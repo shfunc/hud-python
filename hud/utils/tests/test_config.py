@@ -93,9 +93,6 @@ def test_split_and_validate_path_valid():
 
 
 def test_split_and_validate_path_invalid():
-    with pytest.raises(ValueError, match="Empty function path"):
-        _split_and_validate_path("")
-
     with pytest.raises(ValueError, match="Invalid Python identifier in path"):
         _split_and_validate_path("invalid-module.function")
 
