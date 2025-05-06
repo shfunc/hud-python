@@ -343,7 +343,7 @@ def create_remote_config(
         expanded_configs = expand_config(task_config)
         if task.id:
             expanded_configs[0].id = task.id  # for remote IDs
-        elif env and env.final_response and expanded_configs[0].args[0] in LOCAL_EVALUATORS:
+        if env and env.final_response and expanded_configs[0].args[0] in LOCAL_EVALUATORS:
             # Ensure args is a list before appending
             if not isinstance(expanded_configs[0].args, list):
                 expanded_configs[0].args = [expanded_configs[0].args]
