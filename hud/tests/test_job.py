@@ -66,7 +66,12 @@ async def test_job_decorator(mocker):
         status="created",
     )
     await test_function()
-    mock_create_job.assert_called_once_with(name="Decorated Job", metadata={"test": "decorator"})
+    mock_create_job.assert_called_once_with(
+        name="Decorated Job",
+        metadata={"test": "decorator"},
+        evalset_id=None,
+        gym_id=None
+    )
 
 
 @pytest.mark.asyncio
@@ -122,6 +127,8 @@ async def test_run_job(mocker):
     mock_create_job.assert_called_once_with(
         name="Test Job",
         metadata=None,
+        evalset_id=None,
+        gym_id=None,
     )
     mock_gym_make.assert_called_once()
 
@@ -144,6 +151,8 @@ async def test_run_job(mocker):
     mock_create_job.assert_called_once_with(
         name="Test Job",
         metadata=None,
+        evalset_id=None,
+        gym_id=None,
     )
     mock_gym_make.assert_called_once()
 
