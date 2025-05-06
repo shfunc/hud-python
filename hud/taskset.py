@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from venv import logger
 
 from pydantic import BaseModel
 
@@ -58,6 +59,32 @@ class TaskSet(BaseModel):
         """
         return iter(self.tasks)
 
+    async def upload(
+        self,
+        name: str,
+        description: str | None = None,
+        api_key: str | None = None,
+    ) -> None:
+        """
+        Uploads the taskset to the server.
+        """
+        if api_key is None:
+            api_key = settings.api_key
+
+        await make_request(
+            method="POST",
+            url=f"{settings.base_url}/v2/tasksets",
+            api_key=api_key,
+            json={
+                "name": name,
+                "description": description,
+                "tasks": [task.model_dump() for task in self.tasks],
+            },
+        )
+        logger.info(
+            "[HUD] Taskset %s uploaded successfully, see it on app.hud.so/tasksets/%s", name, name
+        )
+
 
 async def load_taskset(taskset_id: str, api_key: str | None = None) -> TaskSet:
     """
@@ -79,6 +106,8 @@ async def load_taskset(taskset_id: str, api_key: str | None = None) -> TaskSet:
         url=f"{settings.base_url}/v2/tasksets/{taskset_id}/tasks",
         api_key=api_key,
     )
+
+    logger.info(f"[HUD] Taskset {taskset_id} loaded successfully")
 
     return TaskSet.model_validate(
         {

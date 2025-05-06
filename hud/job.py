@@ -498,10 +498,27 @@ async def run_job(
     tasks_to_run: list[Task] = []
     created_job: Job | None = None
 
+    evalset_id = None
+    if isinstance(task_or_taskset, TaskSet):
+        evalset_id = task_or_taskset.id
+
+    gym_id = None
+    if isinstance(task_or_taskset, Task):
+        gym_id = task_or_taskset.gym if isinstance(task_or_taskset.gym, str) else None
+    elif isinstance(task_or_taskset, TaskSet):
+        gym_id = (
+            task_or_taskset.tasks[0].gym if isinstance(task_or_taskset.tasks[0].gym, str) else None
+        )
+
     # --- Create Job ---
     try:
         logger.info("Creating job with name: '%s'", job_name)
-        created_job = await create_job(name=job_name, metadata=job_metadata)
+        created_job = await create_job(
+            name=job_name,
+            metadata=job_metadata,
+            evalset_id=evalset_id,
+            gym_id=gym_id,
+        )
         logger.info("Created job with ID: %s", created_job.id)
     except Exception as e:
         logger.exception("Failed to create job '%s': %s", job_name, e)
