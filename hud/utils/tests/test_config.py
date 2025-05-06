@@ -92,12 +92,12 @@ def test_split_and_validate_path_valid():
     _split_and_validate_path("Module_123.function_456")
 
 
-# def test_split_and_validate_path_invalid():
-#     with pytest.raises(ValueError, match="Empty function path"):
-#         _split_and_validate_path("")
+def test_split_and_validate_path_invalid():
+    with pytest.raises(ValueError, match="Empty function path"):
+        _split_and_validate_path("")
 
-#     with pytest.raises(ValueError, match="Invalid Python identifier in path"):
-#         _split_and_validate_path("invalid-module.function")
+    with pytest.raises(ValueError, match="Invalid Python identifier in path"):
+        _split_and_validate_path("invalid-module.function")
 
 
 def test_is_list_of_configs():
