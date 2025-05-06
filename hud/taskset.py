@@ -76,7 +76,7 @@ class TaskSet(BaseModel):
             json={"name": name, "description": description,
                 "tasks": [task.model_dump() for task in self.tasks]},
         )
-        logger.info(f"Taskset {name} uploaded successfully")
+        logger.info(f"[HUD] Taskset {name} uploaded successfully, see it on app.hud.so/tasksets/{name}")
 
 async def load_taskset(taskset_id: str, api_key: str | None = None) -> TaskSet:
     """
@@ -98,6 +98,8 @@ async def load_taskset(taskset_id: str, api_key: str | None = None) -> TaskSet:
         url=f"{settings.base_url}/v2/tasksets/{taskset_id}/tasks",
         api_key=api_key,
     )
+
+    logger.info(f"[HUD] Taskset {taskset_id} loaded successfully")
     
     return TaskSet.model_validate({
         "id": taskset_id,
