@@ -56,12 +56,6 @@ class Task(BaseModel):
     evaluate: FunctionConfigs | None = None
     gym: Gym | None = None
     
-    target: str | list[str] | None = None
-    
-    choices: list[str] | None = None
-    files: dict[str, str] | None = None
-    metadata: dict[str, Any] | None = None
-    
     config: dict[str, Any] | None = None
 
     @classmethod
@@ -136,8 +130,6 @@ class Task(BaseModel):
             id=None,
             prompt=prompt,
             setup=task_setup,
-            metadata=sample.metadata,
-            choices=sample.choices,
             evaluate=evaluate_config,
             gym=task_gym,
             # files=sample.files, # TODO: Decide how/if to handle files

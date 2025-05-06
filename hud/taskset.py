@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from venv import logger
 
 from pydantic import BaseModel
 
@@ -56,8 +57,27 @@ class TaskSet(BaseModel):
         Returns an iterator over the tasks in the taskset.
         """
         return iter(self.tasks)
-
     
+    async def upload(
+        self,
+        name: str,
+        description: str | None = None,
+        api_key: str | None = None,
+    ) -> None:
+        """
+        Uploads the taskset to the server.
+        """
+        if api_key is None:
+            api_key = settings.api_key
+        data = await make_request(
+            method="POST",
+            url=f"{settings.base_url}/v2/tasksets",
+            api_key=api_key,
+            json={"name": name, "description": description,
+                "tasks": [task.model_dump() for task in self.tasks]},
+        )
+        logger.info(f"Taskset {name} uploaded successfully")
+
 async def load_taskset(taskset_id: str, api_key: str | None = None) -> TaskSet:
     """
     Loads a TaskSet by its ID.
