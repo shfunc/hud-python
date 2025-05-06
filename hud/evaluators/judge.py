@@ -12,7 +12,7 @@ from hud.settings import settings
 class LLM(Protocol):
     """Protocol for LLM interfaces that can be used for evaluation."""
 
-    async def ainvoke(self, prompt: str) -> str: ...
+    async def ainvoke(self, prompt: str, /) -> str: ...
 
 
 class Criterion(TypedDict, total=False):
@@ -41,13 +41,6 @@ async def _call_eval_endpoint(
             "reason": f"Remote evaluation failed: {e!s}. Fallback to default score.",
             "criteria_scores": {},
         }
-
-
-def _determine_mode(answer: Any) -> str:
-    """Determine the evaluation mode based on answer type."""
-    if isinstance(answer, bytes) or _is_base64_image(answer):
-        return "VLM"
-    return "LLM"
 
 
 def _process_input(data: Any) -> Any:

@@ -162,5 +162,6 @@ exclude_lines = [
     "@(abc\\.)?abstractmethod",
 ]
 show_missing = true
-fail_under = 50
+fail_under = 60
+omit = ["*/tests/*"]
 

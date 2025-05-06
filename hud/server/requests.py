@@ -23,6 +23,15 @@ logger = logging.getLogger("hud.http")
 logger.setLevel(logging.DEBUG)
 
 
+# Long running requests can take up to 10 minutes.
+_DEFAULT_TIMEOUT = 600.0
+_DEFAULT_LIMITS = httpx.Limits(
+    max_connections=1000,
+    max_keepalive_connections=1000,
+    keepalive_expiry=10.0,
+)
+
+
 async def _handle_retry(
     attempt: int, max_retries: int, retry_delay: float, url: str, error_msg: str
 ) -> None:
@@ -39,6 +48,22 @@ async def _handle_retry(
     await asyncio.sleep(retry_time)
 
 
+def _create_default_async_client() -> httpx.AsyncClient:
+    """Create a default httpx AsyncClient with standard configuration."""
+    return httpx.AsyncClient(
+        timeout=_DEFAULT_TIMEOUT,
+        limits=_DEFAULT_LIMITS,
+    )
+
+
+def _create_default_sync_client() -> httpx.Client:
+    """Create a default httpx Client with standard configuration."""
+    return httpx.Client(
+        timeout=_DEFAULT_TIMEOUT,
+        limits=_DEFAULT_LIMITS,
+    )
+
+
 async def make_request(
     method: str,
     url: str,
@@ -46,6 +71,7 @@ async def make_request(
     api_key: str | None = None,
     max_retries: int = 4,
     retry_delay: float = 2.0,
+    client: httpx.AsyncClient | None = None,
 ) -> dict[str, Any]:
     """
     Make an asynchronous HTTP request to the HUD API.
@@ -57,6 +83,9 @@ async def make_request(
         api_key: API key for authentication
         max_retries: Maximum number of retries
         retry_delay: Delay between retries
+        *,
+        client: Optional custom httpx.AsyncClient
+
     Returns:
         dict: JSON response from the server
 
@@ -72,48 +101,51 @@ async def make_request(
     headers = {"Authorization": f"Bearer {api_key}"}
     retry_status_codes = [502, 503, 504]
     attempt = 0
+    should_close_client = False
 
-    while attempt <= max_retries:
-        attempt += 1
+    if client is None:
+        client = _create_default_async_client()
+        should_close_client = True
 
-        try:
-            async with httpx.AsyncClient(
-                timeout=600.0,  # Long running requests can take up to 10 minutes
-                limits=httpx.Limits(
-                    max_connections=1000,
-                    max_keepalive_connections=1000,
-                    keepalive_expiry=10.0,
-                ),
-            ) as client:
+    try:
+        while attempt <= max_retries:
+            attempt += 1
+
+            try:
                 response = await client.request(method=method, url=url, json=json, headers=headers)
 
-            # Check if we got a retriable status code
-            if response.status_code in retry_status_codes and attempt <= max_retries:
-                await _handle_retry(
-                    attempt,
-                    max_retries,
-                    retry_delay,
-                    url,
-                    f"Received status {response.status_code}",
-                )
-                continue
+                # Check if we got a retriable status code
+                if response.status_code in retry_status_codes and attempt <= max_retries:
+                    await _handle_retry(
+                        attempt,
+                        max_retries,
+                        retry_delay,
+                        url,
+                        f"Received status {response.status_code}",
+                    )
+                    continue
 
-            response.raise_for_status()
-            result = response.json()
-            return result
-        except httpx.TimeoutException as e:
-            raise HudTimeoutError(f"Request timed out: {e!s}") from None
-        except httpx.HTTPStatusError as e:
-            raise HudRequestError.from_httpx_error(e) from None
-        except httpx.RequestError as e:
-            if attempt <= max_retries:
-                await _handle_retry(attempt, max_retries, retry_delay, url, f"Network error: {e}")
-                continue
-            else:
-                raise HudNetworkError(f"Network error: {e!s}") from None
-        except Exception as e:
-            raise HudRequestError(f"Unexpected error: {e!s}") from None
-    raise HudRequestError(f"Request failed after {max_retries} retries with unknown error")
+                response.raise_for_status()
+                result = response.json()
+                return result
+            except httpx.TimeoutException as e:
+                raise HudTimeoutError(f"Request timed out: {e!s}") from None
+            except httpx.HTTPStatusError as e:
+                raise HudRequestError.from_httpx_error(e) from None
+            except httpx.RequestError as e:
+                if attempt <= max_retries:
+                    await _handle_retry(
+                        attempt, max_retries, retry_delay, url, f"Network error: {e}"
+                    )
+                    continue
+                else:
+                    raise HudNetworkError(f"Network error: {e!s}") from None
+            except Exception as e:
+                raise HudRequestError(f"Unexpected error: {e!s}") from None
+        raise HudRequestError(f"Request failed after {max_retries} retries with unknown error")
+    finally:
+        if should_close_client:
+            await client.aclose()
 
 
 def make_request_sync(
@@ -123,6 +155,8 @@ def make_request_sync(
     api_key: str | None = None,
     max_retries: int = 4,
     retry_delay: float = 2.0,
+    *,
+    client: httpx.Client | None = None,
 ) -> dict[str, Any]:
     """
     Make a synchronous HTTP request to the HUD API.
@@ -134,6 +168,8 @@ def make_request_sync(
         api_key: API key for authentication
         max_retries: Maximum number of retries
         retry_delay: Delay between retries
+        client: Optional custom httpx.Client
+
     Returns:
         dict: JSON response from the server
 
@@ -149,57 +185,58 @@ def make_request_sync(
     headers = {"Authorization": f"Bearer {api_key}"}
     retry_status_codes = [502, 503, 504]
     attempt = 0
+    should_close_client = False
 
-    while attempt <= max_retries:
-        attempt += 1
+    if client is None:
+        client = _create_default_sync_client()
+        should_close_client = True
 
-        try:
-            with httpx.Client(
-                timeout=600.0,  # Long running requests can take up to 10 minutes
-                limits=httpx.Limits(
-                    max_connections=1000,
-                    max_keepalive_connections=1000,
-                    keepalive_expiry=10.0,
-                ),
-            ) as client:
+    try:
+        while attempt <= max_retries:
+            attempt += 1
+
+            try:
                 response = client.request(method=method, url=url, json=json, headers=headers)
 
-            # Check if we got a retriable status code
-            if response.status_code in retry_status_codes and attempt <= max_retries:
-                retry_time = retry_delay * (2 ** (attempt - 1))  # Exponential backoff
-                logger.warning(
-                    "Received status %d from %s, retrying in %.2f seconds (attempt %d/%d)",
-                    response.status_code,
-                    url,
-                    retry_time,
-                    attempt,
-                    max_retries,
-                )
-                time.sleep(retry_time)
-                continue
+                # Check if we got a retriable status code
+                if response.status_code in retry_status_codes and attempt <= max_retries:
+                    retry_time = retry_delay * (2 ** (attempt - 1))  # Exponential backoff
+                    logger.warning(
+                        "Received status %d from %s, retrying in %.2f seconds (attempt %d/%d)",
+                        response.status_code,
+                        url,
+                        retry_time,
+                        attempt,
+                        max_retries,
+                    )
+                    time.sleep(retry_time)
+                    continue
 
-            response.raise_for_status()
-            result = response.json()
-            return result
-        except httpx.TimeoutException as e:
-            raise HudTimeoutError(f"Request timed out: {e!s}") from None
-        except httpx.HTTPStatusError as e:
-            raise HudRequestError.from_httpx_error(e) from None
-        except httpx.RequestError as e:
-            if attempt <= max_retries:
-                retry_time = retry_delay * (2 ** (attempt - 1))
-                logger.warning(
-                    "Network error %s from %s, retrying in %.2f seconds (attempt %d/%d)",
-                    str(e),
-                    url,
-                    retry_time,
-                    attempt,
-                    max_retries,
-                )
-                time.sleep(retry_time)
-                continue
-            else:
-                raise HudNetworkError(f"Network error: {e!s}") from None
-        except Exception as e:
-            raise HudRequestError(f"Unexpected error: {e!s}") from None
-    raise HudRequestError(f"Request failed after {max_retries} retries with unknown error")
+                response.raise_for_status()
+                result = response.json()
+                return result
+            except httpx.TimeoutException as e:
+                raise HudTimeoutError(f"Request timed out: {e!s}") from None
+            except httpx.HTTPStatusError as e:
+                raise HudRequestError.from_httpx_error(e) from None
+            except httpx.RequestError as e:
+                if attempt <= max_retries:
+                    retry_time = retry_delay * (2 ** (attempt - 1))
+                    logger.warning(
+                        "Network error %s from %s, retrying in %.2f seconds (attempt %d/%d)",
+                        str(e),
+                        url,
+                        retry_time,
+                        attempt,
+                        max_retries,
+                    )
+                    time.sleep(retry_time)
+                    continue
+                else:
+                    raise HudNetworkError(f"Network error: {e!s}") from None
+            except Exception as e:
+                raise HudRequestError(f"Unexpected error: {e!s}") from None
+        raise HudRequestError(f"Request failed after {max_retries} retries with unknown error")
+    finally:
+        if should_close_client:
+            client.close()
