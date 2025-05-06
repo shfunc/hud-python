@@ -67,10 +67,7 @@ async def test_job_decorator(mocker):
     )
     await test_function()
     mock_create_job.assert_called_once_with(
-        name="Decorated Job",
-        metadata={"test": "decorator"},
-        evalset_id=None,
-        gym_id=None
+        name="Decorated Job", metadata={"test": "decorator"}, evalset_id=None, gym_id=None
     )
 
 
