@@ -58,7 +58,7 @@ class TaskSet(BaseModel):
         Returns an iterator over the tasks in the taskset.
         """
         return iter(self.tasks)
-      
+
     async def upload(
         self,
         name: str,
@@ -70,16 +70,21 @@ class TaskSet(BaseModel):
         """
         if api_key is None:
             api_key = settings.api_key
-        
+
         await make_request(
             method="POST",
             url=f"{settings.base_url}/v2/tasksets",
             api_key=api_key,
-            json={"name": name, "description": description,
-                "tasks": [task.model_dump() for task in self.tasks]},
+            json={
+                "name": name,
+                "description": description,
+                "tasks": [task.model_dump() for task in self.tasks],
+            },
         )
-        logger.info("[HUD] Taskset %s uploaded successfully, see it on app.hud.so/tasksets/%s",
-                    name, name)
+        logger.info(
+            "[HUD] Taskset %s uploaded successfully, see it on app.hud.so/tasksets/%s", name, name
+        )
+
 
 async def load_taskset(taskset_id: str, api_key: str | None = None) -> TaskSet:
     """
@@ -104,11 +109,13 @@ async def load_taskset(taskset_id: str, api_key: str | None = None) -> TaskSet:
 
     logger.info(f"[HUD] Taskset {taskset_id} loaded successfully")
 
-    return TaskSet.model_validate({
-        "id": taskset_id,
-        "tasks": data["evalset"],
-    })
-    
+    return TaskSet.model_validate(
+        {
+            "id": taskset_id,
+            "tasks": data["evalset"],
+        }
+    )
+
 
 def load_from_inspect(dataset: Dataset) -> TaskSet:
     """
