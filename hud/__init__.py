@@ -9,7 +9,7 @@ from .job import create_job, load_job, run_job
 from .job import job as register_job
 from .taskset import load_taskset
 
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 
 __all__ = [
     "agent",
