@@ -24,10 +24,11 @@ class TaskSet(BaseModel):
         description: Description of the taskset
         tasks: List of Task objects in the taskset
     """
+
     id: str | None = None
     description: str | None = None
     tasks: list[Task] = []
-    
+
     def __getitem__(self, index: int) -> Task:
         """
         Allows accessing tasks by index using square bracket notation.
@@ -42,7 +43,7 @@ class TaskSet(BaseModel):
             IndexError: If the index is out of range
         """
         return self.tasks[index]
-    
+
     def __len__(self) -> int:
         """
         Returns the number of tasks in the taskset.
@@ -51,13 +52,13 @@ class TaskSet(BaseModel):
             int: The number of tasks in the taskset
         """
         return len(self.tasks)
-    
+
     def __iter__(self) -> Iterator[Task]:
         """
         Returns an iterator over the tasks in the taskset.
         """
         return iter(self.tasks)
-    
+      
     async def upload(
         self,
         name: str,
@@ -89,10 +90,10 @@ async def load_taskset(taskset_id: str, api_key: str | None = None) -> TaskSet:
     Returns:
         TaskSet: The loaded taskset
     """
-    
+
     if api_key is None:
         api_key = settings.api_key
-    
+
     data = await make_request(
         method="GET",
         url=f"{settings.base_url}/v2/tasksets/{taskset_id}/tasks",
@@ -101,10 +102,6 @@ async def load_taskset(taskset_id: str, api_key: str | None = None) -> TaskSet:
 
     logger.info(f"[HUD] Taskset {taskset_id} loaded successfully")
     
-    return TaskSet.model_validate({
-        "id": taskset_id,
-        "tasks": data["evalset"],
-    })
 
 def load_from_inspect(dataset: Dataset) -> TaskSet:
     """

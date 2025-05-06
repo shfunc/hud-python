@@ -29,17 +29,17 @@ pip install hud-python
 
 ### Simple Browser Example with Claude Computer Use
 
-> This example uses the `@job("test-run")` decorator, so the results of this run will appear under the job named "test-run" on the your [HUD Jobs page](https://app.hud.so/jobs).
+> This example uses the `@register_job("test-run")` decorator, so the results of this run will appear under the job named "test-run" on the your [HUD Jobs page](https://app.hud.so/jobs).
 
 Make sure your have defined your `ANTRHOPIC_API_KEY` in environment variables to run Claude.
 
 ```python
 import asyncio
-from hud import gym, job
+from hud import gym, register_job
 from hud.task import Task
 from hud.agent import ClaudeAgent
 
-@job("test-run")
+@register_job("test-run")
 async def main():
     task = Task(
         prompt="Insert the text 'capybara' into the search bar",
@@ -127,7 +127,7 @@ If you use this SDK in your research, please cite it as follows:
 
 ```bibtex
 @software{hud2025agentevalplatform,
-  author = {HUD and Jay Ram and Lorenss Martinsons and Parth Patel and Max Muoto and Oskars Putans and Govind Pimpale and Mayank Singamreddy and Nguyen Nhat Minh},
+  author = {HUD and Jay Ram and Lorenss Martinsons and Parth Patel and Oskars Putans and Govind Pimpale and Mayank Singamreddy and Nguyen Nhat Minh},
   title = {{HUD: An Evaluation Platform for Agents}},
   date = {2025-04},
   url = {https://github.com/hud-evals/hud-sdk},
