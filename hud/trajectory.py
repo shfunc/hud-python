@@ -1,4 +1,3 @@
-# ruff: noqa: T201
 from __future__ import annotations
 
 import datetime
@@ -44,20 +43,18 @@ class Trajectory(BaseModel):
                     display(Markdown("**Observation Image:**"))
                     display(HTML(f'<img src="{step.observation_url}" style="max-width:100%;"/>'))
                     display(Markdown(f"[Image Link]({step.observation_url})"))
-                except Exception as e:
-                    print(f"    [Error processing image: {e}]")
+                except Exception:
+                    pass
             elif not step.observation_text:  # Only print if no image AND no text
-                print("    No visual or text observation provided.")
+                pass
 
             # Observation Text
             if step.observation_text:
-                print(f"    Observation Text: {step.observation_text}")
+                pass
 
             # Actions
-            print(f"\n    Actions: {step.actions}")  # Added newline for spacing
 
             # Duration
-            duration_str = "N/A"
             step_start_timestamp = self.trajectory[i].start_timestamp
             step_end_timestamp = self.trajectory[i].end_timestamp
             if step_start_timestamp and step_end_timestamp and t_start_dt:
@@ -71,17 +68,13 @@ class Trajectory(BaseModel):
                     )
                     duration = end_dt - start_dt
                     total_seconds = duration.total_seconds()
-                    minutes = int(total_seconds // 60)
-                    seconds = total_seconds % 60
-                    duration_str = f"{minutes}m {seconds:.2f}s"
+                    int(total_seconds // 60)
+                    total_seconds % 60
 
                     # Calculate the total duration up to this step
                     total_duration = end_dt - t_start_dt
-                    total_minutes = int(total_duration.total_seconds() // 60)
+                    int(total_duration.total_seconds() // 60)
                     total_seconds = total_duration.total_seconds() % 60
-                    total_duration_str = f"{total_minutes}m {total_seconds:.2f}s"
                 except ValueError:
-                    duration_str = "Error parsing timestamps"  # Handle potential format issues
-            print(f"    Step Duration: {duration_str}")
-            print(f"    Total Duration: {total_duration_str}")
+                    pass  # Handle potential format issues
             display(Markdown("---"))  # Use Markdown horizontal rule

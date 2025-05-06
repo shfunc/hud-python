@@ -61,7 +61,7 @@ class DockerClient(Client):
 
     _last_pyproject_toml_str: str | None = None
     _last_update_time: int = 0
-    _last_file_mtimes: dict[str, float] = {}  # noqa: RUF012
+    _last_file_mtimes: dict[str, float] = {}  # noqa: RUF012 - Not recognized as Pydantic model
     _source_path: Path | None = None
     _package_name: str | None = None
 
