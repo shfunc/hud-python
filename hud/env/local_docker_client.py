@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import io
 import logging
-from pathlib import Path
-import tarfile
-import tempfile
+import textwrap
 import uuid
 from typing import TYPE_CHECKING, Any
 
@@ -16,6 +14,8 @@ from hud.utils import ExecuteResult
 from hud.utils.common import directory_to_tar_bytes
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from aiodocker.containers import DockerContainer
     from aiodocker.stream import Stream
 
@@ -188,6 +188,25 @@ class LocalDockerClient(DockerClient):
                 stdout_data.extend(message.data)
             elif message.stream == 2:  # stderr
                 stderr_data.extend(message.data)
+
+
+        if "No module named 'hud_controller'" in stderr_data.decode():
+            if self._source_path is None:
+                message = textwrap.dedent("""\
+                Your environment is not set up correctly.
+                You are using a prebuilt image, so please ensure the following:
+                1. Your image cannot be a generic python image, it must contain a python package
+                   called hud_controller.
+                """)
+            else:
+                message = textwrap.dedent("""\
+                Your environment is not set up correctly.
+                You are using a local controller, so please ensure the following:
+                1. Your package name is hud_controller
+                2. You installed the package in the Dockerfile.
+                3. The package is visible from the global python environment (no venv, conda, or uv)
+                """)
+            logger.error(message)
 
         return ExecuteResult(
             stdout=bytes(stdout_data),

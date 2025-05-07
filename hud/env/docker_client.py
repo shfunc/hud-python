@@ -105,6 +105,9 @@ class DockerClient(Client):
 
         self._source_path = source_path
 
+        # set current mtimes
+        self._last_file_mtimes = self._get_all_file_mtimes()
+
     @classmethod
     @abc.abstractmethod
     async def build_image(cls, build_context: Path) -> tuple[str, dict[str, Any]]:
