@@ -173,6 +173,7 @@ CLAKey: TypeAlias = Literal[
     "launchmail",
     "launchmediaselect",
     "playpause",
+    "start",
     "stop",
     "prevtrack",
     "nexttrack",
