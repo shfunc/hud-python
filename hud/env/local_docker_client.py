@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from aiodocker.containers import DockerContainer
     from aiodocker.stream import Stream
 
-logger = logging.getLogger("hud.env.docker_env_client")
+logger = logging.getLogger(__name__)
 
 
 class LocalDockerClient(DockerClient):
@@ -40,6 +40,7 @@ class LocalDockerClient(DockerClient):
 
         # Create a tar file from the path
         tar_bytes = directory_to_tar_bytes(build_context)
+        logger.info(f"generated tar file with size: {len(tar_bytes)//1024} KB")
 
         # Build the image
         build_stream = await docker_client.images.build(
