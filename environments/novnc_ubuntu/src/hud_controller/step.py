@@ -22,7 +22,7 @@ def screenshot_base64() -> str:
     return image_data
 
 
-def step(action: list[dict[str, Any]]) -> None:
+def step(action: list[dict[str, Any]]) -> Any:
     """
     Execute a sequence of actions.
     """

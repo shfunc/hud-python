@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from qa_controller.utils.state import get_last_answer
+from hud_controller.utils.state import get_last_answer
 
 # Try to import nltk for better evaluation
 try:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from base64 import b64decode, b64encode
+from pathlib import Path
 from typing import Any
 
 from hud.env.docker_client import DockerClient
@@ -23,20 +24,33 @@ class RemoteDockerClient(DockerClient):
     """
 
     @classmethod
+    async def build_image(cls, build_context: Path) -> tuple[str, dict[str, Any]]:
+        """
+        Build an image from a build context.
+        """
+        # TODO: Server side, generate presigned URL for build context
+        # Client side, upload zip file to presigned URL
+        # Server side, build image
+        # Stream logs to client
+        # Return image URI
+        raise NotImplementedError("RemoteDockerClient does not yet support building images, but this will be added soon! For now, you must build the image locally and push it to a registry.")
+
+    @classmethod
     async def create(
         cls,
-        dockerfile: str,
+        image_uri: str,
         *,
         job_id: str | None = None,
         task_id: str | None = None,
         metadata: dict[str, Any] | None = None,
-    ) -> tuple[RemoteDockerClient, dict[str, Any]]:
+    ) -> RemoteDockerClient:
         """
-        Creates a remote environment client from a dockerfile or gym_id.
+        Creates a remote environment client from an image.
 
         Args:
-            dockerfile: The dockerfile content to build the environment
-            gym_id: The gym_id of the environment to create
+            image_uri: The image uri to create the environment from
+            job_id: The job_id of the environment to create
+            task_id: The task_id of the environment to create
             metadata: Metadata to associate with the environment
 
         Returns:
@@ -58,7 +72,7 @@ class RemoteDockerClient(DockerClient):
         if "environment_config" not in metadata:
             metadata["environment_config"] = {}
 
-        metadata["environment_config"]["dockerfile"] = dockerfile
+        metadata["environment_config"]["image_uri"] = image_uri
 
         # Create a new environment via the HUD API
         response = await make_request(
@@ -85,12 +99,8 @@ class RemoteDockerClient(DockerClient):
                 response_json=response,
             )
 
-        # Create the controller instance
-        controller = cls(env_id)
+        return cls(env_id)
 
-        build_metadata = response.get("metadata", {})
-
-        return controller, build_metadata
 
     def __init__(self, env_id: str) -> None:
         """

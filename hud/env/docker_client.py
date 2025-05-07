@@ -26,6 +26,7 @@ STATUS_MESSAGES = {
     EnvironmentStatus.COMPLETED.value: "completed",
 }
 
+PACKAGE_NAME = "hud_controller"
 
 class InvokeError(Exception):
     """
@@ -63,19 +64,11 @@ class DockerClient(Client):
     _last_update_time: int = 0
     _last_file_mtimes: dict[str, float] = {}  # noqa: RUF012 - Not recognized as Pydantic model
     _source_path: Path | None = None
-    _package_name: str | None = None
 
     @property
     def source_path(self) -> Path | None:
         """Get the source path."""
         return self._source_path
-
-    @property
-    def package_name(self) -> str:
-        """Get the package name."""
-        if not self._package_name:
-            raise ValueError("Package name not set")
-        return self._package_name
 
     def set_source_path(self, source_path: Path) -> None:
         """
@@ -102,21 +95,38 @@ class DockerClient(Client):
         if not pyproject_path.exists():
             raise FileNotFoundError(f"pyproject.toml not found in {source_path}")
 
+        # validate package name
         pyproject_data = toml.load(pyproject_path)
-        self._package_name = pyproject_data.get("project", {}).get("name")
-        if not self._package_name:
+        package_name = pyproject_data.get("project", {}).get("name")
+        if not package_name:
             raise ValueError("Could not find package name in pyproject.toml")
+        if package_name != PACKAGE_NAME:
+            raise ValueError(f"Package name in pyproject.toml must be {PACKAGE_NAME}")
 
         self._source_path = source_path
 
+        # set current mtimes
+        self._last_file_mtimes = self._get_all_file_mtimes()
+
     @classmethod
     @abc.abstractmethod
-    async def create(cls, dockerfile: str) -> DockerClient:
+    async def build_image(cls, build_context: Path) -> tuple[str, dict[str, Any]]:
         """
-        Creates an environment client from a dockerfile.
+        Build an image from a build context.
+
+        Returns:
+            tuple[str, dict[str, Any]]: The image tag and build output
+        """
+
+
+    @classmethod
+    @abc.abstractmethod
+    async def create(cls, image: str) -> DockerClient:
+        """
+        Creates an environment client from an image.
 
         Args:
-            dockerfile: The dockerfile content to build the environment
+            image: The image to build the environment from
 
         Returns:
             EnvClient: An instance of the environment client
@@ -194,8 +204,8 @@ class DockerClient(Client):
 
         # Create tar archive of the source code and send it to the container
         tar_bytes = directory_to_tar_bytes(self._source_path)
-        await self.execute(["mkdir", "-p", "/root/controller"], timeout=5)
-        await self.put_archive("/root/controller", tar_bytes)
+        await self.execute(["mkdir", "-p", "/controller"], timeout=5)
+        await self.put_archive("/controller", tar_bytes)
 
         # Check if pyproject.toml exists and parse it
         pyproject_path = self._source_path / "pyproject.toml"
@@ -213,9 +223,9 @@ class DockerClient(Client):
             self._package_name = pyproject_data.get("project", {}).get("name")
             if not self._package_name:
                 raise ValueError("Could not find package name in pyproject.toml")
-            logger.info("Installing %s in /root/controller", self._package_name)
+            logger.info("Installing %s in /controller", self._package_name)
             result = await self.execute(
-                ["bash", "-c", "cd /root/controller && pip install -e . --break-system-packages"],
+                ["bash", "-c", "cd /controller && pip install -e . --break-system-packages"],
                 timeout=60,
             )
             if result["stdout"]:
@@ -262,7 +272,7 @@ class DockerClient(Client):
         # generate a random uuid as a divider
         divider = str(uuid.uuid4())
 
-        template = invoke_template(config, self.package_name, divider)
+        template = invoke_template(config, PACKAGE_NAME, divider)
         logger.debug("Invoking template: %s", template)
 
         result = await self.execute(["python3", "-c", template])
