@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import logging
+from pathlib import Path
 import tarfile
 import tempfile
 import uuid
@@ -12,6 +13,7 @@ from aiohttp import ClientTimeout
 
 from hud.env.docker_client import DockerClient, EnvironmentStatus
 from hud.utils import ExecuteResult
+from hud.utils.common import directory_to_tar_bytes
 
 if TYPE_CHECKING:
     from aiodocker.containers import DockerContainer
@@ -26,17 +28,9 @@ class LocalDockerClient(DockerClient):
     """
 
     @classmethod
-    async def create(
-        cls, dockerfile: str, ports: list[int] | None = None
-    ) -> tuple[LocalDockerClient, dict[str, Any]]:
+    async def build_image(cls, build_context: Path) -> tuple[str, dict[str, Any]]:
         """
-        Creates a Docker environment client from a dockerfile.
-
-        Args:
-            dockerfile: The dockerfile content to build the Docker image
-
-        Returns:
-            DockerClient: An instance of the Docker environment client
+        Build an image from a build context.
         """
         # Create a unique image tag
         image_tag = f"hud-env-{uuid.uuid4().hex[:8]}"
@@ -44,32 +38,18 @@ class LocalDockerClient(DockerClient):
         # Initialize Docker client
         docker_client = aiodocker.Docker()
 
-        # Create fileobj for the Dockerfile
-        dockerfile_fileobj = io.BytesIO(dockerfile.encode("utf-8"))
+        # Create a tar file from the path
+        tar_bytes = directory_to_tar_bytes(build_context)
 
-        if ports is None:
-            ports = []
-
-        # Create a tar file from the dockerfile
-        with tempfile.NamedTemporaryFile() as f:
-            with tarfile.open(mode="w:gz", fileobj=f) as t:
-                dfinfo = tarfile.TarInfo("Dockerfile")
-                dfinfo.size = len(dockerfile_fileobj.getvalue())
-                dockerfile_fileobj.seek(0)
-                t.addfile(dfinfo, dockerfile_fileobj)
-
-            # Reset the file pointer to the beginning of the file
-            f.seek(0)
-
-            # Build the image
-            build_stream = await docker_client.images.build(
-                fileobj=f,
-                encoding="gzip",
-                tag=image_tag,
-                rm=True,
-                pull=True,
-                forcerm=True,
-            )
+        # Build the image
+        build_stream = await docker_client.images.build(
+            fileobj=io.BytesIO(tar_bytes),
+            encoding="gzip",
+            tag=image_tag,
+            rm=True,
+            pull=True,
+            forcerm=True,
+        )
 
         # Print build output
         output = ""
@@ -78,23 +58,42 @@ class LocalDockerClient(DockerClient):
                 logger.info(chunk["stream"])
                 output += chunk["stream"]
 
+        return image_tag, {"build_output": output}
+
+
+    @classmethod
+    async def create(
+        cls, image: str,
+    ) -> LocalDockerClient:
+        """
+        Creates a Docker environment client from a image.
+
+        Args:
+            image: The image to build the Docker image
+
+        Returns:
+            DockerClient: An instance of the Docker environment client
+        """
+       
+        # Initialize Docker client
+        docker_client = aiodocker.Docker()
+
         # Create and start the container
         container_config = {
-            "Image": image_tag,
+            "Image": image,
             "Tty": True,
             "OpenStdin": True,
             "Cmd": None,
             "HostConfig": {
                 "PublishAllPorts": True,
             },
-            "ExposedPorts": {f"{port}/tcp": {} for port in ports},
         }
 
         container = await docker_client.containers.create(config=container_config)
         await container.start()
 
         # Return the controller instance
-        return cls(docker_client, container.id), {"build_output": output}
+        return cls(docker_client, container.id)
 
     def __init__(self, docker_conn: aiodocker.Docker, container_id: str) -> None:
         """

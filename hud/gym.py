@@ -63,16 +63,28 @@ async def make(
         task = env_src
 
     if isinstance(gym, CustomGym):
-        # Create the environment (depending on location)
-        if gym.dockerfile is None:
-            raise ValueError("Dockerfile is required for custom environments")
+        build_data = {}
+        if isinstance(gym.image_or_build_context, str):
+            uri = gym.image_or_build_context
+        elif isinstance(gym.image_or_build_context, Path):
+            # need to build the image
+            if gym.location == "local":
+                uri, build_data = await LocalDockerClient.build_image(gym.image_or_build_context)
+            elif gym.location == "remote":
+                uri, build_data = await RemoteDockerClient.build_image(gym.image_or_build_context)
+            else:
+                raise ValueError(f"Invalid environment location: {gym.location}")
+        else:
+            raise ValueError(f"Invalid image or build context: {gym.image_or_build_context}")
+
+
         if gym.location == "local":
             logger.info("Creating local environment")
-            client, build_data = await LocalDockerClient.create(gym.dockerfile)
+            client = await LocalDockerClient.create(uri)
         elif gym.location == "remote":
             logger.info("Creating remote environment")
-            client, build_data = await RemoteDockerClient.create(
-                dockerfile=gym.dockerfile,
+            client = await RemoteDockerClient.create(
+                image_uri=uri,
                 job_id=effective_job_id,
                 task_id=task.id if task else None,
                 metadata=metadata,
@@ -81,9 +93,9 @@ async def make(
             raise ValueError(f"Invalid environment location: {gym.location}")
 
         # Set up the environment with a source path
-        if gym.controller_source_dir:
+        if isinstance(gym.image_or_build_context, Path):
             logger.info("Setting source path")
-            client.set_source_path(Path(gym.controller_source_dir))
+            client.set_source_path(gym.image_or_build_context)
     elif isinstance(gym, str):
         logger.info("Creating private environment")
         # Note: the gym_name_or_id is a unique identifier, but it is not a true

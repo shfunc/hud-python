@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from inspect_ai.util._sandbox import SandboxEnvironmentSpec
 from pydantic import BaseModel
 
 from hud.types import CustomGym, Gym
@@ -9,13 +12,6 @@ from hud.utils.common import FunctionConfig, FunctionConfigs
 
 if TYPE_CHECKING:
     from inspect_ai.dataset import Sample
-
-# Environment specifications:
-# These represent the environment as a whole, including both the controller
-# and the environment type (eg, what os, which services are running)
-
-UBUNTU_DOCKERFILE = "ubuntu:latest"
-
 
 def convert_inspect_setup(setup: str) -> list[FunctionConfig]:
     """
@@ -95,34 +91,32 @@ class Task(BaseModel):
             elif isinstance(sample.target, list):
                 evaluate_config = ("match_all", sample.target)
 
-        task_gym: Gym | None = None
-        task_setup: FunctionConfigs | None = None
+        task_setup: FunctionConfigs | None = convert_inspect_setup(sample.setup) if sample.setup else None
 
         sandbox = sample.sandbox
-        dockerfile = None
-        use_qa_gym = True
+       
+        match sandbox:
+            case "docker":
+                task_gym = CustomGym(
+                    image_or_build_context="ubuntu:latest",
+                    location="local",
+                )
+            case SandboxEnvironmentSpec(type="docker", config=str()):
+                # create temp dir and put dockerfile there, then use that path
+                temp_dir = tempfile.mkdtemp()
+                temp_dir_path = Path(temp_dir)
+                dockerfile_path = temp_dir_path / "Dockerfile"
+                dockerfile_path.write_text(sandbox.config)
+                task_gym = CustomGym(
+                    image_or_build_context=temp_dir_path,
+                    location="local",
+                )
+            case None:
+                task_gym = "qa"
+                task_setup = None
+            case _:
+                raise ValueError(f"Unsupported sandbox type: {sandbox}")
 
-        if sandbox:
-            if isinstance(sandbox, str):
-                if sandbox == "docker":
-                    dockerfile = UBUNTU_DOCKERFILE
-                    use_qa_gym = False
-            elif isinstance(sandbox, tuple) and len(sandbox) == 2:
-                sandbox_type, sandbox_config = sandbox
-                if sandbox_type == "docker":
-                    dockerfile = sandbox_config
-                    use_qa_gym = False
-
-        if use_qa_gym:
-            task_gym = "qa"
-            task_setup = None
-        else:
-            task_gym = CustomGym(
-                dockerfile=dockerfile or UBUNTU_DOCKERFILE,
-                location="local",
-            )
-            task_setup = [x for x in convert_inspect_setup(sample.setup)] if sample.setup else None
-            # TODO: Handle sample.files for CustomGym case if needed
 
         return cls(
             id=None,
