@@ -19,36 +19,37 @@ from pathlib import Path
 # Points to a directory containing controller code and a Dockerfile
 local_env_spec = CustomGym(
     location="local",
-    controller_source_dir="./my_custom_controller" # Path to your controller code
+    image_or_build_context=Path("./my_custom_controller") # Path to your controller code
 )
 
-# Example 2: Remote Docker environment (built and run on HUD platform)
+# Example 2: Local Docker environment (using prebuilt image)
+local_env_spec = CustomGym(
+    location="local",
+    image_or_build_context="local_image" # local docker images can be used when location is local
+)
+
+# Example 3: Remote Docker environment (using prebuilt image)
 remote_env_spec = CustomGym(
     location="remote",
-    # Dockerfile content is sent to HUD to build the image remotely
-    dockerfile="FROM ubuntu:latest\nRUN apt-get update && apt-get install -y my-package\n..."
+    image_or_build_context="govindhud/novnc-ubuntu-withcontroller:latest" # docker hub image name
 )
 ```
-
 **Key `CustomGym` Attributes:**
 
 *   **`location` (`"local"` | `"remote"`):**
     *   `"local"`: Builds and runs the Docker container on your *local* machine. Requires Docker installed. Ideal for development. See [Local Environment Structure](#local-environment-structure) below.
-    *   `"remote"`: Sends the `dockerfile` content to the HUD platform for remote build and execution. Good for sharing or running complex setups.
-*   **`dockerfile` (str | None):** The Dockerfile content.
-    *   Required if `location="remote"`.
-    *   Optional if `location="local"` and `controller_source_dir` is provided (will look for `Dockerfile` inside that directory).
-*   **`controller_source_dir` (str | `Path` | None):**
-    *   *Only relevant for `location="local"`.*
-    *   Path to your local directory containing the controller code and potentially the `Dockerfile`. This directory is mounted into the container.
+    *   `"remote"`: Executes the prebuilt image on the HUD platform. Good for sharing or running complex setups.
+*   **`image_or_build_context` (str | `Path`):**
+    *   If string, it is interpreted as an image name. Both local and remote locations support this. One caveat is that local images are not supported when `location="remote"`, since the HUD platform does not have access to your local Docker daemon.
+    *   If `Path`, it is interpreted as a directory containing a Dockerfile and other files needed to build the image. This is useful for local development. See [Local Environment Structure](#local-environment-structure) below.
 
 ## <a name="local-environment-structure"></a>Local Environment Structure
 
-When creating a `local` custom environment, the directory specified by `controller_source_dir` typically contains:
+When creating a custom environment, the directory specified by `image_or_build_context` must contain:
 
-1.  **`Dockerfile`:** Defines the base image, system dependencies, Python dependencies (often via `pip install -e .`), and the command to run your controller script (`CMD [...]`).
-2.  **`pyproject.toml`:** Defines your controller as an installable Python package. The HUD SDK reads the `[project.name]` from this file to know how to import your controller code within the container after installation.
-3.  **`src/` (or your package name):** A directory containing your Python controller code. This code needs to implement the functions called by `setup`, `evaluate`, and `step` (e.g., interacting with applications inside the container, returning observations).
+1.  **`Dockerfile`:** Defines the base image, system dependencies, Python dependencies (often via `pip install -e .`), and installs your controller package.
+2.  **`pyproject.toml`:** Defines your controller as an installable Python package. The package must be named `hud_controller`.
+3.  **`src/`** A directory containing your Python controller code. This code needs to implement the functions called by `setup`, `evaluate`, and `step` (e.g., interacting with applications inside the container, returning observations).
 
 **Example Structure (`./my_custom_controller/`):**
 
@@ -57,13 +58,12 @@ my_custom_controller/
 ├── Dockerfile
 ├── pyproject.toml
 └── src/
-    └── my_controller_pkg/
+    └── hud_controller/
         ├── __init__.py
         └── main.py        # Your controller logic (e.g., setup, step functions)
 ```
 
 *   **Examples:** The top-level `environments/` directory in the SDK repository contains reference implementations (like `novnc_ubuntu`) following this structure.
-*   **Dependencies:** For local custom environments, you might need to install development dependencies using `pip install -e ".[dev]"` in your SDK checkout to ensure the local components (like the Docker client) function correctly.
 
 ## Using a Custom Environment
 
@@ -86,8 +86,16 @@ print("Custom local environment created.")
 
 await env.close()
 ```
+### Hot Reloading
 
-Creating a custom environment requires careful design of both the Dockerfile and the controller script to ensure they work together correctly.
+The HUD SDK supports hot reloading of controller code. When using a build context, if the controller code in the folder is updated, the SDK will automatically reinstall the controller package
+without needing to rebuild the image.
+This is done by:
+1. Copying the controller code to a temporary directory.
+2. `pip install -e . --break-system-packages` to install the controller package.
+
+Note that docker images cannot be hot reloaded, and will only be rebuilt when a new environment is created.
+
 
 ## Related Concepts
 
