@@ -5,16 +5,29 @@ from base64 import b64decode, b64encode
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 from hud.env.docker_client import DockerClient
 from hud.exceptions import HudResponseError
 from hud.server import make_request
 from hud.settings import settings
 from hud.types import EnvironmentStatus
 from hud.utils import ExecuteResult
-from hud.utils.common import get_gym_id
+from hud.utils.common import directory_to_zip_bytes, get_gym_id
 
 logger = logging.getLogger("hud.env.remote_env_client")
 
+async def upload_bytes_to_presigned_url(presigned_url: str, data_bytes: bytes) -> None:
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.put(presigned_url, content=data_bytes)
+            response.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        logger.exception("Failed to upload to presigned URL")
+        raise HudResponseError(message=f"Failed to upload to presigned URL: {e}") from e
+    except httpx.RequestError as e:
+        logger.exception("Network error uploading to presigned URL")
+        raise HudResponseError(message=f"Network error uploading to presigned URL: {e}") from e
 
 class RemoteDockerClient(DockerClient):
     """
@@ -28,12 +41,34 @@ class RemoteDockerClient(DockerClient):
         """
         Build an image from a build context.
         """
-        # TODO: Server side, generate presigned URL for build context
-        # Client side, upload zip file to presigned URL
-        # Server side, build image
-        # Stream logs to client
-        # Return image URI
-        raise NotImplementedError("RemoteDockerClient does not yet support building images, but this will be added soon! For now, you must build the image locally and push it to a registry.")
+        # create the presigned url by making a POST request to /v2/builds
+        logger.info("Creating build")
+        response = await make_request(
+            method="POST",
+            url=f"{settings.base_url}/v2/builds",
+            api_key=settings.api_key,
+        )
+        logger.info("Build created")
+        presigned_url = response["presigned_url"]
+        # zip the build context
+        logger.info("Zipping build context")
+        zip_bytes = directory_to_zip_bytes(build_context)
+        logger.info("Created zip archive of size %d kb", len(zip_bytes) // 1024)
+        # upload the zip bytes to the presigned url
+        logger.info("Uploading build context")
+        await upload_bytes_to_presigned_url(presigned_url, zip_bytes)
+        logger.info("Build context uploaded")
+
+        # start the build and return uri and logs
+        logger.info("Starting build")
+        response = await make_request(
+            method="POST",
+            url=f"{settings.base_url}/v2/builds/{response['id']}/start",
+            api_key=settings.api_key,
+        )
+        logger.info("Build completed")
+        
+        return response["uri"], {"logs": response["logs"]}
 
     @classmethod
     async def create(

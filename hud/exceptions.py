@@ -165,3 +165,14 @@ class HudNetworkError(HudException):
     This exception is raised when there are issues with the network
     connection, DNS resolution, or other network-related problems.
     """
+
+
+class GymMakeException(HudException):
+    """Raised when environment creation or setup fails, includes context data."""
+    def __init__(self, message: str, data: dict[str, Any]) -> None:
+        super().__init__(message)
+        self.data = data
+
+    def __str__(self) -> str:
+        base = super().__str__()
+        return f"{base} | Data: {self.data}"

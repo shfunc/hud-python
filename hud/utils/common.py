@@ -4,6 +4,7 @@ import io
 import logging
 import tarfile
 from typing import TYPE_CHECKING, Any, TypedDict
+import zipfile
 
 from pydantic import BaseModel
 
@@ -106,6 +107,16 @@ def directory_to_tar_bytes(directory_path: Path) -> bytes:
     output.seek(0)
     return output.getvalue()
 
+def directory_to_zip_bytes(context_dir: Path) -> bytes:
+    """Zip a directory and return the zip archive as bytes."""
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for file_path in context_dir.rglob("*"):
+            if file_path.is_file():
+                rel_path = file_path.relative_to(context_dir)
+                logger.debug("Adding %s to zip archive", rel_path)
+                zipf.write(str(file_path), arcname=str(rel_path))
+    return output.getvalue()
 
 async def get_gym_id(gym_name_or_id: str) -> str:
     """

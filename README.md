@@ -6,7 +6,7 @@ A Python SDK for creating, evaluating, and benchmarking agent interactions with 
 
 [![PyPI version](https://img.shields.io/pypi/v/hud-python)](https://pypi.org/project/hud-python/)
 
-[📚 Documentation](https://documentation.hud.so) | [🏠 Homepage](https://hud.so)
+[📚 Documentation](https://docs.hud.so) | [🏠 Homepage](https://hud.so)
 
 ## API Key Setup
 
@@ -91,18 +91,18 @@ print(await job.get_analytics())
 
 Explore the core concepts and features of the SDK:
 
-*   **[Tasks and TaskSets](https://documentation.hud.so/concepts/task)**: Define goals, context, setup, and evaluation criteria for agent scenarios. This includes both interactive and **question-answering (QA)** style tasks.
-*   **[Environments](https://documentation.hud.so/concepts/environment)**: Understand the browser and OS runtimes where agents interact.
-*   **[Agents](https://documentation.hud.so/concepts/agent)**: Learn about the agent architecture (Claude, Operator) and how they process observations and predict actions.
-*   **[Adapters](https://documentation.hud.so/concepts/adapter)**: See how actions and observations are translated between agents and environments.
-*   **[Jobs](https://documentation.hud.so/concepts/job)**: Group related runs for analysis and viewing on the HUD platform.
-*   **[Trajectories](https://documentation.hud.so/concepts/trajectory)**: Understand the recorded data from each agent run.
+*   **[Tasks and TaskSets](https://docs.hud.so/concepts/task)**: Define goals, context, setup, and evaluation criteria for agent scenarios. This includes both interactive and **question-answering (QA)** style tasks.
+*   **[Environments](https://docs.hud.so/concepts/environment)**: Understand the browser and OS runtimes where agents interact.
+*   **[Agents](https://docs.hud.so/concepts/agent)**: Learn about the agent architecture (Claude, Operator) and how they process observations and predict actions.
+*   **[Adapters](https://docs.hud.so/concepts/adapter)**: See how actions and observations are translated between agents and environments.
+*   **[Jobs](https://docs.hud.so/concepts/job)**: Group related runs for analysis and viewing on the HUD platform.
+*   **[Trajectories](https://docs.hud.so/concepts/trajectory)**: Understand the recorded data from each agent run.
 *   **Advanced Topics**:
-    *   **[CLA Action Details](https://documentation.hud.so/advanced/cla-details)**: Explore the standardized action format.
-    *   **[Custom Environments](https://documentation.hud.so/advanced/custom-environments)**: Build your own Docker-based local or remote environments.
-    *   **[Advanced Environment Control](https://documentation.hud.so/advanced/environment-control)**: Use `invoke`, `execute`, and `_setup` for finer control.
+    *   **[CLA Action Details](https://docs.hud.so/advanced/cla-details)**: Explore the standardized action format.
+    *   **[Custom Environments](https://docs.hud.so/advanced/custom-environments)**: Build your own Docker-based local or remote environments.
+    *   **[Advanced Environment Control](https://docs.hud.so/advanced/environment-control)**: Use `invoke`, `execute`, and `_setup` for finer control.
 
-*   **[Full API Reference](https://documentation.hud.so/api-reference/gym)**: Detailed specifications for all modules and classes.
+*   **[Full API Reference](https://docs.hud.so/api-reference/gym)**: Detailed specifications for all modules and classes.
 
 ## [Examples](examples/)
 
@@ -115,7 +115,7 @@ We recommend you first take a look at the example notebooks showing how to use t
 
 ## Documentation
 
-For comprehensive guides, examples, and API reference, visit [our docs](https://documentation.hud.so/introduction)
+For comprehensive guides, examples, and API reference, visit [our docs](https://docs.hud.so/introduction)
 
 ## License
 
