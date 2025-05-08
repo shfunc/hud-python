@@ -21,11 +21,13 @@ class TaskSet(BaseModel):
 
     Attributes:
         id: Unique identifier for the taskset
+        name: Name of the taskset
         description: Description of the taskset
         tasks: List of Task objects in the taskset
     """
 
     id: str | None = None
+    name: str | None = None
     description: str | None = None
     tasks: list[Task] = []
 
@@ -61,13 +63,19 @@ class TaskSet(BaseModel):
 
     async def upload(
         self,
-        name: str,
+        name: str | None = None,
         description: str | None = None,
         api_key: str | None = None,
     ) -> None:
         """
         Uploads the taskset to the server.
         """
+        if name is None:
+            name = self.name
+
+        if name is None:
+            raise ValueError("Taskset name is required")
+
         if api_key is None:
             api_key = settings.api_key
 

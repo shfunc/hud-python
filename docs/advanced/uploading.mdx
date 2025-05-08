@@ -1,0 +1,160 @@
+---
+title: 'Uploading TaskSets'
+description: 'Learn how to upload TaskSets and view them on the HUD platform'
+---
+
+# Uploading TaskSets
+
+TaskSets are collections of tasks that can be uploaded to the HUD platform for evaluation and sharing. This guide explains how to upload TaskSets and access them through the platform.
+
+## Creating and Uploading a TaskSet
+
+You can create a TaskSet from a list of tasks and upload it to the platform:
+
+```python
+from hud.task import Task
+from hud.taskset import TaskSet
+
+# Create tasks
+tasks = [
+    Task(
+        prompt="Navigate to example.com and verify the login page is displayed",
+        gym="hud-browser",
+        setup=[
+            ("goto", "https://example.com/login")
+        ],
+        evaluate={
+            "function": "page_contains",
+            "args": "Login"
+        }
+    ),
+    Task(
+        prompt="What is the capital of France?",
+        gym="hud-browser",
+        evaluate={
+            "function": "response_includes",
+            "args": "Paris"
+        }
+    )
+]
+
+# Create a TaskSet
+taskset = TaskSet(tasks=tasks)
+
+# Upload the TaskSet
+taskset_id = await taskset.upload("my-taskset")
+print(f"TaskSet uploaded with ID: {taskset_id}")
+```
+
+## TaskSet Parameters
+
+When creating a TaskSet, you can specify:
+
+- `name`: A descriptive name for your TaskSet
+- `description`: Detailed description of what the TaskSet evaluates
+- `tasks`: List of Task objects
+- `metadata`: Optional dictionary of metadata about the TaskSet
+
+## Task Configuration
+
+Each Task in a TaskSet can include:
+
+- `prompt`: The instruction or question for the agent
+- `gym`: The environment type (e.g., "hud-browser", "hud-ubuntu")
+- `setup`: Optional list of setup actions to run before the agent starts
+- `evaluate`: Function configuration to determine task success
+- `id`: Optional unique identifier for the task
+
+Common evaluation functions include:
+- `page_contains`: Checks if specific text exists on the page
+- `response_includes`: Verifies if the agent's final response contains expected text
+- `cookies_exist`: Checks if a set of cookies are present
+
+## Viewing TaskSets on the Platform
+
+After uploading, you can view and manage your TaskSets at [app.hud.so/evalsets](https://app.hud.so/evalsets). The platform provides:
+
+- List of all your uploaded TaskSets
+- Detailed view of individual tasks within each TaskSet
+- Task prompts and evaluation criteria
+- Evaluation results when agents are run against the TaskSet
+
+## Loading an Existing TaskSet
+
+You can load a previously uploaded TaskSet using its name:
+
+```python
+from hud.taskset import TaskSet
+
+# Load an existing TaskSet
+taskset = await TaskSet.load("taskset-name")
+
+# Access tasks
+for task in taskset.tasks:
+    print(f"Task ID: {task.id}")
+    print(f"Prompt: {task.prompt}")
+    print(f"Evaluation: {task.evaluate}")
+```
+
+## Best Practices
+
+1. **Task Organization**
+   - Give tasks clear, unique IDs
+   - Use descriptive prompts
+   - Group related tasks into themed TaskSets
+
+2. **Evaluation Design**
+   - Choose appropriate evaluation functions
+   - Provide clear success criteria
+   - Test evaluation logic before uploading
+
+3. **Documentation**
+   - Write clear task prompts
+   - Document expected agent behavior
+   - Include example solutions where appropriate
+
+## Running Evaluations
+
+Once uploaded, you can run agents against your TaskSet:
+
+```python
+from hud.job import run_job
+from my_agent import MyAgent
+
+# Run evaluation using the TaskSet
+job = await run_job(
+    agent_cls=MyAgent,
+    task_or_taskset=taskset,
+    job_name="Evaluation Run"
+)
+
+# View results on app.hud.so/jobs/{job.id}
+print(f"View results at: https://app.hud.so/jobs/{job.id}")
+```
+
+## Platform Features
+
+The HUD platform ([app.hud.so](https://app.hud.so)) provides several features for working with TaskSets:
+
+1. **TaskSet Management**
+   - Browse all uploaded TaskSets
+   - View individual task details
+   - Filter and search tasks
+   - Track evaluation history
+
+2. **Analysis Tools**
+   - Compare agent performance
+   - View detailed task results
+   - Export evaluation data
+   - Share results with team members
+
+3. **Collaboration**
+   - Share TaskSets with team members
+   - Collaborate on task creation
+   - Track changes and versions
+
+## Related Topics
+
+- [Task Creation](../concepts/task.mdx)
+- [Running Evaluations](../running-your-agent.mdx)
+- [Job Management](../concepts/job.mdx) 

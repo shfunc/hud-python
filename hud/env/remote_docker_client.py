@@ -50,6 +50,14 @@ class RemoteDockerClient(DockerClient):
         )
         logger.info("Build created")
         presigned_url = response["presigned_url"]
+
+        # List files in the build context
+        files = list(build_context.glob("**/*"))
+        logger.info("Found %d files in build context %s", len(files), build_context)
+
+        if len(files) == 0:
+            raise HudResponseError(message="Build context is empty")
+
         # zip the build context
         logger.info("Zipping build context")
         zip_bytes = directory_to_zip_bytes(build_context)

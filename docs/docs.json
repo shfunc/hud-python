@@ -40,6 +40,7 @@
       {
         "group": "Advanced Topics",
         "pages": [
+          "advanced/uploading",
           "advanced/cla-details",
           "advanced/custom-environments",
           "advanced/environment-control"
