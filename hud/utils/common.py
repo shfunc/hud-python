@@ -38,7 +38,8 @@ class FunctionConfig(BaseModel):
 
 
 # Type alias for the shorthand config, which just converts to function name and args
-ShorthandConfig = tuple[str | dict[str, Any] | list[str] | list[dict[str, Any]], ...]
+BasicType = str | int | float | bool | None
+ShorthandConfig = tuple[BasicType | dict[str, Any] | list[BasicType] | list[dict[str, Any]], ...]
 
 # Type alias for multiple config formats
 FunctionConfigs = (
