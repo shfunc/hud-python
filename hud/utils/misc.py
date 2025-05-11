@@ -13,20 +13,12 @@ logger = logging.getLogger(__name__)
 
 
 async def upload_env_telemetry(
-    environment: Environment,  # Changed from environment_id: str
+    environment: Environment,
     results: Any,
     api_key: str | None = None,
-) -> None:  # Assuming BUHelperTrajectory can be represented as a dict
+) -> None:
     """
     Sends telemetry data (results from a cloud runner) to the HUD telemetry upload endpoint.
-
-    Args:
-        environment: The HUD Gym Environment object this telemetry belongs to.
-        results: The 'results' dictionary from the cloud runner.
-        api_key: Optional API key to use for the request. If None, settings.api_key will be used.
-
-    Returns:
-        The parsed JSON response from the server (expected to be a BUHelperTrajectory).
     """
     environment_id = environment.client.env_id # type: ignore
 
