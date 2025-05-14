@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import logging
 from base64 import b64decode, b64encode
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
@@ -14,6 +13,9 @@ from hud.settings import settings
 from hud.types import EnvironmentStatus
 from hud.utils import ExecuteResult
 from hud.utils.common import directory_to_zip_bytes, get_gym_id
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = logging.getLogger("hud.env.remote_env_client")
 
