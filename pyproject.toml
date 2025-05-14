@@ -165,3 +165,5 @@ show_missing = true
 fail_under = 60
 omit = ["*/tests/*"]
 
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"
