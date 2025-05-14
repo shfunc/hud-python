@@ -20,7 +20,7 @@ async def upload_env_telemetry(
     """
     Sends telemetry data (results from a cloud runner) to the HUD telemetry upload endpoint.
     """
-    environment_id = environment.client.env_id # type: ignore
+    environment_id = environment.client.env_id  # type: ignore
 
     if not api_key:
         api_key = settings.api_key
@@ -29,7 +29,7 @@ async def upload_env_telemetry(
         raise ValueError("API key must be provided either as an argument or set in hud.settings.")
 
     endpoint_url = f"{settings.base_url}/v2/environments/{environment_id}/telemetry-upload"
-    
+
     request_payload = {
         "results": {
             "steps": results,

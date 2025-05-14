@@ -13,6 +13,7 @@ from hud.utils.common import FunctionConfig, FunctionConfigs
 if TYPE_CHECKING:
     from inspect_ai.dataset import Sample
 
+
 def convert_inspect_setup(setup: str) -> list[FunctionConfig]:
     """
     Inspect setup is a single bash string to run in the environment.
@@ -91,10 +92,12 @@ class Task(BaseModel):
             elif isinstance(sample.target, list):
                 evaluate_config = ("match_all", sample.target)
 
-        task_setup: FunctionConfigs | None = convert_inspect_setup(sample.setup) if sample.setup else None
+        task_setup: FunctionConfigs | None = (
+            convert_inspect_setup(sample.setup) if sample.setup else None
+        )
 
         sandbox = sample.sandbox
-       
+
         match sandbox:
             case "docker":
                 task_gym = CustomGym(
@@ -116,7 +119,6 @@ class Task(BaseModel):
                 task_setup = None
             case _:
                 raise ValueError(f"Unsupported sandbox type: {sandbox}")
-
 
         return cls(
             id=None,

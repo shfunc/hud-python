@@ -108,6 +108,7 @@ def directory_to_tar_bytes(directory_path: Path) -> bytes:
     output.seek(0)
     return output.getvalue()
 
+
 def directory_to_zip_bytes(context_dir: Path) -> bytes:
     """Zip a directory and return the zip archive as bytes."""
     output = io.BytesIO()
@@ -118,6 +119,7 @@ def directory_to_zip_bytes(context_dir: Path) -> bytes:
                 logger.debug("Adding %s to zip archive", rel_path)
                 zipf.write(str(file_path), arcname=str(rel_path))
     return output.getvalue()
+
 
 async def get_gym_id(gym_name_or_id: str) -> str:
     """

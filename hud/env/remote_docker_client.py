@@ -17,6 +17,7 @@ from hud.utils.common import directory_to_zip_bytes, get_gym_id
 
 logger = logging.getLogger("hud.env.remote_env_client")
 
+
 async def upload_bytes_to_presigned_url(presigned_url: str, data_bytes: bytes) -> None:
     try:
         async with httpx.AsyncClient() as client:
@@ -28,6 +29,7 @@ async def upload_bytes_to_presigned_url(presigned_url: str, data_bytes: bytes) -
     except httpx.RequestError as e:
         logger.exception("Network error uploading to presigned URL")
         raise HudResponseError(message=f"Network error uploading to presigned URL: {e}") from e
+
 
 class RemoteDockerClient(DockerClient):
     """
@@ -75,7 +77,7 @@ class RemoteDockerClient(DockerClient):
             api_key=settings.api_key,
         )
         logger.info("Build completed")
-        
+
         return response["uri"], {"logs": response["logs"]}
 
     @classmethod
@@ -143,7 +145,6 @@ class RemoteDockerClient(DockerClient):
             )
 
         return cls(env_id)
-
 
     def __init__(self, env_id: str) -> None:
         """
