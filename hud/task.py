@@ -88,9 +88,9 @@ class Task(BaseModel):
         evaluate_config = None
         if sample.target:
             if isinstance(sample.target, str):
-                evaluate_config = ("response_includes", [sample.target])
+                evaluate_config = FunctionConfig(function="response_includes", args=[sample.target])
             elif isinstance(sample.target, list):
-                evaluate_config = ("match_all", sample.target)
+                evaluate_config = FunctionConfig(function="match_all", args=sample.target)
 
         task_setup: FunctionConfigs | None = (
             convert_inspect_setup(sample.setup) if sample.setup else None
