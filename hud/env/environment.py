@@ -81,7 +81,9 @@ class Environment(BaseModel):
             elif self.task and self.task.setup is not None:
                 await self._invoke_all(self.task.setup)
             else:
-                raise ValueError("No config, task or task setup function provided for local environment")
+                raise ValueError(
+                    "No config, task or task setup function provided for local environment"
+                )
 
     async def evaluate(self, config: FunctionConfigs | None = None) -> Any:
         """

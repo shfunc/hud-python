@@ -4,8 +4,8 @@ import asyncio
 import io
 import logging
 import textwrap
-import uuid
 import time
+import uuid
 from typing import TYPE_CHECKING, Any
 
 import aiodocker
@@ -42,7 +42,7 @@ class LocalDockerClient(DockerClient):
 
         # Create a tar file from the path
         tar_bytes = directory_to_tar_bytes(build_context)
-        logger.info("generated tar file with size: %d KB", len(tar_bytes)//1024)
+        logger.info("generated tar file with size: %d KB", len(tar_bytes) // 1024)
 
         # Build the image
         build_stream = await docker_client.images.build(
@@ -63,10 +63,10 @@ class LocalDockerClient(DockerClient):
 
         return image_tag, {"build_output": output}
 
-
     @classmethod
     async def create(
-        cls, image: str,
+        cls,
+        image: str,
     ) -> LocalDockerClient:
         """
         Creates a Docker environment client from a image.
@@ -77,7 +77,7 @@ class LocalDockerClient(DockerClient):
         Returns:
             DockerClient: An instance of the Docker environment client
         """
-       
+
         # Initialize Docker client
         docker_client = aiodocker.Docker()
 
@@ -102,9 +102,8 @@ class LocalDockerClient(DockerClient):
             window_usecs = health_check_config.get("Interval", int(30 * 1e9))
             window_secs = window_usecs // 1_000_000
 
-            now = time.monotonic()
-            deadline = now + window_secs
-            logger.debug(f"Waiting for container {container.id} to become healthy")
+            deadline = time.monotonic() + window_secs
+            logger.debug("Waiting for container %s to become healthy", container.id)
             while True:
                 state = (await container.show())["State"]
                 if state.get("Health", {}).get("Status") == "healthy":
@@ -115,7 +114,7 @@ class LocalDockerClient(DockerClient):
                 if now > deadline:
                     raise TimeoutError(f"{container.id} not healthy after {window_secs}s")
                 await asyncio.sleep(1)
-            logger.debug(f"Container {container.id} is healthy")
+            logger.debug("Container %s is healthy", container.id)
 
         # Return the controller instance
         return cls(docker_client, container.id)
@@ -213,7 +212,6 @@ class LocalDockerClient(DockerClient):
                 stdout_data.extend(message.data)
             elif message.stream == 2:  # stderr
                 stderr_data.extend(message.data)
-
 
         if "No module named 'hud_controller'" in stderr_data.decode():
             if self._source_path is None:
