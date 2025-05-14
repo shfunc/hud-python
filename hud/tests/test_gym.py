@@ -10,6 +10,7 @@ from pydantic import ConfigDict
 
 from hud.env.client import Client
 from hud.env.environment import Environment
+from hud.exceptions import GymMakeException
 from hud.gym import make
 from hud.job import Job
 from hud.task import Task
@@ -98,7 +99,9 @@ async def test_make_docker_gym(mocker, test_case):
     mock_client = MockClient()
     mock_build_data = {"image": "test-image"}
 
-    mock_build_image = mocker.patch(f"{test_case['client_class']}.build_image", new_callable=AsyncMock)
+    mock_build_image = mocker.patch(
+        f"{test_case['client_class']}.build_image", new_callable=AsyncMock
+    )
     mock_build_image.return_value = (mock_build_data["image"], mock_build_data)
 
     mock_create = mocker.patch(f"{test_case['client_class']}.create", new_callable=AsyncMock)
@@ -154,7 +157,7 @@ async def test_make_docker_gym(mocker, test_case):
                 "metadata": {},
             },
         },
-    )
+    ),
 )
 async def test_make_remote_gym(mocker, test_case):
     mock_client = MockClient()
@@ -211,7 +214,7 @@ async def test_make_with_job_association(mocker):
 @pytest.mark.asyncio
 async def test_make_with_invalid_gym():
     """Test creating an environment with an invalid gym source."""
-    with pytest.raises(ValueError, match="Invalid gym source"):
+    with pytest.raises(GymMakeException, match="Invalid gym source"):
         # Create a mock object that is neither a Gym nor a Task
         mock_invalid = MagicMock()
         mock_invalid.__class__ = type("InvalidGym", (), {})
@@ -222,11 +225,10 @@ async def test_make_with_invalid_gym():
 async def test_make_with_invalid_location():
     """Test creating an environment with an invalid location."""
     # Create a CustomGym instance with an invalid location
-    with pytest.raises(ValueError, match="Invalid environment location"):
+    with pytest.raises(GymMakeException, match="Invalid environment location"):
         await make(
             MagicMock(
                 spec=CustomGym,
-                dockerfile="test.Dockerfile",
                 location="invalid",
                 image_or_build_context=Path("/path/to/source"),
             )
@@ -234,15 +236,8 @@ async def test_make_with_invalid_location():
 
 
 @pytest.mark.asyncio
-async def test_make_without_dockerfile():
-    """Test creating an environment without a dockerfile."""
-    # Create a CustomGym instance without a dockerfile
-    with pytest.raises(ValueError, match="Dockerfile is required for custom environments"):
-        await make(
-            MagicMock(
-                spec=CustomGym,
-                dockerfile=None,
-                location="local",
-                image_or_build_context=Path("/path/to/source"),
-            )
-        )
+async def test_make_without_image_or_build_context():
+    """Test creating an environment without an image or build context."""
+    # Create a CustomGym instance without an image or build context
+    with pytest.raises(GymMakeException, match="Invalid image or build context"):
+        await make(MagicMock(spec=CustomGym, location="local", image_or_build_context=None))
