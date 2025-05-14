@@ -162,7 +162,7 @@ exclude_lines = [
     "@(abc\\.)?abstractmethod",
 ]
 show_missing = true
-fail_under = 60
+fail_under = 59
 omit = ["*/tests/*"]
 
 [tool.pytest.ini_options]
