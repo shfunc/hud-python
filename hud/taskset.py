@@ -32,6 +32,7 @@ class TaskSet(BaseModel):
     tasks: list[Task] = []
 
     def __init__(self, tasks: list[Task] | None = None) -> None:
+        super().__init__(tasks=tasks)
         if tasks is not None:
             self.tasks = tasks
 
