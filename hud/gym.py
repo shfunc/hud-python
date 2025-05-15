@@ -75,9 +75,13 @@ async def make(
             elif isinstance(gym.image_or_build_context, Path):
                 # need to build the image
                 if gym.location == "local":
-                    uri, build_data = await LocalDockerClient.build_image(gym.image_or_build_context)
+                    uri, build_data = await LocalDockerClient.build_image(
+                        gym.image_or_build_context
+                    )
                 elif gym.location == "remote":
-                    uri, build_data = await RemoteDockerClient.build_image(gym.image_or_build_context)
+                    uri, build_data = await RemoteDockerClient.build_image(
+                        gym.image_or_build_context
+                    )
                 else:
                     raise ValueError(f"Invalid environment location: {gym.location}")
             else:
@@ -119,7 +123,9 @@ async def make(
             raise ValueError(f"Invalid gym source: {gym}")
 
         # Create the environment itself
-        environment = Environment(client=client, metadata=metadata, task=task, build_data=build_data)
+        environment = Environment(
+            client=client, metadata=metadata, task=task, build_data=build_data
+        )
 
         if task:
             await environment._setup()

@@ -102,7 +102,9 @@ class LangchainAgent(Agent[LangchainModelOrRunnable, Any], Generic[LangchainMode
             "If you believe the task is complete based on the user's prompt and the observations, use the 'ResponseAction'."
         )
 
-    async def fetch_response(self, observation: Observation) -> tuple[list[dict | SingleCLAction], bool]:
+    async def fetch_response(
+        self, observation: Observation
+    ) -> tuple[list[dict | SingleCLAction], bool]:
         """
         Fetches a response from the configured Langchain model, expecting a single
         structured CLA action.
