@@ -23,6 +23,7 @@ dependencies = [
     "openai",
     "langchain",
     "langchain-openai",
+    "wrapt>=1.14.0",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",

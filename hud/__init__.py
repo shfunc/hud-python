@@ -1,28 +1,24 @@
 """
-HUD Gym SDK - A Python SDK for interacting with HUD environments.
+HUD SDK for interacting with the HUD evaluation platform.
 """
 
-from __future__ import annotations
+# Initialize telemetry
+from hud.telemetry import init_telemetry
+init_telemetry()
 
-from . import agent, env, gym, settings, task, taskset, types, utils
-from .job import create_job, load_job, run_job
-from .job import job as register_job
-from .taskset import load_taskset
+# Import version
+from hud.version import __version__
 
-__version__ = "0.2.4"
+# Import API components for top-level access
+from hud.gym import make
+from hud.taskset import TaskSet, load_taskset
+from hud.telemetry import trace, async_trace
 
 __all__ = [
-    "agent",
-    "create_job",
-    "env",
-    "gym",
-    "load_job",
+    "make",
+    "__version__",
+    "TaskSet",
     "load_taskset",
-    "register_job",
-    "run_job",
-    "settings",
-    "task",
-    "taskset",
-    "types",
-    "utils",
+    "trace",
+    "async_trace",
 ]
