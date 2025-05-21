@@ -293,9 +293,9 @@ async def _execute_task(
         # Environment creation with semaphore
         if env_creation_semaphore:
             async with env_creation_semaphore:
-                env = await gym.make(task, job=job)
+                env = await gym.make(task, job=job, skip_trace=True)
         else:
-            env = await gym.make(task, job=job)
+            env = await gym.make(task, job=job, skip_trace=True)
 
         obs_tuple = await env.reset()
         if obs_tuple is None:
