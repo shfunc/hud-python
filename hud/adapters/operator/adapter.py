@@ -4,6 +4,7 @@ from typing import Any, ClassVar
 
 from hud.adapters.common import CLA, Adapter
 from hud.adapters.common.types import (
+    CLAButton,
     CLAKey,
     ClickAction,
     DragAction,
@@ -24,7 +25,11 @@ class OperatorAdapter(Adapter):
         "arrowup": "up",
         "arrowdown": "down",
         "arrowleft": "left",
-        "arrowright": "right",
+        "arrowright": "right"
+    }
+
+    BUTTON_MAP: ClassVar[dict[str, CLAButton]] = {
+        "wheel": "middle"
     }
 
     def __init__(self) -> None:
@@ -45,6 +50,7 @@ class OperatorAdapter(Adapter):
             if action_type == "click":
                 x, y = data.get("x", 0), data.get("y", 0)
                 button = data.get("button", "left")
+                button = self.BUTTON_MAP.get(button, button)
                 return ClickAction(point=Point(x=x, y=y), button=button)
 
             elif action_type == "double_click":

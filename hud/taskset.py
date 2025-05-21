@@ -90,7 +90,7 @@ class TaskSet(BaseModel):
             },
         )
         logger.info(
-            "[HUD] Taskset %s uploaded successfully, see it on app.hud.so/tasksets/%s", name, name
+            "[HUD] Taskset %s uploaded successfully, see it on app.hud.so/evalsets/%s", name, name
         )
 
 

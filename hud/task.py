@@ -55,6 +55,10 @@ class Task(BaseModel):
     config: dict[str, Any] | None = None
 
     @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Task:
+        return cls(**data)
+
+    @classmethod
     def from_inspect_sample(cls, sample: Sample) -> Task:
         """Create a Task from an Inspect dataset sample.
         Automatically detects if a CustomGym (docker) or QA Gym is needed based on sample.sandbox.
