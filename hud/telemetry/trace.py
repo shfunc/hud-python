@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
-from contextlib import asynccontextmanager
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from hud.telemetry.context import (
@@ -12,25 +12,31 @@ from hud.telemetry.context import (
     is_root_trace,
     set_current_task_run_id,
 )
-from hud.telemetry.exporter import export_telemetry
+from hud.telemetry.exporter import export_telemetry as export_telemetry_coro
+from hud.telemetry.exporter import submit_to_worker_loop
 from hud.telemetry.instrumentation.registry import registry
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
+    from collections.abc import Generator
+
+    from hud.telemetry.mcp_models import BaseMCPCall
 
 logger = logging.getLogger("hud.telemetry")
 T = TypeVar("T")
 
 def init_telemetry() -> None:
-    """Initialize telemetry instrumentors."""
+    """Initialize telemetry instrumentors and ensure worker is started if telemetry is active."""
     registry.install_all()
+    logger.info("HUD Telemetry initialized.")
 
-@asynccontextmanager
-async def trace(
+@contextmanager
+def trace(
     attributes: dict[str, Any] | None = None,
-) -> AsyncGenerator[str, None]:
+) -> Generator[str, None, None]:
     """
-    Async context manager for tracing an asynchronous block of code.
+    Context manager for tracing a block of code.
+    The task_run_id is always generated internally as a UUID.
+    Telemetry export is handled by a background worker thread.
     
     Args:
         attributes: Optional dictionary of attributes to associate with this trace
@@ -38,37 +44,29 @@ async def trace(
     Returns:
         The generated task run ID (UUID string) used for this trace
     """
-    # Always generate a task_run_id internally
     task_run_id = str(uuid.uuid4())
     
     if attributes is None:
         attributes = {}
     
-    # Record trace start
     start_time = time.time()
     logger.debug("Starting trace %s", task_run_id)
     
-    # Save previous context
     previous_task_id = get_current_task_run_id()
     was_root = is_root_trace.get()
     
-    # Set new context
     set_current_task_run_id(task_run_id)
     is_root = previous_task_id is None
     is_root_trace.set(is_root)
     
     try:
-        # Yield the task_run_id to the caller
         yield task_run_id
     finally:
-        # Capture end time
         end_time = time.time()
         duration = end_time - start_time
         
-        # Get any buffered MCP calls
-        mcp_calls = flush_buffer()
+        mcp_calls: list[BaseMCPCall] = flush_buffer()
         
-        # Add our own metadata to the trace
         trace_attributes = {
             **attributes,
             "start_time": start_time,
@@ -77,28 +75,25 @@ async def trace(
             "is_root": is_root,
         }
         
-        # Only export if this is a root trace and we have MCP calls
         if is_root and mcp_calls:
-            # Export telemetry
             try:
-                # Pass raw Pydantic model objects to export_telemetry
-                await export_telemetry(
+                coro_to_submit = export_telemetry_coro(
                     task_run_id=task_run_id,
                     trace_attributes=trace_attributes,
-                    mcp_calls=mcp_calls # Pass the list of BaseMCPCall objects directly
+                    mcp_calls=mcp_calls
                 )
+                future = submit_to_worker_loop(coro_to_submit)
+                if future:
+                    logger.debug("Telemetry for trace %s submitted to background worker.", task_run_id)
+                else:
+                    logger.warning("Failed to submit telemetry for trace %s to background worker (loop not available).", task_run_id)
             except Exception as e:
-                logger.warning(f"Failed to export telemetry: {e}")
+                logger.warning("Failed to submit telemetry for trace %s: %s", task_run_id, e)
         
-        # Restore previous context
         set_current_task_run_id(previous_task_id)
         is_root_trace.set(was_root)
         
-        logger.debug(
-            "Ended trace %s with %d MCP call(s)",
-            task_run_id,
-            len(mcp_calls)
-        )
+        logger.debug("Ended trace %s with %d MCP call(s)", task_run_id, len(mcp_calls))
 
         logger.info("[hud] View trace at https://app.hud.so/jobs/traces/%s", task_run_id)
 
