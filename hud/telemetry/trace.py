@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import asyncio  # For checking if function is async
 import logging
 import time
 import uuid
-import asyncio # For checking if function is async
-from functools import wraps # For creating decorators
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, TypeVar, Callable, overload, ParamSpec # Added overload, ParamSpec
-from collections.abc import Coroutine # For async return type hint
+from functools import wraps  # For creating decorators
+from typing import (  # Added overload, ParamSpec
+    TYPE_CHECKING,
+    Any,
+    ParamSpec,
+    TypeVar,
+    overload,
+)
 
 from hud.telemetry.context import (
     flush_buffer,
@@ -20,7 +25,11 @@ from hud.telemetry.exporter import submit_to_worker_loop
 from hud.telemetry.instrumentation.registry import registry
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import (
+        Callable,
+        Coroutine,
+        Generator,
+    )
 
     from hud.telemetry.mcp_models import BaseMCPCall
 
