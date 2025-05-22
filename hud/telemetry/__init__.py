@@ -7,13 +7,13 @@ to the HUD platform for analysis.
 from __future__ import annotations
 
 from hud.telemetry.context import get_current_task_run_id, set_current_task_run_id
-from hud.telemetry.trace import init_telemetry, trace
 from hud.telemetry.exporter import flush
+from hud.telemetry.trace import init_telemetry, trace
 
 __all__ = [
+    "flush",
     "get_current_task_run_id",
     "init_telemetry",
     "set_current_task_run_id",
-    "trace",
-    "flush"
+    "trace"
 ]

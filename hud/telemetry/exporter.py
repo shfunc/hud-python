@@ -259,8 +259,8 @@ async def _export_trace_payload_async(payload: dict[str, Any]) -> None:
     # The payload itself is what we want to send (containing attributes and mcp_calls list)
     # The mcp_calls within the payload are already dumped dictionaries.
     data_to_send = {
-        "attributes": payload.get("attributes", {}),
-        "mcp_calls": payload.get("mcp_calls", [])
+        "metadata": payload.get("attributes", {}),
+        "telemetry": payload.get("mcp_calls", [])
     }
     
     # Ensure mcp_calls is not empty if that's a requirement, or send as is. For now, send as is.
@@ -323,7 +323,7 @@ def flush(timeout: float = 10.0) -> None:
         
         if shutdown_future:
             try:
-                shutdown_future.result(timeout / 2 if timeout else None) 
+                shutdown_future.result(timeout / 2 if timeout else None)
                 logger.debug("Shutdown sentinel successfully queued.")
             except concurrent.futures.TimeoutError:
                 logger.warning("Timeout waiting for shutdown sentinel to be queued.")
@@ -364,6 +364,6 @@ def flush(timeout: float = 10.0) -> None:
     
     _worker_thread = None
     _worker_loop = None
-    _export_task_async = None 
+    _export_task_async = None
     # _export_queue_async.clear() # Optionally clear the queue
     logger.info("Telemetry flush and shutdown process completed.")
