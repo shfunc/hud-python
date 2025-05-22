@@ -2,17 +2,26 @@ from __future__ import annotations
 
 import contextvars
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TypeVar, Union, cast
+from datetime import datetime
+
+from hud.telemetry.mcp_models import (
+    BaseMCPCall, MCPRequestCall, MCPResponseCall, MCPNotificationCall,
+    MCPStreamEvent, MCPManualTestCall, MCPTelemetryRecord, StatusType
+)
 
 logger = logging.getLogger("hud.telemetry")
 
 # Context variables for tracing
-current_task_run_id = contextvars.ContextVar("current_task_run_id", default=None)
-mcp_calls_buffer = contextvars.ContextVar("mcp_calls_buffer", default=[])
-is_root_trace = contextvars.ContextVar("is_root_trace", default=False)
+current_task_run_id: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("current_task_run_id", default=None)
+mcp_calls_buffer: contextvars.ContextVar[List[BaseMCPCall]] = contextvars.ContextVar("mcp_calls_buffer", default=[])
+is_root_trace: contextvars.ContextVar[bool] = contextvars.ContextVar("is_root_trace", default=False)
 
 # Maximum buffer size before automatic flush
 MAX_BUFFER_SIZE = 100
+
+# Type variable for record factories
+T = TypeVar('T', bound=BaseMCPCall)
 
 def get_current_task_run_id() -> Optional[str]:
     """Get the task_run_id for the current trace context."""
@@ -20,23 +29,35 @@ def get_current_task_run_id() -> Optional[str]:
 
 def set_current_task_run_id(task_run_id: Optional[str]) -> None:
     """Set the task_run_id for the current trace context."""
-    # ContextVar.set doesn't allow None, so we need to handle this case
-    # by using an empty string as a sentinel value for None
-    current_task_run_id.set("" if task_run_id is None else task_run_id)
+    # Handle None value by using empty string as sentinel
+    value_to_set = "" if task_run_id is None else task_run_id
+    current_task_run_id.set(value_to_set)
 
-def buffer_mcp_call(call_data: Dict[str, Any]) -> None:
+def buffer_mcp_call(record: Union[BaseMCPCall, Dict[str, Any]]) -> None:
     """
     Add an MCP call to the buffer for the current trace.
     
     Args:
-        call_data: Dictionary containing details of the MCP call
+        record: Either a Pydantic model instance or dictionary with MCP call data
     """
     # Only buffer if we have an active trace
     task_run_id = get_current_task_run_id()
     if task_run_id is not None and task_run_id != "":
         buffer = mcp_calls_buffer.get()
-        # Make a copy to avoid modifying objects outside our control
-        buffer.append(call_data.copy() if isinstance(call_data, dict) else call_data)
+        
+        # Convert dictionary to proper model if needed
+        if isinstance(record, dict):
+            record = BaseMCPCall.from_dict(record)
+            
+        # Ensure the record has the current task_run_id
+        if record.task_run_id != task_run_id:
+            # Create a copy with the current task_run_id
+            record_dict = record.model_dump()
+            record_dict["task_run_id"] = task_run_id
+            record = BaseMCPCall.from_dict(record_dict)
+        
+        # Add to buffer
+        buffer.append(record)
         mcp_calls_buffer.set(buffer)
         
         # Auto-flush if buffer gets too large
@@ -44,7 +65,7 @@ def buffer_mcp_call(call_data: Dict[str, Any]) -> None:
             logger.debug(f"MCP calls buffer reached size {len(buffer)}, auto-flushing")
             flush_buffer(export=True)
 
-def flush_buffer(export: bool = False) -> List[Dict[str, Any]]:
+def flush_buffer(export: bool = False) -> List[BaseMCPCall]:
     """
     Clear the MCP calls buffer and return its contents.
     
@@ -58,9 +79,95 @@ def flush_buffer(export: bool = False) -> List[Dict[str, Any]]:
     # Reset buffer to empty list
     mcp_calls_buffer.set([])
     
-    if export and buffer:
-        # Handle export if requested - this branch is for future expansion
-        # Currently the export is done in the trace context manager
-        pass
-        
-    return buffer 
+    if export and buffer and len(buffer) > 0:
+        task_id = buffer[0].task_run_id if buffer else None
+        if task_id:
+            logger.debug(f"Exporting {len(buffer)} MCP calls for task run {task_id}")
+            # Create a telemetry record for export
+            telemetry_record = MCPTelemetryRecord(
+                task_run_id=task_id,
+                records=buffer
+            )
+            # In the future, we could call an export function here
+            # For now, just log that we have telemetry
+            logger.debug(f"MCP telemetry record created with {len(buffer)} calls")
+        else:
+            logger.warning("No task_run_id found in buffer, skipping export")
+    
+    return buffer
+
+def create_request_record(
+    method: str,
+    status: StatusType = StatusType.STARTED,
+    **kwargs
+) -> MCPRequestCall:
+    """Create and buffer a request record"""
+    task_run_id = get_current_task_run_id()
+    if not task_run_id:
+        logger.warning("No active task_run_id, request record will not be created")
+        raise ValueError("No active task_run_id")
+    
+    record = MCPRequestCall(
+        task_run_id=task_run_id,
+        method=method,
+        status=status,
+        start_time=kwargs.pop("start_time", None) or datetime.now().timestamp(),
+        **kwargs
+    )
+    buffer_mcp_call(record)
+    return record
+
+def create_response_record(
+    method: str,
+    related_request_id: Optional[Union[str, int]] = None,
+    is_error: bool = False,
+    **kwargs
+) -> MCPResponseCall:
+    """Create and buffer a response record"""
+    task_run_id = get_current_task_run_id()
+    if not task_run_id:
+        logger.warning("No active task_run_id, response record will not be created")
+        raise ValueError("No active task_run_id")
+    
+    record = MCPResponseCall(
+        task_run_id=task_run_id,
+        method=method,
+        status=StatusType.COMPLETED,
+        related_request_id=related_request_id,
+        is_error=is_error,
+        **kwargs
+    )
+    buffer_mcp_call(record)
+    return record
+
+def create_notification_record(
+    method: str,
+    status: StatusType = StatusType.STARTED,
+    **kwargs
+) -> MCPNotificationCall:
+    """Create and buffer a notification record"""
+    task_run_id = get_current_task_run_id()
+    if not task_run_id:
+        logger.warning("No active task_run_id, notification record will not be created")
+        raise ValueError("No active task_run_id")
+    
+    record = MCPNotificationCall(
+        task_run_id=task_run_id,
+        method=method,
+        status=status,
+        start_time=kwargs.pop("start_time", None) or datetime.now().timestamp(),
+        **kwargs
+    )
+    buffer_mcp_call(record)
+    return record
+
+def create_manual_test_record(**custom_data) -> Optional[MCPManualTestCall]:
+    """Create and buffer a manual test record"""
+    task_run_id = get_current_task_run_id()
+    if not task_run_id:
+        logger.warning("No active task_run_id, manual test record will not be created")
+        return None
+    
+    record = MCPManualTestCall.create(task_run_id=task_run_id, **custom_data)
+    buffer_mcp_call(record)
+    return record 
