@@ -31,6 +31,7 @@ def init_telemetry() -> None:
 
 @contextmanager
 def trace(
+    name: str | None = None,
     attributes: dict[str, Any] | None = None,
 ) -> Generator[str, None, None]:
     """
@@ -40,6 +41,7 @@ def trace(
     
     Args:
         attributes: Optional dictionary of attributes to associate with this trace
+        name: Optional name for this trace, will be added to attributes.
         
     Returns:
         The generated task run ID (UUID string) used for this trace
@@ -49,8 +51,11 @@ def trace(
     if attributes is None:
         attributes = {}
     
+    if name is not None:
+        attributes["trace_name"] = name
+    
     start_time = time.time()
-    logger.debug("Starting trace %s", task_run_id)
+    logger.debug("Starting trace %s (Name: %s)", task_run_id, name if name else "Unnamed")
     
     previous_task_id = get_current_task_run_id()
     was_root = is_root_trace.get()
@@ -67,7 +72,7 @@ def trace(
         
         mcp_calls: list[BaseMCPCall] = flush_buffer()
         
-        trace_attributes = {
+        trace_attributes_final = {
             **attributes,
             "start_time": start_time,
             "end_time": end_time,
@@ -79,7 +84,7 @@ def trace(
             try:
                 coro_to_submit = export_telemetry_coro(
                     task_run_id=task_run_id,
-                    trace_attributes=trace_attributes,
+                    trace_attributes=trace_attributes_final,
                     mcp_calls=mcp_calls
                 )
                 future = submit_to_worker_loop(coro_to_submit)
@@ -93,7 +98,7 @@ def trace(
         set_current_task_run_id(previous_task_id)
         is_root_trace.set(was_root)
         
-        logger.debug("Ended trace %s with %d MCP call(s)", task_run_id, len(mcp_calls))
+        logger.debug("Ended trace %s (Name: %s) with %d MCP call(s)", task_run_id, name if name else "Unnamed", len(mcp_calls))
 
         logger.info("[hud] View trace at https://app.hud.so/jobs/traces/%s", task_run_id)
 
