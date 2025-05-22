@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -9,8 +9,8 @@ logger = logging.getLogger(__name__)
 class InstrumentorRegistry:
     """Registry for telemetry instrumentors."""
     
-    def __init__(self):
-        self._instrumentors: Dict[str, Any] = {}
+    def __init__(self) -> None:
+        self._instrumentors: dict[str, Any] = {}
         
     def register(self, name: str, instrumentor: Any) -> None:
         """Register an instrumentor.
@@ -20,16 +20,16 @@ class InstrumentorRegistry:
             instrumentor: The instrumentor instance
         """
         self._instrumentors[name] = instrumentor
-        logger.debug(f"Registered instrumentor: {name}")
+        logger.debug("Registered instrumentor: %s", name)
         
     def install_all(self) -> None:
         """Install all registered instrumentors."""
         for name, instrumentor in self._instrumentors.items():
             try:
                 instrumentor.install()
-                logger.debug(f"Installed instrumentor: {name}")
+                logger.debug("Installed instrumentor: %s", name)
             except Exception as e:
-                logger.warning(f"Failed to install instrumentor {name}: {e}")
+                logger.warning("Failed to install instrumentor %s: %s", name, e)
 
 
 # Create a singleton registry
@@ -41,4 +41,4 @@ try:
     registry.register("mcp", MCPInstrumentor())
     logger.debug("MCP instrumentor registered")
 except Exception as e:
-    logger.debug(f"Could not register MCP instrumentor: {e}") 
+    logger.debug("Could not register MCP instrumentor: %s", e)

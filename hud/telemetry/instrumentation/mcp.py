@@ -1,23 +1,31 @@
-import asyncio
+from __future__ import annotations
+
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
+from typing import Any
+
 # from dataclasses import dataclass # Likely unused now
-from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Tuple, cast
-
-from wrapt import ObjectProxy, register_post_import_hook, wrap_function_wrapper
-
-from hud.telemetry.context import (
-    buffer_mcp_call, get_current_task_run_id, set_current_task_run_id,
-    create_request_record, create_response_record, create_notification_record
-)
-from hud.telemetry.mcp_models import (
-    StatusType, DirectionType, MCPCallType, MCPManualTestCall
-)
+from mcp.shared.message import SessionMessage  # type: ignore
 
 # MCP type imports for type checking and attribute access safety
-from mcp.types import JSONRPCRequest, JSONRPCResponse, JSONRPCError, JSONRPCNotification # type: ignore
-from mcp.shared.message import SessionMessage # type: ignore
+from mcp.types import (  # type: ignore
+    JSONRPCError,
+    JSONRPCNotification,
+    JSONRPCRequest,
+    JSONRPCResponse,
+)
+from wrapt import register_post_import_hook, wrap_function_wrapper
+
+from hud.telemetry.context import (
+    buffer_mcp_call,
+    create_notification_record,
+    create_request_record,
+    create_response_record,
+    get_current_task_run_id,
+)
+from hud.telemetry.mcp_models import DirectionType, MCPCallType, MCPManualTestCall, StatusType
 
 logger = logging.getLogger(__name__)
 
@@ -60,11 +68,11 @@ class MCPInstrumentor:
         # Removed hook for BaseSession.__init__ (it was for _base_session_init_wrapper)
         
         logger.debug("MCPInstrumentor: Attempting immediate instrumentation of already imported modules.")
-        for module, func_name, wrapper in hooks: 
+        for module, func_name, wrapper in hooks:
             try:
-                mod = __import__(module, fromlist=[func_name.split('.')[0]])
+                mod = __import__(module, fromlist=[func_name.split(".")[0]])
                 target_obj = mod
-                parts = func_name.split('.')
+                parts = func_name.split(".")
                 for i, part in enumerate(parts):
                     if hasattr(target_obj, part):
                         if i == len(parts) - 1:
@@ -112,7 +120,13 @@ class MCPInstrumentor:
             yield read_stream, write_stream # Pass original streams directly
             logger.debug(f"_transport_wrapper: Exited original stream context for {original_func_name}")
 
-    async def _receive_loop_wrapper(self, wrapped, instance, args, kwargs):
+    async def _receive_loop_wrapper(
+        self,
+        wrapped: Callable[[Any, Any, Any, Any], Awaitable[Any]],
+        instance: Any,
+        args: Any,
+        kwargs: Any
+    ) -> Any:
         """
         Wrap _receive_loop to capture responses and handled incoming messages.
         """
@@ -129,11 +143,11 @@ class MCPInstrumentor:
             call_type_override = MCPCallType.HANDLE_INCOMING
 
             actual_message_root = None
-            if hasattr(req_or_msg, 'message') and hasattr(req_or_msg.message, 'root'): # SessionMessage
+            if hasattr(req_or_msg, "message") and hasattr(req_or_msg.message, "root"): # SessionMessage
                 actual_message_root = req_or_msg.message.root
-            elif hasattr(req_or_msg, 'root'): # e.g. RequestResponder
+            elif hasattr(req_or_msg, "root"): # e.g. RequestResponder
                 actual_message_root = req_or_msg.root
-            elif isinstance(req_or_msg, (JSONRPCRequest, JSONRPCNotification, JSONRPCResponse, JSONRPCError)):
+            elif isinstance(req_or_msg, JSONRPCRequest | JSONRPCNotification | JSONRPCResponse | JSONRPCError):
                 actual_message_root = req_or_msg
             
             if actual_message_root:
@@ -145,7 +159,7 @@ class MCPInstrumentor:
                     method_name = actual_message_root.method
                     message_id = None # Notifications don't have IDs
                     # call_type_override can remain HANDLE_INCOMING
-                elif isinstance(actual_message_root, (JSONRPCResponse, JSONRPCError)):
+                elif isinstance(actual_message_root, JSONRPCResponse | JSONRPCError):
                     # This case implies _handle_incoming is processing a response/error directly
                     # (e.g. an error encountered while trying to send/route a response previously)
                     message_id = actual_message_root.id
@@ -154,9 +168,9 @@ class MCPInstrumentor:
                     call_type_override = MCPCallType.RECEIVE_RESPONSE # Treat as receiving a response internally
                 else:
                     # Fallback for other types, if any, that might appear here
-                    if hasattr(actual_message_root, 'method'):
+                    if hasattr(actual_message_root, "method"):
                         method_name = actual_message_root.method
-                    if hasattr(actual_message_root, 'id'):
+                    if hasattr(actual_message_root, "id"):
                         message_id = actual_message_root.id
 
             record_data_base = {
@@ -215,26 +229,30 @@ class MCPInstrumentor:
                         continue
 
                     # Ensure we are dealing with SessionMessage
-                    if not isinstance(message, SessionMessage) or not hasattr(message, 'message') or not hasattr(message.message, 'root'):
-                        logger.warning(f"Unexpected message type in _receive_loop: {type(message)}")
+                    if (
+                        not isinstance(message, SessionMessage)
+                        or not hasattr(message, "message")
+                        or not hasattr(message.message, "root")
+                    ):
+                        logger.warning("Unexpected message type in _receive_loop: %s", type(message))
                         await instance._handle_incoming(RuntimeError(f"Unknown message type: {message}"))
                         continue
                     
                     msg_root = message.message.root
 
-                    if isinstance(msg_root, (JSONRPCRequest, JSONRPCNotification)):
+                    if isinstance(msg_root, JSONRPCRequest | JSONRPCNotification):
                         # Let the (wrapped) _handle_incoming deal with these and record telemetry
                         await instance._handle_incoming(message)
-                    elif isinstance(msg_root, (JSONRPCResponse, JSONRPCError)):
+                    elif isinstance(msg_root, JSONRPCResponse | JSONRPCError):
                         # This is a direct response/error, record it here
                         logger.debug(f"MCPInstrumentor: Capturing direct response/error ID: {msg_root.id}")
                         if hud_task_run_id:
                             is_error = isinstance(msg_root, JSONRPCError)
                             error_message = None
                             error_code = None
-                            if is_error and hasattr(msg_root, 'error'):
-                                error_message = getattr(msg_root.error, 'message', None)
-                                error_code = str(getattr(msg_root.error, 'code', None))
+                            if is_error and hasattr(msg_root, "error"):
+                                error_message = getattr(msg_root.error, "message", None)
+                                error_code = str(getattr(msg_root.error, "code", None))
                             
                             create_response_record(
                                 method=f"response_to_id_{msg_root.id}", # Consistent method naming
@@ -255,26 +273,34 @@ class MCPInstrumentor:
                             await stream.send(msg_root)
                         else:
                             # This case should ideally be handled by _handle_incoming if it's an unsolicited response
-                            logger.warning(f"Received response/error with unknown request ID {msg_root.id} and no response stream.")
+                            logger.warning(
+                                "Received response/error with unknown request ID %s and no response stream.",
+                                msg_root.id,
+                            )
                             # Potentially pass to _handle_incoming if that's desired for unroutable responses
-                            await instance._handle_incoming(message) # Let wrapped handler decide
+                            await instance._handle_incoming(message)  # Let wrapped handler decide
                     else:
-                        logger.warning(f"Unknown message root type in _receive_loop: {type(msg_root)}")
+                        logger.warning("Unknown message root type in _receive_loop: %s", type(msg_root))
                         await instance._handle_incoming(message) # Let wrapped handler decide
 
             logger.debug("MCPInstrumentor: Exiting instrumented _receive_loop section")
         except Exception as e:
-            logger.error(f"Error in instrumented receive loop: {e}, falling back to original")
+            logger.error("Error in instrumented receive loop: %s, falling back to original", e)
             instance._handle_incoming = orig_handle_incoming
             # Re-raising to ensure original behavior if full loop fails, or call wrapped directly
             # For simplicity now, we just log and let finally restore.
-            # Consider if `await wrapped(*args, **kwargs)` should be called here as a fallback for the whole loop.
             raise
         finally:
             instance._handle_incoming = orig_handle_incoming
             logger.debug("MCPInstrumentor: Restored original _handle_incoming")
 
-    async def _send_request_telemetry_wrapper(self, wrapped, instance, args, kwargs):
+    async def _send_request_telemetry_wrapper(
+        self,
+        wrapped: Callable[[Any, Any, Any, Any], Awaitable[Any]],
+        instance: Any,
+        args: Any,
+        kwargs: Any
+    ) -> Any:
         start_time = time.time()
         hud_task_run_id = get_current_task_run_id()
         method_name = "unknown_method"
@@ -283,17 +309,24 @@ class MCPInstrumentor:
 
         if args and len(args) > 0:
             request_session_msg = args[0] # Assuming SessionMessage
-            if hasattr(request_session_msg, 'message') and hasattr(request_session_msg.message, 'root'):
+            if (
+                hasattr(request_session_msg, "message")
+                and hasattr(request_session_msg.message, "root")
+            ):
                 actual_request = request_session_msg.message.root
-                if hasattr(actual_request, 'method'):
+                if hasattr(actual_request, "method"):
                     method_name = actual_request.method
-                if hasattr(actual_request, 'id'):
+                if hasattr(actual_request, "id"):
                     request_id = actual_request.id
-                if hasattr(actual_request, 'model_dump'):
+                if hasattr(actual_request, "model_dump"):
                     try:
                         request_obj_data = actual_request.model_dump(exclude_none=True)
                     except Exception as e:
-                        logger.warning(f"Could not dump request data for {method_name}: {e}")
+                        logger.warning(
+                            "Could not dump request data for %s: %s",
+                            method_name,
+                            e,
+                        )
         
         record_data_base = {
             "method": method_name,
@@ -339,7 +372,13 @@ class MCPInstrumentor:
                 )
             raise
 
-    async def _send_notification_telemetry_wrapper(self, wrapped, instance, args, kwargs):
+    async def _send_notification_telemetry_wrapper(
+        self,
+        wrapped: Callable[[Any, Any, Any, Any], Awaitable[Any]],
+        instance: Any,
+        args: Any,
+        kwargs: Any
+    ) -> Any:
         start_time = time.time()
         hud_task_run_id = get_current_task_run_id()
         method_name = "unknown_method"
@@ -347,15 +386,19 @@ class MCPInstrumentor:
 
         if args and len(args) > 0:
             notification_session_msg = args[0] # Assuming SessionMessage
-            if hasattr(notification_session_msg, 'message') and hasattr(notification_session_msg.message, 'root'):
+            if hasattr(notification_session_msg, "message") and hasattr(notification_session_msg.message, "root"):
                 actual_notification = notification_session_msg.message.root
-                if hasattr(actual_notification, 'method'):
+                if hasattr(actual_notification, "method"):
                     method_name = actual_notification.method
-                if hasattr(actual_notification, 'model_dump'):
+                if hasattr(actual_notification, "model_dump"):
                     try:
                         notification_obj_data = actual_notification.model_dump(exclude_none=True)
                     except Exception as e:
-                        logger.warning(f"Could not dump notification data for {method_name}: {e}")
+                        logger.warning(
+                            "Could not dump notification data for %s: %s",
+                            method_name,
+                            e,
+                        )
 
         record_data_base = {
             "method": method_name,
@@ -396,7 +439,7 @@ class MCPInstrumentor:
                 )
             raise
 
-    def record_manual_test(self, **kwargs):
+    def record_manual_test(self, **kwargs: Any) -> bool:
         """Record a manual test telemetry entry"""
         hud_task_run_id = get_current_task_run_id()
         if not hud_task_run_id:
@@ -408,8 +451,8 @@ class MCPInstrumentor:
                 **kwargs
             )
             buffer_mcp_call(record) # buffer_mcp_call handles Pydantic model directly
-            logger.info(f"Manual test recorded: {record.model_dump(exclude_none=True)}")
+            logger.info("Manual test recorded: %s", record.model_dump(exclude_none=True))
             return True
         except Exception as e:
-            logger.warning(f"Manual test not recorded: {e}")
-            return False 
+            logger.warning("Manual test not recorded: %s", e)
+            return False
