@@ -27,24 +27,20 @@ def init_telemetry() -> None:
 
 @asynccontextmanager
 async def trace(
-    task_run_id: str | None = None,
     attributes: dict[str, Any] | None = None,
 ) -> AsyncGenerator[str, None]:
     """
     Async context manager for tracing an asynchronous block of code.
     
     Args:
-        task_run_id: Optional ID for this task run, will be generated if not provided
         attributes: Optional dictionary of attributes to associate with this trace
         
     Returns:
-        The task run ID used for this trace
+        The generated task run ID (UUID string) used for this trace
     """
-    # Generate a task_run_id if none provided
-    if task_run_id is None:
-        task_run_id = str(uuid.uuid4())
+    # Always generate a task_run_id internally
+    task_run_id = str(uuid.uuid4())
     
-    # Default attributes
     if attributes is None:
         attributes = {}
     
