@@ -99,3 +99,6 @@ async def trace(
             task_run_id,
             len(mcp_calls)
         )
+
+        logger.info("[hud] View trace at https://app.hud.so/jobs/traces/%s", task_run_id)
+

@@ -98,14 +98,14 @@ class Agent(Generic[ClientT, ActionT], ABC):
                                                        indicating if the agent believes it has completed the task
         """
         if verbose:
-            logger.info("[HUD] Predicting action...")
+            logger.info("[hud] Predicting action...")
         # Stage 1: Preprocess the observation
         processed_obs = self.preprocess(observation)
             
         # Stage 2: Fetch response from the model
         actions, done = await self.fetch_response(processed_obs)
         if verbose:
-            logger.info("[HUD] Raw action: %s", actions)
+            logger.info("[hud] Raw action: %s", actions)
 
         # Stage 3: Postprocess the actions if we have an adapter
         if self.adapter and actions:

@@ -213,20 +213,20 @@ class Environment(BaseModel):
             agent: The agent to run
         """
         if verbose:
-            logger.info("[HUD] Running agent in environment...")
+            logger.info("[hud] Running agent in environment...")
         obs, _ = await self.reset()
         for i in range(max_steps):
             action, done = await agent.predict(obs, verbose=verbose)
             if verbose:
-                logger.info("[HUD] Step %d: Action: %s", i, action)
+                logger.info("[hud] Step %d: Action: %s", i, action)
             obs, reward, terminated, info = await self.step(action)
             if verbose:
-                logger.info("[HUD] Step %d: Observation: %s", i, obs)
+                logger.info("[hud] Step %d: Observation: %s", i, obs)
             if done or terminated:
                 break
         result = await self.evaluate()
         if verbose:
-            logger.info("[HUD] Evaluation result: %s", result)
+            logger.info("[hud] Evaluation result: %s", result)
         return result
 
 

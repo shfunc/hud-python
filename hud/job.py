@@ -162,7 +162,7 @@ async def create_job(
     # If not, we might need to make a subsequent GET request
     job_data = data  # Adjust if the API response structure is different
 
-    logger.info("[HUD] View job at https://app.hud.so/jobs/%s.", job_data["id"])
+    logger.info("[hud] View job at https://app.hud.so/jobs/%s.", job_data["id"])
 
     return Job(
         id=job_data["id"],
