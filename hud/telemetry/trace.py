@@ -3,8 +3,11 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+import asyncio # For checking if function is async
+from functools import wraps # For creating decorators
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, Callable, overload, ParamSpec # Added overload, ParamSpec
+from collections.abc import Coroutine # For async return type hint
 
 from hud.telemetry.context import (
     flush_buffer,
@@ -48,11 +51,9 @@ def trace(
     """
     task_run_id = str(uuid.uuid4())
     
-    if attributes is None:
-        attributes = {}
-    
+    local_attributes = attributes.copy() if attributes is not None else {}
     if name is not None:
-        attributes["trace_name"] = name
+        local_attributes["trace_name"] = name
     
     start_time = time.time()
     logger.debug("Starting trace %s (Name: %s)", task_run_id, name if name else "Unnamed")
@@ -73,7 +74,7 @@ def trace(
         mcp_calls: list[BaseMCPCall] = flush_buffer()
         
         trace_attributes_final = {
-            **attributes,
+            **local_attributes,
             "start_time": start_time,
             "end_time": end_time,
             "duration": duration,
@@ -101,4 +102,46 @@ def trace(
         logger.debug("Ended trace %s (Name: %s) with %d MCP call(s)", task_run_id, name if name else "Unnamed", len(mcp_calls))
 
         logger.info("[hud] View trace at https://app.hud.so/jobs/traces/%s", task_run_id)
+
+P = ParamSpec("P")
+R = TypeVar("R")
+
+def register_trace(name: str | None = None, attributes: dict[str, Any] | None = None) -> (
+        Callable[[Callable[..., Any]], Callable[..., Any]]
+):
+    """
+    Decorator to wrap a synchronous or asynchronous function call
+    within a hud.telemetry.trace context.
+
+    Args:
+        name: Optional name for the trace.
+        attributes: Optional dictionary of attributes for the trace.
+    """
+
+    @overload
+    def decorator(func: Callable[P, Coroutine[Any, Any, R]]) -> (
+        Callable[P, Coroutine[Any, Any, R]]
+    ): ...
+
+    @overload
+    def decorator(func: Callable[P, R]) -> (
+        Callable[P, R]
+    ): ...
+
+    def decorator(func: Callable[P, Any]) -> Callable[P, Any]:
+        if asyncio.iscoroutinefunction(func):
+            @wraps(func)
+            async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> Any:
+                effective_name = name if name else func.__name__
+                with trace(name=effective_name, attributes=attributes):
+                    return await func(*args, **kwargs)
+            return async_wrapper
+        else:
+            @wraps(func)
+            def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> Any:
+                effective_name = name if name else func.__name__
+                with trace(name=effective_name, attributes=attributes):
+                    return func(*args, **kwargs)
+            return sync_wrapper
+    return decorator
 
