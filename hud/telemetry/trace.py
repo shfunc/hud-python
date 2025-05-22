@@ -82,16 +82,17 @@ async def trace(
         }
         
         # Only export if this is a root trace and we have MCP calls
-        if is_root: # and mcp_calls:
+        if is_root and mcp_calls:
             # Export telemetry
             try:
+                # Pass raw Pydantic model objects to export_telemetry
                 await export_telemetry(
                     task_run_id=task_run_id,
                     trace_attributes=trace_attributes,
-                    mcp_calls=[call.model_dump() for call in mcp_calls]
+                    mcp_calls=mcp_calls # Pass the list of BaseMCPCall objects directly
                 )
             except Exception as e:
-                logger.warning("Failed to export telemetry: %s", e)
+                logger.warning(f"Failed to export telemetry: {e}")
         
         # Restore previous context
         set_current_task_run_id(previous_task_id)

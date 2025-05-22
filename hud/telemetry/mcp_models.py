@@ -314,3 +314,15 @@ class MCPTelemetryRecord(BaseModel):
                 direction = record.direction.value
                 result[direction] = result.get(direction, 0) + 1
         return result
+
+
+class TrajectoryStep(BaseModel):
+    """Model representing a single step in a trajectory, for export."""
+
+    type: str = Field(default="mcp-step") # Default for MCP calls
+    observation_url: str | None = None
+    observation_text: str | None = None
+    actions: list[dict[str, Any]] = Field(default_factory=list)
+    start_timestamp: str | None = None # ISO 8601 format
+    end_timestamp: str | None = None   # ISO 8601 format
+    metadata: dict[str, Any] = Field(default_factory=dict)
