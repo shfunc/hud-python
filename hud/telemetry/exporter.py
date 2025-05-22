@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
 
@@ -13,9 +12,9 @@ from hud.settings import settings
 logger = logging.getLogger("hud.telemetry")
 
 # Export queue and lock for async operations
-_export_queue: List[Dict[str, Any]] = []
+_export_queue: list[dict[str, Any]] = []
 _export_lock = asyncio.Lock()
-_export_task: Optional[asyncio.Task] = None
+_export_task: asyncio.Task | None = None
 
 # Constants for export behavior
 MAX_BATCH_SIZE = 50
@@ -23,8 +22,8 @@ EXPORT_INTERVAL = 5.0  # seconds
 
 async def export_telemetry(
     task_run_id: str,
-    trace_attributes: Dict[str, Any],
-    mcp_calls: List[Dict[str, Any]]
+    trace_attributes: dict[str, Any],
+    mcp_calls: list[dict[str, Any]]
 ) -> None:
     """
     Export telemetry data to the HUD telemetry service.
@@ -49,7 +48,7 @@ async def export_telemetry(
     # Queue the payload for async export
     await _queue_for_export(payload)
 
-async def _queue_for_export(payload: Dict[str, Any]) -> None:
+async def _queue_for_export(payload: dict[str, Any]) -> None:
     """Add a payload to the export queue."""
     global _export_task
     
@@ -64,12 +63,12 @@ async def _process_export_queue() -> None:
     """Process the export queue periodically, sending one trace at a time."""
     try:
         while True:
-            payload_to_export: Optional[Dict[str, Any]] = None
+            payload_to_export: dict[str, Any] | None = None
             async with _export_lock:
                 if not _export_queue:
                     logger.debug("Telemetry export queue empty, task will pause.")
                     _export_task = None # Allow task to complete and be restarted if new data comes
-                    return 
+                    return
                 
                 payload_to_export = _export_queue.pop(0)
             
@@ -80,7 +79,7 @@ async def _process_export_queue() -> None:
             
     except asyncio.CancelledError:
         logger.info("Telemetry export task cancelled.")
-        # When cancelled, _export_task.done() will be true. 
+        # When cancelled, _export_task.done() will be true.
         # _queue_for_export will create a new task if needed.
         # Setting _export_task = None here could be problematic if cancellation happens
         # mid-operation in a way that _queue_for_export is called before this task fully exits.
@@ -91,7 +90,7 @@ async def _process_export_queue() -> None:
         # Similar to CancelledError, let the .done() check in _queue_for_export handle restart.
         # _export_task will be in a .done() state if an exception terminated it.
 
-async def _export_trace_payload(payload: Dict[str, Any]) -> None:
+async def _export_trace_payload(payload: dict[str, Any]) -> None:
     """Export a single trace payload to the HUD telemetry service."""
     if not settings.telemetry_enabled:
         logger.debug("Telemetry export skipped - telemetry not enabled")
@@ -123,7 +122,11 @@ async def _export_trace_payload(payload: Dict[str, Any]) -> None:
                 "Authorization": f"Bearer {settings.api_key}"
             }
             
-            logger.debug(f"Exporting telemetry for task run {task_run_id} to {telemetry_url}")
+            logger.debug(
+                "Exporting telemetry for task run %s to %s",
+                task_run_id,
+                telemetry_url,
+            )
             response = await client.post(
                 telemetry_url,
                 json=data_to_send, # Send the structured attributes and mcp_calls
@@ -132,8 +135,17 @@ async def _export_trace_payload(payload: Dict[str, Any]) -> None:
             )
             
             if response.status_code >= 200 and response.status_code < 300:
-                logger.debug(f"Successfully exported telemetry for task run {task_run_id}. Status: {response.status_code}")
+                logger.debug(
+                    "Successfully exported telemetry for task run %s. Status: %s",
+                    task_run_id,
+                    response.status_code,
+                )
             else:
-                logger.warning(f"Failed to export telemetry for task run {task_run_id}: HTTP {response.status_code} - {response.text}")
+                logger.warning(
+                    "Failed to export telemetry for task run %s: HTTP %s - %s",
+                    task_run_id,
+                    response.status_code,
+                    response.text,
+                )
     except Exception as e:
-        logger.error(f"Error exporting telemetry for task run {task_run_id}: {e}") 
+        logger.error("Error exporting telemetry for task run %s: %s", task_run_id, e)

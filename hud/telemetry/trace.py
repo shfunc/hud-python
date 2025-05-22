@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 import uuid
-from typing import Any, AsyncGenerator, Callable, Dict, Generator, List, Optional, TypeVar, cast
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from hud.telemetry.context import (
-    buffer_mcp_call,
     flush_buffer,
     get_current_task_run_id,
     is_root_trace,
@@ -15,6 +13,9 @@ from hud.telemetry.context import (
 )
 from hud.telemetry.exporter import export_telemetry
 from hud.telemetry.instrumentation.registry import registry
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
 
 logger = logging.getLogger("hud.telemetry")
 T = TypeVar("T")
@@ -24,8 +25,8 @@ def init_telemetry() -> None:
     registry.install_all()
 
 async def trace(
-    task_run_id: Optional[str] = None,
-    attributes: Optional[Dict[str, Any]] = None,
+    task_run_id: str | None = None,
+    attributes: dict[str, Any] | None = None,
 ) -> AsyncGenerator[str, None]:
     """
     Async context manager for tracing an asynchronous block of code.
@@ -47,7 +48,7 @@ async def trace(
     
     # Record trace start
     start_time = time.time()
-    logger.debug(f"Starting trace {task_run_id}")
+    logger.debug("Starting trace %s", task_run_id)
     
     # Save previous context
     previous_task_id = get_current_task_run_id()
@@ -88,10 +89,14 @@ async def trace(
                     mcp_calls=[call.model_dump() for call in mcp_calls]
                 )
             except Exception as e:
-                logger.warning(f"Failed to export telemetry: {e}")
+                logger.warning("Failed to export telemetry: %s", e)
         
         # Restore previous context
         set_current_task_run_id(previous_task_id)
         is_root_trace.set(was_root)
         
-        logger.debug(f"Ended trace {task_run_id} with {len(mcp_calls)} MCP call(s)") 
+        logger.debug(
+            "Ended trace %s with %d MCP call(s)",
+            task_run_id,
+            len(mcp_calls)
+        )
