@@ -23,6 +23,7 @@ dependencies = [
     "openai",
     "langchain",
     "langchain-openai",
+    "mcp",
     "wrapt>=1.14.0",
 ]
 classifiers = [
