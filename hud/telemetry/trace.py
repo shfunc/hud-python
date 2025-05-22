@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from hud.telemetry.context import (
@@ -24,6 +25,7 @@ def init_telemetry() -> None:
     """Initialize telemetry instrumentors."""
     registry.install_all()
 
+@asynccontextmanager
 async def trace(
     task_run_id: str | None = None,
     attributes: dict[str, Any] | None = None,
