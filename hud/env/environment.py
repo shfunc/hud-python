@@ -375,10 +375,11 @@ def create_remote_config(
         if env and env.final_response:
             args_list.append(env.final_response)  # Append final response
         return [FunctionConfig(function=f"{REMOTE_FUNCTION_PREFIX}{function}",
-                               args=args_list)]
+                               args=args_list, metadata={"task": task.model_dump()})]
 
     # Case 5: No valid configuration found
     args_list = []
     if env and env.final_response:
         args_list.append(env.final_response)
-    return [FunctionConfig(function=function, args=args_list)]
+    return [FunctionConfig(function=function, args=args_list,
+                           metadata={"task": task.model_dump()})]
