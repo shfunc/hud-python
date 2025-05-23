@@ -74,6 +74,7 @@ class Environment(BaseModel):
             config: The configuration to use for the setup
         """
         if isinstance(self.client, RemoteClient):
+            await self.get_urls()
             await self._invoke_all(create_remote_config(self, config, REMOTE_SETUP))
         else:
             if config is not None:
