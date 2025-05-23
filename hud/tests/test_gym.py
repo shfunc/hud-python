@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import datetime
 from pathlib import Path
 from typing import Any
@@ -15,9 +14,9 @@ from hud.exceptions import GymMakeException
 from hud.gym import make
 from hud.job import Job
 from hud.task import Task
+from hud.telemetry.context import reset_context
 from hud.types import CustomGym, EnvironmentStatus
 from hud.utils.config import FunctionConfig
-from hud.telemetry.context import reset_context
 
 
 class MockClient(Client):

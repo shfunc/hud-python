@@ -1,1 +1,1 @@
-# Tests for hud.adapters.operator module 
+# Tests for hud.adapters.operator module

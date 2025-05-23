@@ -520,4 +520,4 @@ class TestClaudeAdapterIntegration:
         assert isinstance(results[5], ScreenshotFetch)
         
         # Check memory
-        assert len(adapter.memory) == 6 
+        assert len(adapter.memory) == 6

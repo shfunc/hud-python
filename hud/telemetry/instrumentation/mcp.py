@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import logging
 import time
-from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator, Awaitable, Callable
 
 # from dataclasses import dataclass # Likely unused now
 from mcp.shared.message import SessionMessage  # type: ignore
@@ -37,7 +39,7 @@ class MCPInstrumentor:
     Instrumentor for MCP calls.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._installed = False
 
     def install(self) -> None:
@@ -47,9 +49,9 @@ class MCPInstrumentor:
             logger.debug("MCP instrumentation already installed")
             return
 
-        # Updated hooks: removed _transport_wrapper and _base_session_init_wrapper related hooks if they become no-ops
-        # For now, let's assume _transport_wrapper might still be used, but simplified.
-        # _base_session_init_wrapper hook is removed.
+        # Updated hooks: removed _transport_wrapper and _base_session_init_wrapper related hooks
+        # if they become no-ops. For now, let's assume _transport_wrapper might still be used,
+        # but simplified. _base_session_init_wrapper hook is removed.
         hooks = [
             ("mcp.client.sse", "sse_client", self._transport_wrapper),
             ("mcp.server.sse", "SseServerTransport.connect_sse", self._transport_wrapper),
@@ -58,16 +60,23 @@ class MCPInstrumentor:
             ("mcp.shared.session", "BaseSession._receive_loop", self._receive_loop_wrapper),
         ]
 
+        def create_hook(module: str, func_name: str, wrapper: Any) -> Any:
+            return lambda _: wrap_function_wrapper(module, func_name, wrapper)
+
         for module, func_name, wrapper in hooks:
-            logger.debug(f"MCPInstrumentor: Registering post-import hook for {module}.{func_name}")
+            logger.debug(
+                "MCPInstrumentor: Registering post-import hook for %s.%s", module, func_name
+            )
             register_post_import_hook(
-                (lambda m, f, w: lambda _: wrap_function_wrapper(m, f, w))(module, func_name, wrapper),
+                create_hook(module, func_name, wrapper),
                 module,
             )
         
         # Removed hook for BaseSession.__init__ (it was for _base_session_init_wrapper)
         
-        logger.debug("MCPInstrumentor: Attempting immediate instrumentation of already imported modules.")
+        logger.debug(
+            "MCPInstrumentor: Attempting immediate instrumentation of already imported modules."
+        )
         for module, func_name, wrapper in hooks:
             try:
                 mod = __import__(module, fromlist=[func_name.split(".")[0]])
@@ -84,41 +93,61 @@ class MCPInstrumentor:
                         break
                         
                 if target_obj and callable(target_obj):
-                    logger.debug(f"MCPInstrumentor: Wrapping {module}.{func_name}")
+                    logger.debug("MCPInstrumentor: Wrapping %s.%s", module, func_name)
                     wrap_function_wrapper(module, func_name, wrapper)
                 else:
-                    logger.debug(f"Function {func_name} not found in {module} during immediate instrumentation attempt")
+                    logger.debug(
+                        "Function %s not found in %s during immediate instrumentation attempt",
+                        func_name, module
+                    )
             except ImportError:
-                logger.debug(f"Module {module} not imported yet, post-import hook will cover it")
+                logger.debug("Module %s not imported yet, post-import hook will cover it", module)
             except Exception as e:
-                logger.warning(f"Failed to immediately wrap {module}.{func_name}: {e}")
+                logger.warning("Failed to immediately wrap %s.%s: %s", module, func_name, e)
 
         try:
-            import mcp.shared.session
-            wrap_function_wrapper("mcp.shared.session", "BaseSession.send_request", self._send_request_telemetry_wrapper)
-            wrap_function_wrapper("mcp.shared.session", "BaseSession.send_notification", self._send_notification_telemetry_wrapper)
+            # Import only for testing availability, don't store reference
+            __import__("mcp.shared.session")
+            wrap_function_wrapper(
+                "mcp.shared.session", "BaseSession.send_request",
+                self._send_request_telemetry_wrapper
+            )
+            wrap_function_wrapper(
+                "mcp.shared.session", "BaseSession.send_notification",
+                self._send_notification_telemetry_wrapper
+            )
             logger.debug("Successfully wrapped BaseSession methods for telemetry")
         except ImportError:
             logger.debug("mcp.shared.session not imported yet, post-import hook will cover it")
         except Exception as e:
-            logger.warning(f"Failed to wrap BaseSession methods: {e}")
+            logger.warning("Failed to wrap BaseSession methods: %s", e)
 
         self._installed = True
         logger.info("MCP instrumentation installed (simplified)")
 
     @asynccontextmanager
-    async def _transport_wrapper(self, wrapped, instance, args, kwargs):
+    async def _transport_wrapper(
+        self,
+        wrapped: Callable[..., Any],
+        instance: Any,
+        args: Any,
+        kwargs: Any
+    ) -> AsyncGenerator[Any, None]:
         """Wrap transport functions. Simplified: passes through original streams."""
         original_func_name = f"{wrapped.__module__}.{wrapped.__name__}"
-        logger.debug(f"MCPInstrumentor: _transport_wrapper called for {original_func_name} (passthrough)")
+        logger.debug(
+            "MCPInstrumentor: _transport_wrapper called for %s (passthrough)", original_func_name
+        )
         
         # No OTel context or HUD Task ID manipulation here anymore for transport layer itself.
         # Higher level wrappers (_send_request, _receive_loop) will handle HUD Task ID.
 
         async with wrapped(*args, **kwargs) as (read_stream, write_stream):
-            logger.debug(f"_transport_wrapper: Yielding original streams for {original_func_name}")
+            logger.debug("_transport_wrapper: Yielding original streams for %s", original_func_name)
             yield read_stream, write_stream # Pass original streams directly
-            logger.debug(f"_transport_wrapper: Exited original stream context for {original_func_name}")
+            logger.debug(
+                "_transport_wrapper: Exited original stream context for %s", original_func_name
+            )
 
     async def _receive_loop_wrapper(
         self,
@@ -134,7 +163,7 @@ class MCPInstrumentor:
         
         orig_handle_incoming = instance._handle_incoming
         
-        async def handle_incoming_with_telemetry(req_or_msg): # Renamed 'req' to be more generic
+        async def handle_incoming_with_telemetry(req_or_msg: Any) -> Any:
             start_time = time.time()
             hud_task_run_id = get_current_task_run_id()
             method_name = "unknown_method"
@@ -143,11 +172,14 @@ class MCPInstrumentor:
             call_type_override = MCPCallType.HANDLE_INCOMING
 
             actual_message_root = None
-            if hasattr(req_or_msg, "message") and hasattr(req_or_msg.message, "root"): # SessionMessage
+            # SessionMessage
+            if hasattr(req_or_msg, "message") and hasattr(req_or_msg.message, "root"):
                 actual_message_root = req_or_msg.message.root
             elif hasattr(req_or_msg, "root"): # e.g. RequestResponder
                 actual_message_root = req_or_msg.root
-            elif isinstance(req_or_msg, JSONRPCRequest | JSONRPCNotification | JSONRPCResponse | JSONRPCError):
+            elif isinstance(
+                req_or_msg, JSONRPCRequest | JSONRPCNotification | JSONRPCResponse | JSONRPCError
+            ):
                 actual_message_root = req_or_msg
             
             if actual_message_root:
@@ -165,7 +197,8 @@ class MCPInstrumentor:
                     message_id = actual_message_root.id
                     method_name = f"internal_response_handling_for_id_{message_id}"
                     is_response_or_error_flag = True
-                    call_type_override = MCPCallType.RECEIVE_RESPONSE # Treat as receiving a response internally
+                    # Treat as receiving a response internally
+                    call_type_override = MCPCallType.RECEIVE_RESPONSE
                 else:
                     # Fallback for other types, if any, that might appear here
                     if hasattr(actual_message_root, "method"):
@@ -219,8 +252,10 @@ class MCPInstrumentor:
         
         try:
             logger.debug("MCPInstrumentor: Entering instrumented _receive_loop section")
-            # The original logic for distinguishing request/notification from response for telemetry:
-            async with instance._read_stream, instance._write_stream: # Ensure streams are context managed
+            # The original logic for distinguishing request/notification from response for
+            # telemetry:
+            # Ensure streams are context managed
+            async with instance._read_stream, instance._write_stream:
                 async for message in instance._read_stream:
                     hud_task_run_id = get_current_task_run_id() # Get ID for each message
 
@@ -234,8 +269,12 @@ class MCPInstrumentor:
                         or not hasattr(message, "message")
                         or not hasattr(message.message, "root")
                     ):
-                        logger.warning("Unexpected message type in _receive_loop: %s", type(message))
-                        await instance._handle_incoming(RuntimeError(f"Unknown message type: {message}"))
+                        logger.warning(
+                            "Unexpected message type in _receive_loop: %s", type(message)
+                        )
+                        await instance._handle_incoming(
+                            RuntimeError(f"Unknown message type: {message}")
+                        )
                         continue
                     
                     msg_root = message.message.root
@@ -245,7 +284,9 @@ class MCPInstrumentor:
                         await instance._handle_incoming(message)
                     elif isinstance(msg_root, JSONRPCResponse | JSONRPCError):
                         # This is a direct response/error, record it here
-                        logger.debug(f"MCPInstrumentor: Capturing direct response/error ID: {msg_root.id}")
+                        logger.debug(
+                            "MCPInstrumentor: Capturing direct response/error ID: %s", msg_root.id
+                        )
                         if hud_task_run_id:
                             is_error = isinstance(msg_root, JSONRPCError)
                             error_message = None
@@ -272,15 +313,20 @@ class MCPInstrumentor:
                         if stream:
                             await stream.send(msg_root)
                         else:
-                            # This case should ideally be handled by _handle_incoming if it's an unsolicited response
+                            # This case should ideally be handled by _handle_incoming if it's an
+                            # unsolicited response
                             logger.warning(
-                                "Received response/error with unknown request ID %s and no response stream.",
+                                "Received response/error with unknown request ID %s and no "
+                                "response stream.",
                                 msg_root.id,
                             )
-                            # Potentially pass to _handle_incoming if that's desired for unroutable responses
+                            # Potentially pass to _handle_incoming if that's desired for unroutable
+                            # responses
                             await instance._handle_incoming(message)  # Let wrapped handler decide
                     else:
-                        logger.warning("Unknown message root type in _receive_loop: %s", type(msg_root))
+                        logger.warning(
+                            "Unknown message root type in _receive_loop: %s", type(msg_root)
+                        )
                         await instance._handle_incoming(message) # Let wrapped handler decide
 
             logger.debug("MCPInstrumentor: Exiting instrumented _receive_loop section")
@@ -386,7 +432,9 @@ class MCPInstrumentor:
 
         if args and len(args) > 0:
             notification_session_msg = args[0] # Assuming SessionMessage
-            if hasattr(notification_session_msg, "message") and hasattr(notification_session_msg.message, "root"):
+            if hasattr(notification_session_msg, "message") and hasattr(
+                notification_session_msg.message, "root"
+            ):
                 actual_notification = notification_session_msg.message.root
                 if hasattr(actual_notification, "method"):
                     method_name = actual_notification.method

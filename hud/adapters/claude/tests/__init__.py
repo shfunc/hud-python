@@ -1,1 +1,1 @@
-# Tests for hud.adapters.claude module 
+# Tests for hud.adapters.claude module

@@ -64,7 +64,8 @@ class TestTrace:
     @patch("hud.telemetry.trace.flush_buffer")
     @patch("hud.telemetry.trace.set_current_task_run_id")
     @patch("hud.telemetry.trace.get_current_task_run_id")
-    def test_trace_with_attributes(self, mock_get_task_id, mock_set_task_id, mock_flush, mock_submit):
+    def test_trace_with_attributes(self, mock_get_task_id, mock_set_task_id, mock_flush, mock_submit
+                                   ):
         """Test trace with attributes."""
         mock_get_task_id.return_value = None
         mock_flush.return_value = []
@@ -81,14 +82,15 @@ class TestTrace:
     @patch("hud.telemetry.trace.set_current_task_run_id")
     @patch("hud.telemetry.trace.get_current_task_run_id")
     @patch("hud.telemetry.trace.export_telemetry_coro")
-    def test_trace_with_mcp_calls(self, mock_export, mock_get_task_id, mock_set_task_id, mock_flush, mock_submit):
+    def test_trace_with_mcp_calls(self, mock_export, mock_get_task_id, mock_set_task_id, mock_flush,
+                                  mock_submit):
         """Test trace with MCP calls exports telemetry."""
         mock_get_task_id.return_value = None
         mock_mcp_calls = [MagicMock(), MagicMock()]
         mock_flush.return_value = mock_mcp_calls
         mock_submit.return_value = MagicMock()
 
-        with trace() as task_run_id:
+        with trace():
             pass
 
         # Should submit telemetry when there are MCP calls
@@ -96,7 +98,7 @@ class TestTrace:
         mock_export.assert_called_once()
 
     @patch("hud.telemetry.trace.submit_to_worker_loop")
-    @patch("hud.telemetry.trace.flush_buffer") 
+    @patch("hud.telemetry.trace.flush_buffer")
     @patch("hud.telemetry.trace.set_current_task_run_id")
     @patch("hud.telemetry.trace.get_current_task_run_id")
     def test_trace_nested(self, mock_get_task_id, mock_set_task_id, mock_flush, mock_submit):
@@ -115,15 +117,18 @@ class TestTrace:
     @patch("hud.telemetry.trace.flush_buffer")
     @patch("hud.telemetry.trace.set_current_task_run_id")
     @patch("hud.telemetry.trace.get_current_task_run_id")
-    def test_trace_exception_handling(self, mock_get_task_id, mock_set_task_id, mock_flush, mock_submit):
+    def test_trace_exception_handling(
+        self, mock_get_task_id, mock_set_task_id, mock_flush, mock_submit
+    ):
         """Test trace handles exceptions properly."""
         mock_get_task_id.return_value = None
+        mock_set_task_id.return_value = None
         mock_flush.return_value = []
         mock_submit.return_value = MagicMock()
 
-        with pytest.raises(ValueError), trace() as task_run_id:
-                raise ValueError("Test exception")
-
+        with pytest.raises(ValueError), trace():
+            raise ValueError("Test exception")
+            
         # Should still clean up properly
         mock_flush.assert_called_once()
 
@@ -165,7 +170,6 @@ class TestRegisterTrace:
     @patch("hud.telemetry.trace.trace")
     def test_register_trace_with_attributes(self, mock_trace):
         """Test register_trace with attributes."""
-        mock_context = MagicMock()
         mock_trace.return_value.__enter__ = MagicMock(return_value="task_id")
         mock_trace.return_value.__exit__ = MagicMock(return_value=None)
 
@@ -182,7 +186,6 @@ class TestRegisterTrace:
     @patch("hud.telemetry.trace.trace")
     def test_register_trace_without_name(self, mock_trace):
         """Test register_trace uses function name when name not provided."""
-        mock_context = MagicMock()
         mock_trace.return_value.__enter__ = MagicMock(return_value="task_id")
         mock_trace.return_value.__exit__ = MagicMock(return_value=None)
 
@@ -199,7 +202,6 @@ class TestRegisterTrace:
         @register_trace(name="test")
         def original_function():
             """Original docstring."""
-            pass
 
         assert original_function.__name__ == "original_function"
         assert original_function.__doc__ == "Original docstring."
@@ -207,7 +209,6 @@ class TestRegisterTrace:
     @patch("hud.telemetry.trace.trace")
     def test_register_trace_exception_propagation(self, mock_trace):
         """Test register_trace propagates exceptions."""
-        mock_context = MagicMock()
         mock_trace.return_value.__enter__ = MagicMock(return_value="task_id")
         mock_trace.return_value.__exit__ = MagicMock(return_value=None)
 
@@ -218,4 +219,4 @@ class TestRegisterTrace:
         with pytest.raises(RuntimeError, match="Test error"):
             failing_function()
 
-        mock_trace.assert_called_once() 
+        mock_trace.assert_called_once()

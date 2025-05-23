@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from hud.telemetry.context import (
     buffer_mcp_call,
     flush_buffer,
@@ -179,7 +177,10 @@ class TestContextIntegration:
         mock_calls = []
         for i in range(2):
             mock_call = MagicMock(spec=BaseMCPCall)
-            mock_call.model_dump.return_value = {"type": f"integration_test_{i}", "task_run_id": task_id}
+            mock_call.model_dump.return_value = {
+                "type": f"integration_test_{i}",
+                "task_run_id": task_id
+            }
             mock_call.task_run_id = task_id
             mock_calls.append(mock_call)
             buffer_mcp_call(mock_call)

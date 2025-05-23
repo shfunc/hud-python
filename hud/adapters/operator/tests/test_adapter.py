@@ -6,7 +6,6 @@ from hud.adapters.common.types import (
     ClickAction,
     DragAction,
     MoveAction,
-    Point,
     PressAction,
     ResponseAction,
     ScreenshotFetch,
@@ -378,4 +377,4 @@ class TestOperatorAdapterIntegration:
         assert isinstance(results[2], PressAction)
         
         # Check memory
-        assert len(adapter.memory) == 3 
+        assert len(adapter.memory) == 3

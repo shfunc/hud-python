@@ -367,7 +367,7 @@ async def _execute_task(
                 evaluation_result = await env.evaluate()
                 status = "completed"
                 error_msg = None
-                logger.info(f"Evaluation result: {evaluation_result}")
+                logger.info("Evaluation result: %s", evaluation_result)
             except Exception as eval_err:
                 logger.exception(
                     "[Job: %s/%s, Task: %s] Evaluation Error: %s",

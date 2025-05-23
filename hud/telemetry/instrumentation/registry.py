@@ -22,14 +22,28 @@ class InstrumentorRegistry:
         self._instrumentors[name] = instrumentor
         logger.debug("Registered instrumentor: %s", name)
         
+    def _safe_install(self, name: str, instrumentor: Any) -> tuple[str, Exception | None]:
+        """Safely install an instrumentor and return result."""
+        try:
+            instrumentor.install()
+            return name, None
+        except Exception as e:
+            return name, e
+
     def install_all(self) -> None:
         """Install all registered instrumentors."""
-        for name, instrumentor in self._instrumentors.items():
-            try:
-                instrumentor.install()
+        # Use map to apply safe installation to all instrumentors
+        installation_results = [
+            self._safe_install(name, instrumentor)
+            for name, instrumentor in self._instrumentors.items()
+        ]
+        
+        # Process results
+        for name, error in installation_results:
+            if error is None:
                 logger.debug("Installed instrumentor: %s", name)
-            except Exception as e:
-                logger.warning("Failed to install instrumentor %s: %s", name, e)
+            else:
+                logger.warning("Failed to install instrumentor %s: %s", name, error)
 
 
 # Create a singleton registry

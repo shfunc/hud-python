@@ -99,16 +99,19 @@ def trace(
                 )
                 future = submit_to_worker_loop(coro_to_submit)
                 if future:
-                    logger.debug("Telemetry for trace %s submitted to background worker.", task_run_id)
+                    logger.debug("Telemetry for trace %s submitted to background worker.",
+                                 task_run_id)
                 else:
-                    logger.warning("Failed to submit telemetry for trace %s to background worker (loop not available).", task_run_id)
+                    logger.warning("Failed to submit telemetry for trace %s to"
+                                   "background worker (loop not available).", task_run_id)
             except Exception as e:
                 logger.warning("Failed to submit telemetry for trace %s: %s", task_run_id, e)
         
         set_current_task_run_id(previous_task_id)
         is_root_trace.set(was_root)
         
-        logger.debug("Ended trace %s (Name: %s) with %d MCP call(s)", task_run_id, name if name else "Unnamed", len(mcp_calls))
+        logger.debug("Ended trace %s (Name: %s) with %d MCP call(s)",
+                     task_run_id, name if name else "Unnamed", len(mcp_calls))
 
         logger.info("[hud] View trace at https://app.hud.so/jobs/traces/%s", task_run_id)
 
