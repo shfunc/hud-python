@@ -44,6 +44,7 @@ class Settings(BaseSettings):
         validation_alias="TELEMETRY_ENABLED",
     )
 
+
 # Create a singleton instance
 settings = Settings()
 

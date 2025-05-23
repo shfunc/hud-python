@@ -28,18 +28,19 @@ logger = logging.getLogger("hud.telemetry")
 # --- Worker Thread and Event Loop Management ---
 _worker_thread: threading.Thread | None = None
 _worker_loop: asyncio.AbstractEventLoop | None = None
-_worker_lock = threading.Lock() # For protecting worker thread/loop startup
-_worker_loop_ready_event = threading.Event() # Event for sync between threads
+_worker_lock = threading.Lock()  # For protecting worker thread/loop startup
+_worker_loop_ready_event = threading.Event()  # Event for sync between threads
 
 # --- Async Queue and Task (managed by the worker loop) ---
-_SENTINEL_FOR_WORKER_SHUTDOWN = object() # Sentinel for queue-based shutdown signaling
-_export_queue_async: list[dict[str, Any] | object] = [] # Queue can hold dicts or sentinel
-_export_lock_async = asyncio.Lock() # Async lock for the async queue
-_export_task_async: asyncio.Task | None = None # Async task for processing the queue
+_SENTINEL_FOR_WORKER_SHUTDOWN = object()  # Sentinel for queue-based shutdown signaling
+_export_queue_async: list[dict[str, Any] | object] = []  # Queue can hold dicts or sentinel
+_export_lock_async = asyncio.Lock()  # Async lock for the async queue
+_export_task_async: asyncio.Task | None = None  # Async task for processing the queue
 
 # --- Constants ---
 EXPORT_INTERVAL = 5.0  # seconds
 # MAX_BATCH_SIZE removed as we send one trace payload at a time
+
 
 def _run_worker_loop() -> None:
     """Target function for the worker thread. Runs its own asyncio event loop."""
@@ -47,16 +48,14 @@ def _run_worker_loop() -> None:
     logger.info("Telemetry worker thread: Starting event loop.")
     _worker_loop = asyncio.new_event_loop()
     asyncio.set_event_loop(_worker_loop)
-    
-    _worker_loop_ready_event.set() # Signal that loop is created and set for this thread
-    
+
+    _worker_loop_ready_event.set()  # Signal that loop is created and set for this thread
+
     try:
         logger.info("Telemetry worker thread: Event loop running.")
         _worker_loop.run_forever()
     except Exception as e:
-        logger.exception(
-            "Telemetry worker loop encountered an unhandled exception: %s", e
-        )
+        logger.exception("Telemetry worker loop encountered an unhandled exception: %s", e)
     finally:
         logger.debug("Telemetry worker loop: Starting cleanup...")
         if _export_task_async and not _export_task_async.done():
@@ -75,15 +74,16 @@ def _run_worker_loop() -> None:
                 logger.debug(
                     "Telemetry worker loop: Exception during export task cleanup: %s", e_gather
                 )
-        
+
         logger.debug("Telemetry worker loop: Closing.")
         _worker_loop.close()
         logger.info("Telemetry worker thread: Event loop closed.")
         # _worker_loop_ready_event.clear() # Should be cleared by starter if thread is to be reused
 
+
 def _start_worker_if_needed() -> None:
     """Starts the background worker thread if not already running. Assumes _worker_lock is held."""
-    global _worker_thread # _worker_loop is set by the thread itself
+    global _worker_thread  # _worker_loop is set by the thread itself
     if _worker_thread is None or not _worker_thread.is_alive():
         logger.info("Telemetry: Worker thread not alive, starting new one.")
         # _worker_loop should be None here or will be replaced by the new thread
@@ -92,25 +92,26 @@ def _start_worker_if_needed() -> None:
             target=_run_worker_loop, daemon=True, name="HUDTelemetryWorker"
         )
         _worker_thread.start()
-        
+
         logger.debug("Telemetry: Waiting for worker thread event loop to be ready...")
-        if not _worker_loop_ready_event.wait(timeout=5.0): # Wait up to 5 seconds
+        if not _worker_loop_ready_event.wait(timeout=5.0):  # Wait up to 5 seconds
             logger.error(
                 "Telemetry: Worker thread failed to signal event loop readiness within timeout."
             )
             # This is a problem, subsequent submissions might fail.
             return
-        
+
         # Minor delay to ensure loop might have started run_forever if wait was too tight
         time.sleep(0.05)
         if _worker_loop is None or not _worker_loop.is_running():
-             logger.error("Telemetry: Worker loop is not ready or not running after event was set.")
+            logger.error("Telemetry: Worker loop is not ready or not running after event was set.")
         else:
             logger.info("Telemetry: Worker thread event loop is ready.")
 
+
 def submit_to_worker_loop(coro: Coroutine[Any, Any, Any]) -> concurrent.futures.Future[Any] | None:
     """Submits a coroutine to be run on the worker thread's event loop."""
-    with _worker_lock: # Protects check-and-start of worker thread/loop
+    with _worker_lock:  # Protects check-and-start of worker thread/loop
         _start_worker_if_needed()
 
     # Check _worker_loop status AFTER attempting to start and waiting for readiness event
@@ -119,7 +120,7 @@ def submit_to_worker_loop(coro: Coroutine[Any, Any, Any]) -> concurrent.futures.
             "Telemetry: Worker loop not available or not running for submitting coroutine."
         )
         return None
-    
+
     try:
         future = asyncio.run_coroutine_threadsafe(coro, _worker_loop)
         return future
@@ -128,16 +129,18 @@ def submit_to_worker_loop(coro: Coroutine[Any, Any, Any]) -> concurrent.futures.
         logger.exception("Telemetry: Failed to submit coroutine to worker loop: %s", e)
         return None
 
+
 # --- Telemetry Export Logic (runs on worker thread's loop) ---
+
 
 async def export_telemetry(
     task_run_id: str,
     trace_attributes: dict[str, Any],
-    mcp_calls: list[BaseMCPCall]  # Type hint is now list[BaseMCPCall]
+    mcp_calls: list[BaseMCPCall],  # Type hint is now list[BaseMCPCall]
 ) -> None:
     """
     Export telemetry data to the HUD telemetry service.
-    
+
     Args:
         task_run_id: The task run ID associated with this telemetry
         trace_attributes: Attributes of the trace
@@ -146,7 +149,7 @@ async def export_telemetry(
     trajectory_steps_data: list[dict[str, Any]] = []
     for mcp_call_model in mcp_calls:
         action_data = mcp_call_model.model_dump()
-        
+
         start_ts_iso = None
         end_ts_iso = None
 
@@ -158,7 +161,7 @@ async def export_telemetry(
                 .isoformat()
                 .replace("+00:00", "Z")
             )
-        
+
         # Use 'end_time' if available, otherwise fall back to 'timestamp' for the end_timestamp
         actual_end_time_float = getattr(mcp_call_model, "end_time", None)
         effective_end_timestamp_float = (
@@ -186,16 +189,18 @@ async def export_telemetry(
         if mcp_call_model.direction:
             step_metadata["mcp_direction"] = mcp_call_model.direction.value
         if mcp_call_model.message_id is not None:
-            step_metadata["mcp_message_id"] = str(mcp_call_model.message_id) # Ensure string
-        
+            step_metadata["mcp_message_id"] = str(mcp_call_model.message_id)  # Ensure string
+
         # Specific handling for MCPResponseCall fields in metadata
         if isinstance(mcp_call_model, MCPResponseCall):
-            step_metadata["mcp_is_error"] = mcp_call_model.is_error # bool is fine for JSON Any
+            step_metadata["mcp_is_error"] = mcp_call_model.is_error  # bool is fine for JSON Any
             if mcp_call_model.is_error:
                 if mcp_call_model.error is not None:
-                    step_metadata["mcp_error_details"] = str(mcp_call_model.error) # Ensure string
+                    step_metadata["mcp_error_details"] = str(mcp_call_model.error)  # Ensure string
                 if mcp_call_model.error_type is not None:
-                    step_metadata["mcp_error_type"] = str(mcp_call_model.error_type) # Ensure string
+                    step_metadata["mcp_error_type"] = str(
+                        mcp_call_model.error_type
+                    )  # Ensure string
 
         obs_text = None
         if isinstance(mcp_call_model, MCPResponseCall) and mcp_call_model.response_data:
@@ -205,14 +210,14 @@ async def export_telemetry(
                     obs_text = json.dumps(result_data)
                 except (TypeError, OverflowError):
                     obs_text = str(result_data)
-        
+
         trajectory_step = TrajectoryStep(
             type="mcp-step",
             actions=[action_data],
             start_timestamp=start_ts_iso,
             end_timestamp=end_ts_iso,
             metadata=step_metadata,
-            observation_text=obs_text
+            observation_text=obs_text,
         )
         trajectory_steps_data.append(trajectory_step.model_dump())
 
@@ -220,10 +225,11 @@ async def export_telemetry(
         "task_run_id": task_run_id,
         "attributes": trace_attributes,
         "mcp_calls": trajectory_steps_data,
-        "timestamp": time.time()
+        "timestamp": time.time(),
     }
-    
+
     await _queue_for_export_async(payload_to_queue)
+
 
 async def _queue_for_export_async(payload: dict[str, Any] | object) -> None:
     """Adds a payload or sentinel to the async export queue. Runs on worker loop."""
@@ -238,6 +244,7 @@ async def _queue_for_export_async(payload: dict[str, Any] | object) -> None:
             _export_task_async = _worker_loop.create_task(_process_export_queue_async())
             logger.debug("Started/Restarted async telemetry export processing task on worker loop.")
 
+
 async def _process_export_queue_async() -> None:
     """Processes the async export queue. Runs on worker loop via _export_task_async."""
     global _export_task_async
@@ -250,20 +257,20 @@ async def _process_export_queue_async() -> None:
                     _export_task_async = None
                     return
                 payload_to_process = _export_queue_async.pop(0)
-            
+
             if payload_to_process is _SENTINEL_FOR_WORKER_SHUTDOWN:
                 logger.info("Shutdown sentinel received by processing task, stopping.")
                 _export_task_async = None
                 return
 
-            if isinstance(payload_to_process, dict): # Ensure it's a dict before processing as such
+            if isinstance(payload_to_process, dict):  # Ensure it's a dict before processing as such
                 await _export_trace_payload_async(payload_to_process)
             else:
                 # Should not happen if only dicts and sentinel are queued
                 logger.warning("Unexpected item in telemetry queue: %s", type(payload_to_process))
-            
+
             await asyncio.sleep(EXPORT_INTERVAL)
-            
+
     except asyncio.CancelledError:
         logger.info("Async telemetry export processing task cancelled.")
         _export_task_async = None
@@ -271,6 +278,7 @@ async def _process_export_queue_async() -> None:
     except Exception as e:
         logger.exception("Error in async telemetry export processing task: %s", e)
         _export_task_async = None
+
 
 async def _export_trace_payload_async(payload: dict[str, Any]) -> None:
     """Export a single trace payload to the HUD telemetry service."""
@@ -287,24 +295,24 @@ async def _export_trace_payload_async(payload: dict[str, Any]) -> None:
     # The mcp_calls within the payload are already dumped dictionaries.
     data_to_send = {
         "metadata": payload.get("attributes", {}),
-        "telemetry": payload.get("mcp_calls", [])
+        "telemetry": payload.get("mcp_calls", []),
     }
-    
+
     # Ensure mcp_calls is not empty if that's a requirement, or send as is. For now, send as is.
     # if not data_to_send["mcp_calls"]:
     #     logger.debug("No MCP calls in payload for task run %s, skipping specific export if "
     #                  "desired.", task_run_id)
     #     # Depending on backend, might not want to send empty mcp_calls list, or it's fine.
-    
+
     telemetry_url = f"{settings.base_url}/v2/task_runs/{task_run_id}/telemetry-upload"
-    
+
     try:
         async with httpx.AsyncClient() as client:
             headers = {
                 "Content-Type": "application/json",
-                "Authorization": f"Bearer {settings.api_key}"
+                "Authorization": f"Bearer {settings.api_key}",
             }
-            
+
             logger.debug(
                 "Exporting telemetry for task run %s to %s",
                 task_run_id,
@@ -312,11 +320,11 @@ async def _export_trace_payload_async(payload: dict[str, Any]) -> None:
             )
             response = await client.post(
                 telemetry_url,
-                json=data_to_send, # Send the structured attributes and mcp_calls
+                json=data_to_send,  # Send the structured attributes and mcp_calls
                 headers=headers,
-                timeout=30.0
+                timeout=30.0,
             )
-            
+
             if response.status_code >= 200 and response.status_code < 300:
                 logger.debug(
                     "Successfully exported telemetry for task run %s. Status: %s",
@@ -333,6 +341,7 @@ async def _export_trace_payload_async(payload: dict[str, Any]) -> None:
     except Exception as e:
         logger.exception("Error exporting telemetry for task run %s: %s", task_run_id, e)
 
+
 # --- Public Shutdown Function ---
 def flush(timeout: float = 10.0) -> None:
     """Flushes pending telemetry data and stops the worker thread."""
@@ -345,12 +354,10 @@ def flush(timeout: float = 10.0) -> None:
         coro = _queue_for_export_async(_SENTINEL_FOR_WORKER_SHUTDOWN)
         try:
             shutdown_future = asyncio.run_coroutine_threadsafe(coro, _worker_loop)
-        except Exception as e: # Catch errors during submission (e.g. if loop is shutting down)
-            logger.warning(
-                "Exception during submission of shutdown sentinel: %s", e, exc_info=True
-            )
+        except Exception as e:  # Catch errors during submission (e.g. if loop is shutting down)
+            logger.warning("Exception during submission of shutdown sentinel: %s", e, exc_info=True)
             # Proceed to attempt thread join if possible
-        
+
         if shutdown_future:
             try:
                 shutdown_future.result(timeout / 2 if timeout else None)
@@ -366,7 +373,7 @@ def flush(timeout: float = 10.0) -> None:
     # This is tricky because the task lives on another thread's loop.
     # The best way is for _process_export_queue_async to clear _export_task_async when it exits.
     # We then wait a bit for that to happen.
-    if _export_task_async is not None: # Check if a task was even known to be running
+    if _export_task_async is not None:  # Check if a task was even known to be running
         # This check is racy, but it's the best we can do without more complex inter-thread
         # sync for task completion. Give some time for the task to process the sentinel and
         # clear itself.
@@ -389,18 +396,20 @@ def flush(timeout: float = 10.0) -> None:
         _worker_loop.call_soon_threadsafe(_worker_loop.stop)
 
     if _worker_thread and _worker_thread.is_alive():
-        logger.debug("Joining telemetry worker thread (up to remaining timeout)...",)
+        logger.debug(
+            "Joining telemetry worker thread (up to remaining timeout)...",
+        )
         # Calculate remaining timeout for join
-        remaining_timeout = timeout - (timeout / 2) if timeout else None # Simplistic split
+        remaining_timeout = timeout - (timeout / 2) if timeout else None  # Simplistic split
         if remaining_timeout is not None and remaining_timeout < 0:
             remaining_timeout = 0
-        
+
         _worker_thread.join(remaining_timeout)
         if _worker_thread.is_alive():
             logger.warning("Telemetry worker thread did not shut down cleanly after timeout.")
         else:
             logger.info("Telemetry worker thread successfully joined.")
-    
+
     _worker_thread = None
     _worker_loop = None
     _export_task_async = None

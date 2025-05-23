@@ -42,7 +42,7 @@ async def make(
     else:
         gym = env_src.gym
         task = env_src
-    
+
     effective_job_id = None
     if job is not None:
         effective_job_id = job.id
@@ -57,7 +57,7 @@ async def make(
                 effective_job_id = active_job.id
         except ImportError:
             pass
-    
+
     async def create_env() -> Environment:
         build_data = {}
         try:
@@ -68,7 +68,7 @@ async def make(
                 metadata_copy["task_run_id"] = current_task_run_id
                 logger.debug(
                     "Passing task_run_id %s from hud.telemetry context to environment metadata.",
-                    current_task_run_id
+                    current_task_run_id,
                 )
 
             if isinstance(gym, CustomGym):
@@ -129,5 +129,5 @@ async def make(
         except Exception as e:
             build_data["exception"] = str(e)
             raise GymMakeException("Failed to create environment", build_data) from e
-    
+
     return await create_env()

@@ -11,14 +11,17 @@ from pydantic import BaseModel, Field, field_validator
 if TYPE_CHECKING:
     from mcp.shared.message import SessionMessage
 
+
 class DirectionType(str, Enum):
     """Direction of an MCP message"""
+
     SENT = "sent"
     RECEIVED = "received"
 
 
 class StatusType(str, Enum):
     """Status of an MCP operation"""
+
     STARTED = "started"
     COMPLETED = "completed"
     ERROR = "error"
@@ -26,6 +29,7 @@ class StatusType(str, Enum):
 
 class MCPCallType(str, Enum):
     """Known MCP call types"""
+
     SEND_REQUEST = "mcp.shared.session.send_request"
     SEND_NOTIFICATION = "mcp.shared.session.send_notification"
     RECEIVE_RESPONSE = "mcp.shared.session.receive_response"
@@ -34,10 +38,11 @@ class MCPCallType(str, Enum):
     STREAM_WRITE = "mcp.stream.write"
     HANDLE_INCOMING = "mcp.handle_incoming"
     MANUAL_TEST = "manual.test"
-    
+
 
 class BaseMCPCall(BaseModel):
     """Base model for all MCP telemetry records"""
+
     task_run_id: str
     call_type: str
     timestamp: float = Field(default_factory=lambda: datetime.now().timestamp())
@@ -46,23 +51,23 @@ class BaseMCPCall(BaseModel):
     direction: DirectionType | None = None
     # Additional data that might be useful for any call
     message_id: str | int | None = None
-    
+
     # Mapping of call types to model classes - to be populated by subclasses
     _call_type_mapping: ClassVar[dict[str, type["BaseMCPCall"]]] = {}
-    
+
     @field_validator("call_type")
     @classmethod
     def validate_call_type(cls, v: str) -> str:
         """Allow any string but preferably from MCPCallType"""
         return v
-    
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> BaseMCPCall:
         """Create a record from a dictionary, using the appropriate subclass"""
         call_type = data.get("call_type", "")
         record_cls = cls._call_type_mapping.get(call_type, BaseMCPCall)
         return record_cls.model_validate(data)
-    
+
     def __init_subclass__(cls, **kwargs: Any) -> None:
         """Register subclasses in the mapping by their default call_type"""
         super().__init_subclass__(**kwargs)
@@ -74,6 +79,7 @@ class BaseMCPCall(BaseModel):
 
 class MCPRequestCall(BaseMCPCall):
     """Record for an MCP request"""
+
     direction: DirectionType = DirectionType.SENT
     call_type: str = MCPCallType.SEND_REQUEST
     start_time: float
@@ -81,13 +87,15 @@ class MCPRequestCall(BaseMCPCall):
     duration: float | None = None
     request_id: str | int | None = None
     request_data: dict[str, Any] | None = None
-    
+
     @classmethod
-    def from_jsonrpc_request(cls,
-                            request: JSONRPCRequest,
-                            task_run_id: str,
-                            status: StatusType = StatusType.STARTED,
-                            **kwargs: Any) -> MCPRequestCall:
+    def from_jsonrpc_request(
+        cls,
+        request: JSONRPCRequest,
+        task_run_id: str,
+        status: StatusType = StatusType.STARTED,
+        **kwargs: Any,
+    ) -> MCPRequestCall:
         """Create telemetry record from a JSONRPCRequest"""
         return cls(
             task_run_id=task_run_id,
@@ -97,32 +105,32 @@ class MCPRequestCall(BaseMCPCall):
             method=request.method,
             request_data=request.model_dump(exclude_none=True),
             start_time=datetime.now().timestamp(),
-            **kwargs
+            **kwargs,
         )
-    
+
     @classmethod
-    def from_session_message(cls,
-                           message: SessionMessage,
-                           task_run_id: str,
-                           status: StatusType = StatusType.STARTED,
-                           **kwargs: Any) -> MCPRequestCall | None:
+    def from_session_message(
+        cls,
+        message: SessionMessage,
+        task_run_id: str,
+        status: StatusType = StatusType.STARTED,
+        **kwargs: Any,
+    ) -> MCPRequestCall | None:
         """Create telemetry record from a SessionMessage containing a JSONRPCRequest"""
         if (
             hasattr(message, "message")
             and hasattr(message.message, "root")
             and isinstance(message.message.root, JSONRPCRequest)
         ):
-                return cls.from_jsonrpc_request(
-                    message.message.root,
-                    task_run_id=task_run_id,
-                    status=status,
-                    **kwargs
-                )
+            return cls.from_jsonrpc_request(
+                message.message.root, task_run_id=task_run_id, status=status, **kwargs
+            )
         return None
 
 
 class MCPResponseCall(BaseMCPCall):
     """Record for an MCP response"""
+
     direction: DirectionType = DirectionType.RECEIVED
     call_type: str = MCPCallType.RECEIVE_RESPONSE
     is_response_or_error: bool = True
@@ -132,15 +140,14 @@ class MCPResponseCall(BaseMCPCall):
     response_data: dict[str, Any] | None = None
     error: str | None = None
     error_type: str | None = None
-    
+
     @classmethod
-    def from_jsonrpc_response(cls,
-                             response: JSONRPCResponse | JSONRPCError,
-                             task_run_id: str,
-                             **kwargs: Any) -> MCPResponseCall:
+    def from_jsonrpc_response(
+        cls, response: JSONRPCResponse | JSONRPCError, task_run_id: str, **kwargs: Any
+    ) -> MCPResponseCall:
         """Create telemetry record from a JSONRPCResponse or JSONRPCError"""
         is_error = isinstance(response, JSONRPCError)
-        
+
         result = cls(
             task_run_id=task_run_id,
             status=StatusType.COMPLETED,
@@ -150,49 +157,49 @@ class MCPResponseCall(BaseMCPCall):
             is_error=is_error,
             method=f"response_to_id_{response.id}",
             response_data=response.model_dump(exclude_none=True),
-            **kwargs
+            **kwargs,
         )
-        
+
         if is_error and hasattr(response, "error"):
             result.error = response.error.message
             result.error_type = str(response.error.code)
-            
+
         return result
-    
+
     @classmethod
-    def from_session_message(cls,
-                           message: SessionMessage,
-                           task_run_id: str,
-                           **kwargs: Any) -> MCPResponseCall | None:
+    def from_session_message(
+        cls, message: SessionMessage, task_run_id: str, **kwargs: Any
+    ) -> MCPResponseCall | None:
         """Create telemetry record from a SessionMessage containing a response or error"""
         if (
             hasattr(message, "message")
             and hasattr(message.message, "root")
             and isinstance(message.message.root, JSONRPCResponse | JSONRPCError)
         ):
-                return cls.from_jsonrpc_response(
-                    message.message.root,
-                    task_run_id=task_run_id,
-                    **kwargs
-                )
+            return cls.from_jsonrpc_response(
+                message.message.root, task_run_id=task_run_id, **kwargs
+            )
         return None
 
 
 class MCPNotificationCall(BaseMCPCall):
     """Record for an MCP notification"""
+
     direction: DirectionType = DirectionType.SENT
     call_type: str = MCPCallType.SEND_NOTIFICATION
     start_time: float
     end_time: float | None = None
     duration: float | None = None
     notification_data: dict[str, Any] | None = None
-    
+
     @classmethod
-    def from_jsonrpc_notification(cls,
-                                notification: JSONRPCNotification,
-                                task_run_id: str,
-                                status: StatusType = StatusType.STARTED,
-                                **kwargs: Any) -> MCPNotificationCall:
+    def from_jsonrpc_notification(
+        cls,
+        notification: JSONRPCNotification,
+        task_run_id: str,
+        status: StatusType = StatusType.STARTED,
+        **kwargs: Any,
+    ) -> MCPNotificationCall:
         """Create telemetry record from a JSONRPCNotification"""
         return cls(
             task_run_id=task_run_id,
@@ -200,15 +207,17 @@ class MCPNotificationCall(BaseMCPCall):
             method=notification.method,
             notification_data=notification.model_dump(exclude_none=True),
             start_time=datetime.now().timestamp(),
-            **kwargs
+            **kwargs,
         )
-    
+
     @classmethod
-    def from_session_message(cls,
-                          message: SessionMessage,
-                          task_run_id: str,
-                          status: StatusType = StatusType.STARTED,
-                          **kwargs: Any) -> MCPNotificationCall | None:
+    def from_session_message(
+        cls,
+        message: SessionMessage,
+        task_run_id: str,
+        status: StatusType = StatusType.STARTED,
+        **kwargs: Any,
+    ) -> MCPNotificationCall | None:
         """Create telemetry record from a SessionMessage containing a JSONRPCNotification"""
         if (
             hasattr(message, "message")
@@ -216,52 +225,44 @@ class MCPNotificationCall(BaseMCPCall):
             and isinstance(message.message.root, JSONRPCNotification)
         ):
             return cls.from_jsonrpc_notification(
-                message.message.root,
-                task_run_id=task_run_id,
-                status=status,
-                **kwargs
+                message.message.root, task_run_id=task_run_id, status=status, **kwargs
             )
         return None
 
 
 class MCPStreamEvent(BaseMCPCall):
     """Record for an MCP stream event (read or write)"""
+
     stream_event: bool = True
     event_type: str = Field(..., description="Type of stream event: read or write")
     item_type: str | None = None
     is_response_or_error: bool = False
     message_data: dict[str, Any] | None = None
-    
+
     @classmethod
-    def from_session_message(cls,
-                           message: SessionMessage,
-                           task_run_id: str,
-                           event_type: str,
-                           **kwargs: Any) -> MCPStreamEvent:
+    def from_session_message(
+        cls, message: SessionMessage, task_run_id: str, event_type: str, **kwargs: Any
+    ) -> MCPStreamEvent:
         """Create telemetry record for a stream event"""
         method_name = "unknown_stream_operation"
         is_response = False
         item_type = "unknown"
         message_data = None
-        
+
         if hasattr(message, "message") and hasattr(message.message, "root"):
             msg_root = message.message.root
             item_type = type(msg_root).__name__
             message_data = msg_root.model_dump(exclude_none=True)
-            
+
             # Check type first before accessing attributes
-            if (
-                isinstance(msg_root, JSONRPCRequest | JSONRPCNotification)
-                and hasattr(msg_root, "method")
+            if isinstance(msg_root, JSONRPCRequest | JSONRPCNotification) and hasattr(
+                msg_root, "method"
             ):
                 method_name = msg_root.method
-            elif (
-                isinstance(msg_root, JSONRPCResponse | JSONRPCError)
-                and hasattr(msg_root, "id")
-            ):
+            elif isinstance(msg_root, JSONRPCResponse | JSONRPCError) and hasattr(msg_root, "id"):
                 method_name = f"response_to_id_{msg_root.id}"
                 is_response = True
-                
+
         return cls(
             task_run_id=task_run_id,
             status=StatusType.COMPLETED,
@@ -271,15 +272,16 @@ class MCPStreamEvent(BaseMCPCall):
             is_response_or_error=is_response,
             message_data=message_data,
             timestamp=datetime.now().timestamp(),
-            **kwargs
+            **kwargs,
         )
 
 
 class MCPManualTestCall(BaseMCPCall):
     """Record for a manual test record"""
+
     call_type: str = MCPCallType.MANUAL_TEST
     custom_data: dict[str, Any] = Field(default_factory=dict)
-    
+
     @classmethod
     def create(cls, task_run_id: str, **custom_data: Any) -> MCPManualTestCall:
         """Create a manual test record with custom data"""
@@ -287,12 +289,13 @@ class MCPManualTestCall(BaseMCPCall):
             task_run_id=task_run_id,
             status=StatusType.COMPLETED,
             custom_data=custom_data,
-            timestamp=datetime.now().timestamp()
+            timestamp=datetime.now().timestamp(),
         )
 
 
 class MCPTelemetryRecord(BaseModel):
     """Container for a set of related MCP telemetry records"""
+
     task_run_id: str
     records: list[BaseMCPCall]
     timestamp: float = Field(default_factory=lambda: datetime.now().timestamp())
@@ -304,7 +307,7 @@ class MCPTelemetryRecord(BaseModel):
         for record in self.records:
             result[record.call_type] = result.get(record.call_type, 0) + 1
         return result
-    
+
     @property
     def count_by_direction(self) -> dict[str, int]:
         """Count records by direction"""
@@ -319,10 +322,10 @@ class MCPTelemetryRecord(BaseModel):
 class TrajectoryStep(BaseModel):
     """Model representing a single step in a trajectory, for export."""
 
-    type: str = Field(default="mcp-step") # Default for MCP calls
+    type: str = Field(default="mcp-step")  # Default for MCP calls
     observation_url: str | None = None
     observation_text: str | None = None
     actions: list[dict[str, Any]] = Field(default_factory=list)
-    start_timestamp: str | None = None # ISO 8601 format
-    end_timestamp: str | None = None   # ISO 8601 format
+    start_timestamp: str | None = None  # ISO 8601 format
+    end_timestamp: str | None = None  # ISO 8601 format
     metadata: dict[str, Any] = Field(default_factory=dict)

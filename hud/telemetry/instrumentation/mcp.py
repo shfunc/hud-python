@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 # Ensure no OTel imports remain
 # from opentelemetry import context as otel_context, propagate # Should be removed
 
+
 class MCPInstrumentor:
     """
     Instrumentor for MCP calls.
@@ -71,9 +72,9 @@ class MCPInstrumentor:
                 create_hook(module, func_name, wrapper),
                 module,
             )
-        
+
         # Removed hook for BaseSession.__init__ (it was for _base_session_init_wrapper)
-        
+
         logger.debug(
             "MCPInstrumentor: Attempting immediate instrumentation of already imported modules."
         )
@@ -91,14 +92,15 @@ class MCPInstrumentor:
                     else:
                         target_obj = None
                         break
-                        
+
                 if target_obj and callable(target_obj):
                     logger.debug("MCPInstrumentor: Wrapping %s.%s", module, func_name)
                     wrap_function_wrapper(module, func_name, wrapper)
                 else:
                     logger.debug(
                         "Function %s not found in %s during immediate instrumentation attempt",
-                        func_name, module
+                        func_name,
+                        module,
                     )
             except ImportError:
                 logger.debug("Module %s not imported yet, post-import hook will cover it", module)
@@ -109,12 +111,14 @@ class MCPInstrumentor:
             # Import only for testing availability, don't store reference
             __import__("mcp.shared.session")
             wrap_function_wrapper(
-                "mcp.shared.session", "BaseSession.send_request",
-                self._send_request_telemetry_wrapper
+                "mcp.shared.session",
+                "BaseSession.send_request",
+                self._send_request_telemetry_wrapper,
             )
             wrap_function_wrapper(
-                "mcp.shared.session", "BaseSession.send_notification",
-                self._send_notification_telemetry_wrapper
+                "mcp.shared.session",
+                "BaseSession.send_notification",
+                self._send_notification_telemetry_wrapper,
             )
             logger.debug("Successfully wrapped BaseSession methods for telemetry")
         except ImportError:
@@ -127,24 +131,20 @@ class MCPInstrumentor:
 
     @asynccontextmanager
     async def _transport_wrapper(
-        self,
-        wrapped: Callable[..., Any],
-        instance: Any,
-        args: Any,
-        kwargs: Any
+        self, wrapped: Callable[..., Any], instance: Any, args: Any, kwargs: Any
     ) -> AsyncGenerator[Any, None]:
         """Wrap transport functions. Simplified: passes through original streams."""
         original_func_name = f"{wrapped.__module__}.{wrapped.__name__}"
         logger.debug(
             "MCPInstrumentor: _transport_wrapper called for %s (passthrough)", original_func_name
         )
-        
+
         # No OTel context or HUD Task ID manipulation here anymore for transport layer itself.
         # Higher level wrappers (_send_request, _receive_loop) will handle HUD Task ID.
 
         async with wrapped(*args, **kwargs) as (read_stream, write_stream):
             logger.debug("_transport_wrapper: Yielding original streams for %s", original_func_name)
-            yield read_stream, write_stream # Pass original streams directly
+            yield read_stream, write_stream  # Pass original streams directly
             logger.debug(
                 "_transport_wrapper: Exited original stream context for %s", original_func_name
             )
@@ -154,15 +154,15 @@ class MCPInstrumentor:
         wrapped: Callable[[Any, Any, Any, Any], Awaitable[Any]],
         instance: Any,
         args: Any,
-        kwargs: Any
+        kwargs: Any,
     ) -> Any:
         """
         Wrap _receive_loop to capture responses and handled incoming messages.
         """
         logger.debug("MCPInstrumentor: _receive_loop_wrapper called")
-        
+
         orig_handle_incoming = instance._handle_incoming
-        
+
         async def handle_incoming_with_telemetry(req_or_msg: Any) -> Any:
             start_time = time.time()
             hud_task_run_id = get_current_task_run_id()
@@ -175,13 +175,13 @@ class MCPInstrumentor:
             # SessionMessage
             if hasattr(req_or_msg, "message") and hasattr(req_or_msg.message, "root"):
                 actual_message_root = req_or_msg.message.root
-            elif hasattr(req_or_msg, "root"): # e.g. RequestResponder
+            elif hasattr(req_or_msg, "root"):  # e.g. RequestResponder
                 actual_message_root = req_or_msg.root
             elif isinstance(
                 req_or_msg, JSONRPCRequest | JSONRPCNotification | JSONRPCResponse | JSONRPCError
             ):
                 actual_message_root = req_or_msg
-            
+
             if actual_message_root:
                 if isinstance(actual_message_root, JSONRPCRequest):
                     method_name = actual_message_root.method
@@ -189,7 +189,7 @@ class MCPInstrumentor:
                     # call_type_override can remain HANDLE_INCOMING or be more specific if desired
                 elif isinstance(actual_message_root, JSONRPCNotification):
                     method_name = actual_message_root.method
-                    message_id = None # Notifications don't have IDs
+                    message_id = None  # Notifications don't have IDs
                     # call_type_override can remain HANDLE_INCOMING
                 elif isinstance(actual_message_root, JSONRPCResponse | JSONRPCError):
                     # This case implies _handle_incoming is processing a response/error directly
@@ -211,7 +211,7 @@ class MCPInstrumentor:
                 "direction": DirectionType.RECEIVED,
                 "call_type": call_type_override,
                 "message_id": message_id,
-                "is_response_or_error": is_response_or_error_flag # For MCPRequestCall model
+                "is_response_or_error": is_response_or_error_flag,  # For MCPRequestCall model
             }
 
             try:
@@ -222,9 +222,9 @@ class MCPInstrumentor:
                         start_time=start_time,
                         # request_data might be populated if needed for HANDLE_INCOMING
                     )
-                
+
                 result = await orig_handle_incoming(req_or_msg)
-                
+
                 if hud_task_run_id:
                     create_request_record(
                         **record_data_base,
@@ -244,12 +244,12 @@ class MCPInstrumentor:
                         end_time=time.time(),
                         duration=time.time() - start_time,
                         error=str(e),
-                        error_type=type(e).__name__
+                        error_type=type(e).__name__,
                     )
                 raise
-        
+
         instance._handle_incoming = handle_incoming_with_telemetry
-        
+
         try:
             logger.debug("MCPInstrumentor: Entering instrumented _receive_loop section")
             # The original logic for distinguishing request/notification from response for
@@ -257,10 +257,10 @@ class MCPInstrumentor:
             # Ensure streams are context managed
             async with instance._read_stream, instance._write_stream:
                 async for message in instance._read_stream:
-                    hud_task_run_id = get_current_task_run_id() # Get ID for each message
+                    hud_task_run_id = get_current_task_run_id()  # Get ID for each message
 
                     if isinstance(message, Exception):
-                        await instance._handle_incoming(message) # Will be wrapped
+                        await instance._handle_incoming(message)  # Will be wrapped
                         continue
 
                     # Ensure we are dealing with SessionMessage
@@ -276,7 +276,7 @@ class MCPInstrumentor:
                             RuntimeError(f"Unknown message type: {message}")
                         )
                         continue
-                    
+
                     msg_root = message.message.root
 
                     if isinstance(msg_root, JSONRPCRequest | JSONRPCNotification):
@@ -294,9 +294,9 @@ class MCPInstrumentor:
                             if is_error and hasattr(msg_root, "error"):
                                 error_message = getattr(msg_root.error, "message", None)
                                 error_code = str(getattr(msg_root.error, "code", None))
-                            
+
                             create_response_record(
-                                method=f"response_to_id_{msg_root.id}", # Consistent method naming
+                                method=f"response_to_id_{msg_root.id}",  # Consistent method naming
                                 related_request_id=msg_root.id,
                                 response_id=msg_root.id,
                                 is_error=is_error,
@@ -305,9 +305,9 @@ class MCPInstrumentor:
                                 error_type=error_code,
                                 direction=DirectionType.RECEIVED,
                                 call_type=MCPCallType.RECEIVE_RESPONSE,
-                                timestamp=time.time() # Add timestamp here for accuracy
+                                timestamp=time.time(),  # Add timestamp here for accuracy
                             )
-                        
+
                         # Original logic to pass response to waiting stream
                         stream = instance._response_streams.pop(msg_root.id, None)
                         if stream:
@@ -327,7 +327,7 @@ class MCPInstrumentor:
                         logger.warning(
                             "Unknown message root type in _receive_loop: %s", type(msg_root)
                         )
-                        await instance._handle_incoming(message) # Let wrapped handler decide
+                        await instance._handle_incoming(message)  # Let wrapped handler decide
 
             logger.debug("MCPInstrumentor: Exiting instrumented _receive_loop section")
         except Exception as e:
@@ -345,7 +345,7 @@ class MCPInstrumentor:
         wrapped: Callable[[Any, Any, Any, Any], Awaitable[Any]],
         instance: Any,
         args: Any,
-        kwargs: Any
+        kwargs: Any,
     ) -> Any:
         start_time = time.time()
         hud_task_run_id = get_current_task_run_id()
@@ -354,10 +354,9 @@ class MCPInstrumentor:
         request_id = None
 
         if args and len(args) > 0:
-            request_session_msg = args[0] # Assuming SessionMessage
-            if (
-                hasattr(request_session_msg, "message")
-                and hasattr(request_session_msg.message, "root")
+            request_session_msg = args[0]  # Assuming SessionMessage
+            if hasattr(request_session_msg, "message") and hasattr(
+                request_session_msg.message, "root"
             ):
                 actual_request = request_session_msg.message.root
                 if hasattr(actual_request, "method"):
@@ -373,36 +372,34 @@ class MCPInstrumentor:
                             method_name,
                             e,
                         )
-        
+
         record_data_base = {
             "method": method_name,
             "direction": DirectionType.SENT,
-            "call_type": MCPCallType.SEND_REQUEST, # More specific type
+            "call_type": MCPCallType.SEND_REQUEST,  # More specific type
             "request_id": request_id,
             "message_id": request_id,
-            "request_data": request_obj_data
+            "request_data": request_obj_data,
         }
 
         try:
             if hud_task_run_id:
                 create_request_record(
-                    **record_data_base,
-                    status=StatusType.STARTED,
-                    start_time=start_time
+                    **record_data_base, status=StatusType.STARTED, start_time=start_time
                 )
-            
-            result = await wrapped(*args, **kwargs) # result here is usually None for send_request
-            
+
+            result = await wrapped(*args, **kwargs)  # result here is usually None for send_request
+
             if hud_task_run_id:
                 # For send_request, the 'result' is the response future, not the response itself.
                 # Completion means the request was successfully sent to the transport.
                 # The actual response is captured by _receive_loop_wrapper.
                 create_request_record(
                     **record_data_base,
-                    status=StatusType.COMPLETED, # Meaning: successfully dispatched
+                    status=StatusType.COMPLETED,  # Meaning: successfully dispatched
                     start_time=start_time,
                     end_time=time.time(),
-                    duration=time.time() - start_time
+                    duration=time.time() - start_time,
                 )
             return result
         except Exception as e:
@@ -414,7 +411,7 @@ class MCPInstrumentor:
                     end_time=time.time(),
                     duration=time.time() - start_time,
                     error=str(e),
-                    error_type=type(e).__name__
+                    error_type=type(e).__name__,
                 )
             raise
 
@@ -423,7 +420,7 @@ class MCPInstrumentor:
         wrapped: Callable[[Any, Any, Any, Any], Awaitable[Any]],
         instance: Any,
         args: Any,
-        kwargs: Any
+        kwargs: Any,
     ) -> Any:
         start_time = time.time()
         hud_task_run_id = get_current_task_run_id()
@@ -431,7 +428,7 @@ class MCPInstrumentor:
         notification_obj_data = None
 
         if args and len(args) > 0:
-            notification_session_msg = args[0] # Assuming SessionMessage
+            notification_session_msg = args[0]  # Assuming SessionMessage
             if hasattr(notification_session_msg, "message") and hasattr(
                 notification_session_msg.message, "root"
             ):
@@ -451,27 +448,25 @@ class MCPInstrumentor:
         record_data_base = {
             "method": method_name,
             "direction": DirectionType.SENT,
-            "call_type": MCPCallType.SEND_NOTIFICATION, # More specific type
-            "notification_data": notification_obj_data
+            "call_type": MCPCallType.SEND_NOTIFICATION,  # More specific type
+            "notification_data": notification_obj_data,
         }
 
         try:
             if hud_task_run_id:
                 create_notification_record(
-                    **record_data_base,
-                    status=StatusType.STARTED,
-                    start_time=start_time
+                    **record_data_base, status=StatusType.STARTED, start_time=start_time
                 )
-            
-            result = await wrapped(*args, **kwargs) # Usually None
-            
+
+            result = await wrapped(*args, **kwargs)  # Usually None
+
             if hud_task_run_id:
                 create_notification_record(
                     **record_data_base,
                     status=StatusType.COMPLETED,
                     start_time=start_time,
                     end_time=time.time(),
-                    duration=time.time() - start_time
+                    duration=time.time() - start_time,
                 )
             return result
         except Exception as e:
@@ -483,7 +478,7 @@ class MCPInstrumentor:
                     end_time=time.time(),
                     duration=time.time() - start_time,
                     error=str(e),
-                    error_type=type(e).__name__
+                    error_type=type(e).__name__,
                 )
             raise
 
@@ -494,11 +489,8 @@ class MCPInstrumentor:
             logger.warning("Manual test not recorded: No active task_run_id")
             return False
         try:
-            record = MCPManualTestCall.create(
-                task_run_id=hud_task_run_id,
-                **kwargs
-            )
-            buffer_mcp_call(record) # buffer_mcp_call handles Pydantic model directly
+            record = MCPManualTestCall.create(task_run_id=hud_task_run_id, **kwargs)
+            buffer_mcp_call(record)  # buffer_mcp_call handles Pydantic model directly
             logger.info("Manual test recorded: %s", record.model_dump(exclude_none=True))
             return True
         except Exception as e:

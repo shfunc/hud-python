@@ -5,6 +5,7 @@ from hud.adapters import Adapter, CLA
 from hud.utils.common import Observation
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 # Generic type for different client types (Anthropic, OpenAI, etc.)
@@ -84,7 +85,9 @@ class Agent(Generic[ClientT, ActionT], ABC):
 
         return self.adapter.adapt_list(actions)
 
-    async def predict(self, observation: Observation, verbose: bool = False) -> tuple[list[CLA] | list[ActionT], bool]:
+    async def predict(
+        self, observation: Observation, verbose: bool = False
+    ) -> tuple[list[CLA] | list[ActionT], bool]:
         """
         Predict the next action based on the observation.
 
@@ -101,7 +104,7 @@ class Agent(Generic[ClientT, ActionT], ABC):
             logger.info("[hud] Predicting action...")
         # Stage 1: Preprocess the observation
         processed_obs = self.preprocess(observation)
-            
+
         # Stage 2: Fetch response from the model
         actions, done = await self.fetch_response(processed_obs)
         if verbose:

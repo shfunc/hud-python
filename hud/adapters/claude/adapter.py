@@ -45,7 +45,7 @@ class ClaudeAdapter(Adapter):
             # Validate input data
             if not isinstance(data, dict):
                 raise ValueError(f"Invalid action: {data}")
-                
+
             action_type = data.get("action")
 
             if action_type == "key":
@@ -85,8 +85,10 @@ class ClaudeAdapter(Adapter):
                 assert len(coord) == 2
                 if (
                     len(self.memory) == 0
-                    or (not isinstance(self.memory[-1], MoveAction)
-                        and not isinstance(self.memory[-1], ClickAction))
+                    or (
+                        not isinstance(self.memory[-1], MoveAction)
+                        and not isinstance(self.memory[-1], ClickAction)
+                    )
                     or self.memory[-1].point is None
                 ):
                     raise ValueError("Left click drag must be preceded by a move or click action")

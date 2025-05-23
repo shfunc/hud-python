@@ -69,7 +69,7 @@ class TestOperatorAdapterConvert:
         """Test converting click action."""
         data = {"type": "click", "x": 100, "y": 200, "button": "left"}
         result = adapter.convert(data)
-        
+
         assert isinstance(result, ClickAction)
         assert result.point is not None
         assert result.point.x == 100
@@ -80,7 +80,7 @@ class TestOperatorAdapterConvert:
         """Test converting click action with default values."""
         data = {"type": "click"}
         result = adapter.convert(data)
-        
+
         assert isinstance(result, ClickAction)
         assert result.point is not None
         assert result.point.x == 0
@@ -91,7 +91,7 @@ class TestOperatorAdapterConvert:
         """Test converting click action with mapped button."""
         data = {"type": "click", "x": 100, "y": 200, "button": "wheel"}
         result = adapter.convert(data)
-        
+
         assert isinstance(result, ClickAction)
         assert result.button == "middle"
 
@@ -99,7 +99,7 @@ class TestOperatorAdapterConvert:
         """Test converting double click action."""
         data = {"type": "double_click", "x": 150, "y": 250}
         result = adapter.convert(data)
-        
+
         assert isinstance(result, ClickAction)
         assert result.point is not None
         assert result.point.x == 150
@@ -109,15 +109,9 @@ class TestOperatorAdapterConvert:
 
     def test_convert_scroll_action(self, adapter):
         """Test converting scroll action."""
-        data = {
-            "type": "scroll",
-            "x": 300,
-            "y": 400,
-            "scroll_x": 10,
-            "scroll_y": -20
-        }
+        data = {"type": "scroll", "x": 300, "y": 400, "scroll_x": 10, "scroll_y": -20}
         result = adapter.convert(data)
-        
+
         assert isinstance(result, ScrollAction)
         assert result.point is not None
         assert result.scroll is not None
@@ -130,7 +124,7 @@ class TestOperatorAdapterConvert:
         """Test converting scroll action with default values."""
         data = {"type": "scroll"}
         result = adapter.convert(data)
-        
+
         assert isinstance(result, ScrollAction)
         assert result.point is not None
         assert result.scroll is not None
@@ -143,7 +137,7 @@ class TestOperatorAdapterConvert:
         """Test converting type action."""
         data = {"type": "type", "text": "Hello, World!"}
         result = adapter.convert(data)
-        
+
         assert isinstance(result, TypeAction)
         assert result.text == "Hello, World!"
         assert result.enter_after is False
@@ -152,7 +146,7 @@ class TestOperatorAdapterConvert:
         """Test converting type action with default text."""
         data = {"type": "type"}
         result = adapter.convert(data)
-        
+
         assert isinstance(result, TypeAction)
         assert result.text == ""
         assert result.enter_after is False
@@ -161,7 +155,7 @@ class TestOperatorAdapterConvert:
         """Test converting wait action."""
         data = {"type": "wait", "ms": 2000}
         result = adapter.convert(data)
-        
+
         assert isinstance(result, WaitAction)
         assert result.time == 2000
 
@@ -169,7 +163,7 @@ class TestOperatorAdapterConvert:
         """Test converting wait action with default time."""
         data = {"type": "wait"}
         result = adapter.convert(data)
-        
+
         assert isinstance(result, WaitAction)
         assert result.time == 1000
 
@@ -177,7 +171,7 @@ class TestOperatorAdapterConvert:
         """Test converting move action."""
         data = {"type": "move", "x": 500, "y": 600}
         result = adapter.convert(data)
-        
+
         assert isinstance(result, MoveAction)
         assert result.point is not None
         assert result.point.x == 500
@@ -187,7 +181,7 @@ class TestOperatorAdapterConvert:
         """Test converting move action with default values."""
         data = {"type": "move"}
         result = adapter.convert(data)
-        
+
         assert isinstance(result, MoveAction)
         assert result.point is not None
         assert result.point.x == 0
@@ -197,7 +191,7 @@ class TestOperatorAdapterConvert:
         """Test converting keypress action."""
         data = {"type": "keypress", "keys": ["ctrl", "c"]}
         result = adapter.convert(data)
-        
+
         assert isinstance(result, PressAction)
         assert result.keys == ["ctrl", "c"]
 
@@ -205,7 +199,7 @@ class TestOperatorAdapterConvert:
         """Test converting keypress action with mapped keys."""
         data = {"type": "keypress", "keys": ["return", "arrowup"]}
         result = adapter.convert(data)
-        
+
         assert isinstance(result, PressAction)
         assert result.keys == ["enter", "up"]
 
@@ -213,7 +207,7 @@ class TestOperatorAdapterConvert:
         """Test converting keypress action with default keys."""
         data = {"type": "keypress"}
         result = adapter.convert(data)
-        
+
         assert isinstance(result, PressAction)
         assert result.keys == []
 
@@ -221,14 +215,10 @@ class TestOperatorAdapterConvert:
         """Test converting drag action."""
         data = {
             "type": "drag",
-            "path": [
-                {"x": 100, "y": 200},
-                {"x": 150, "y": 250},
-                {"x": 200, "y": 300}
-            ]
+            "path": [{"x": 100, "y": 200}, {"x": 150, "y": 250}, {"x": 200, "y": 300}],
         }
         result = adapter.convert(data)
-        
+
         assert isinstance(result, DragAction)
         assert len(result.path) == 3
         assert result.path[0].x == 100
@@ -242,7 +232,7 @@ class TestOperatorAdapterConvert:
         """Test converting drag action with default path."""
         data = {"type": "drag"}
         result = adapter.convert(data)
-        
+
         assert isinstance(result, DragAction)
         assert result.path == []
 
@@ -253,11 +243,11 @@ class TestOperatorAdapterConvert:
             "path": [
                 {"x": 100},  # Missing y
                 {"y": 200},  # Missing x
-                {}  # Missing both
-            ]
+                {},  # Missing both
+            ],
         }
         result = adapter.convert(data)
-        
+
         assert isinstance(result, DragAction)
         assert len(result.path) == 3
         assert result.path[0].x == 100
@@ -271,14 +261,14 @@ class TestOperatorAdapterConvert:
         """Test converting screenshot action."""
         data = {"type": "screenshot"}
         result = adapter.convert(data)
-        
+
         assert isinstance(result, ScreenshotFetch)
 
     def test_convert_response_action(self, adapter):
         """Test converting response action."""
         data = {"type": "response", "text": "Task completed successfully"}
         result = adapter.convert(data)
-        
+
         assert isinstance(result, ResponseAction)
         assert result.text == "Task completed successfully"
 
@@ -286,17 +276,17 @@ class TestOperatorAdapterConvert:
         """Test converting response action with default text."""
         data = {"type": "response"}
         result = adapter.convert(data)
-        
+
         assert isinstance(result, ResponseAction)
         assert result.text == ""
 
     def test_convert_unsupported_action_type(self, adapter):
         """Test converting unsupported action type."""
         data = {"type": "unsupported_action"}
-        
+
         with pytest.raises(ValueError) as exc_info:
             adapter.convert(data)
-        
+
         assert "Unsupported action type: unsupported_action" in str(exc_info.value)
 
     def test_convert_invalid_data_structure(self, adapter):
@@ -304,23 +294,23 @@ class TestOperatorAdapterConvert:
         # Test with non-dict data
         with pytest.raises(ValueError) as exc_info:
             adapter.convert("invalid_data")
-        
+
         assert "Invalid action" in str(exc_info.value)
 
     def test_convert_missing_type_field(self, adapter):
         """Test converting data without type field."""
         data = {"x": 100, "y": 200}  # Missing type
-        
+
         with pytest.raises(ValueError) as exc_info:
             adapter.convert(data)
-        
+
         assert "Unsupported action type: None" in str(exc_info.value)
 
     def test_convert_none_data(self, adapter):
         """Test converting None data."""
         with pytest.raises(ValueError) as exc_info:
             adapter.convert(None)
-        
+
         assert "Invalid action" in str(exc_info.value)
 
 
@@ -339,18 +329,18 @@ class TestOperatorAdapterIntegration:
         adapter.agent_height = 1080
         adapter.env_width = 1920
         adapter.env_height = 1080
-        
+
         # Test the full adapt method
         raw_action = {"type": "click", "x": 100, "y": 200, "button": "right"}
-        
+
         result = adapter.adapt(raw_action)
-        
+
         assert isinstance(result, ClickAction)
         assert result.point is not None
         assert result.point.x == 100
         assert result.point.y == 200
         assert result.button == "right"
-        
+
         # Check that it was added to memory
         assert len(adapter.memory) == 1
         assert adapter.memory[0] == result
@@ -362,19 +352,19 @@ class TestOperatorAdapterIntegration:
         adapter.agent_height = 1080
         adapter.env_width = 1920
         adapter.env_height = 1080
-        
+
         actions = [
             {"type": "click", "x": 100, "y": 200},
             {"type": "type", "text": "hello"},
-            {"type": "keypress", "keys": ["return"]}
+            {"type": "keypress", "keys": ["return"]},
         ]
-        
+
         results = adapter.adapt_list(actions)
-        
+
         assert len(results) == 3
         assert isinstance(results[0], ClickAction)
         assert isinstance(results[1], TypeAction)
         assert isinstance(results[2], PressAction)
-        
+
         # Check memory
         assert len(adapter.memory) == 3

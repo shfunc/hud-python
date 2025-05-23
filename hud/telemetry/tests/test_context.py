@@ -34,10 +34,10 @@ class TestTaskRunIdContext:
         # This test simulates what would happen in different contexts
         set_current_task_run_id("context-1")
         assert get_current_task_run_id() == "context-1"
-        
+
         set_current_task_run_id("context-2")
         assert get_current_task_run_id() == "context-2"
-        
+
         # Reset to None
         set_current_task_run_id(None)
         assert get_current_task_run_id() is None
@@ -56,7 +56,7 @@ class TestRootTraceContext:
         """Test setting root trace state."""
         is_root_trace.set(True)
         assert is_root_trace.get() is True
-        
+
         is_root_trace.set(False)
         assert is_root_trace.get() is False
 
@@ -79,22 +79,22 @@ class TestMCPCallBuffer:
     def test_add_and_flush_mcp_call(self):
         """Test adding and flushing MCP calls."""
         self.setUp()
-        
+
         # Set active task run ID
         set_current_task_run_id("test-task")
-        
+
         # Create mock MCP call with required attributes
         mock_call = MagicMock(spec=BaseMCPCall)
         mock_call.model_dump.return_value = {"type": "test", "task_run_id": "test-task"}
         mock_call.task_run_id = "test-task"
-        
+
         buffer_mcp_call(mock_call)
-        
+
         # Flush should return the call and clear buffer
         result = flush_buffer()
         assert len(result) == 1
         assert result[0] == mock_call
-        
+
         # Buffer should be empty after flush
         result2 = flush_buffer()
         assert result2 == []
@@ -102,10 +102,10 @@ class TestMCPCallBuffer:
     def test_add_multiple_mcp_calls(self):
         """Test adding multiple MCP calls."""
         self.setUp()
-        
+
         # Set active task run ID
         set_current_task_run_id("test-task")
-        
+
         # Create multiple mock calls
         mock_calls = []
         for i in range(3):
@@ -114,7 +114,7 @@ class TestMCPCallBuffer:
             mock_call.task_run_id = "test-task"
             mock_calls.append(mock_call)
             buffer_mcp_call(mock_call)
-        
+
         # Flush should return all calls
         result = flush_buffer()
         assert len(result) == 3
@@ -123,21 +123,21 @@ class TestMCPCallBuffer:
     def test_buffer_isolation_per_task(self):
         """Test that MCP call buffers contain all calls regardless of task ID."""
         self.setUp()
-        
+
         # Set task run ID 1
         set_current_task_run_id("task-1")
         mock_call_1 = MagicMock(spec=BaseMCPCall)
         mock_call_1.task_run_id = "task-1"
         mock_call_1.model_dump.return_value = {"type": "test", "task_run_id": "task-1"}
         buffer_mcp_call(mock_call_1)
-        
+
         # Set task run ID 2
         set_current_task_run_id("task-2")
         mock_call_2 = MagicMock(spec=BaseMCPCall)
         mock_call_2.task_run_id = "task-2"
         mock_call_2.model_dump.return_value = {"type": "test", "task_run_id": "task-2"}
         buffer_mcp_call(mock_call_2)
-        
+
         # Flush should return all calls from both tasks
         result = flush_buffer()
         assert len(result) == 2
@@ -148,11 +148,11 @@ class TestMCPCallBuffer:
         """Test adding MCP call when no task run ID is set."""
         self.setUp()
         set_current_task_run_id(None)
-        
+
         mock_call = MagicMock(spec=BaseMCPCall)
         mock_call.task_run_id = None
         buffer_mcp_call(mock_call)
-        
+
         # Should not buffer anything when no task ID is set
         result = flush_buffer()
         assert len(result) == 0
@@ -167,37 +167,37 @@ class TestContextIntegration:
         set_current_task_run_id(None)
         flush_buffer()
         is_root_trace.set(False)
-        
+
         # Set up trace context
         task_id = "integration-test-task"
         set_current_task_run_id(task_id)
         is_root_trace.set(True)
-        
+
         # Add some MCP calls
         mock_calls = []
         for i in range(2):
             mock_call = MagicMock(spec=BaseMCPCall)
             mock_call.model_dump.return_value = {
                 "type": f"integration_test_{i}",
-                "task_run_id": task_id
+                "task_run_id": task_id,
             }
             mock_call.task_run_id = task_id
             mock_calls.append(mock_call)
             buffer_mcp_call(mock_call)
-        
+
         # Verify context state
         assert get_current_task_run_id() == task_id
         assert is_root_trace.get() is True
-        
+
         # Flush and verify
         result = flush_buffer()
         assert len(result) == 2
         assert result == mock_calls
-        
+
         # Clean up
         set_current_task_run_id(None)
         is_root_trace.set(False)
-        
+
         # Verify cleanup
         assert get_current_task_run_id() is None
         assert flush_buffer() == []

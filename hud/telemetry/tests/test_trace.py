@@ -64,8 +64,9 @@ class TestTrace:
     @patch("hud.telemetry.trace.flush_buffer")
     @patch("hud.telemetry.trace.set_current_task_run_id")
     @patch("hud.telemetry.trace.get_current_task_run_id")
-    def test_trace_with_attributes(self, mock_get_task_id, mock_set_task_id, mock_flush, mock_submit
-                                   ):
+    def test_trace_with_attributes(
+        self, mock_get_task_id, mock_set_task_id, mock_flush, mock_submit
+    ):
         """Test trace with attributes."""
         mock_get_task_id.return_value = None
         mock_flush.return_value = []
@@ -82,8 +83,9 @@ class TestTrace:
     @patch("hud.telemetry.trace.set_current_task_run_id")
     @patch("hud.telemetry.trace.get_current_task_run_id")
     @patch("hud.telemetry.trace.export_telemetry_coro")
-    def test_trace_with_mcp_calls(self, mock_export, mock_get_task_id, mock_set_task_id, mock_flush,
-                                  mock_submit):
+    def test_trace_with_mcp_calls(
+        self, mock_export, mock_get_task_id, mock_set_task_id, mock_flush, mock_submit
+    ):
         """Test trace with MCP calls exports telemetry."""
         mock_get_task_id.return_value = None
         mock_mcp_calls = [MagicMock(), MagicMock()]
@@ -128,7 +130,7 @@ class TestTrace:
 
         with pytest.raises(ValueError), trace():
             raise ValueError("Test exception")
-            
+
         # Should still clean up properly
         mock_flush.assert_called_once()
 
@@ -199,6 +201,7 @@ class TestRegisterTrace:
 
     def test_register_trace_preserves_function_metadata(self):
         """Test register_trace preserves original function metadata."""
+
         @register_trace(name="test")
         def original_function():
             """Original docstring."""

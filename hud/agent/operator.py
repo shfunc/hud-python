@@ -81,8 +81,12 @@ class OperatorAgent(Agent[OpenAI, dict[str, Any]]):
         self.last_response_id = None
         self.pending_call_id = None
         self.initial_prompt = None
-        self.acknowledged_safety_checks: list[dict[str, Any]] | None = None # To store safety checks that need acknowledgement
-        self.pending_safety_checks_for_acknowledgment: list[dict[str, Any]] | None = None # To store safety checks received from the API
+        self.acknowledged_safety_checks: list[dict[str, Any]] | None = (
+            None  # To store safety checks that need acknowledgement
+        )
+        self.pending_safety_checks_for_acknowledgment: list[dict[str, Any]] | None = (
+            None  # To store safety checks received from the API
+        )
 
     async def fetch_response(self, observation: Observation) -> tuple[list[dict[str, Any]], bool]:
         """
@@ -154,7 +158,9 @@ class OperatorAgent(Agent[OpenAI, dict[str, Any]]):
 
             # Add acknowledged safety checks if they exist
             if self.acknowledged_safety_checks is not None:
-                computer_call_output_dict["acknowledged_safety_checks"] = self.acknowledged_safety_checks
+                computer_call_output_dict["acknowledged_safety_checks"] = (
+                    self.acknowledged_safety_checks
+                )
                 # Reset after including them in the call
                 self.acknowledged_safety_checks = None
 
@@ -233,10 +239,12 @@ class OperatorAgent(Agent[OpenAI, dict[str, Any]]):
                     self.pending_safety_checks_for_acknowledgment = [
                         check.model_dump() for check in item.pending_safety_checks
                     ]
-                    logger.info(f"Pending safety checks received: {self.pending_safety_checks_for_acknowledgment}")
+                    logger.info(
+                        f"Pending safety checks received: {self.pending_safety_checks_for_acknowledgment}"
+                    )
                     # For now, we assume the client will see this log or be notified by other means
                     # and call acknowledge_safety_checks if they wish to proceed.
-                    break # Assuming one set of safety checks per response is sufficient to handle
+                    break  # Assuming one set of safety checks per response is sufficient to handle
 
         return actions, done
 
