@@ -30,7 +30,9 @@ T = TypeVar("T", bound=BaseMCPCall)
 
 def get_current_task_run_id() -> str | None:
     """Get the task_run_id for the current trace context."""
-    return current_task_run_id.get()
+    value = current_task_run_id.get()
+    # Convert empty string sentinel back to None
+    return None if value == "" else value
 
 def set_current_task_run_id(task_run_id: str | None) -> None:
     """Set the task_run_id for the current trace context."""
@@ -176,3 +178,9 @@ def create_manual_test_record(**custom_data) -> MCPManualTestCall | None:
     record = MCPManualTestCall.create(task_run_id=task_run_id, **custom_data)
     buffer_mcp_call(record)
     return record
+
+def reset_context() -> None:
+    """Reset all telemetry context variables. Useful for test isolation."""
+    set_current_task_run_id(None)
+    mcp_calls_buffer.set([])
+    is_root_trace.set(False)
