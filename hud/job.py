@@ -317,7 +317,7 @@ async def _execute_task(
                 if tracker:
                     tracker.increment_step(task_id)
 
-                if auto_reply_question and action.type == "response" and action.text.includes("?"):
+                if auto_reply_question and action[0].type == "response" and "?" in action[0].text:
                     obs.text = "Yes!"
                     obs.screenshot = None
                     continue
