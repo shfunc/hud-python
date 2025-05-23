@@ -113,8 +113,53 @@ if __name__ == "__main__":
 5.  **Evaluation & Close:** `env.evaluate()` checks if the task succeeded based on the `evaluate` definition. `env.close()` shuts down the environment.
 6.  **`@register_job` Decorator:** Wrapping `main` with `@register_job("quickstart-run")` automatically creates a Job. When `env.close()` is called, the recorded interactions (trajectory) are associated with this Job. You can view the job and its trajectory video on the [HUD Jobs page](https://app.hud.so/jobs).
 
+## 5. Using Tracing with MCP Agents
+
+If you're working with MCP-based agents, you can use the tracing functionality to capture and analyze MCP calls:
+
+```python
+import hud
+from mcp_use import MCPAgent, MCPClient
+from langchain_openai import ChatOpenAI
+
+# Create MCP components
+client = MCPClient.from_dict({
+    "mcpServers": {
+        "example_server": {
+            "command": "npx",
+            "args": ["-y", "@example/mcp-server"],
+        }
+    }
+})
+llm = ChatOpenAI(model="gpt-4o")
+agent = MCPAgent(llm=llm, client=client, max_steps=5)
+
+# Use the trace context manager to capture MCP calls
+with hud.trace("example_trace"):
+    result = await agent.run(
+        "Find information about capybaras",
+        max_steps=5,
+    )
+    print(f"Result: {result}")
+
+# Trace is automatically uploaded and available at the URL shown in the logs
+```
+
+You can also use the `@hud.register_trace` decorator to trace entire functions:
+
+```python
+@hud.register_trace(name="search_function")
+async def perform_search(query):
+    # MCP agent setup and execution
+    # All MCP calls will be traced
+    return result
+```
+
+For more details on tracing, see the [Tracing documentation](/advanced/tracing).
+
 ## Next Steps
 
 *   Explore the [Core Concepts](/concepts/environment) to understand the SDK architecture in more detail.
 *   Check out the [Examples folder in the GitHub repo](/examples/) for more detailed, runnable notebooks covering different agents and environments.
 *   Review the [API Reference](/api-reference/gym) for comprehensive documentation on specific functions and classes.
+*   Learn about [Tracing](/advanced/tracing) to capture and analyze MCP calls in your applications.
