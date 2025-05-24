@@ -14,6 +14,7 @@ from hud.exceptions import GymMakeException
 from hud.gym import make
 from hud.job import Job
 from hud.task import Task
+from hud.telemetry.context import reset_context
 from hud.types import CustomGym, EnvironmentStatus
 from hud.utils.config import FunctionConfig
 
@@ -96,6 +97,7 @@ class MockClient(Client):
 )
 async def test_make_docker_gym(mocker, test_case):
     """Test creating environments with different gym types."""
+    reset_context()
     mock_client = MockClient()
     mock_build_data = {"image": "test-image"}
 
@@ -160,6 +162,7 @@ async def test_make_docker_gym(mocker, test_case):
     ),
 )
 async def test_make_remote_gym(mocker, test_case):
+    reset_context()
     mock_client = MockClient()
     mock_build_data = {"image": "test-image"}
 
@@ -183,6 +186,7 @@ async def test_make_remote_gym(mocker, test_case):
 @pytest.mark.asyncio
 async def test_make_with_job_association(mocker):
     """Test creating an environment with job association."""
+    reset_context()
     mock_get_gym_id = mocker.patch("hud.gym.get_gym_id", new_callable=AsyncMock)
     mock_get_gym_id.return_value = "true-gym-id"
 
@@ -214,6 +218,7 @@ async def test_make_with_job_association(mocker):
 @pytest.mark.asyncio
 async def test_make_with_invalid_gym():
     """Test creating an environment with an invalid gym source."""
+    reset_context()
     with pytest.raises(GymMakeException, match="Invalid gym source"):
         # Create a mock object that is neither a Gym nor a Task
         mock_invalid = MagicMock()
@@ -224,6 +229,7 @@ async def test_make_with_invalid_gym():
 @pytest.mark.asyncio
 async def test_make_with_invalid_location():
     """Test creating an environment with an invalid location."""
+    reset_context()
     # Create a CustomGym instance with an invalid location
     with pytest.raises(GymMakeException, match="Invalid environment location"):
         await make(
@@ -238,6 +244,7 @@ async def test_make_with_invalid_location():
 @pytest.mark.asyncio
 async def test_make_without_image_or_build_context():
     """Test creating an environment without an image or build context."""
+    reset_context()
     # Create a CustomGym instance without an image or build context
     with pytest.raises(GymMakeException, match="Invalid image or build context"):
         await make(MagicMock(spec=CustomGym, location="local", image_or_build_context=None))

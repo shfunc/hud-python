@@ -25,12 +25,10 @@ class OperatorAdapter(Adapter):
         "arrowup": "up",
         "arrowdown": "down",
         "arrowleft": "left",
-        "arrowright": "right"
+        "arrowright": "right",
     }
 
-    BUTTON_MAP: ClassVar[dict[str, CLAButton]] = {
-        "wheel": "middle"
-    }
+    BUTTON_MAP: ClassVar[dict[str, CLAButton]] = {"wheel": "middle"}
 
     def __init__(self) -> None:
         super().__init__()

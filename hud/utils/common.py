@@ -23,6 +23,7 @@ class FunctionConfig(BaseModel):
     args: list[Any]  # Must be json serializable
 
     id: str | None = None  # Optional id for remote execution
+    metadata: dict[str, Any] | None = None  # Optional metadata for telemetry
 
     def __len__(self) -> int:
         return len(self.args)
