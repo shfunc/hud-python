@@ -222,7 +222,6 @@ class TestRegisterTrace:
         @register_trace(name="test")
         def original_function():
             """Original docstring."""
-            pass
 
         assert original_function.__name__ == "original_function"
         assert original_function.__doc__ == "Original docstring."
