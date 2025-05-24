@@ -30,7 +30,16 @@
       ]
     },
     {
-      "group": "Core Concepts",
+      "group": "Features",
+      "pages": [
+        "advanced/tracing",
+        "advanced/cla-details",
+        "advanced/environment-control",
+        "advanced/uploading"
+      ]
+    },
+    {
+      "group": "Concepts",
       "pages": [
         "concepts/agent",
         "concepts/adapter",
@@ -38,15 +47,6 @@
         "concepts/job",
         "concepts/task",
         "concepts/trajectory"
-      ]
-    },
-    {
-      "group": "Features",
-      "pages": [
-        "advanced/tracing",
-        "advanced/cla-details",
-        "advanced/environment-control",
-        "advanced/uploading"
       ]
     },
     {

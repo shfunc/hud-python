@@ -1,5 +1,5 @@
 ---
-title: 'Writing evaluations'
+title: 'Writing tasks'
 description: 'Design, build, and share evaluation scenarios for browser-based agents'
 icon: 'flag'
 ---
@@ -32,15 +32,13 @@ task = Task(
 )
 ```
 
-## Setup Functions
-
-## Setup Functions (for `hud-browser` `env.reset()`)
+## Setup Functions (for `hud-browser`)
 
 | Function                     | Description                                                                 |
 | ---------------------------- | --------------------------------------------------------------------------- |
 | `goto(url)`                  | Navigates to a URL.                                                         |
 | `load_html_content(html)`    | Loads static HTML content into the browser.                                 |
-| `sheets_from_xlsx(url, name?)` | Downloads XLSX, converts to Google Sheet, and navigates to it.              |
+| `sheets_from_xlsx(url)` | Downloads XLSX, converts to Google Sheet, and navigates to it.              |
 
 <Info>
 Actions such as clicking elements, typing text, complex page manipulations, or waiting for dynamic content to appear *after* an initial page load are typically performed by the agent via `env.step()` calls during the task execution, not as part of the initial `Task.setup`.
