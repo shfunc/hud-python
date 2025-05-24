@@ -34,7 +34,7 @@ class OperatorAgent(Agent[OpenAI, dict[str, Any]]):
         self,
         client: OpenAI | None = None,
         model: str = "computer-use-preview",
-        environment: Literal["windows", "mac", "linux", "browser"] = "windows",
+        environment: Literal["windows", "mac", "linux", "browser"] = "linux",
         adapter: Adapter | None = None,
         max_iterations: int = 8,
     ):
@@ -81,12 +81,6 @@ class OperatorAgent(Agent[OpenAI, dict[str, Any]]):
         self.last_response_id = None
         self.pending_call_id = None
         self.initial_prompt = None
-        self.acknowledged_safety_checks: list[dict[str, Any]] | None = (
-            None  # To store safety checks that need acknowledgement
-        )
-        self.pending_safety_checks_for_acknowledgment: list[dict[str, Any]] | None = (
-            None  # To store safety checks received from the API
-        )
 
     async def fetch_response(self, observation: Observation) -> tuple[list[dict[str, Any]], bool]:
         """
@@ -146,31 +140,20 @@ class OperatorAgent(Agent[OpenAI, dict[str, Any]]):
                 logger.warning("No screenshot provided for response to action")
                 return [], True
 
-            # Prepare the computer_call_output dictionary
-            computer_call_output_dict: dict[str, Any] = {
-                "call_id": self.pending_call_id,
-                "type": "computer_call_output",
-                "output": {
-                    "type": "input_image",
-                    "image_url": f"data:image/png;base64,{observation.screenshot}",
-                },
-            }
-
-            # Add acknowledged safety checks if they exist
-            if self.acknowledged_safety_checks is not None:
-                computer_call_output_dict["acknowledged_safety_checks"] = (
-                    self.acknowledged_safety_checks
-                )
-                # Reset after including them in the call
-                self.acknowledged_safety_checks = None
-
             # Create a response to the previous action with the new screenshot
             input_param_followup = cast(
                 ResponseInputParam,
                 [
                     cast(
                         ResponseInputItemParam,
-                        computer_call_output_dict,
+                        {
+                            "call_id": self.pending_call_id,
+                            "type": "computer_call_output",
+                            "output": {
+                                "type": "input_image",
+                                "image_url": f"data:image/png;base64,{observation.screenshot}",
+                            },
+                        },
                     )
                 ],
             )
@@ -230,40 +213,4 @@ class OperatorAgent(Agent[OpenAI, dict[str, Any]]):
                 logger.info("No computer calls and no final text message found.")
                 # Keep done = True, actions remains empty
 
-        # Store pending_safety_checks if any, to be acknowledged by the client
-        self.pending_safety_checks_for_acknowledgment = None
-        for item in response.output:
-            if isinstance(item, ResponseComputerToolCall) and item.type == "computer_call":
-                if item.pending_safety_checks:
-                    # Convert pending_safety_checks to a list of dicts
-                    self.pending_safety_checks_for_acknowledgment = [
-                        check.model_dump() for check in item.pending_safety_checks
-                    ]
-                    logger.info(
-                        f"Pending safety checks received: {self.pending_safety_checks_for_acknowledgment}"
-                    )
-                    # For now, we assume the client will see this log or be notified by other means
-                    # and call acknowledge_safety_checks if they wish to proceed.
-                    break  # Assuming one set of safety checks per response is sufficient to handle
-
         return actions, done
-
-    def acknowledge_safety_checks(self, safety_checks: list[dict[str, Any]]) -> None:
-        """
-        Allows the client to provide acknowledged safety checks.
-        These will be included in the next call to the API.
-
-        Args:
-            safety_checks: A list of safety check objects that have been acknowledged.
-                           Each object should be a dictionary matching the structure
-                           expected by the OpenAI API.
-        """
-        self.acknowledged_safety_checks = safety_checks
-        logger.info(f"Safety checks acknowledged by client: {safety_checks}")
-
-    def get_pending_safety_checks(self) -> list[dict[str, Any]] | None:
-        """
-        Returns the safety checks that were received from the last API call
-        and are pending acknowledgment.
-        """
-        return self.pending_safety_checks_for_acknowledgment
