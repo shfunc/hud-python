@@ -8,7 +8,8 @@
     "dark": "#3730A3"
   },
   "favicon": "/favicon.png",
-  "navigation": [
+  "navigation": {
+    "groups": [
     {
       "group": "Getting Started",
       "pages": [
@@ -54,13 +55,15 @@
         "environments/browser",
         "environments/custom", 
         "environments/qa",
-        "environments/ubuntu" 
+        "environments/ubuntu",
+        "environments/osworld-ubuntu"
       ]
     }
-  ],
+    ]
+  },
   "logo": {
-    "light": "/logo/HUD-light-optimized.svg",
-    "dark": "/logo/HUD.svg"
+    "light": "/logo/hud_logo.svg",
+    "dark": "/logo/hud_logo_dark.svg"
   },
   "navbar": {
     "links": [
