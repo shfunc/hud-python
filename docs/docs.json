@@ -14,9 +14,9 @@
       "group": "Getting Started",
       "pages": [
         "quickstart",
-        "running-your-agent",
         "task-creation",
-        "environment-creation"
+        "environment-creation",
+        "running-your-agent"
       ]
     },
     {
