@@ -113,8 +113,8 @@ class RemoteDockerClient(DockerClient):
 
         logger.info("Creating remote environment")
 
-        # true_gym_id = await get_gym_id("local-docker")
-        true_gym_id = await get_gym_id("docker")
+        true_gym_id = await get_gym_id("local-docker")
+        # true_gym_id = await get_gym_id("docker")
 
         # augment metadata with dockerfile
         if "environment_config" not in metadata:
