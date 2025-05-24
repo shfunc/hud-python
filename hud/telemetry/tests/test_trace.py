@@ -218,7 +218,6 @@ class TestRegisterTrace:
 
     def test_register_trace_preserves_function_metadata(self):
         """Test register_trace preserves original function metadata."""
-
         @register_trace(name="test")
         def original_function():
             """Original docstring."""
