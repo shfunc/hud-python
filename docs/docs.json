@@ -32,8 +32,9 @@
       {
         "group": "Environments",
         "pages": [
+          "environments/custom-environments",
+          "environments/osworld-ubuntu",
           "environments/hud-browser",
-          "environments/hud-ubuntu",
           "environments/qa"
         ]
       },
@@ -42,7 +43,6 @@
         "pages": [
           "advanced/uploading",
           "advanced/cla-details",
-          "advanced/custom-environments",
           "advanced/environment-control"
         ]
       },
@@ -62,8 +62,8 @@
     ]
   },
   "logo": {
-    "light": "/logo/HUD-light-optimized.svg",
-    "dark": "/logo/HUD.svg"
+    "light": "/logo/hud_logo.svg",
+    "dark": "/logo/hud_logo_dark.svg"
   },
   "navbar": {
     "links": [
