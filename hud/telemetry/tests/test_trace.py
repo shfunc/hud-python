@@ -6,15 +6,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from hud.telemetry.context import get_current_task_run_id as actual_get_current_task_run_id
+from hud.telemetry.context import is_root_trace as actual_is_root_trace
+from hud.telemetry.context import reset_context
+from hud.telemetry.context import set_current_task_run_id as actual_set_current_task_run_id
 from hud.telemetry.trace import (
     init_telemetry,
     register_trace,
     trace,
 )
-from hud.telemetry.context import get_current_task_run_id as actual_get_current_task_run_id
-from hud.telemetry.context import set_current_task_run_id as actual_set_current_task_run_id
-from hud.telemetry.context import reset_context
-from hud.telemetry.context import is_root_trace as actual_is_root_trace
 
 
 @pytest.fixture(autouse=True)
@@ -149,11 +149,10 @@ class TestTrace:
         mock_flush.return_value = []
         mock_submit_loop.return_value = MagicMock()
 
-        with pytest.raises(ValueError, match="Test exception"):
-            with trace(name="trace_with_exception"):
-                assert actual_get_current_task_run_id() != initial_task_id_before_trace
-                assert actual_is_root_trace.get() is False
-                raise ValueError("Test exception")
+        with pytest.raises(ValueError, match="Test exception"), trace(name="trace_with_exception"):
+            assert actual_get_current_task_run_id() != initial_task_id_before_trace
+            assert actual_is_root_trace.get() is False
+            raise ValueError("Test exception")
 
         mock_flush.assert_called_once()
         assert actual_get_current_task_run_id() == initial_task_id_before_trace
@@ -231,7 +230,6 @@ class TestRegisterTrace:
         @register_trace(name="test")
         def original_function():
             """Original docstring."""
-            pass
 
         assert original_function.__name__ == "original_function"
         assert original_function.__doc__ == "Original docstring."
