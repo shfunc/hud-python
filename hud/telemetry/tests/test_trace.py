@@ -40,9 +40,7 @@ class TestTrace:
 
     @patch("hud.telemetry.trace.submit_to_worker_loop")
     @patch("hud.telemetry.trace.flush_buffer")
-    def test_trace_basic(
-        self, mock_flush, mock_submit_loop
-    ):
+    def test_trace_basic(self, mock_flush, mock_submit_loop):
         """Test basic trace functionality and context setting."""
         mock_flush.return_value = []
         mock_submit_loop.return_value = MagicMock()
@@ -62,20 +60,18 @@ class TestTrace:
 
     @patch("hud.telemetry.trace.submit_to_worker_loop")
     @patch("hud.telemetry.trace.flush_buffer")
-    def test_trace_with_name_and_attributes(
-        self, mock_flush, mock_submit_loop
-    ):
+    def test_trace_with_name_and_attributes(self, mock_flush, mock_submit_loop):
         """Test trace with name and attributes, checking they are passed on."""
         mock_mcp_calls = [MagicMock()]
         mock_flush.return_value = mock_mcp_calls
         mock_submit_loop.return_value = MagicMock()
-        
+
         trace_name = "test_trace_with_data"
         attrs = {"key": "value", "number": 42}
 
         with trace(name=trace_name, attributes=attrs) as task_run_id:
             assert isinstance(task_run_id, str)
-        
+
         mock_flush.assert_called_once()
         mock_submit_loop.assert_called_once()
 
@@ -101,23 +97,21 @@ class TestTrace:
 
         mock_flush.assert_called_once()
         mock_submit_loop.assert_called_once()
-        
+
         mock_export_actual_coro.assert_called_once()
         args, kwargs = mock_export_actual_coro.call_args
-        assert kwargs['task_run_id'] == task_run_id
-        assert kwargs['mcp_calls'] == mock_mcp_calls
-        assert kwargs['trace_attributes']["trace_name"] == test_name
-        assert kwargs['trace_attributes']["custom_attr"] == "test_val"
-        assert "start_time" in kwargs['trace_attributes']
-        assert "end_time" in kwargs['trace_attributes']
-        assert "duration" in kwargs['trace_attributes']
-        assert kwargs['trace_attributes']["is_root"] is True
+        assert kwargs["task_run_id"] == task_run_id
+        assert kwargs["mcp_calls"] == mock_mcp_calls
+        assert kwargs["trace_attributes"]["trace_name"] == test_name
+        assert kwargs["trace_attributes"]["custom_attr"] == "test_val"
+        assert "start_time" in kwargs["trace_attributes"]
+        assert "end_time" in kwargs["trace_attributes"]
+        assert "duration" in kwargs["trace_attributes"]
+        assert kwargs["trace_attributes"]["is_root"] is True
 
     @patch("hud.telemetry.trace.submit_to_worker_loop")
     @patch("hud.telemetry.trace.flush_buffer")
-    def test_trace_nested(
-        self, mock_flush_internal, mock_submit_loop_internal
-    ):
+    def test_trace_nested(self, mock_flush_internal, mock_submit_loop_internal):
         """Test nested traces, verifying context restoration and root trace logic."""
         actual_set_current_task_run_id(None)
         actual_is_root_trace.set(False)
@@ -145,9 +139,7 @@ class TestTrace:
 
     @patch("hud.telemetry.trace.submit_to_worker_loop")
     @patch("hud.telemetry.trace.flush_buffer")
-    def test_trace_exception_handling(
-        self, mock_flush, mock_submit_loop
-    ):
+    def test_trace_exception_handling(self, mock_flush, mock_submit_loop):
         """Test trace handles exceptions properly and restores context."""
         initial_task_id_before_trace = "pre_existing_id_123"
         initial_root_state_before_trace = True
@@ -162,7 +154,7 @@ class TestTrace:
                 assert actual_get_current_task_run_id() != initial_task_id_before_trace
                 assert actual_is_root_trace.get() is False
                 raise ValueError("Test exception")
-            
+
         mock_flush.assert_called_once()
         assert actual_get_current_task_run_id() == initial_task_id_before_trace
         assert actual_is_root_trace.get() == initial_root_state_before_trace
@@ -197,7 +189,9 @@ class TestRegisterTrace:
         async def run_test():
             result = await async_function(1, 2)
             assert result == 3
-            mock_trace_context_manager.assert_called_once_with(name="test_func_async", attributes=None)
+            mock_trace_context_manager.assert_called_once_with(
+                name="test_func_async", attributes=None
+            )
 
         asyncio.run(run_test())
 
@@ -233,6 +227,7 @@ class TestRegisterTrace:
 
     def test_register_trace_preserves_function_metadata(self):
         """Test register_trace preserves original function metadata."""
+
         @register_trace(name="test")
         def original_function():
             """Original docstring."""
