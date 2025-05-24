@@ -144,7 +144,7 @@ print(await job.get_analytics())
 
 Add your environment to the `environments/` folder and submit a PR! Examples:
 - `environments/novnc_ubuntu/` - Ubuntu with VNC access 
-- `environments/gameboy/` - GameBoy emulator environment
+- `environments/gameboy/` - GameBoy emulator environment (In Development)
 - `environments/qa_controller/` - Lightweight app sample
 
 See [Custom Environments Guide](https://docs.hud.so/environments/custom) for details.

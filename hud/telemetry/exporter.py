@@ -140,7 +140,7 @@ async def export_telemetry(
 ) -> None:
     """
     Export telemetry data to the HUD telemetry service.
-
+    
     Args:
         task_run_id: The task run ID associated with this telemetry
         trace_attributes: Attributes of the trace
@@ -270,7 +270,7 @@ async def _process_export_queue_async() -> None:
                 logger.warning("Unexpected item in telemetry queue: %s", type(payload_to_process))
 
             await asyncio.sleep(EXPORT_INTERVAL)
-
+            
     except asyncio.CancelledError:
         logger.info("Async telemetry export processing task cancelled.")
         _export_task_async = None
@@ -305,14 +305,14 @@ async def _export_trace_payload_async(payload: dict[str, Any]) -> None:
     #     # Depending on backend, might not want to send empty mcp_calls list, or it's fine.
 
     telemetry_url = f"{settings.base_url}/v2/task_runs/{task_run_id}/telemetry-upload"
-
+    
     try:
         async with httpx.AsyncClient() as client:
             headers = {
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {settings.api_key}",
             }
-
+            
             logger.debug(
                 "Exporting telemetry for task run %s to %s",
                 task_run_id,
