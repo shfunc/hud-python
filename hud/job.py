@@ -22,7 +22,7 @@ from hud.utils.progress import StepProgressTracker
 if TYPE_CHECKING:
     from hud.adapters.common import Adapter
     from hud.agent.base import Agent
-
+    from hud.agent import ResponseAgent
 logger = logging.getLogger("hud.job")
 
 # Type variable for the decorator
@@ -284,10 +284,12 @@ async def _execute_task(
     status = "error"
     error_msg = "Initialization failed"
     try:
+        response_agent = ResponseAgent() if auto_reply_question else None
+
         adapter_instance = None
         if adapter_cls:
             adapter_instance = adapter_cls(**(adapter_kwargs or {}))
-        agent_instance = agent_cls(adapter=adapter_instance, **(agent_kwargs or {}))
+        agent_instance = agent_cls(adapter=adapter_instance, response_agent=response_agent, **(agent_kwargs or {}))
         if agent_instance is None:
             raise RuntimeError("Agent could not be instantiated")
 
@@ -316,11 +318,6 @@ async def _execute_task(
 
                 if tracker:
                     tracker.increment_step(task_id)
-
-                if auto_reply_question and action[0].type == "response" and "?" in action[0].text:
-                    obs.text = "Yes!"
-                    obs.screenshot = None
-                    continue
 
                 if action is None and not done:
                     done = True
@@ -470,7 +467,7 @@ async def run_job(
     auto_reply_question: bool = False,
     # Concurrency control with semaphores
     max_concurrent_env_creations: int | None = 30,  # Limits env.make calls
-    max_concurrent_agent_predictions: int | None = None,  # No limit on LLM calls - let them all run in parallel
+    max_concurrent_agent_predictions: int | None = None,  # No limit on LLM calls
     max_concurrent_tasks: int | None = 30,  # Limits overall task concurrency
 ) -> Job:
     """
@@ -567,7 +564,7 @@ async def run_job(
             "Limiting concurrent agent predictions to %d.", max_concurrent_agent_predictions
         )
     else:
-        logger.info("No limit on concurrent agent predictions - allowing unlimited parallel LLM calls.")
+        logger.info("No limit on concurrent agent predictions.")
 
     task_execution_sema = None
     effective_concurrency = num_tasks  # Default to running all if parallel
