@@ -40,7 +40,7 @@ T = TypeVar("T")
 def init_telemetry() -> None:
     """Initialize telemetry instrumentors and ensure worker is started if telemetry is active."""
     registry.install_all()
-    logger.info("HUD Telemetry initialized.")
+    logger.info("[hud] telemetry initialized.")
 
 
 @contextmanager

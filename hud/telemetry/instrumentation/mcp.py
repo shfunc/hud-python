@@ -127,7 +127,7 @@ class MCPInstrumentor:
             logger.warning("Failed to wrap BaseSession methods: %s", e)
 
         self._installed = True
-        logger.info("MCP instrumentation installed (simplified)")
+        logger.debug("MCP instrumentation installed (simplified)")
 
     @asynccontextmanager
     async def _transport_wrapper(
@@ -491,7 +491,7 @@ class MCPInstrumentor:
         try:
             record = MCPManualTestCall.create(task_run_id=hud_task_run_id, **kwargs)
             buffer_mcp_call(record)  # buffer_mcp_call handles Pydantic model directly
-            logger.info("Manual test recorded: %s", record.model_dump(exclude_none=True))
+            logger.debug("Manual test recorded: %s", record.model_dump(exclude_none=True))
             return True
         except Exception as e:
             logger.warning("Manual test not recorded: %s", e)

@@ -4,6 +4,8 @@ HUD SDK for interacting with the HUD evaluation platform.
 
 from __future__ import annotations
 
+import logging
+
 from . import agent, env, gym, settings, task, taskset, types, utils
 from .adapters import ResponseAction as Response
 from .job import create_job, load_job, run_job
@@ -14,6 +16,8 @@ from .telemetry import flush, init_telemetry, trace
 from .version import __version__
 
 init_telemetry()
+
+logging.basicConfig(level=logging.INFO)
 
 __all__ = [
     "Response",

@@ -45,14 +45,14 @@ EXPORT_INTERVAL = 5.0  # seconds
 def _run_worker_loop() -> None:
     """Target function for the worker thread. Runs its own asyncio event loop."""
     global _worker_loop
-    logger.info("Telemetry worker thread: Starting event loop.")
+    logger.debug("Telemetry worker thread: Starting event loop.")
     _worker_loop = asyncio.new_event_loop()
     asyncio.set_event_loop(_worker_loop)
 
     _worker_loop_ready_event.set()  # Signal that loop is created and set for this thread
 
     try:
-        logger.info("Telemetry worker thread: Event loop running.")
+        logger.debug("Telemetry worker thread: Event loop running.")
         _worker_loop.run_forever()
     except Exception as e:
         logger.exception("Telemetry worker loop encountered an unhandled exception: %s", e)
@@ -77,7 +77,7 @@ def _run_worker_loop() -> None:
 
         logger.debug("Telemetry worker loop: Closing.")
         _worker_loop.close()
-        logger.info("Telemetry worker thread: Event loop closed.")
+        logger.debug("Telemetry worker thread: Event loop closed.")
         # _worker_loop_ready_event.clear() # Should be cleared by starter if thread is to be reused
 
 
@@ -85,7 +85,7 @@ def _start_worker_if_needed() -> None:
     """Starts the background worker thread if not already running. Assumes _worker_lock is held."""
     global _worker_thread  # _worker_loop is set by the thread itself
     if _worker_thread is None or not _worker_thread.is_alive():
-        logger.info("Telemetry: Worker thread not alive, starting new one.")
+        logger.debug("Telemetry: Worker thread not alive, starting new one.")
         # _worker_loop should be None here or will be replaced by the new thread
         _worker_loop_ready_event.clear()
         _worker_thread = threading.Thread(
@@ -106,7 +106,7 @@ def _start_worker_if_needed() -> None:
         if _worker_loop is None or not _worker_loop.is_running():
             logger.error("Telemetry: Worker loop is not ready or not running after event was set.")
         else:
-            logger.info("Telemetry: Worker thread event loop is ready.")
+            logger.debug("Telemetry: Worker thread event loop is ready.")
 
 
 def submit_to_worker_loop(coro: Coroutine[Any, Any, Any]) -> concurrent.futures.Future[Any] | None:
@@ -259,7 +259,7 @@ async def _process_export_queue_async() -> None:
                 payload_to_process = _export_queue_async.pop(0)
 
             if payload_to_process is _SENTINEL_FOR_WORKER_SHUTDOWN:
-                logger.info("Shutdown sentinel received by processing task, stopping.")
+                logger.debug("Shutdown sentinel received by processing task, stopping.")
                 _export_task_async = None
                 return
 
@@ -272,7 +272,7 @@ async def _process_export_queue_async() -> None:
             await asyncio.sleep(EXPORT_INTERVAL)
 
     except asyncio.CancelledError:
-        logger.info("Async telemetry export processing task cancelled.")
+        logger.debug("Async telemetry export processing task cancelled.")
         _export_task_async = None
         raise
     except Exception as e:
@@ -346,7 +346,7 @@ async def _export_trace_payload_async(payload: dict[str, Any]) -> None:
 def flush(timeout: float = 10.0) -> None:
     """Flushes pending telemetry data and stops the worker thread."""
     global _worker_thread, _worker_loop, _export_task_async, _export_queue_async
-    logger.info("Initiating telemetry flush and shutdown.")
+    logger.debug("Initiating telemetry flush and shutdown.")
 
     shutdown_future: concurrent.futures.Future | None = None
     if _worker_loop and _worker_loop.is_running():
@@ -408,10 +408,10 @@ def flush(timeout: float = 10.0) -> None:
         if _worker_thread.is_alive():
             logger.warning("Telemetry worker thread did not shut down cleanly after timeout.")
         else:
-            logger.info("Telemetry worker thread successfully joined.")
+            logger.debug("Telemetry worker thread successfully joined.")
 
     _worker_thread = None
     _worker_loop = None
     _export_task_async = None
     # _export_queue_async.clear() # Optionally clear the queue
-    logger.info("Telemetry flush and shutdown process completed.")
+    logger.debug("Telemetry flush and shutdown process completed.")

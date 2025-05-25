@@ -105,7 +105,7 @@ async def make(
                     raise ValueError(f"Invalid environment location: {gym.location}")
 
                 if isinstance(gym.image_or_build_context, Path):
-                    logger.info("Setting source path")
+                    logger.info("Setting source path %s", gym.image_or_build_context)
                     client.set_source_path(gym.image_or_build_context)
             elif isinstance(gym, str):
                 logger.info("Creating private environment")

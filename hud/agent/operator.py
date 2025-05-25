@@ -193,11 +193,11 @@ class OperatorAgent(Agent[OpenAI, dict[str, Any]]):
                 action = computer_call.action
                 self.pending_safety_checks = computer_call.pending_safety_checks
                 actions.append(action.model_dump())  # Convert Pydantic model to dict
-                logger.info(f"Computer call action: {action}")
+                #logger.info(f"Computer call action: {action}")
         else:
             # No computer calls, check for a final text message
-            logger.info("No computer call found. Checking for final message.")
-            logger.info(response.output)
+            #logger.info("No computer call found. Checking for final message.")
+            #logger.info(response.output)
             for item in response.output:
                 if isinstance(item, ResponseOutputMessage) and item.type == "message":
                     # Extract text from content blocks within the message
@@ -206,15 +206,15 @@ class OperatorAgent(Agent[OpenAI, dict[str, Any]]):
                     )
                     if full_text:
                         final_text_response = full_text
-                        logger.info(f"Final text message: {final_text_response}")
+                        #logger.info(f"Final text message: {final_text_response}")
                         break  # Stop after finding the first text message
 
             # If we found final text, package it as a 'response' action
             if final_text_response:
                 actions = [{"type": "response", "text": final_text_response}]
                 # Keep done = True
-            else:
-                logger.info("No computer calls and no final text message found.")
+            # else:
+            #     logger.info("No computer calls and no final text message found.")
                 # Keep done = True, actions remains empty
 
         return actions, done

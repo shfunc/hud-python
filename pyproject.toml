@@ -25,6 +25,7 @@ dependencies = [
     "langchain-openai",
     "mcp",
     "wrapt>=1.14.0",
+    "dotenv>=0.9.9",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",

@@ -170,11 +170,11 @@ class LangchainAgent(Agent[LangchainModelOrRunnable, Any], Generic[LangchainMode
             ai_message_content_for_history = actual_action.model_dump()
             if isinstance(actual_action, ResponseAction):
                 is_done = True
-                logger.info(
-                    f"LangchainAgent determined task is done with response: {actual_action.text[:100]}..."
-                )
-            else:
-                logger.info(f"LangchainAgent produced action: {type(actual_action).__name__}")
+                # logger.info(
+                #     f"LangchainAgent determined task is done with response: {actual_action.text[:100]}..."
+                # )
+            # else:
+            #     logger.info(f"LangchainAgent produced action: {type(actual_action).__name__}")
 
         else:
             logger.warning(
