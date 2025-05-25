@@ -23,7 +23,7 @@ from hud.utils.progress import StepProgressTracker
 if TYPE_CHECKING:
     from hud.adapters.common import Adapter
     from hud.agent.base import Agent
-    
+
 logger = logging.getLogger("hud.job")
 
 # Type variable for the decorator
@@ -369,7 +369,7 @@ async def _execute_task(
                 evaluation_result = await env.evaluate()
                 status = "completed"
                 error_msg = None
-                #logger.info("Evaluation result: %s", evaluation_result)
+                # logger.info("Evaluation result: %s", evaluation_result)
             except Exception as eval_err:
                 logger.exception(
                     "[Job: %s/%s, Task: %s] Evaluation Error: %s",
@@ -532,7 +532,7 @@ async def run_job(
             evalset_id=evalset_id,
             gym_id=gym_id,
         )
-        #logger.info("Created job with ID: %s", created_job.id)
+        # logger.info("Created job with ID: %s", created_job.id)
     except Exception as e:
         logger.exception("Failed to create job '%s': %s", job_name, e)
         raise

@@ -6,19 +6,22 @@ from openai import AsyncOpenAI
 
 ResponseType = Literal["STOP", "CONTINUE"]
 
+
 class ResponseAgent:
     """
     An assistant that helps determine whether an agent should stop or continue
     based on the agent's final response message.
     """
-    
+
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
         if not self.api_key:
-            raise ValueError("OpenAI API key must be provided or set as OPENAI_API_KEY environment variable")
-        
+            raise ValueError(
+                "OpenAI API key must be provided or set as OPENAI_API_KEY environment variable"
+            )
+
         self.client = AsyncOpenAI(api_key=self.api_key)
-        
+
         self.system_prompt = """
         You are an assistant that helps determine the appropriate response to an agent's message.
         
@@ -35,14 +38,14 @@ class ResponseAgent:
         
         Respond ONLY with one of these two options.
         """
-    
+
     async def determine_response(self, agent_message: str) -> ResponseType:
         """
         Determine whether the agent should stop or continue based on its message.
-        
+
         Args:
             agent_message: The message from the agent
-            
+
         Returns:
             ResponseType: Either "STOP" or "CONTINUE"
         """
@@ -51,24 +54,27 @@ class ResponseAgent:
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": self.system_prompt},
-                    {"role": "user", "content": f"Agent message: {agent_message}\n\nWhat is the appropriate response?"}
+                    {
+                        "role": "user",
+                        "content": f"Agent message: {agent_message}\n\nWhat is the appropriate response?",
+                    },
                 ],
                 temperature=0.1,  # Low temperature for more deterministic responses
-                max_tokens=5  # We only need a short response
+                max_tokens=5,  # We only need a short response
             )
-            
+
             response_text = response.choices[0].message.content
             if not response_text:
                 return "CONTINUE"
-            
+
             response_text = response_text.strip().upper()
-            
+
             # Validate the response
             if "STOP" in response_text:
                 return "STOP"
             else:
                 return "CONTINUE"
-                
+
         except Exception as e:
             print(f"Error determining response: {e}")
-            return "CONTINUE"  # Default to continue on error 
+            return "CONTINUE"  # Default to continue on error

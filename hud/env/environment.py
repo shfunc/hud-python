@@ -388,7 +388,7 @@ def create_remote_config(
                 metadata={"task": task.model_dump()},
             )
         ]
-    
+
     # Case 5: No valid configuration found
     args_list = []
     if env and env.final_response:

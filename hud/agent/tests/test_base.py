@@ -137,9 +137,7 @@ class TestAgentBase:
 
         # Verify verbose logging was called
         mock_logger.info.assert_any_call("Predicting action...")
-        mock_logger.info.assert_any_call(
-            "Raw action: %s", [{"type": "click", "x": 100, "y": 200}]
-        )
+        mock_logger.info.assert_any_call("Raw action: %s", [{"type": "click", "x": 100, "y": 200}])
 
         assert len(actions) == 1
         assert isinstance(actions[0], ClickAction)

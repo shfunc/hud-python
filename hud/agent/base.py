@@ -27,7 +27,12 @@ class Agent(Generic[ClientT, ActionT], ABC):
     Subclasses only need to implement the fetch_response method.
     """
 
-    def __init__(self, client: ClientT | None = None, adapter: Adapter | None = None, response_agent: "ResponseAgent | None" = None):
+    def __init__(
+        self,
+        client: ClientT | None = None,
+        adapter: Adapter | None = None,
+        response_agent: "ResponseAgent | None" = None,
+    ):
         """
         Initialize the agent.
 
@@ -39,7 +44,7 @@ class Agent(Generic[ClientT, ActionT], ABC):
         self.client = client
         self.adapter = adapter
         self.response_agent = response_agent
-        
+
     def preprocess(self, observation: Observation) -> Observation:
         """
         Preprocess the observation before sending to the model.

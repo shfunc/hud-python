@@ -128,20 +128,20 @@ class ClaudeAgent(Agent[AsyncAnthropic, Any]):
 
         # Add text instruction if present
         if observation.text:
-            #logger.info("Adding text to user content: %s", observation.text)
+            # logger.info("Adding text to user content: %s", observation.text)
             user_content.append(text_to_content_block(str(observation.text)))
 
         # Add screenshot if present
         if observation.screenshot:
-            #logger.info("Adding screenshot to user content")
+            # logger.info("Adding screenshot to user content")
             if not self.pending_computer_use_tool_id:
-                #logger.info("Adding screenshot to user content, no tool id")
+                # logger.info("Adding screenshot to user content, no tool id")
                 user_content.append(base64_to_content_block(observation.screenshot))
             else:
-                #logger.info(
+                # logger.info(
                 #    "Adding screenshot to user content, tool id: %s",
                 #    self.pending_computer_use_tool_id,
-                #)
+                # )
                 user_content.append(
                     tool_use_content_block(
                         self.pending_computer_use_tool_id,
@@ -188,9 +188,9 @@ class ClaudeAgent(Agent[AsyncAnthropic, Any]):
         done = True  # Assume we're done unless we find a tool use
 
         for block in response_content:
-            #logger.info("Processing block: %s", block)
+            # logger.info("Processing block: %s", block)
             if block.type == "tool_use":
-                #logger.info("Processing tool use: %s", block)
+                # logger.info("Processing tool use: %s", block)
                 assert block.name == "computer"
 
                 # Store the raw action
@@ -209,13 +209,15 @@ class ClaudeAgent(Agent[AsyncAnthropic, Any]):
                     final_text_response += block.text
 
             if final_text_response.strip():
-                #logger.info(
+                # logger.info(
                 #    f"No tool use found. Using final text as response: {final_text_response}"
-                #)
+                # )
                 # Use ResponseAgent to determine if we should actually stop
                 if self.response_agent:
                     try:
-                        decision = await self.response_agent.determine_response(final_text_response.strip())
+                        decision = await self.response_agent.determine_response(
+                            final_text_response.strip()
+                        )
                         if decision == "CONTINUE":
                             # Agent wants to continue, so don't mark as done
                             # Instead, provide a generic "continue" response to keep the conversation going
@@ -234,8 +236,8 @@ class ClaudeAgent(Agent[AsyncAnthropic, Any]):
                     actions = [{"action": "response", "text": final_text_response.strip()}]
                     done = True
                 # Keep done = True
-            #else:
-                #logger.info("No tool use and no final text block found.")
-                # Keep done = True, actions remains empty
+            # else:
+            # logger.info("No tool use and no final text block found.")
+            # Keep done = True, actions remains empty
 
         return actions, done
