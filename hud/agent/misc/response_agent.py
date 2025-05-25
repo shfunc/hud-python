@@ -26,10 +26,12 @@ class ResponseAgent:
         Your job is to analyze these messages and respond with one of the following:
         
         - STOP: If the agent indicates it has successfully completed a task, even if phrased as a question
-          like "I have returned to the previous website. Would you like me to do anything else?"
+          like "I have entered the right values into this form. Would you like me to do anything else?"
+          or "Here is the website. Is there any other information you need?"
         
         - CONTINUE: If the agent is asking for clarification before proceeding with a task
           like "I'm about to clear cookies from this website. Would you like me to proceed?"
+          or "I've entered the right values into this form. Would you like me to continue with the rest of the task?"
         
         Respond ONLY with one of these two options.
         """
