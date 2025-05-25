@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import asyncio  # For checking if function is async
+import asyncio
 import logging
 import time
 import uuid
 from contextlib import contextmanager
-from functools import wraps  # For creating decorators
-from typing import (  # Added overload, ParamSpec
+from functools import wraps
+from typing import (
     TYPE_CHECKING,
     Any,
     ParamSpec,
@@ -14,13 +14,13 @@ from typing import (  # Added overload, ParamSpec
     overload,
 )
 
+from hud.telemetry import exporter
 from hud.telemetry.context import (
     flush_buffer,
     get_current_task_run_id,
     is_root_trace,
     set_current_task_run_id,
 )
-from hud.telemetry.exporter import export_telemetry as export_telemetry_coro
 from hud.telemetry.exporter import submit_to_worker_loop
 from hud.telemetry.instrumentation.registry import registry
 
@@ -94,7 +94,7 @@ def trace(
 
         if is_root and mcp_calls:
             try:
-                coro_to_submit = export_telemetry_coro(
+                coro_to_submit = exporter.export_telemetry(
                     task_run_id=task_run_id,
                     trace_attributes=trace_attributes_final,
                     mcp_calls=mcp_calls,
@@ -135,7 +135,7 @@ def register_trace(
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """
     Decorator to wrap a synchronous or asynchronous function call
-    within a hud.telemetry.trace context.
+    within a hud._telemetry.trace context.
 
     Args:
         name: Optional name for the trace.
