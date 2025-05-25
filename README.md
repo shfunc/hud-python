@@ -2,9 +2,9 @@
   <img src="https://raw.githubusercontent.com/hud-evals/hud-sdk/main/docs/logo/hud_logo.svg" alt="HUD" width="150" style="margin-bottom: 20px;"/>
 </div>
 
-<h1>
+<h3>
 Create, evaluate, and improve AI agents across web browsers, desktop environments, and custom scenarios.
-</h1>
+</h3>
 
 > ### 🚀 Are you a startup building agents?
 > 
