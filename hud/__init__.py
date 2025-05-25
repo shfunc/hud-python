@@ -17,7 +17,14 @@ from .version import __version__
 
 init_telemetry()
 
-logging.basicConfig(level=logging.INFO)
+hud_logger = logging.getLogger("hud")
+hud_logger.setLevel(logging.INFO)
+
+if not hud_logger.handlers:
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    hud_logger.addHandler(handler)
 
 __all__ = [
     "Response",
