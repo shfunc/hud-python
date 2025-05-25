@@ -2,11 +2,9 @@
   <img src="https://raw.githubusercontent.com/hud-evals/hud-sdk/main/docs/logo/hud_logo.svg" alt="HUD" width="150" style="margin-bottom: 20px;"/>
 </div>
 
-<h style="font-size: 24px; margin-bottom: 8px;">
+<h1>
 Create, evaluate, and improve AI agents across web browsers, desktop environments, and custom scenarios.
-</h>
-
-[![PyPI version](https://img.shields.io/pypi/v/hud-python)](https://pypi.org/project/hud-python/)
+</h1>
 
 > ### 🚀 Are you a startup building agents?
 > 
@@ -16,6 +14,8 @@ Create, evaluate, and improve AI agents across web browsers, desktop environment
 
 
 > **Early Release Notice**: This SDK is currently in early release status. The API is evolving and may change in future releases as we gather feedback and improve functionality.
+
+[![PyPI version](https://img.shields.io/pypi/v/hud-python)](https://pypi.org/project/hud-python/)
 
 ## ✨ What You Can Do
 
