@@ -1,14 +1,23 @@
-# HUD
+<div align="left">
+  <img src="https://raw.githubusercontent.com/hud-evals/hud-sdk/main/docs/logo/hud_logo.svg" alt="HUD" width="150" style="margin-bottom: 20px;"/>
+</div>
 
+<h style="font-size: 20px; margin-bottom: 8px">
 A Python SDK for creating, evaluating, and benchmarking AI agents across web browsers, desktop environments, and custom scenarios.
+</h>
 
 > **Early Release Notice**: This SDK is currently in early release status. The API is evolving and may change in future releases as we gather feedback and improve functionality.
 
 [![PyPI version](https://img.shields.io/pypi/v/hud-python)](https://pypi.org/project/hud-python/)
 
-[📚 Documentation](https://docs.hud.so) | [🏠 Homepage](https://hud.so)
+> ### 🚀 Are you a startup building agents?
+> 
+> [📅 Hop on a call ](https://cal.com/jay-ram-z6st6w/demo) or [📧 founders@hud.so](mailto:founders@hud.so)
+> 
+> We're here to help with eval strategies, custom environments, or improving your agent architecture!
 
-## What You Can Do
+
+## ✨ What You Can Do
 
 **Evaluate Existing Benchmarks**
 ```python
@@ -43,7 +52,7 @@ custom_gym = CustomGym(
 # Or create complex Docker environments - see environments/ folder for examples
 ```
 
-**Trace MCP Calls Alongside HUD Environments (or Independently)**
+**Trace Tool Calls Alongside HUD Environments (or Independently)**
 ```python
 import hud
 
@@ -144,10 +153,10 @@ print(await job.get_analytics())
 
 Add your environment to the `environments/` folder and submit a PR! Examples:
 - `environments/novnc_ubuntu/` - Ubuntu with VNC access 
-- `environments/gameboy/` - GameBoy emulator environment (In Development)
+- `environments/pokemon_controller/` - Pokemon emulator environment (In Development)
 - `environments/qa_controller/` - Lightweight app sample
 
-See [Custom Environments Guide](https://docs.hud.so/environments/custom) for details.
+See [Custom Environments Guide](https://docs.hud.so/environment-creation) for details.
 
 ## Documentation Sections
 
