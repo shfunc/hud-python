@@ -13,6 +13,7 @@ from pydantic import BaseModel, PrivateAttr, TypeAdapter
 
 import hud.server
 from hud import gym
+from hud.agent import ResponseAgent
 from hud.settings import settings
 from hud.task import Task
 from hud.taskset import TaskSet
@@ -22,7 +23,7 @@ from hud.utils.progress import StepProgressTracker
 if TYPE_CHECKING:
     from hud.adapters.common import Adapter
     from hud.agent.base import Agent
-    from hud.agent import ResponseAgent
+    
 logger = logging.getLogger("hud.job")
 
 # Type variable for the decorator
@@ -289,7 +290,11 @@ async def _execute_task(
         adapter_instance = None
         if adapter_cls:
             adapter_instance = adapter_cls(**(adapter_kwargs or {}))
-        agent_instance = agent_cls(adapter=adapter_instance, response_agent=response_agent, **(agent_kwargs or {}))
+        agent_instance = agent_cls(
+            adapter=adapter_instance,
+            response_agent=response_agent,
+            **(agent_kwargs or {}),
+        )
         if agent_instance is None:
             raise RuntimeError("Agent could not be instantiated")
 
