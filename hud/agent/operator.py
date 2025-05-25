@@ -3,7 +3,7 @@ import logging
 import os
 from typing import Any, Literal, cast
 
-from openai import OpenAI
+from openai import AsyncOpenAI
 from openai.types.responses import (
     ToolParam,
     ResponseInputParam,
@@ -22,7 +22,7 @@ from hud.settings import settings
 logger = logging.getLogger(__name__)
 
 
-class OperatorAgent(Agent[OpenAI, dict[str, Any]]):
+class OperatorAgent(Agent[AsyncOpenAI, dict[str, Any]]):
     """
     An agent implementation using OpenAI's Computer Use API.
 
@@ -32,7 +32,7 @@ class OperatorAgent(Agent[OpenAI, dict[str, Any]]):
 
     def __init__(
         self,
-        client: OpenAI | None = None,
+        client: AsyncOpenAI | None = None,
         model: str = "computer-use-preview",
         environment: Literal["windows", "mac", "linux", "browser"] = "linux",
         adapter: Adapter | None = None,
@@ -42,7 +42,7 @@ class OperatorAgent(Agent[OpenAI, dict[str, Any]]):
         Initialize the OperatorAgent.
 
         Args:
-            client: The OpenAI client for API calls (optional, created automatically if not provided)
+            client: The AsyncOpenAI client for API calls (optional, created automatically if not provided)
             model: The model to use for computer use
             environment: The environment type (windows, mac, linux, browser)
             adapter: The adapter to use for preprocessing and postprocessing
@@ -57,8 +57,8 @@ class OperatorAgent(Agent[OpenAI, dict[str, Any]]):
                     "OpenAI API key not found in settings or environment variables. Set OPENAI_API_KEY."
                 )
 
-            # Create synchronous client
-            client = OpenAI(api_key=api_key)
+            # Create asynchronous client
+            client = AsyncOpenAI(api_key=api_key)
 
         adapter = adapter or OperatorAdapter()
 
@@ -130,8 +130,8 @@ class OperatorAgent(Agent[OpenAI, dict[str, Any]]):
             # Structure the input correctly for the API using cast
             input_param = cast(ResponseInputParam, [{"role": "user", "content": input_content}])
 
-            # Call OpenAI API for the initial prompt (synchronous call)
-            response = self.client.responses.create(
+            # Call OpenAI API for the initial prompt (asynchronous call)
+            response = await self.client.responses.create(
                 model=self.model, tools=[computer_tool], input=input_param, truncation="auto"
             )
 
@@ -161,8 +161,8 @@ class OperatorAgent(Agent[OpenAI, dict[str, Any]]):
             )
             self.pending_safety_checks = []
 
-            # Call OpenAI API for follow-up (synchronous call)
-            response = self.client.responses.create(
+            # Call OpenAI API for follow-up (asynchronous call)
+            response = await self.client.responses.create(
                 model=self.model,
                 previous_response_id=self.last_response_id,
                 tools=[computer_tool],

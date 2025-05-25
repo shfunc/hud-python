@@ -162,7 +162,7 @@ async def create_job(
     # If not, we might need to make a subsequent GET request
     job_data = data  # Adjust if the API response structure is different
 
-    logger.info("[hud] View job at https://app.hud.so/jobs/%s.", job_data["id"])
+    logger.info("View job at https://app.hud.so/jobs/%s.", job_data["id"])
 
     return Job(
         id=job_data["id"],
@@ -470,7 +470,7 @@ async def run_job(
     auto_reply_question: bool = False,
     # Concurrency control with semaphores
     max_concurrent_env_creations: int | None = 30,  # Limits env.make calls
-    max_concurrent_agent_predictions: int | None = 30,  # Limits agent.predict calls
+    max_concurrent_agent_predictions: int | None = None,  # No limit on LLM calls - let them all run in parallel
     max_concurrent_tasks: int | None = 30,  # Limits overall task concurrency
 ) -> Job:
     """
@@ -503,6 +503,9 @@ async def run_job(
     Returns:
         The created Job object with errors stored in job.errors.
     """
+    hud_logger = logging.getLogger("hud")
+    hud_logger.setLevel(logging.CRITICAL)
+
     tasks_to_run: list[Task] = []
     created_job: Job | None = None
 
@@ -563,6 +566,8 @@ async def run_job(
         logger.info(
             "Limiting concurrent agent predictions to %d.", max_concurrent_agent_predictions
         )
+    else:
+        logger.info("No limit on concurrent agent predictions - allowing unlimited parallel LLM calls.")
 
     task_execution_sema = None
     effective_concurrency = num_tasks  # Default to running all if parallel

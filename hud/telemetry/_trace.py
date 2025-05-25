@@ -40,7 +40,7 @@ T = TypeVar("T")
 def init_telemetry() -> None:
     """Initialize telemetry instrumentors and ensure worker is started if telemetry is active."""
     registry.install_all()
-    logger.info("[hud] telemetry initialized.")
+    logger.info("Telemetry initialized.")
 
 
 @contextmanager
@@ -123,7 +123,7 @@ def trace(
             len(mcp_calls),
         )
 
-        logger.info("[hud] View trace at https://app.hud.so/jobs/traces/%s", task_run_id)
+        logger.info("View trace at https://app.hud.so/jobs/traces/%s", task_run_id)
 
 
 P = ParamSpec("P")

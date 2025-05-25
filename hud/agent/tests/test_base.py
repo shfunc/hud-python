@@ -136,9 +136,9 @@ class TestAgentBase:
         actions, done = await agent_with_adapter.predict(observation, verbose=True)
 
         # Verify verbose logging was called
-        mock_logger.info.assert_any_call("[hud] Predicting action...")
+        mock_logger.info.assert_any_call("Predicting action...")
         mock_logger.info.assert_any_call(
-            "[hud] Raw action: %s", [{"type": "click", "x": 100, "y": 200}]
+            "Raw action: %s", [{"type": "click", "x": 100, "y": 200}]
         )
 
         assert len(actions) == 1

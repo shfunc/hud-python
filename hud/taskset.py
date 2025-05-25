@@ -108,7 +108,7 @@ class TaskSet(BaseModel):
             },
         )
         logger.info(
-            "[hud] Taskset %s uploaded successfully, see it on app.hud.so/evalsets/%s", name, name
+            "Taskset %s uploaded successfully, see it on app.hud.so/evalsets/%s", name, name
         )
 
 
@@ -133,7 +133,7 @@ async def load_taskset(taskset_id: str, api_key: str | None = None) -> TaskSet:
         api_key=api_key,
     )
 
-    logger.info(f"[hud] Taskset {taskset_id} loaded successfully")
+    logger.info(f"Taskset {taskset_id} loaded successfully")
 
     return TaskSet.model_validate(
         {
