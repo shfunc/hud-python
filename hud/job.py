@@ -13,6 +13,7 @@ from pydantic import BaseModel, PrivateAttr, TypeAdapter
 
 import hud.server
 from hud import gym
+from hud.agent import ResponseAgent
 from hud.settings import settings
 from hud.task import Task
 from hud.taskset import TaskSet
@@ -284,10 +285,16 @@ async def _execute_task(
     status = "error"
     error_msg = "Initialization failed"
     try:
+        response_agent = ResponseAgent() if auto_reply_question else None
+
         adapter_instance = None
         if adapter_cls:
             adapter_instance = adapter_cls(**(adapter_kwargs or {}))
-        agent_instance = agent_cls(adapter=adapter_instance, **(agent_kwargs or {}))
+        agent_instance = agent_cls(
+            adapter=adapter_instance,
+            response_agent=response_agent,
+            **(agent_kwargs or {}),
+        )
         if agent_instance is None:
             raise RuntimeError("Agent could not be instantiated")
 
@@ -316,11 +323,6 @@ async def _execute_task(
 
                 if tracker:
                     tracker.increment_step(task_id)
-
-                if auto_reply_question and action[0].type == "response" and "?" in action[0].text:
-                    obs.text = "Yes!"
-                    obs.screenshot = None
-                    continue
 
                 if action is None and not done:
                     done = True
@@ -367,7 +369,7 @@ async def _execute_task(
                 evaluation_result = await env.evaluate()
                 status = "completed"
                 error_msg = None
-                #logger.info("Evaluation result: %s", evaluation_result)
+                # logger.info("Evaluation result: %s", evaluation_result)
             except Exception as eval_err:
                 logger.exception(
                     "[Job: %s/%s, Task: %s] Evaluation Error: %s",
@@ -460,6 +462,7 @@ async def run_job(
     agent_cls: type[Agent],
     task_or_taskset: Task | TaskSet,
     job_name: str,
+    auto_reply_question: bool = False,
     adapter_cls: type[Adapter] | None = None,
     agent_kwargs: dict[str, Any] | None = None,
     adapter_kwargs: dict[str, Any] | None = None,
@@ -467,10 +470,9 @@ async def run_job(
     run_parallel: bool = True,
     job_metadata: dict[str, Any] | None = None,
     show_progress: bool = True,
-    auto_reply_question: bool = False,
     # Concurrency control with semaphores
     max_concurrent_env_creations: int | None = 30,  # Limits env.make calls
-    max_concurrent_agent_predictions: int | None = None,  # No limit on LLM calls - let them all run in parallel
+    max_concurrent_agent_predictions: int | None = None,  # No limit on LLM calls
     max_concurrent_tasks: int | None = 30,  # Limits overall task concurrency
 ) -> Job:
     """
@@ -530,7 +532,7 @@ async def run_job(
             evalset_id=evalset_id,
             gym_id=gym_id,
         )
-        #logger.info("Created job with ID: %s", created_job.id)
+        # logger.info("Created job with ID: %s", created_job.id)
     except Exception as e:
         logger.exception("Failed to create job '%s': %s", job_name, e)
         raise
@@ -567,7 +569,7 @@ async def run_job(
             "Limiting concurrent agent predictions to %d.", max_concurrent_agent_predictions
         )
     else:
-        logger.info("No limit on concurrent agent predictions - allowing unlimited parallel LLM calls.")
+        logger.info("No limit on concurrent agent predictions.")
 
     task_execution_sema = None
     effective_concurrency = num_tasks  # Default to running all if parallel

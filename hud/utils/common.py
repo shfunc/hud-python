@@ -35,7 +35,7 @@ class FunctionConfig(BaseModel):
         return iter(self.args)
 
     def __str__(self) -> str:
-        return f"{self.function}: {', '.join(str(arg) for arg in self.args)}"
+        return f"FC: {self.function}: {', '.join(str(arg) for arg in self.args)} ({self.metadata})"
 
 
 # Type alias for the shorthand config, which just converts to function name and args
