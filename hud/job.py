@@ -462,6 +462,7 @@ async def run_job(
     agent_cls: type[Agent],
     task_or_taskset: Task | TaskSet,
     job_name: str,
+    auto_reply_question: bool = False,
     adapter_cls: type[Adapter] | None = None,
     agent_kwargs: dict[str, Any] | None = None,
     adapter_kwargs: dict[str, Any] | None = None,
@@ -469,7 +470,6 @@ async def run_job(
     run_parallel: bool = True,
     job_metadata: dict[str, Any] | None = None,
     show_progress: bool = True,
-    auto_reply_question: bool = False,
     # Concurrency control with semaphores
     max_concurrent_env_creations: int | None = 30,  # Limits env.make calls
     max_concurrent_agent_predictions: int | None = None,  # No limit on LLM calls
