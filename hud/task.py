@@ -13,6 +13,8 @@ from hud.utils.common import FunctionConfig, FunctionConfigs
 if TYPE_CHECKING:
     from inspect_ai.dataset import Sample
 
+    from hud.agent import Agent
+
 
 def convert_inspect_setup(setup: str) -> list[FunctionConfig]:
     """
@@ -53,6 +55,8 @@ class Task(BaseModel):
     evaluate: FunctionConfigs | None = None
     gym: Gym | None = None
     config: dict[str, Any] | None = None
+
+    description: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Task:
@@ -132,3 +136,11 @@ class Task(BaseModel):
             gym=task_gym,
             # files=sample.files, # TODO: Decide how/if to handle files
         )
+
+    async def fit(self, agent: Agent | type[Agent]) -> None:
+        if isinstance(agent, type):
+            agent = agent()
+
+        if self.gym is None:
+            return
+        self.gym = agent.transfer_gyms.get(self.gym, self.gym)

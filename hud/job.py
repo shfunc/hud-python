@@ -12,12 +12,13 @@ from typing import TYPE_CHECKING, Any, TypeVar, cast
 from pydantic import BaseModel, PrivateAttr, TypeAdapter
 
 import hud.server
-from hud import gym
+from hud import Response, gym
 from hud.agent import ResponseAgent
 from hud.settings import settings
 from hud.task import Task
 from hud.taskset import TaskSet
 from hud.trajectory import Trajectory
+from hud.utils.common import Observation
 from hud.utils.progress import StepProgressTracker
 
 if TYPE_CHECKING:
@@ -260,6 +261,27 @@ def get_active_job() -> Job | None:
     return None
 
 
+async def _maybe_resample_action(
+    obs: Observation, action: Any, response_agent: ResponseAgent
+) -> tuple[Observation, bool]:
+    if isinstance(action, Response):
+        action = action.model_dump()
+    if isinstance(action, dict) and action.get("type") == "response":
+        response_text = action.get("text", "")
+        if response_agent and response_text:
+            try:
+                decision = await response_agent.determine_response(response_text)
+                if decision == "CONTINUE":
+                    logger.info("ResponseAgent indicated CONTINUE. Retrying...")
+                    obs = Observation(text="Please continue.")
+                    return obs, False
+                elif decision == "CONTINUE":
+                    logger.warning("Max continue retries reached. Stopping despite CONTINUE.")
+            except Exception as e:
+                logger.warning("Error using ResponseAgent: %s", e)
+    return obs, True
+
+
 async def _execute_task(
     agent_cls: type[Agent],
     adapter_cls: type[Adapter] | None,
@@ -292,7 +314,6 @@ async def _execute_task(
             adapter_instance = adapter_cls(**(adapter_kwargs or {}))
         agent_instance = agent_cls(
             adapter=adapter_instance,
-            response_agent=response_agent,
             **(agent_kwargs or {}),
         )
         if agent_instance is None:
@@ -311,6 +332,7 @@ async def _execute_task(
         obs, _ = obs_tuple
 
         step_error = None
+
         for step in range(max_steps_per_task):
             action, done = (None, False)
             try:
@@ -326,6 +348,11 @@ async def _execute_task(
 
                 if action is None and not done:
                     done = True
+
+                if done and response_agent:
+                    obs, finish = await _maybe_resample_action(obs, action[-1], response_agent)
+                    if not finish:
+                        continue
 
                 step_result = await env.step(action)
                 if step_result is None:
@@ -498,6 +525,7 @@ async def run_job(
         run_parallel: Run TaskSet tasks concurrently if True (limited by max_concurrent_tasks).
         job_metadata: Metadata for the created Job.
         show_progress: Display the step-based progress tracker.
+        max_continue_retries: Maximum number of retries if ResponseAgent says "CONTINUE".
         max_concurrent_env_creations: Max concurrent environment creation calls.
         max_concurrent_agent_predictions: Max concurrent agent prediction calls.
         max_concurrent_tasks: Max number of tasks to run actively at the same time.
@@ -514,6 +542,7 @@ async def run_job(
     evalset_id = None
     if isinstance(task_or_taskset, TaskSet):
         evalset_id = task_or_taskset.id
+        await task_or_taskset.fit(agent_cls)
 
     gym_id = None
     if isinstance(task_or_taskset, Task):

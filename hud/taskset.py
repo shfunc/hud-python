@@ -16,6 +16,8 @@ if TYPE_CHECKING:
 
     from inspect_ai.dataset import Dataset
 
+    from hud.agent import Agent
+
 
 class TaskSet(BaseModel):
     """
@@ -110,6 +112,18 @@ class TaskSet(BaseModel):
         logger.info(
             "Taskset %s uploaded successfully, see it on app.hud.so/evalsets/%s", name, name
         )
+
+    async def fit(self, agent: Agent | type[Agent]) -> None:
+        """
+        Automatically adapts the taskset to the agent's transfer_gyms.
+        """
+        if isinstance(agent, type):
+            agent = agent()
+
+        for task in self.tasks:
+            if task.gym is None:
+                continue
+            task.gym = agent.transfer_gyms.get(task.gym, task.gym)
 
 
 async def load_taskset(taskset_id: str, api_key: str | None = None) -> TaskSet:

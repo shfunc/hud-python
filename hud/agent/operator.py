@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-from typing import Any, Literal, cast, TYPE_CHECKING
+from typing import Any, Literal, cast
 
 from openai import AsyncOpenAI
 from openai.types.responses import (
@@ -16,11 +16,9 @@ from openai.types.responses import (
 from hud.adapters import Adapter
 from hud.agent.base import Agent
 from hud.adapters.operator import OperatorAdapter
+from hud.types import Gym
 from hud.utils.common import Observation
 from hud.settings import settings
-
-if TYPE_CHECKING:
-    from hud.agent import ResponseAgent
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +31,8 @@ class OperatorAgent(Agent[AsyncOpenAI, dict[str, Any]]):
     through the OperatorAdapter which converts actions to the format expected by HUD.
     """
 
+    transfer_gyms: dict[Gym, Gym] = {"qa": "hud-browser"}
+
     def __init__(
         self,
         client: AsyncOpenAI | None = None,
@@ -40,7 +40,6 @@ class OperatorAgent(Agent[AsyncOpenAI, dict[str, Any]]):
         environment: Literal["windows", "mac", "linux", "browser"] = "linux",
         adapter: Adapter | None = None,
         max_iterations: int = 8,
-        response_agent: "ResponseAgent | None" = None,
     ):
         """
         Initialize the OperatorAgent.
@@ -51,7 +50,6 @@ class OperatorAgent(Agent[AsyncOpenAI, dict[str, Any]]):
             environment: The environment type (windows, mac, linux, browser)
             adapter: The adapter to use for preprocessing and postprocessing
             max_iterations: Maximum number of iterations for the agent
-            response_agent: The response agent to use for automatic stopping
         """
         # Initialize client if not provided
         if client is None:
@@ -67,7 +65,7 @@ class OperatorAgent(Agent[AsyncOpenAI, dict[str, Any]]):
 
         adapter = adapter or OperatorAdapter()
 
-        super().__init__(client=client, adapter=adapter, response_agent=response_agent)
+        super().__init__(client=client, adapter=adapter)
 
         self.model = model
         self.environment = environment
@@ -216,27 +214,9 @@ class OperatorAgent(Agent[AsyncOpenAI, dict[str, Any]]):
 
             # If we found final text, package it as a 'response' action
             if final_text_response:
-                # Use ResponseAgent to determine if we should actually stop
-                if self.response_agent:
-                    try:
-                        decision = await self.response_agent.determine_response(final_text_response)
-                        if decision == "CONTINUE":
-                            # Agent wants to continue, so don't mark as done
-                            # Instead, provide a generic "continue" response to keep the conversation going
-                            actions = [{"type": "response", "text": "Please continue."}]
-                            done = False
-                        else:
-                            # Agent indicates completion, mark as done
-                            actions = [{"type": "response", "text": final_text_response}]
-                            done = True
-                    except Exception as e:
-                        logger.warning(f"Error using ResponseAgent: {e}, defaulting to stop")
-                        actions = [{"type": "response", "text": final_text_response}]
-                        done = True
-                else:
-                    # No ResponseAgent, use original behavior
-                    actions = [{"type": "response", "text": final_text_response}]
-                    done = True
+                # No ResponseAgent logic here anymore - just return the response
+                actions = [{"type": "response", "text": final_text_response}]
+                done = True
             # else:
             #     logger.info("No computer calls and no final text message found.")
             # Keep done = True, actions remains empty

@@ -10,6 +10,7 @@ from pydantic import Field, BaseModel
 # HUD imports
 from hud.adapters import Adapter
 from hud.agent.base import Agent
+from hud.types import Gym
 from hud.utils.common import Observation
 from hud.adapters.common.types import (
     ClickAction,
@@ -65,6 +66,8 @@ class LangchainAgent(Agent[LangchainModelOrRunnable, Any], Generic[LangchainMode
     An agent that uses an arbitrary Langchain model or runnable, leveraging
     Langchain's structured output capabilities to produce a single CLA action per step.
     """
+
+    transfer_gyms: dict[Gym, Gym] = {"qa": "hud-browser"}
 
     def __init__(
         self,

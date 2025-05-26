@@ -1,12 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import Sequence, TypeVar, Generic, TYPE_CHECKING
+from typing import Sequence, TypeVar, Generic
 
 from hud.adapters import Adapter, CLA
+from hud.types import Gym
 from hud.utils.common import Observation
 import logging
-
-if TYPE_CHECKING:
-    from hud.agent import ResponseAgent
 
 logger = logging.getLogger(__name__)
 
@@ -27,11 +25,12 @@ class Agent(Generic[ClientT, ActionT], ABC):
     Subclasses only need to implement the fetch_response method.
     """
 
+    transfer_gyms: dict[Gym, Gym] = {}
+
     def __init__(
         self,
         client: ClientT | None = None,
         adapter: Adapter | None = None,
-        response_agent: "ResponseAgent | None" = None,
     ):
         """
         Initialize the agent.
@@ -39,11 +38,9 @@ class Agent(Generic[ClientT, ActionT], ABC):
         Args:
             client: The client to use for API calls
             adapter: The adapter to use for preprocessing and postprocessing
-            response_agent: The response agent to use for automatic stopping
         """
         self.client = client
         self.adapter = adapter
-        self.response_agent = response_agent
 
     def preprocess(self, observation: Observation) -> Observation:
         """
