@@ -200,7 +200,7 @@ class ClaudeAgent(Agent[AsyncAnthropic, Any]):
                 break
 
         # If no tool use action was found, check for a final text response
-        if not actions and done:
+        if len(actions) == 0 and done:
             final_text_response = ""
             for block in response_content:
                 if block.type == "text":
@@ -210,7 +210,7 @@ class ClaudeAgent(Agent[AsyncAnthropic, Any]):
                 # logger.info(
                 #    f"No tool use found. Using final text as response: {final_text_response}"
                 # )
-                actions = [{"type": "response", "text": final_text_response.strip()}]
+                actions = [{"action": "response", "text": final_text_response.strip()}]
                 done = True
             # else:
             # logger.info("No tool use and no final text block found.")
