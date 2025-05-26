@@ -85,9 +85,7 @@ async def make(
                 else:
                     raise ValueError(f"Invalid environment location: {gym.location}")
             else:
-                raise ValueError(
-                    f"Invalid image or build context: {gym.image_or_build_context}"
-                )
+                raise ValueError(f"Invalid image or build context: {gym.image_or_build_context}")
 
             if gym.location == "local":
                 logger.info("Creating local environment")
