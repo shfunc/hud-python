@@ -525,7 +525,6 @@ async def run_job(
         run_parallel: Run TaskSet tasks concurrently if True (limited by max_concurrent_tasks).
         job_metadata: Metadata for the created Job.
         show_progress: Display the step-based progress tracker.
-        max_continue_retries: Maximum number of retries if ResponseAgent says "CONTINUE".
         max_concurrent_env_creations: Max concurrent environment creation calls.
         max_concurrent_agent_predictions: Max concurrent agent prediction calls.
         max_concurrent_tasks: Max number of tasks to run actively at the same time.
