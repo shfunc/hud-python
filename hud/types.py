@@ -48,7 +48,7 @@ class EnvironmentStatus(str, enum.Enum):
 
 
 # Available HUD gyms
-ServerGym: TypeAlias = Literal["qa", "hud-browser", "hud-ubuntu", "OSWorld-Ubuntu"]
+ServerGym: TypeAlias = Literal["qa", "hud-browser", "OSWorld-Ubuntu"]
 
 # Gyms can be either custom or server-side
 Gym: TypeAlias = CustomGym | ServerGym

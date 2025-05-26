@@ -55,7 +55,6 @@
         "environments/browser",
         "environments/custom", 
         "environments/qa",
-        "environments/ubuntu",
         "environments/osworld-ubuntu"
       ]
     }
