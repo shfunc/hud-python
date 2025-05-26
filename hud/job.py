@@ -471,7 +471,7 @@ async def run_job(
     job_metadata: dict[str, Any] | None = None,
     show_progress: bool = True,
     # Concurrency control with semaphores
-    max_concurrent_env_creations: int | None = 30,  # Limits env.make calls
+    max_concurrent_env_creations: int | None = 30,  # Limits gym.make calls
     max_concurrent_agent_predictions: int | None = None,  # No limit on LLM calls
     max_concurrent_tasks: int | None = 30,  # Limits overall task concurrency
 ) -> Job:

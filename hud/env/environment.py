@@ -147,8 +147,7 @@ class Environment(BaseModel):
         args = [[action.model_dump() for action in actions]]
 
         # TODO: Move this into the server side
-        if self._maybe_store_response(actions):
-            return Observation(text=self.final_response), 0, False, {}
+        self._maybe_store_response(actions)
 
         result, stdout, stderr = await self.client.invoke(
             FunctionConfig(function="step", args=args)
