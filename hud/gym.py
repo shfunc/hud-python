@@ -58,76 +58,73 @@ async def make(
         except ImportError:
             pass
 
-    async def create_env() -> Environment:
-        build_data = {}
-        try:
-            metadata_copy = {} if metadata is None else metadata.copy()
+    build_data = {}
+    try:
+        metadata_copy = {} if metadata is None else metadata.copy()
 
-            current_task_run_id = get_current_task_run_id()
-            if current_task_run_id:
-                metadata_copy["task_run_id"] = current_task_run_id
-                logger.debug(
-                    "Passing task_run_id %s from hud.telemetry context to environment metadata.",
-                    current_task_run_id,
-                )
+        current_task_run_id = get_current_task_run_id()
+        if current_task_run_id:
+            metadata_copy["task_run_id"] = current_task_run_id
+            logger.debug(
+                "Passing task_run_id %s from hud.telemetry context to environment metadata.",
+                current_task_run_id,
+            )
 
-            if isinstance(gym, CustomGym):
-                if isinstance(gym.image_or_build_context, str):
-                    uri = gym.image_or_build_context
-                elif isinstance(gym.image_or_build_context, Path):
-                    if gym.location == "local":
-                        uri, build_data = await LocalDockerClient.build_image(
-                            gym.image_or_build_context
-                        )
-                    elif gym.location == "remote":
-                        uri, build_data = await RemoteDockerClient.build_image(
-                            gym.image_or_build_context
-                        )
-                    else:
-                        raise ValueError(f"Invalid environment location: {gym.location}")
-                else:
-                    raise ValueError(
-                        f"Invalid image or build context: {gym.image_or_build_context}"
-                    )
-
+        if isinstance(gym, CustomGym):
+            if isinstance(gym.image_or_build_context, str):
+                uri = gym.image_or_build_context
+            elif isinstance(gym.image_or_build_context, Path):
                 if gym.location == "local":
-                    logger.info("Creating local environment")
-                    client = await LocalDockerClient.create(uri)
+                    uri, build_data = await LocalDockerClient.build_image(
+                        gym.image_or_build_context
+                    )
                 elif gym.location == "remote":
-                    logger.info("Creating remote environment")
-                    client = await RemoteDockerClient.create(
-                        image_uri=uri,
-                        job_id=effective_job_id,
-                        task_id=task.id if task else None,
-                        metadata=metadata_copy,
+                    uri, build_data = await RemoteDockerClient.build_image(
+                        gym.image_or_build_context
                     )
                 else:
                     raise ValueError(f"Invalid environment location: {gym.location}")
+            else:
+                raise ValueError(
+                    f"Invalid image or build context: {gym.image_or_build_context}"
+                )
 
-                if isinstance(gym.image_or_build_context, Path):
-                    logger.info("Setting source path %s", gym.image_or_build_context)
-                    client.set_source_path(gym.image_or_build_context)
-            elif isinstance(gym, str):
-                logger.info("Creating private environment")
-                true_gym_id = await get_gym_id(gym)
-                client, build_data = await RemoteClient.create(
-                    gym_id=true_gym_id,
+            if gym.location == "local":
+                logger.info("Creating local environment")
+                client = await LocalDockerClient.create(uri)
+            elif gym.location == "remote":
+                logger.info("Creating remote environment")
+                client = await RemoteDockerClient.create(
+                    image_uri=uri,
                     job_id=effective_job_id,
                     task_id=task.id if task else None,
                     metadata=metadata_copy,
                 )
             else:
-                raise ValueError(f"Invalid gym source: {gym}")
+                raise ValueError(f"Invalid environment location: {gym.location}")
 
-            environment = Environment(
-                client=client, metadata=metadata_copy, task=task, build_data=build_data
+            if isinstance(gym.image_or_build_context, Path):
+                logger.info("Setting source path %s", gym.image_or_build_context)
+                client.set_source_path(gym.image_or_build_context)
+        elif isinstance(gym, str):
+            logger.info("Creating private environment")
+            true_gym_id = await get_gym_id(gym)
+            client, build_data = await RemoteClient.create(
+                gym_id=true_gym_id,
+                job_id=effective_job_id,
+                task_id=task.id if task else None,
+                metadata=metadata_copy,
             )
+        else:
+            raise ValueError(f"Invalid gym source: {gym}")
 
-            if task:
-                await environment._setup()
-            return environment
-        except Exception as e:
-            build_data["exception"] = str(e)
-            raise GymMakeException("Failed to create environment", build_data) from e
+        environment = Environment(
+            client=client, metadata=metadata_copy, task=task, build_data=build_data
+        )
 
-    return await create_env()
+        if task:
+            await environment._setup()
+        return environment
+    except Exception as e:
+        build_data["exception"] = str(e)
+        raise GymMakeException("Failed to create environment", build_data) from e
