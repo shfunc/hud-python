@@ -11,6 +11,7 @@ from anthropic.types.beta import (
     BetaImageBlockParam,
 )
 
+from hud.adapters.common.types import CLA
 from hud.agent import Agent
 from hud.adapters import Adapter
 from hud.settings import settings
@@ -128,7 +129,7 @@ def extract_json_from_response(response: str) -> str:
     return response.strip()
 
 
-class ClaudePlaysPokemon(Agent[AsyncAnthropic, None]):
+class ClaudePlaysPokemon(Agent[AsyncAnthropic, CLA]):
     """AI agent that plays Pokémon games using Claude."""
 
     def __init__(
