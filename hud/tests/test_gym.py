@@ -235,7 +235,7 @@ async def test_make_with_invalid_gym():
         # Create an object that is neither a Gym nor a Task
         class InvalidGym:
             pass
-        
+
         invalid_gym = InvalidGym()
         await make(invalid_gym)  # type: ignore[arg-type]
 
