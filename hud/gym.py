@@ -16,7 +16,6 @@ from hud.utils.common import get_gym_id
 
 if TYPE_CHECKING:
     from hud.job import Job
-    from hud.task import Task
 
 logger = logging.getLogger("hud.gym")
 
