@@ -104,7 +104,7 @@ class TaskSet(BaseModel):
                 evaluate_config = None
 
             if isinstance(task.gym, CustomGym):
-                if isinstance(task.gym.location, PosixPath):
+                if isinstance(task.gym.image_or_build_context, PosixPath):
                     raise ValueError(
                         "Local build contexts are not supported for "
                         "remote tasksets, attach an image or existing "
