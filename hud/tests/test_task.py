@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from hud.types import CustomGym
 from hud.task import Task
+from hud.types import CustomGym
 
 
 @dataclass

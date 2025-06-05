@@ -226,6 +226,7 @@ async def test_taskset_with_local_gym_spec():
 
     with pytest.raises(
         ValueError,
-        match="Local build contexts are not supported for remote tasksets, attach an image or existing gym id.",
+        match="Local build contexts are not supported for remote tasksets, "
+        "attach an image or existing gym id.",
     ):
         await taskset.upload(name="Test", description="Test", api_key="test-api-key")

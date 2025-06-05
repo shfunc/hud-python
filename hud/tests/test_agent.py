@@ -1,21 +1,20 @@
 from __future__ import annotations
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from anthropic.types import Message
 from anthropic.types.beta import (
-    BetaMessageParam,
     BetaTextBlockParam,
     BetaToolUseBlockParam,
-    BetaToolResultBlockParam,
 )
 from openai.types.responses import (
     Response,
+    ResponseComputerToolCall,
     ResponseOutputMessage,
     ResponseOutputText,
-    ResponseComputerToolCall,
 )
+
 from hud.agent.claude import ClaudeAgent
 from hud.agent.operator import OperatorAgent
 from hud.utils.common import Observation
