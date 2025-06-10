@@ -70,13 +70,12 @@ async def test_claude_fetch_response_text_only(
     mock_response.content = [text_block]
     mock_anthropic_client.beta.messages.create.return_value = mock_response
 
-    actions, done, logs = await claude_agent.fetch_response(observation)
+    actions, done = await claude_agent.fetch_response(observation)
 
     mock_anthropic_client.beta.messages.create.assert_called_once()
     assert len(actions) == 1
     assert actions[0] == {"action": "response", "text": "This is a test response"}
     assert done is True
-    assert logs == [mock_response.model_dump()]
 
 
 @pytest.mark.asyncio
@@ -96,14 +95,13 @@ async def test_claude_fetch_response_with_tool_use(
     mock_response.content = [tool_block]
     mock_anthropic_client.beta.messages.create.return_value = mock_response
 
-    actions, done, logs = await claude_agent.fetch_response(observation)
+    actions, done = await claude_agent.fetch_response(observation)
 
     mock_anthropic_client.beta.messages.create.assert_called_once()
     assert len(actions) == 1
     assert actions[0] == {"action": "click", "coordinates": {"x": 100, "y": 200}}
     assert done is False
     assert claude_agent.pending_computer_use_tool_id == "tool_123"
-    assert logs == [mock_response.model_dump()]
 
 
 @pytest.mark.asyncio
@@ -122,14 +120,13 @@ async def test_claude_fetch_response_with_screenshot_and_pending_tool(
     mock_response.content = [text_block]
     mock_anthropic_client.beta.messages.create.return_value = mock_response
 
-    actions, done, logs = await claude_agent.fetch_response(observation)
+    actions, done = await claude_agent.fetch_response(observation)
 
     mock_anthropic_client.beta.messages.create.assert_called_once()
     assert len(actions) == 1
     assert actions[0] == {"action": "response", "text": "Task completed successfully"}
     assert done is True
     assert claude_agent.pending_computer_use_tool_id is None
-    assert logs == [mock_response.model_dump()]
 
 
 @pytest.mark.asyncio
@@ -150,13 +147,12 @@ async def test_operator_fetch_response_text_only(
     mock_response.output = [mock_message]
     mock_openai_client.responses.create.return_value = mock_response
 
-    actions, done, logs = await operator_agent.fetch_response(observation)
+    actions, done = await operator_agent.fetch_response(observation)
 
     mock_openai_client.responses.create.assert_called_once()
     assert len(actions) == 1
     assert actions[0] == {"type": "response", "text": "This is a test response"}
     assert done is True
-    assert logs == [mock_response.model_dump()]
 
 
 @pytest.mark.asyncio
@@ -179,14 +175,13 @@ async def test_operator_fetch_response_with_computer_call(
     mock_response.output = [mock_computer_call]
     mock_openai_client.responses.create.return_value = mock_response
 
-    actions, done, logs = await operator_agent.fetch_response(observation)
+    actions, done = await operator_agent.fetch_response(observation)
 
     mock_openai_client.responses.create.assert_called_once()
     assert len(actions) == 1
     assert actions[0] == {"type": "click", "coordinates": {"x": 100, "y": 200}}
     assert done is False
     assert operator_agent.pending_call_id == "call_123"
-    assert logs == [mock_response.model_dump()]
 
 
 @pytest.mark.asyncio
@@ -209,10 +204,9 @@ async def test_operator_fetch_response_with_screenshot_followup(
     mock_response.output = [mock_message]
     mock_openai_client.responses.create.return_value = mock_response
 
-    actions, done, logs = await operator_agent.fetch_response(observation)
+    actions, done = await operator_agent.fetch_response(observation)
 
     mock_openai_client.responses.create.assert_called_once()
     assert len(actions) == 1
     assert actions[0] == {"type": "response", "text": "Task completed successfully"}
     assert done is True
-    assert logs == [mock_response.model_dump()]
