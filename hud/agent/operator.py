@@ -238,6 +238,6 @@ class OperatorAgent(Agent[AsyncOpenAI, dict[str, Any]]):
         # add reasoning to the actions
         for action in actions:
             action["reasoning"] = reasoning
-            action["logs"] = json.dumps(response.model_dump())
+            action["logs"] = response.model_dump()  # type: ignore[assignment]
 
         return actions, done

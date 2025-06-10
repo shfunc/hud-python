@@ -68,13 +68,21 @@ async def test_claude_fetch_response_text_only(
     text_block.type = "text"
     text_block.text = "This is a test response"
     mock_response.content = [text_block]
+    mock_response.model_dump.return_value = {
+        "content": [{"type": "text", "text": "This is a test response"}]
+    }
     mock_anthropic_client.beta.messages.create.return_value = mock_response
 
     actions, done = await claude_agent.fetch_response(observation)
 
     mock_anthropic_client.beta.messages.create.assert_called_once()
     assert len(actions) == 1
-    assert actions[0] == {"action": "response", "text": "This is a test response"}
+    assert actions[0] == {
+        "action": "response",
+        "text": "This is a test response",
+        "reasoning": "This is a test response",
+        "logs": {"content": [{"type": "text", "text": "This is a test response"}]},
+    }
     assert done is True
 
 
@@ -93,13 +101,37 @@ async def test_claude_fetch_response_with_tool_use(
     tool_block.id = "tool_123"
     tool_block.input = {"action": "click", "coordinates": {"x": 100, "y": 200}}
     mock_response.content = [tool_block]
+    mock_response.model_dump.return_value = {
+        "content": [
+            {
+                "type": "tool_use",
+                "name": "computer",
+                "id": "tool_123",
+                "input": {"action": "click", "coordinates": {"x": 100, "y": 200}},
+            }
+        ]
+    }
     mock_anthropic_client.beta.messages.create.return_value = mock_response
 
     actions, done = await claude_agent.fetch_response(observation)
 
     mock_anthropic_client.beta.messages.create.assert_called_once()
     assert len(actions) == 1
-    assert actions[0] == {"action": "click", "coordinates": {"x": 100, "y": 200}}
+    assert actions[0] == {
+        "action": "click",
+        "coordinates": {"x": 100, "y": 200},
+        "reasoning": "",
+        "logs": {
+            "content": [
+                {
+                    "type": "tool_use",
+                    "name": "computer",
+                    "id": "tool_123",
+                    "input": {"action": "click", "coordinates": {"x": 100, "y": 200}},
+                }
+            ]
+        },
+    }
     assert done is False
     assert claude_agent.pending_computer_use_tool_id == "tool_123"
 
@@ -118,13 +150,21 @@ async def test_claude_fetch_response_with_screenshot_and_pending_tool(
     text_block.type = "text"
     text_block.text = "Task completed successfully"
     mock_response.content = [text_block]
+    mock_response.model_dump.return_value = {
+        "content": [{"type": "text", "text": "Task completed successfully"}]
+    }
     mock_anthropic_client.beta.messages.create.return_value = mock_response
 
     actions, done = await claude_agent.fetch_response(observation)
 
     mock_anthropic_client.beta.messages.create.assert_called_once()
     assert len(actions) == 1
-    assert actions[0] == {"action": "response", "text": "Task completed successfully"}
+    assert actions[0] == {
+        "action": "response",
+        "text": "Task completed successfully",
+        "reasoning": "Task completed successfully",
+        "logs": {"content": [{"type": "text", "text": "Task completed successfully"}]},
+    }
     assert done is True
     assert claude_agent.pending_computer_use_tool_id is None
 
@@ -145,13 +185,23 @@ async def test_operator_fetch_response_text_only(
     mock_text.text = "This is a test response"
     mock_message.content = [mock_text]
     mock_response.output = [mock_message]
+    mock_response.model_dump.return_value = {
+        "id": "resp_123",
+        "output": [{"type": "message", "content": [{"text": "This is a test response"}]}],
+    }
     mock_openai_client.responses.create.return_value = mock_response
 
     actions, done = await operator_agent.fetch_response(observation)
 
     mock_openai_client.responses.create.assert_called_once()
     assert len(actions) == 1
-    assert actions[0] == {"type": "response", "text": "This is a test response"}
+    assert actions[0]["type"] == "response"
+    assert actions[0]["text"] == "This is a test response"
+    assert "This is a test response" in actions[0]["reasoning"]
+    assert actions[0]["logs"] == {
+        "id": "resp_123",
+        "output": [{"type": "message", "content": [{"text": "This is a test response"}]}],
+    }
     assert done is True
 
 
@@ -173,13 +223,37 @@ async def test_operator_fetch_response_with_computer_call(
     mock_action.model_dump.return_value = {"type": "click", "coordinates": {"x": 100, "y": 200}}
     mock_computer_call.action = mock_action
     mock_response.output = [mock_computer_call]
+    mock_response.model_dump.return_value = {
+        "id": "resp_123",
+        "output": [
+            {
+                "type": "computer_call",
+                "call_id": "call_123",
+                "action": {"type": "click", "coordinates": {"x": 100, "y": 200}},
+            }
+        ],
+    }
     mock_openai_client.responses.create.return_value = mock_response
 
     actions, done = await operator_agent.fetch_response(observation)
 
     mock_openai_client.responses.create.assert_called_once()
     assert len(actions) == 1
-    assert actions[0] == {"type": "click", "coordinates": {"x": 100, "y": 200}}
+    assert actions[0] == {
+        "type": "click",
+        "coordinates": {"x": 100, "y": 200},
+        "reasoning": "",
+        "logs": {
+            "id": "resp_123",
+            "output": [
+                {
+                    "type": "computer_call",
+                    "call_id": "call_123",
+                    "action": {"type": "click", "coordinates": {"x": 100, "y": 200}},
+                }
+            ],
+        },
+    }
     assert done is False
     assert operator_agent.pending_call_id == "call_123"
 
@@ -202,11 +276,21 @@ async def test_operator_fetch_response_with_screenshot_followup(
     mock_text.text = "Task completed successfully"
     mock_message.content = [mock_text]
     mock_response.output = [mock_message]
+    mock_response.model_dump.return_value = {
+        "id": "resp_124",
+        "output": [{"type": "message", "content": [{"text": "Task completed successfully"}]}],
+    }
     mock_openai_client.responses.create.return_value = mock_response
 
     actions, done = await operator_agent.fetch_response(observation)
 
     mock_openai_client.responses.create.assert_called_once()
     assert len(actions) == 1
-    assert actions[0] == {"type": "response", "text": "Task completed successfully"}
+    assert actions[0]["type"] == "response"
+    assert actions[0]["text"] == "Task completed successfully"
+    assert "Task completed successfully" in actions[0]["reasoning"]
+    assert actions[0]["logs"] == {
+        "id": "resp_124",
+        "output": [{"type": "message", "content": [{"text": "Task completed successfully"}]}],
+    }
     assert done is True

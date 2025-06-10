@@ -9,12 +9,10 @@ LogType = str | dict[str, Any] | list[str | dict[str, Any]] | None
 
 # Helper function to format logs for display
 def _format_logs_for_display(
-    logs: LogType,
+    logs: LogType | None = None,
     reasoning: str | None = None,
     max_log_len: int = 277,
 ) -> str:
-    if not logs:
-        return ""
     log_repr = repr(logs)
     truncated_log = log_repr[:max_log_len] + "..." if len(log_repr) > max_log_len else log_repr
     return f" │ Reasoning: {reasoning} │ Logs: {truncated_log}"
@@ -24,7 +22,7 @@ def _format_logs_for_display(
 class CLAAction(BaseModel):
     type: str
     reasoning: str | None = None
-    logs: LogType = None
+    logs: LogType | None = None
 
     def __str__(self) -> str:
         # Basic representation for actions that don't have a specific override

@@ -54,7 +54,8 @@ class ClaudeAdapter(Adapter):
                     keys: list[CLAKey] = [self._map_key(k) for k in (data["text"].split("+"))]
                     assert len(keys) > 0
                     converted_action = PressAction(keys=keys)
-                converted_action = PressAction(keys=[self._map_key(data["text"])])
+                else:
+                    converted_action = PressAction(keys=[self._map_key(data["text"])])
 
             elif action_type == "type":
                 assert "text" in data
@@ -167,8 +168,8 @@ class ClaudeAdapter(Adapter):
             else:
                 raise ValueError(f"Unsupported action type: {action_type}")
 
-            converted_action.reasoning = data.get("reasoning", "")
-            converted_action.logs = data.get("logs", "")
+            converted_action.reasoning = data.get("reasoning", None)
+            converted_action.logs = data.get("logs", None)
 
             return converted_action
         except AssertionError:

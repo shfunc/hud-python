@@ -7,7 +7,7 @@ import pytest
 
 from hud.agent.base import Agent
 from hud.adapters import Adapter
-from hud.adapters.common.types import ClickAction, LogType, Point
+from hud.adapters.common.types import ClickAction, Point
 from hud.utils.common import Observation
 
 
@@ -19,16 +19,13 @@ class ConcreteAgent(Agent[Any, dict[str, Any]]):
         self.mock_responses = []
         self.call_count = 0
 
-    async def fetch_response(
-        self, observation: Observation
-    ) -> tuple[list[dict[str, Any]], bool, list[LogType] | None]:
+    async def fetch_response(self, observation: Observation) -> tuple[list[dict[str, Any]], bool]:
         """Mock implementation that returns predefined responses."""
         if self.call_count < len(self.mock_responses):
-            # Ensure we return a 3-tuple including None for logs
-            actions, done, logs = self.mock_responses[self.call_count]
+            actions, done = self.mock_responses[self.call_count]
             self.call_count += 1
-            return actions, done, logs
-        return [], True, None
+            return actions, done
+        return [], True
 
 
 class TestAgentBase:
@@ -106,14 +103,14 @@ class TestAgentBase:
         actions = [{"type": "click", "x": 100, "y": 200}]
 
         with pytest.raises(ValueError, match="Cannot postprocess actions without an adapter"):
-            agent_without_adapter.postprocess(actions, None)
+            agent_without_adapter.postprocess(actions)
 
     def test_postprocess_with_adapter(self, agent_with_adapter, mock_adapter):
         """Test postprocess with adapter."""
         actions = [{"type": "click", "x": 100, "y": 200}]
-        result = agent_with_adapter.postprocess(actions, None)
+        result = agent_with_adapter.postprocess(actions)
 
-        mock_adapter.adapt_list.assert_called_once_with(actions, None)
+        mock_adapter.adapt_list.assert_called_once_with(actions)
         assert len(result) == 1
         assert isinstance(result[0], ClickAction)
 
@@ -121,7 +118,7 @@ class TestAgentBase:
     async def test_predict_without_verbose(self, agent_with_adapter):
         """Test predict method without verbose logging."""
         observation = Observation(text="test", screenshot="screenshot")
-        agent_with_adapter.mock_responses = [([{"type": "click", "x": 100, "y": 200}], False, None)]
+        agent_with_adapter.mock_responses = [([{"type": "click", "x": 100, "y": 200}], False)]
 
         actions, done = await agent_with_adapter.predict(observation, verbose=False)
 
@@ -134,7 +131,7 @@ class TestAgentBase:
     async def test_predict_with_verbose_logging(self, mock_logger, agent_with_adapter):
         """Test predict method with verbose logging (covers missing lines 100-116)."""
         observation = Observation(text="test", screenshot="screenshot")
-        agent_with_adapter.mock_responses = [([{"type": "click", "x": 100, "y": 200}], True, None)]
+        agent_with_adapter.mock_responses = [([{"type": "click", "x": 100, "y": 200}], True)]
 
         actions, done = await agent_with_adapter.predict(observation, verbose=True)
 
@@ -151,7 +148,7 @@ class TestAgentBase:
         """Test predict without adapter returns raw actions."""
         observation = Observation(text="test", screenshot=None)
         raw_actions = [{"type": "click", "x": 100, "y": 200}]
-        agent_without_adapter.mock_responses = [(raw_actions, True, None)]
+        agent_without_adapter.mock_responses = [(raw_actions, True)]
 
         actions, done = await agent_without_adapter.predict(observation, verbose=False)
 
@@ -163,7 +160,7 @@ class TestAgentBase:
     async def test_predict_with_empty_actions(self, agent_with_adapter):
         """Test predict when fetch_response returns empty actions."""
         observation = Observation(text="test", screenshot="screenshot")
-        agent_with_adapter.mock_responses = [([], True, None)]
+        agent_with_adapter.mock_responses = [([], True)]
 
         actions, done = await agent_with_adapter.predict(observation, verbose=False)
 
@@ -177,8 +174,7 @@ class TestAgentBase:
         # Set up observation with screenshot that will be rescaled
         observation = Observation(text="test input", screenshot="original_screenshot")
         raw_actions = [{"type": "click", "x": 150, "y": 250}]
-        sample_logs = ["Log message 1", {"key": "value"}]
-        agent_with_adapter.mock_responses = [(raw_actions, False, sample_logs)]
+        agent_with_adapter.mock_responses = [(raw_actions, False)]
 
         actions, done = await agent_with_adapter.predict(observation, verbose=True)
 
@@ -187,7 +183,7 @@ class TestAgentBase:
         mock_adapter.rescale.assert_called_once_with("original_screenshot")
 
         # Stage 3: Postprocessing
-        mock_adapter.adapt_list.assert_called_once_with(raw_actions, sample_logs)
+        mock_adapter.adapt_list.assert_called_once_with(raw_actions)
 
         assert len(actions) == 1
         assert isinstance(actions[0], ClickAction)
@@ -198,7 +194,7 @@ class TestAgentBase:
         """Test predict integration when observation has no screenshot."""
         observation = Observation(text="test input", screenshot=None)
         raw_actions = [{"type": "response", "text": "Task completed"}]
-        agent_with_adapter.mock_responses = [(raw_actions, True, None)]
+        agent_with_adapter.mock_responses = [(raw_actions, True)]
 
         actions, done = await agent_with_adapter.predict(observation, verbose=False)
 
