@@ -10,18 +10,20 @@ LogType = str | dict[str, Any] | list[str | dict[str, Any]] | None
 # Helper function to format logs for display
 def _format_logs_for_display(
     logs: LogType,
+    reasoning: str | None = None,
     max_log_len: int = 277,
 ) -> str:
     if not logs:
         return ""
     log_repr = repr(logs)
     truncated_log = log_repr[:max_log_len] + "..." if len(log_repr) > max_log_len else log_repr
-    return f" │ Logs: {truncated_log}"
+    return f" │ Reasoning: {reasoning} │ Logs: {truncated_log}"
 
 
 # Base class for all actions
 class CLAAction(BaseModel):
     type: str
+    reasoning: str | None = None
     logs: LogType = None
 
     def __str__(self) -> str:
@@ -30,10 +32,10 @@ class CLAAction(BaseModel):
         attributes = ", ".join(
             f"{k}='{v}'" if isinstance(v, str) else f"{k}={v}"
             for k, v in self.model_dump().items()
-            if k != "type" and v is not None and k != "logs"
+            if k != "type" and v is not None and k != "logs" and k != "reasoning"
         )
         action_str = f"{self.type.capitalize()}Action ({attributes})"
-        action_str += _format_logs_for_display(self.logs)  # Add logs if present via helper
+        action_str += _format_logs_for_display(self.logs, self.reasoning)
         return action_str
 
 
@@ -43,7 +45,7 @@ class Point(BaseModel):
     y: int
 
 
-# CLICK ACTION (supports extra options)
+# CLICK ACTION
 class ClickAction(CLAAction):
     type: Literal["click"] = "click"
     point: Point | None = None
@@ -60,7 +62,7 @@ class ClickAction(CLAAction):
         if self.hold_keys:
             parts.append(f"holding {self.hold_keys}")
         action_str = " ".join(parts)
-        action_str += _format_logs_for_display(self.logs)
+        action_str += _format_logs_for_display(self.logs, self.reasoning)
         return action_str
 
 
@@ -71,7 +73,7 @@ class PressAction(CLAAction):
 
     def __str__(self) -> str:
         action_str = f"🎹 Press keys: {'+'.join(self.keys)}"
-        action_str += _format_logs_for_display(self.logs)
+        action_str += _format_logs_for_display(self.logs, self.reasoning)
         return action_str
 
 
@@ -82,7 +84,7 @@ class KeyDownAction(CLAAction):
 
     def __str__(self) -> str:
         action_str = f"👇 KeyDown: {'+'.join(self.keys)}"
-        action_str += _format_logs_for_display(self.logs)
+        action_str += _format_logs_for_display(self.logs, self.reasoning)
         return action_str
 
 
@@ -93,7 +95,7 @@ class KeyUpAction(CLAAction):
 
     def __str__(self) -> str:
         action_str = f"👆 KeyUp: {'+'.join(self.keys)}"
-        action_str += _format_logs_for_display(self.logs)
+        action_str += _format_logs_for_display(self.logs, self.reasoning)
         return action_str
 
 
@@ -107,7 +109,7 @@ class TypeAction(CLAAction):
         action_str = f'✍️ Type: "{self.text}"'
         if self.enter_after:
             action_str += " (and press Enter)"
-        action_str += _format_logs_for_display(self.logs)
+        action_str += _format_logs_for_display(self.logs, self.reasoning)
         return action_str
 
 
@@ -127,7 +129,7 @@ class ScrollAction(CLAAction):
         if self.hold_keys:  # Added hold_keys for scroll
             parts.append(f"holding {self.hold_keys}")
         action_str = " ".join(parts)
-        action_str += _format_logs_for_display(self.logs)
+        action_str += _format_logs_for_display(self.logs, self.reasoning)
         return action_str
 
 
@@ -144,7 +146,7 @@ class MoveAction(CLAAction):
         if self.offset:
             parts.append(f"by ({self.offset.x},{self.offset.y})")
         action_str = " ".join(parts)
-        action_str += _format_logs_for_display(self.logs)
+        action_str += _format_logs_for_display(self.logs, self.reasoning)
         return action_str
 
 
@@ -155,7 +157,7 @@ class WaitAction(CLAAction):
 
     def __str__(self) -> str:
         action_str = f"💤 Wait for {self.time}ms"
-        action_str += _format_logs_for_display(self.logs)
+        action_str += _format_logs_for_display(self.logs, self.reasoning)
         return action_str
 
 
@@ -179,7 +181,7 @@ class DragAction(CLAAction):
         if self.hold_keys:  # Added hold_keys for drag
             parts.append(f"holding {self.hold_keys}")
         action_str = " ".join(parts)
-        action_str += _format_logs_for_display(self.logs)
+        action_str += _format_logs_for_display(self.logs, self.reasoning)
         return action_str
 
 
@@ -191,7 +193,7 @@ class ResponseAction(CLAAction):
     def __str__(self) -> str:
         displayed_text = self.text if len(self.text) < 50 else self.text[:47] + "..."
         action_str = f'💬 Response: "{displayed_text}"'
-        action_str += _format_logs_for_display(self.logs)
+        action_str += _format_logs_for_display(self.logs, self.reasoning)
         return action_str
 
 
@@ -201,7 +203,7 @@ class ScreenshotFetch(CLAAction):
 
     def __str__(self) -> str:
         action_str = "📸 Screenshot"
-        action_str += _format_logs_for_display(self.logs)
+        action_str += _format_logs_for_display(self.logs, self.reasoning)
         return action_str
 
 
@@ -210,7 +212,7 @@ class PositionFetch(CLAAction):
 
     def __str__(self) -> str:
         action_str = "📍 Position"
-        action_str += _format_logs_for_display(self.logs)
+        action_str += _format_logs_for_display(self.logs, self.reasoning)
         return action_str
 
 
@@ -220,7 +222,7 @@ class CustomAction(CLAAction):
 
     def __str__(self) -> str:
         action_str = f"⚙️ Custom: {self.action}"
-        action_str += _format_logs_for_display(self.logs)
+        action_str += _format_logs_for_display(self.logs, self.reasoning)
         return action_str
 
 

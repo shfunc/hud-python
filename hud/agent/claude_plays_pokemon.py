@@ -185,9 +185,7 @@ class ClaudePlaysPokemon(Agent[AsyncAnthropic, CLA]):
 
         self.messages: list[BetaMessageParam] = []
 
-    async def fetch_response(
-        self, observation: Observation
-    ) -> tuple[list[dict[str, Any]], bool, list[LogType] | None]:
+    async def fetch_response(self, observation: Observation) -> tuple[list[dict[str, Any]], bool]:
         """Fetch a response from Claude based on the current observation.
 
         Args:
@@ -282,4 +280,4 @@ class ClaudePlaysPokemon(Agent[AsyncAnthropic, CLA]):
 
         logger.debug("Extracted actions", extra={"actions": action_list})
 
-        return action_list, False, [response.model_dump()]
+        return action_list, False

@@ -51,46 +51,53 @@ class OperatorAdapter(Adapter):
                 button = self.BUTTON_MAP.get(button, button)
                 if button is None:
                     button = "left"
-                return ClickAction(point=Point(x=x, y=y), button=button)
+                converted_action = ClickAction(point=Point(x=x, y=y), button=button)
 
             elif action_type == "double_click":
                 x, y = data.get("x", 0), data.get("y", 0)
-                return ClickAction(point=Point(x=x, y=y), button="left", pattern=[100])
+                converted_action = ClickAction(point=Point(x=x, y=y), button="left", pattern=[100])
 
             elif action_type == "scroll":
                 x, y = int(data.get("x", 0)), int(data.get("y", 0))
                 scroll_x = int(data.get("scroll_x", 0))
                 scroll_y = int(data.get("scroll_y", 0))
-                return ScrollAction(point=Point(x=x, y=y), scroll=Point(x=scroll_x, y=scroll_y))
+                converted_action = ScrollAction(
+                    point=Point(x=x, y=y), scroll=Point(x=scroll_x, y=scroll_y)
+                )
 
             elif action_type == "type":
                 text = data.get("text", "")
-                return TypeAction(text=text, enter_after=False)
+                converted_action = TypeAction(text=text, enter_after=False)
 
             elif action_type == "wait":
                 ms = data.get("ms", 1000)
-                return WaitAction(time=ms)
+                converted_action = WaitAction(time=ms)
 
             elif action_type == "move":
                 x, y = data.get("x", 0), data.get("y", 0)
-                return MoveAction(point=Point(x=x, y=y))
+                converted_action = MoveAction(point=Point(x=x, y=y))
 
             elif action_type == "keypress":
                 keys = data.get("keys", [])
-                return PressAction(keys=[self._map_key(k) for k in keys])
+                converted_action = PressAction(keys=[self._map_key(k) for k in keys])
 
             elif action_type == "drag":
                 path = data.get("path", [])
                 points = [Point(x=p.get("x", 0), y=p.get("y", 0)) for p in path]
-                return DragAction(path=points)
+                converted_action = DragAction(path=points)
 
             elif action_type == "screenshot":
-                return ScreenshotFetch()
+                converted_action = ScreenshotFetch()
 
             elif action_type == "response":
-                return ResponseAction(text=data.get("text", ""))
+                converted_action = ResponseAction(text=data.get("text", ""))
             else:
                 raise ValueError(f"Unsupported action type: {action_type}")
+
+            converted_action.reasoning = data.get("reasoning", "")
+            converted_action.logs = data.get("logs", "")
+
+            return converted_action
 
         except Exception as e:
             raise ValueError(f"Invalid action: {data}. Error: {e!s}") from e

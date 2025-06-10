@@ -53,12 +53,12 @@ class ClaudeAdapter(Adapter):
                 if "+" in data["text"]:
                     keys: list[CLAKey] = [self._map_key(k) for k in (data["text"].split("+"))]
                     assert len(keys) > 0
-                    return PressAction(keys=keys)
-                return PressAction(keys=[self._map_key(data["text"])])
+                    converted_action = PressAction(keys=keys)
+                converted_action = PressAction(keys=[self._map_key(data["text"])])
 
             elif action_type == "type":
                 assert "text" in data
-                return TypeAction(
+                converted_action = TypeAction(
                     text=data["text"],
                     enter_after=False,
                 )
@@ -69,14 +69,14 @@ class ClaudeAdapter(Adapter):
                 coord = data["coordinate"]
                 assert isinstance(coord, list)
                 assert len(coord) == 2
-                return MoveAction(point=Point(x=coord[0], y=coord[1]))
+                converted_action = MoveAction(point=Point(x=coord[0], y=coord[1]))
 
             elif action_type == "left_click":
                 assert "coordinate" in data
                 coord = data["coordinate"]
                 assert isinstance(coord, list)
                 assert len(coord) == 2
-                return ClickAction(point=Point(x=coord[0], y=coord[1]), button="left")
+                converted_action = ClickAction(point=Point(x=coord[0], y=coord[1]), button="left")
 
             elif action_type == "left_click_drag":
                 assert "coordinate" in data
@@ -93,28 +93,30 @@ class ClaudeAdapter(Adapter):
                 ):
                     raise ValueError("Left click drag must be preceded by a move or click action")
                 else:
-                    return DragAction(path=[self.memory[-1].point, Point(x=coord[0], y=coord[1])])
+                    converted_action = DragAction(
+                        path=[self.memory[-1].point, Point(x=coord[0], y=coord[1])]
+                    )
 
             elif action_type == "right_click":
                 assert "coordinate" in data
                 coord = data["coordinate"]
                 assert isinstance(coord, list)
                 assert len(coord) == 2
-                return ClickAction(point=Point(x=coord[0], y=coord[1]), button="right")
+                converted_action = ClickAction(point=Point(x=coord[0], y=coord[1]), button="right")
 
             elif action_type == "middle_click":
                 assert "coordinate" in data
                 coord = data["coordinate"]
                 assert isinstance(coord, list)
                 assert len(coord) == 2
-                return ClickAction(point=Point(x=coord[0], y=coord[1]), button="middle")
+                converted_action = ClickAction(point=Point(x=coord[0], y=coord[1]), button="middle")
 
             elif action_type == "double_click":
                 assert "coordinate" in data
                 coord = data["coordinate"]
                 assert isinstance(coord, list)
                 assert len(coord) == 2
-                return ClickAction(
+                converted_action = ClickAction(
                     point=Point(x=coord[0], y=coord[1]), button="left", pattern=[100]
                 )
 
@@ -123,7 +125,7 @@ class ClaudeAdapter(Adapter):
                 coord = data["coordinate"]
                 assert isinstance(coord, list)
                 assert len(coord) == 2
-                return ClickAction(
+                converted_action = ClickAction(
                     point=Point(x=coord[0], y=coord[1]),
                     button="left",
                     pattern=[100, 100],
@@ -144,25 +146,30 @@ class ClaudeAdapter(Adapter):
                 else:
                     raise ValueError(f"Unsupported scroll direction: {direction}")
 
-                return ScrollAction(
+                converted_action = ScrollAction(
                     point=Point(x=data["coordinate"][0], y=data["coordinate"][1]),
                     scroll=scroll,
                 )
 
             elif action_type == "screenshot":
-                return ScreenshotFetch()
+                converted_action = ScreenshotFetch()
 
             elif action_type == "cursor_position":
-                return PositionFetch()
+                converted_action = PositionFetch()
 
             elif action_type == "wait":
                 assert "duration" in data
-                return WaitAction(time=data["duration"])
+                converted_action = WaitAction(time=data["duration"])
 
             elif action_type == "response":
-                return ResponseAction(text=data.get("text", ""))
+                converted_action = ResponseAction(text=data.get("text", ""))
 
             else:
                 raise ValueError(f"Unsupported action type: {action_type}")
+
+            converted_action.reasoning = data.get("reasoning", "")
+            converted_action.logs = data.get("logs", "")
+
+            return converted_action
         except AssertionError:
             raise ValueError(f"Invalid action: {data}") from None
