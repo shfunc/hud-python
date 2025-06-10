@@ -24,7 +24,7 @@
       "pages": [
         "examples/benchmarking-agents",
         "examples/alignment-evaluation",
-        "examples/page-cloning",
+        "examples/web-mocks",
         "examples/custom-os-env",
         "examples/mcp-agent-tracing",
         "examples/web-app-testing"
