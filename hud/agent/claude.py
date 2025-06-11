@@ -110,9 +110,7 @@ class ClaudeAgent(Agent[AsyncAnthropic, Any]):
         self.messages: list[BetaMessageParam] = []
         self.pending_computer_use_tool_id = None
 
-    async def fetch_response(
-        self, observation: Observation
-    ) -> tuple[list[Any], bool, list[LogType] | None]:
+    async def fetch_response(self, observation: Observation) -> tuple[list[Any], bool]:
         """
         Fetch a response from Claude based on the observation.
 
@@ -237,4 +235,16 @@ class ClaudeAgent(Agent[AsyncAnthropic, Any]):
             # logger.info("No tool use and no final text block found.")
             # Keep done = True, actions remains empty
 
-        return actions, done, [response.model_dump()]
+        reasoning = ""
+        for block in response_content:
+            if block.type == "thinking":
+                reasoning += f"Thinking: {block.thinking}\n"
+            elif block.type == "text":
+                reasoning += block.text
+
+        # add reasoning to the actions
+        for action in actions:
+            action["reasoning"] = reasoning
+            action["logs"] = response.model_dump()
+
+        return actions, done

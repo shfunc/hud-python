@@ -100,6 +100,7 @@ async def main():
         setup=("goto", "google.com"),
         evaluate=("contains_text", "capybara")
     )
+    print(f"Running task with prompt: {task.prompt}")
     
     # Create environment using the gym module
     env = await gym.make(task)
@@ -111,6 +112,7 @@ async def main():
     obs, _ = await env.reset() # Gets first observation
     for i in range(5):
         actions, done = await agent.predict(obs)
+        print(f"Agent action {i}: {actions}")
 
         obs, reward, terminated, info = await env.step(actions)
         if done or terminated: break

@@ -108,7 +108,7 @@ class LangchainAgent(Agent[LangchainModelOrRunnable, Any], Generic[LangchainMode
 
     async def fetch_response(
         self, observation: Observation
-    ) -> tuple[list[dict | SingleCLAction], bool, list[LogType] | None]:
+    ) -> tuple[list[dict | SingleCLAction], bool]:
         """
         Fetches a response from the configured Langchain model, expecting a single
         structured CLA action.
@@ -120,7 +120,6 @@ class LangchainAgent(Agent[LangchainModelOrRunnable, Any], Generic[LangchainMode
             A tuple containing:
             - A list with a single dictionary representing the raw CLA action (before adapter postprocessing).
             - A boolean indicating if the agent chose ResponseAction (task completion).
-            - A list of strings or dictionaries of logs.
         """
         # 1. Format observation into Langchain message(s)
         human_content: List[Union[str, dict]] = []
@@ -139,16 +138,7 @@ class LangchainAgent(Agent[LangchainModelOrRunnable, Any], Generic[LangchainMode
         if not human_content:
             logger.warning("LangchainAgent received an observation with no text or screenshot.")
             # Decide how to handle empty observation - perhaps return no action?
-            return (
-                [],
-                False,
-                [
-                    {
-                        "type": "warning",
-                        "message": "LangchainAgent received an observation with no text or screenshot.",
-                    }
-                ],
-            )
+            return [], False
 
         current_human_message = HumanMessage(content=human_content)
 
@@ -172,11 +162,7 @@ class LangchainAgent(Agent[LangchainModelOrRunnable, Any], Generic[LangchainMode
         except Exception as e:
             logger.error(f"Langchain model invocation failed: {e}", exc_info=True)
             # Decide how to handle LLM errors - maybe retry or return empty action?
-            return (
-                [],
-                False,
-                [{"type": "error", "message": f"Langchain model invocation failed: {e}"}],
-            )
+            return [], False
 
         # 5. Process the structured response
         is_done = False
@@ -207,16 +193,7 @@ class LangchainAgent(Agent[LangchainModelOrRunnable, Any], Generic[LangchainMode
             else:
                 ai_message_content_for_history = repr(ai_response_structured)
             # Return no action as we didn't get the expected structure
-            return (
-                [],
-                False,
-                [
-                    {
-                        "type": "error",
-                        "message": f"Langchain model did not return the expected StepAction structure. {ai_message_content_for_history}",
-                    }
-                ],
-            )
+            return [], False
 
         # 6. Update history
         self.history.append(current_human_message)
@@ -226,17 +203,10 @@ class LangchainAgent(Agent[LangchainModelOrRunnable, Any], Generic[LangchainMode
         # TODO: Consider history truncation/summarization if it grows too long
 
         if actual_action:
+            actual_action = actual_action.model_dump()
             # Return the single action dictionary within a list
-            return [actual_action], is_done, [ai_message_content_for_history]
+            actual_action["logs"] = ai_message_content_for_history
+            return [actual_action], is_done
         else:
             # Should ideally not happen if structure validation worked, but as a fallback
-            return (
-                [],
-                is_done,
-                [
-                    {
-                        "type": "error",
-                        "message": f"Langchain model did not return the expected StepAction structure. {ai_message_content_for_history}",
-                    }
-                ],
-            )
+            return [], is_done

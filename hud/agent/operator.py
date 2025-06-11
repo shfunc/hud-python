@@ -87,9 +87,7 @@ class OperatorAgent(Agent[AsyncOpenAI, dict[str, Any]]):
         self.initial_prompt = None
         self.pending_safety_checks = []
 
-    async def fetch_response(
-        self, observation: Observation
-    ) -> tuple[list[dict[str, Any]], bool, list[LogType] | None]:
+    async def fetch_response(self, observation: Observation) -> tuple[list[dict[str, Any]], bool]:
         """
         Fetch a response from the model based on the observation.
 
@@ -98,7 +96,7 @@ class OperatorAgent(Agent[AsyncOpenAI, dict[str, Any]]):
 
         Returns:
             tuple[list[dict[str, Any]], bool, list[LogType] | None]: A tuple containing the list of raw actions,
-                                             boolean indicating if the agent believes the task is complete, and a list of strings or dictionaries of logs.
+                                             boolean indicating if the agent believes the task is complete.
         """
         if not self.client:
             raise ValueError("Client is required")
@@ -138,23 +136,18 @@ class OperatorAgent(Agent[AsyncOpenAI, dict[str, Any]]):
 
             # Call OpenAI API for the initial prompt (asynchronous call)
             response = await self.client.responses.create(
-                model=self.model, tools=[computer_tool], input=input_param, truncation="auto"
+                model=self.model,
+                tools=[computer_tool],
+                input=input_param,
+                truncation="auto",
+                reasoning={"summary": "auto"},
             )
 
         else:
             # This is a response to a previous action
             if not observation.screenshot:
                 logger.warning("No screenshot provided for response to action")
-                return (
-                    [],
-                    True,
-                    [
-                        {
-                            "type": "warning",
-                            "message": "No screenshot provided for response to action",
-                        }
-                    ],
-                )
+                return [], True
 
             # Create a response to the previous action with the new screenshot
             input_param_followup = cast(
@@ -233,4 +226,18 @@ class OperatorAgent(Agent[AsyncOpenAI, dict[str, Any]]):
                 logger.info("No computer calls and no final text message found.")
             # Keep done = True, actions remains empty
 
-        return actions, done, [response.model_dump()]
+        reasoning = ""
+        for item in response.output:
+            if item.type == "reasoning":
+                reasoning += f"Thinking: {item.summary[0].text}\n"
+            elif item.type == "message":
+                for content in item.content:
+                    if isinstance(content, ResponseOutputText):
+                        reasoning += f"{content.text}\n"
+
+        # add reasoning to the actions
+        for action in actions:
+            action["reasoning"] = reasoning
+            action["logs"] = response.model_dump()  # type: ignore[assignment]
+
+        return actions, done
