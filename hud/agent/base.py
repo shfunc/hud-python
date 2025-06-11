@@ -31,6 +31,7 @@ class Agent(Generic[ClientT, ActionT], ABC):
         self,
         client: ClientT | None = None,
         adapter: Adapter | None = None,
+        name: str | None = None,
     ):
         """
         Initialize the agent.
@@ -41,6 +42,7 @@ class Agent(Generic[ClientT, ActionT], ABC):
         """
         self.client = client
         self.adapter = adapter
+        self.name = name
 
     def preprocess(self, observation: Observation) -> Observation:
         """
