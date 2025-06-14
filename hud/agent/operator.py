@@ -233,7 +233,7 @@ class OperatorAgent(Agent[AsyncOpenAI, dict[str, Any]]):
 
         reasoning = ""
         for item in response.output:
-            if item.type == "reasoning":
+            if item.type == "reasoning" and item.summary:
                 reasoning += f"Thinking: {item.summary[0].text}\n"
             elif item.type == "message":
                 for content in item.content:
