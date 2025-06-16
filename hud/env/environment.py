@@ -42,6 +42,9 @@ class Environment(BaseModel):
     task: Task | None = None
     build_data: dict[str, Any]
 
+    # The task run id
+    task_run_id: str | None = None
+
     # final response
     final_response: str | None = None
 
@@ -80,7 +83,12 @@ class Environment(BaseModel):
         """
         if isinstance(self.client, RemoteClient):
             await self.get_urls()
-            await self._invoke_all(create_remote_config(self, config, REMOTE_SETUP))
+            result = await self._invoke_all(create_remote_config(self, config, REMOTE_SETUP))
+            if result and result[0] and isinstance(result[0], dict) and result[0].get("id"):
+                self.task_run_id = result[0].get("id")
+                logger.info("View the live trace at https://app.hud.so/trace/%s", self.task_run_id)
+            else:
+                logger.warning("No task run id found in the result")
         else:
             if config is not None:
                 await self._invoke_all(config)
@@ -217,7 +225,6 @@ class Environment(BaseModel):
             logger.warning("No live URL found")
             return None
         # Stream the live view
-        # logger.info("Look at the live trace at app.hud.so/trace/%s", self.task.id)
         return stream(urls["live_url"])
 
     async def run(self, agent: Agent, max_steps: int = 27, verbose: bool = True) -> Any:

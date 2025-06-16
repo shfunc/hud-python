@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     )
 
     fancy_logging: bool = Field(
-        default=False,
+        default=True,
         description="Enable fancy logging for the HUD SDK",
         validation_alias="FANCY_LOGGING",
     )
