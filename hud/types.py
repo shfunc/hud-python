@@ -56,9 +56,25 @@ ServerGym: TypeAlias = Literal["qa", "hud-browser", "OSWorld-Ubuntu", "docker"]
 # Gyms can be either custom or server-side
 Gym: TypeAlias = CustomGym | ServerGym
 
+
 # Metadata keys for the environment.
 # partial: Whether the environment evaluator should give partial grades.
 # eval_model: The model to use for evaluation when running a VLM. Wraps langchain.
 # agent_name: The name of the agent that was used for running this task.
 ServerMetadataKeys: TypeAlias = Literal["partial", "eval_model", "agent_name"]
 MetadataKeys: TypeAlias = str | ServerMetadataKeys
+
+
+# Dictionary of sensitive data (only supported for hud-browser environments)
+# key: website name or page identifier
+# value: Dictionary of credentials for the sensitive data
+# Example:
+# {
+#     "google.com": {
+#         "google_username": "my_username",
+#         "google_password": "my_password"
+#     }
+# }
+# The agent only has access to the key of the credential, not the value. (i.e. google_username)
+# The value is only available to the environment. (i.e. my_username)
+SensitiveData: TypeAlias = dict[str, dict[str, str]]
