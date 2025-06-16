@@ -116,7 +116,7 @@ async def make(
                 logger.info("Setting source path %s", gym.image_or_build_context)
                 client.set_source_path(gym.image_or_build_context)
         elif isinstance(gym, str):
-            logger.info("Creating private environment")
+            logger.debug("Creating private environment")
             true_gym_id = await get_gym_id(gym)
             client, build_data = await RemoteClient.create(
                 gym_id=true_gym_id,

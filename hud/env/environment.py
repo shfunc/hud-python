@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from hud.env.client import Client
 from hud.env.remote_client import RemoteClient
 from hud.task import Task
+from hud.utils.agent import format_agent_prompt
 from hud.utils.common import FunctionConfig, FunctionConfigs, Observation
 from hud.utils.config import (
     LOCAL_EVALUATORS,
@@ -41,8 +42,14 @@ class Environment(BaseModel):
     task: Task | None = None
     build_data: dict[str, Any]
 
+    # The task run id
+    task_run_id: str | None = None
+
     # final response
     final_response: str | None = None
+
+    # environment prompt information
+    environment_prompt: str | None = None
 
     async def _invoke_all(self, configs: FunctionConfigs) -> list[Any]:
         # Execute each config and collect results
@@ -76,7 +83,12 @@ class Environment(BaseModel):
         """
         if isinstance(self.client, RemoteClient):
             await self.get_urls()
-            await self._invoke_all(create_remote_config(self, config, REMOTE_SETUP))
+            result = await self._invoke_all(create_remote_config(self, config, REMOTE_SETUP))
+            if result and result[0] and isinstance(result[0], dict) and result[0].get("id"):
+                self.task_run_id = result[0].get("id")
+                logger.info("View the live trace at https://app.hud.so/trace/%s", self.task_run_id)
+            else:
+                logger.warning("No task run id found in the result")
         else:
             if config is not None:
                 await self._invoke_all(config)
@@ -113,23 +125,26 @@ class Environment(BaseModel):
         else:
             return results
 
-    async def reset(
-        self, configs: FunctionConfigs | None = None
-    ) -> tuple[Observation, dict[str, Any]]:
+    async def reset(self) -> tuple[Observation, dict[str, Any]]:
         """
-        Reset the environment.
+        Reset the environment and return the first observation with the agent prompt.
 
         Args:
-            configs: The configuration to use for the reset
+            None
 
         Returns:
-            Observation: The first observation from the environment
+            Observation: The first observation from the environment with the agent prompt
             info: Dictionary of information about the environment
         """
         # await self._setup(configs)
         obs, _, _, info = await self.step()
-        if self.task and self.task.prompt:
-            obs.text = self.task.prompt
+
+        if self.build_data.get("environment_prompt"):
+            self.environment_prompt = self.build_data["environment_prompt"]
+
+        # Format the agent prompt with the environment prompt and the task prompt
+        obs.text = format_agent_prompt(self.environment_prompt, self.task)
+
         return obs, info
 
     async def step(
@@ -356,6 +371,8 @@ def create_remote_config(
     if task.metadata:
         for key, value in task.metadata.items():
             metadata[str(key)] = value
+    if task.sensitive_data:
+        metadata["sensitive_data"] = task.sensitive_data
 
     # Case 2: Task has the specified function attribute
     task_config = getattr(task, function, None)

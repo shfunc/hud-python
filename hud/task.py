@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 from inspect_ai.util._sandbox import SandboxEnvironmentSpec
 from pydantic import BaseModel, Field
 
-from hud.types import CustomGym, Gym, MetadataKeys
+from hud.types import CustomGym, Gym, MetadataKeys, SensitiveData
 from hud.utils.common import FunctionConfig, FunctionConfigs
 
 if TYPE_CHECKING:
@@ -43,21 +43,32 @@ class Task(BaseModel):
         setup: Environment setup configuration (optional)
         evaluate: Configuration for evaluating responses
         metadata: Additional task metadata
+        sensitive_data: Sensitive data such as API keys, passwords, etc.
         choices: Multiple choice answer list (for Inspect compatibility)
         target: Ideal target output (for Inspect compatibility)
         files: Files that go along with the task (for Inspect compatibility)
         gym: Environment specification
     """
 
-    id: str | None = None
-    prompt: str
+    id: str | None = None  # Remote task ID (optional if local-only)
+
+    prompt: str  # Task prompt or instruction
+    gym: Gym | None = None  # Environment specification
+
+    # Setup and evaluate configurations for the environment (environment specific)
     setup: FunctionConfigs | None = None
     evaluate: FunctionConfigs | None = None
-    gym: Gym | None = None
+
+    # Overflow configuration for environments that don't conform to the standard
     config: dict[str, Any] | None = None
 
+    # Sensitive data such as API keys, passwords, etc.
+    sensitive_data: SensitiveData = Field(default_factory=dict)
+
+    # Metadata for the task evaluation, information about the agent (see MetadataKeys)
     metadata: dict[MetadataKeys, Any] = Field(default_factory=dict)
 
+    # Description of the task, for extra information about its purpose and context
     description: str | None = None
 
     @classmethod
@@ -93,6 +104,8 @@ class Task(BaseModel):
             gym=parsed_gym,
             config=data.get("config"),
             description=data.get("description"),
+            sensitive_data=data.get("sensitive_data", {}),
+            metadata=data.get("metadata", {}),
         )
 
     @classmethod
@@ -202,4 +215,6 @@ class Task(BaseModel):
             "setup": parsed_setup,
             "evaluate": parsed_evaluate,
             "gym": parsed_gym,
+            "sensitive_data": self.sensitive_data,
+            "metadata": self.metadata,
         }
