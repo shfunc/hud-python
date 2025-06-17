@@ -2,7 +2,7 @@ import copy
 import logging
 from typing import Any, cast
 
-from anthropic import AsyncAnthropic
+from anthropic import AsyncAnthropic, BadRequestError
 from anthropic.types.beta import (
     BetaMessageParam,
     BetaToolResultBlockParam,
@@ -170,28 +170,40 @@ class ClaudeAgent(Agent[AsyncAnthropic, Any]):
             )
         )
 
-        # Call Claude API using async client
+        # Call Claude API using async client, truncating 50 messages at a time if needed
+        while True:
+            # first, make a copy and add prompt caching to the last message
+            messages_cached = copy.deepcopy(self.messages)
+            # Mark last user message with cache control for prompt caching
+            last_msg = messages_cached[-1]
+            if last_msg.get("role") == "user":
+                last_content = last_msg["content"]
+                if isinstance(last_content, list):
+                    for block in last_content:
+                        if not block["type"] == "thinking" and not block["type"] == "redacted_thinking":
+                            cache_control: BetaCacheControlEphemeralParam = {"type": "ephemeral"}
+                            block["cache_control"] = cache_control
 
-        # first, make a copy and add prompt caching to the last message
-        messages_cached = copy.deepcopy(self.messages)
-        # Mark last user message with cache control for prompt caching
-        last_msg = messages_cached[-1]
-        if last_msg.get("role") == "user":
-            last_content = last_msg["content"]
-            if isinstance(last_content, list):
-                for block in last_content:
-                    if not block["type"] == "thinking" and not block["type"] == "redacted_thinking":
-                        cache_control: BetaCacheControlEphemeralParam = {"type": "ephemeral"}
-                        block["cache_control"] = cache_control
 
-        response = await self.client.beta.messages.create(
-            model=self.model,
-            max_tokens=self.max_tokens,
-            messages=messages_cached,
-            tools=[COMPUTER_TOOL],
-            betas=["computer-use-2025-01-24"],
-            tool_choice={"type": "auto", "disable_parallel_tool_use": True},
-        )
+            try: 
+                response = await self.client.beta.messages.create(
+                    model=self.model,
+                    max_tokens=self.max_tokens,
+                    messages=messages_cached,
+                    tools=[COMPUTER_TOOL],
+                    betas=["computer-use-2025-01-24"],
+                    tool_choice={"type": "auto", "disable_parallel_tool_use": True},
+                )
+            except BadRequestError as e:
+                if e.message.startswith("prompt is too long"):
+                    logger.warning(f"Prompt is too long, removing the first 50 messages except for the first user message: {e.message}")
+                    self.messages = [self.messages[0]] + self.messages[50:]
+                    continue
+                else:
+                    raise e
+            
+            # break out of the while loop if we get a response
+            break
 
         # Add Claude's response to the conversation history
         response_content = response.content
