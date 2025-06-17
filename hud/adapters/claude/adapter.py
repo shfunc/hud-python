@@ -30,6 +30,7 @@ class ClaudeAdapter(Adapter):
         "right shift": "shift",
         "left shift": "shift",
         "down shift": "shift",
+        "windows": "win",
     }
 
     def __init__(self, width: int = 1024, height: int = 768) -> None:

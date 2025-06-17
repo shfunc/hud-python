@@ -38,7 +38,7 @@ class OperatorAgent(Agent[AsyncOpenAI, dict[str, Any]]):
         self,
         client: AsyncOpenAI | None = None,
         model: str = "computer-use-preview",
-        environment: Literal["windows", "mac", "linux", "browser"] = "linux",
+        environment: Literal["windows", "mac", "linux", "browser"] = "browser",
         adapter: Adapter | None = None,
         max_iterations: int = 8,
         name: str | None = None,
@@ -92,6 +92,8 @@ class OperatorAgent(Agent[AsyncOpenAI, dict[str, Any]]):
         self.initial_prompt = None
         self.pending_safety_checks = []
 
+        self.task_run_id = None
+
     async def fetch_response(self, observation: Observation) -> tuple[list[dict[str, Any]], bool]:
         """
         Fetch a response from the model based on the observation.
@@ -118,7 +120,7 @@ class OperatorAgent(Agent[AsyncOpenAI, dict[str, Any]]):
         )
 
         # Process the observation based on whether it's the first one or a response to an action
-        if self.pending_call_id is None and self.last_response_id is None:
+        if self.pending_call_id is None: #and self.last_response_id is None:
             # This is the first observation, store and send the prompt
             self.initial_prompt = observation.text
 
@@ -139,7 +141,6 @@ class OperatorAgent(Agent[AsyncOpenAI, dict[str, Any]]):
             # Structure the input correctly for the API using cast
             input_param = cast(ResponseInputParam, [{"role": "user", "content": input_content}])
 
-            # Call OpenAI API for the initial prompt (asynchronous call)
             response = await self.client.responses.create(
                 model=self.model,
                 tools=[computer_tool],
@@ -149,7 +150,6 @@ class OperatorAgent(Agent[AsyncOpenAI, dict[str, Any]]):
             )
 
         else:
-            # This is a response to a previous action
             if not observation.screenshot:
                 logger.warning("No screenshot provided for response to action")
                 return [], True
@@ -174,7 +174,6 @@ class OperatorAgent(Agent[AsyncOpenAI, dict[str, Any]]):
             )
             self.pending_safety_checks = []
 
-            # Call OpenAI API for follow-up (asynchronous call)
             response = await self.client.responses.create(
                 model=self.model,
                 previous_response_id=self.last_response_id,
@@ -190,6 +189,8 @@ class OperatorAgent(Agent[AsyncOpenAI, dict[str, Any]]):
         actions = []
         done = True  # Assume done unless a computer call is found
         final_text_response = ""
+
+        self.pending_call_id = None
 
         # Check for computer calls first
         computer_calls = [

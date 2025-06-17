@@ -332,12 +332,17 @@ async def _execute_task(
         else:
             env = await gym.make(task, job=job)
 
+        if not env:
+            raise ValueError(f"Environment creation failed for task {task_id}")
+
         obs_tuple = await env.reset()
         if obs_tuple is None:
             raise ValueError(f"env.reset() returned None for task {task_id}")
         obs, _ = obs_tuple
 
         step_error = None
+
+        resampled_actions = 0
 
         for step in range(max_steps_per_task):
             action, done = (None, False)
@@ -351,14 +356,19 @@ async def _execute_task(
                         action, done = await agent_instance.predict(obs)
                 except Exception as e:
                     # if agent prediction fails, pass back the error to the agent
-                    obs = Observation(text=str(e))
+                    logger.exception("[TR: %s] Agent prediction failed: %s", task_id, e)
                     continue
 
                 if tracker:
                     tracker.increment_step(task_id)
 
+                finish = False
                 if done and response_agent and action and len(action) > 0:
                     obs, finish = await _maybe_resample_action(obs, action[-1], response_agent)
+                    resampled_actions += 1
+                    if resampled_actions > 3:
+                        logger.warning("[TR: %s] Resampled action %d times. Stopping.", task_id, resampled_actions)
+                        break
                     if not finish:
                         continue
 
@@ -367,14 +377,12 @@ async def _execute_task(
                     terminated = True
                 else:
                     obs, _, terminated, _ = step_result
-                if terminated or done:
+                if terminated or done or finish:
                     break
 
             except Exception as agent_step_err:
                 logger.exception(
-                    "[Job: %s/%s, Task: %s] Step %d Error: %s",
-                    job.name,
-                    job.id,
+                    "[TR: %s] Step %d Error: %s",
                     task_id,
                     step + 1,
                     agent_step_err,
@@ -392,7 +400,7 @@ async def _execute_task(
                 )
                 continue
         else:
-            logger.warning("[Job: %s/%s, Task: %s] Max steps reached.", job.name, job.id, task_id)
+            logger.warning("[TR: %s] Max steps reached.", task_id)
 
         # --- Evaluate Task ---
         evaluation_result = None
@@ -407,9 +415,7 @@ async def _execute_task(
                 # logger.info("Evaluation result: %s", evaluation_result)
             except Exception as eval_err:
                 logger.exception(
-                    "[Job: %s/%s, Task: %s] Evaluation Error: %s",
-                    job.name,
-                    job.id,
+                    "[TR: %s] Evaluation Error: %s",
                     task_id,
                     eval_err,
                 )
@@ -426,7 +432,7 @@ async def _execute_task(
                 )
 
     except Exception as e:
-        logger.exception("[Job: %s/%s, Task: %s] Setup/Run Error: %s", job.name, job.id, task_id, e)
+        logger.exception("[TR: %s] Setup/Run Error: %s", task_id, e)
         status = "error"
         error_msg = str(e)
         # Store setup/initialization error in job
@@ -447,7 +453,7 @@ async def _execute_task(
                 await env.close()
             except Exception as close_err:
                 logger.exception(
-                    "[Job: %s/%s, Task: %s] Close Error: %s", job.name, job.id, task_id, close_err
+                    "[TR: %s] Close Error: %s", task_id, close_err
                 )
                 # Store environment close error in job
                 job.errors.append(
@@ -461,9 +467,7 @@ async def _execute_task(
 
     log_suffix = f" Error: {error_msg}" if status == "error" else f" Eval: {evaluation_result}"
     logger.info(
-        "[Job: %s/%s, Task: %s] Finished local execution. Status: %s.%s",
-        job.name,
-        job.id,
+        "[TR: %s] Finished local execution. Status: %s.%s",
         task_id,
         status,
         log_suffix,

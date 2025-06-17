@@ -26,6 +26,7 @@ class OperatorAdapter(Adapter):
         "arrowdown": "down",
         "arrowleft": "left",
         "arrowright": "right",
+        "cmd": "ctrl",
     }
 
     BUTTON_MAP: ClassVar[dict[str, CLAButton]] = {"wheel": "middle"}
