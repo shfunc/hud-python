@@ -31,6 +31,8 @@ class ClaudeAdapter(Adapter):
         "left shift": "shift",
         "down shift": "shift",
         "windows": "win",
+        "page_down": "pagedown",
+        "page_up": "pageup",
     }
 
     def __init__(self, width: int = 1024, height: int = 768) -> None:
