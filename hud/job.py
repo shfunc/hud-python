@@ -323,9 +323,9 @@ async def _execute_task(
 
         agent_name = agent_instance.name
         logger.info("Using agent: %s", agent_name)
-        if task.metadata is None:
+        if task.metadata is None or not isinstance(task.metadata, dict):
             task.metadata = {}
-            task.metadata["agent_name"] = agent_name
+        task.metadata["agent_name"] = agent_name
 
         # Environment creation with semaphore
         if env_creation_semaphore:
