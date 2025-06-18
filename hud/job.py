@@ -323,7 +323,9 @@ async def _execute_task(
 
         agent_name = agent_instance.name
         logger.info("Using agent: %s", agent_name)
-        task.metadata["agent_name"] = agent_name
+        if task.metadata is None:
+            task.metadata = {}
+            task.metadata["agent_name"] = agent_name
 
         # Environment creation with semaphore
         if env_creation_semaphore:
@@ -357,6 +359,10 @@ async def _execute_task(
                 except Exception as e:
                     # if agent prediction fails, pass back the error to the agent
                     logger.exception("[TR: %s] Agent prediction failed: %s", task_id, e)
+                    resampled_actions += 1
+                    if resampled_actions > 5:
+                        logger.warning("[TR: %s] Resampled action %d times. Stopping.", task_id, resampled_actions)
+                        break
                     continue
 
                 if tracker:
@@ -366,7 +372,7 @@ async def _execute_task(
                 if done and response_agent and action and len(action) > 0:
                     obs, finish = await _maybe_resample_action(obs, action[-1], response_agent)
                     resampled_actions += 1
-                    if resampled_actions > 3:
+                    if resampled_actions > 5:
                         logger.warning("[TR: %s] Resampled action %d times. Stopping.", task_id, resampled_actions)
                         break
                     if not finish:
@@ -723,3 +729,43 @@ async def run_job(
         num_tasks,
     )
     return created_job
+
+
+
+
+
+
+"""
+c7f85f7d-3730-4c9a-85a3-a1dc436c3bd2
+
+
+de12c3cc-9d9c-4e90-82cc-1d71d30ede54
+59104743-0a63-4569-a8b5-1eda1a1b55ac
+ff759429-056c-4cde-8851-11e26729ff03
+
+
+7b98ea22-e243-4eeb-a6db-79f4a76da2b3
+
+7aad3f7b-d74f-470d-826d-d817f95fdd67
+
+e356ede6-074a-49ef-9fcd-69e5bcfbdec9
+
+26cd1192-3991-4d1b-b599-b2bed1bcb606
+
+31ece277-970f-4763-b0c8-bf19a56f56c7
+
+
+f9b722a0-5f33-466b-bce0-8ece101f2bc6
+33d1af33-8952-4945-b901-229bcfd88354
+
+6c3d6557-e745-44ab-bc10-300180a81c79
+6c3d6557-e745-44ab-bc10-300180a81c79
+502e02b5-9939-4e57-91af-4fcbcb90a979
+
+7aad3f7b-d74f-470d-826d-d817f95fdd67
+
+
+31ece277-970f-4763-b0c8-bf19a56f56c7
+
+
+e356ede6-074a-49ef-9fcd-69e5bcfbdec9"""
