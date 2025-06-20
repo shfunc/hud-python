@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import logging
 from base64 import b64decode
-from typing import TYPE_CHECKING, Any
+from typing import Any
+
+from pydantic import BaseModel
 
 from hud.env.client import Client
 from hud.exceptions import HudResponseError
@@ -10,11 +12,16 @@ from hud.server import make_request
 from hud.settings import settings
 from hud.types import EnvironmentStatus
 from hud.utils import ExecuteResult
-
-if TYPE_CHECKING:
-    from hud.utils.config import FunctionConfig
+from hud.utils.config import FunctionConfig
 
 logger = logging.getLogger("hud.env.remote_env_client")
+
+
+class SetupRequest(BaseModel):
+    task_id: str | None = None
+    setup: FunctionConfig | None = None
+    config: dict[str, Any] | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class RemoteClient(Client):
@@ -182,6 +189,17 @@ class RemoteClient(Client):
         )
 
         return data["result"], b64decode(data["stdout"]), b64decode(data["stderr"])
+
+    async def setup(self, setup_request: SetupRequest) -> dict[str, Any]:
+        """
+        Setup the environment.
+        """
+        return await make_request(
+            method="POST",
+            url=f"{settings.base_url}/v1/environments/{self.env_id}/reset",
+            json=setup_request.model_dump(),
+            api_key=settings.api_key,
+        )
 
     async def close(self) -> None:
         """

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel
 
 from hud.env.client import Client
-from hud.env.remote_client import RemoteClient
+from hud.env.remote_client import RemoteClient, SetupRequest
 from hud.task import Task
 from hud.utils.agent import format_agent_prompt
 from hud.utils.common import FunctionConfig, FunctionConfigs, Observation
@@ -16,7 +16,6 @@ from hud.utils.config import (
     LOCAL_EVALUATORS,
     REMOTE_EVALUATE,
     REMOTE_FUNCTION_PREFIX,
-    REMOTE_SETUP,
     expand_config,
 )
 from hud.utils.telemetry import stream
@@ -83,9 +82,24 @@ class Environment(BaseModel):
         """
         if isinstance(self.client, RemoteClient):
             await self.get_urls()
-            result = await self._invoke_all(create_remote_config(self, config, REMOTE_SETUP))
-            if result and result[0] and isinstance(result[0], dict) and result[0].get("id"):
-                self.task_run_id = result[0].get("id")
+            
+            setup_request = SetupRequest()
+
+            if self.task:
+                setup_request.task_id = self.task.id
+                setup_request.config = self.task.config
+                setup_request.metadata = _format_task_metadata(self.task)
+                if self.task.setup:
+                    setup_request.setup = expand_config(self.task.setup)[0]
+            elif config:
+                setup_request.setup = expand_config(config)[0]
+            else:
+                raise ValueError("No task or config provided for remote environment")
+
+            result = await self.client.setup(setup_request)
+
+            if result and result.get("id"):
+                self.task_run_id = result.get("id")
                 logger.info("View the live trace at https://app.hud.so/trace/%s", self.task_run_id)
             else:
                 logger.warning("No task run id found in the result")
@@ -220,12 +234,12 @@ class Environment(BaseModel):
         await self.client.close()
 
     async def stream(self) -> str | None:
-        urls = await self.get_urls()
-        if urls["live_url"] is None:
+        if not self.live_url:
+            await self.get_urls()
+        if self.live_url is None:
             logger.warning("No live URL found")
             return None
-        # Stream the live view
-        return stream(urls["live_url"])
+        return stream(self.live_url)
 
     async def run(self, agent: Agent, max_steps: int = 27, verbose: bool = True) -> Any:
         """Run an agent in the environment.
@@ -253,6 +267,16 @@ class Environment(BaseModel):
         if verbose:
             logger.info("Evaluation result: %s", result)
         return result
+
+
+def _format_task_metadata(task: Task) -> dict[str, Any]:
+    metadata = {}
+    if task.metadata:
+        for key, value in task.metadata.items():
+            metadata[str(key)] = value
+    if task.sensitive_data:
+        metadata["sensitive_data"] = task.sensitive_data
+    return metadata
 
 
 def create_remote_config(
@@ -367,12 +391,7 @@ def create_remote_config(
     if task is None:
         raise ValueError("Either task or config must be provided")
 
-    metadata["task"] = task.model_dump()
-    if task.metadata:
-        for key, value in task.metadata.items():
-            metadata[str(key)] = value
-    if task.sensitive_data:
-        metadata["sensitive_data"] = task.sensitive_data
+    metadata = _format_task_metadata(task)
 
     # Case 2: Task has the specified function attribute
     task_config = getattr(task, function, None)
