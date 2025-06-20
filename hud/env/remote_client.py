@@ -16,11 +16,13 @@ from hud.utils.config import FunctionConfig
 
 logger = logging.getLogger("hud.env.remote_env_client")
 
+
 class SetupRequest(BaseModel):
     task_id: str | None = None
     setup: FunctionConfig | None = None
     config: dict[str, Any] | None = None
     metadata: dict[str, Any] | None = None
+
 
 class RemoteClient(Client):
     """
@@ -187,7 +189,7 @@ class RemoteClient(Client):
         )
 
         return data["result"], b64decode(data["stdout"]), b64decode(data["stderr"])
-    
+
     async def setup(self, setup_request: SetupRequest) -> dict[str, Any]:
         """
         Setup the environment.

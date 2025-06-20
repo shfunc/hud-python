@@ -16,7 +16,6 @@ from hud.utils.config import (
     LOCAL_EVALUATORS,
     REMOTE_EVALUATE,
     REMOTE_FUNCTION_PREFIX,
-    REMOTE_SETUP,
     expand_config,
 )
 from hud.utils.telemetry import stream
@@ -83,12 +82,9 @@ class Environment(BaseModel):
         """
         if isinstance(self.client, RemoteClient):
             await self.get_urls()
-            setup_request = SetupRequest(
-                task_id=None,
-                setup=None,
-                config=None,
-                metadata=None,
-            )
+            
+            setup_request = SetupRequest()
+
             if self.task:
                 setup_request.task_id = self.task.id
                 setup_request.config = self.task.config
@@ -101,7 +97,7 @@ class Environment(BaseModel):
                 raise ValueError("No task or config provided for remote environment")
 
             result = await self.client.setup(setup_request)
-            
+
             if result and result.get("id"):
                 self.task_run_id = result.get("id")
                 logger.info("View the live trace at https://app.hud.so/trace/%s", self.task_run_id)
@@ -238,12 +234,12 @@ class Environment(BaseModel):
         await self.client.close()
 
     async def stream(self) -> str | None:
-        urls = await self.get_urls()
-        if urls["live_url"] is None:
+        if not self.live_url:
+            await self.get_urls()
+        if self.live_url is None:
             logger.warning("No live URL found")
             return None
-        # Stream the live view
-        return stream(urls["live_url"])
+        return stream(self.live_url)
 
     async def run(self, agent: Agent, max_steps: int = 27, verbose: bool = True) -> Any:
         """Run an agent in the environment.
@@ -281,6 +277,7 @@ def _format_task_metadata(task: Task) -> dict[str, Any]:
     if task.sensitive_data:
         metadata["sensitive_data"] = task.sensitive_data
     return metadata
+
 
 def create_remote_config(
     env: Environment | None = None,
