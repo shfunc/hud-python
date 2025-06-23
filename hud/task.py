@@ -40,6 +40,7 @@ class Task(BaseModel):
     Attributes:
         id: The remote task ID (optional if local-only)
         prompt: The task prompt or instruction
+        system_prompt: The system prompt for the evalset (optional)
         setup: Environment setup configuration (optional)
         evaluate: Configuration for evaluating responses
         metadata: Additional task metadata
@@ -53,6 +54,8 @@ class Task(BaseModel):
     id: str | None = None  # Remote task ID (optional if local-only)
 
     prompt: str  # Task prompt or instruction
+    system_prompt: str | None = None  # System prompt for the evalset (optional)
+
     gym: Gym | None = None  # Environment specification
 
     # Setup and evaluate configurations for the environment (environment specific)
@@ -99,6 +102,7 @@ class Task(BaseModel):
         return cls(
             id=data.get("id"),
             prompt=data.get("prompt", ""),
+            system_prompt=data.get("system_prompt"),
             setup=parsed_setup,
             evaluate=parsed_evaluate,
             gym=parsed_gym,

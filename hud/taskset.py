@@ -170,6 +170,7 @@ async def load_taskset(
     api_key: str | None = None,
     metadata: dict[str, Any] | None = None,
     load_custom_as_local: bool = False,
+    system_prompt: str | None = None,
 ) -> TaskSet:
     """
     Loads a TaskSet by its ID.
@@ -178,6 +179,8 @@ async def load_taskset(
         taskset_id: The ID of the taskset to load
         api_key: Optional API key to use for the request
         metadata: Optional metadata to apply to the taskset
+        load_custom_as_local: Whether to load custom gyms as local
+        system_prompt: Optional system prompt to override the default
     Returns:
         TaskSet: The loaded taskset
     """
@@ -195,6 +198,8 @@ async def load_taskset(
 
     tasks = data["evalset"]
     for task in tasks:
+        if system_prompt:
+            task["system_prompt"] = system_prompt
         if task["gym"] == "docker":
             if "image_uri" not in task:
                 raise ValueError(

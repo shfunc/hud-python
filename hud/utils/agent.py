@@ -16,7 +16,10 @@ def format_agent_prompt(environment_prompt: str | None, task: Task | None) -> st
     """
     prompt = AGENT_PROMPT
 
-    if environment_prompt:
+    # User-provided system prompt takes precedence over environment prompt
+    if task and task.system_prompt:
+        prompt += f"\n\n{task.system_prompt}"
+    elif environment_prompt:
         prompt += f"\n\n{environment_prompt}"
 
     if task:
