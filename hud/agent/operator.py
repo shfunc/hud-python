@@ -120,7 +120,7 @@ class OperatorAgent(Agent[AsyncOpenAI, dict[str, Any]]):
         )
 
         # Process the observation based on whether it's the first one or a response to an action
-        if self.pending_call_id is None: #and self.last_response_id is None:
+        if self.pending_call_id is None:  # and self.last_response_id is None:
             # This is the first observation, store and send the prompt
             self.initial_prompt = observation.text
 

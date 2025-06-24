@@ -180,12 +180,14 @@ class ClaudeAgent(Agent[AsyncAnthropic, Any]):
                 last_content = last_msg["content"]
                 if isinstance(last_content, list):
                     for block in last_content:
-                        if not block["type"] == "thinking" and not block["type"] == "redacted_thinking":
+                        if (
+                            not block["type"] == "thinking"
+                            and not block["type"] == "redacted_thinking"
+                        ):
                             cache_control: BetaCacheControlEphemeralParam = {"type": "ephemeral"}
                             block["cache_control"] = cache_control
 
-
-            try: 
+            try:
                 response = await self.client.beta.messages.create(
                     model=self.model,
                     max_tokens=self.max_tokens,
@@ -196,12 +198,14 @@ class ClaudeAgent(Agent[AsyncAnthropic, Any]):
                 )
             except BadRequestError as e:
                 if e.message.startswith("prompt is too long"):
-                    logger.warning(f"Prompt is too long, removing the first 50 messages except for the first user message: {e.message}")
+                    logger.warning(
+                        f"Prompt is too long, removing the first 50 messages except for the first user message: {e.message}"
+                    )
                     self.messages = [self.messages[0]] + self.messages[50:]
                     continue
                 else:
                     raise e
-            
+
             # break out of the while loop if we get a response
             break
 

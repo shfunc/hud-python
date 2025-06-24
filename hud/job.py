@@ -18,12 +18,12 @@ from hud.settings import settings
 from hud.task import Task
 from hud.taskset import TaskSet
 from hud.trajectory import Trajectory
-from hud.utils.common import Observation
 from hud.utils.progress import StepProgressTracker
 
 if TYPE_CHECKING:
     from hud.adapters.common import Adapter
     from hud.agent.base import Agent
+    from hud.utils.common import Observation
 
 logger = logging.getLogger("hud.job")
 
@@ -361,7 +361,11 @@ async def _execute_task(
                     logger.exception("[TR: %s] Agent prediction failed: %s", task_id, e)
                     resampled_actions += 1
                     if resampled_actions > 5:
-                        logger.warning("[TR: %s] Resampled action %d times. Stopping.", task_id, resampled_actions)
+                        logger.warning(
+                            "[TR: %s] Resampled action %d times. Stopping.",
+                            task_id,
+                            resampled_actions,
+                        )
                         break
                     continue
 
@@ -373,7 +377,11 @@ async def _execute_task(
                     obs, finish = await _maybe_resample_action(obs, action[-1], response_agent)
                     resampled_actions += 1
                     if resampled_actions > 5:
-                        logger.warning("[TR: %s] Resampled action %d times. Stopping.", task_id, resampled_actions)
+                        logger.warning(
+                            "[TR: %s] Resampled action %d times. Stopping.",
+                            task_id,
+                            resampled_actions,
+                        )
                         break
                     if not finish:
                         continue
@@ -458,9 +466,7 @@ async def _execute_task(
             try:
                 await env.close()
             except Exception as close_err:
-                logger.exception(
-                    "[TR: %s] Close Error: %s", task_id, close_err
-                )
+                logger.exception("[TR: %s] Close Error: %s", task_id, close_err)
                 # Store environment close error in job
                 job.errors.append(
                     {
@@ -729,10 +735,6 @@ async def run_job(
         num_tasks,
     )
     return created_job
-
-
-
-
 
 
 """

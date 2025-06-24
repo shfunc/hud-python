@@ -82,7 +82,7 @@ class Environment(BaseModel):
         """
         if isinstance(self.client, RemoteClient):
             await self.get_urls()
-            
+
             setup_request = SetupRequest()
 
             if self.task:
