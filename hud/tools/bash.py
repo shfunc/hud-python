@@ -1,6 +1,5 @@
 import asyncio  # noqa -- swapping to trio would be beneficial, but not blocking atm
 import os
-import sys
 
 from .base import CLIResult, ToolError, ToolResult
 
@@ -11,7 +10,7 @@ class _BashSession:
     _started: bool
     _process: asyncio.subprocess.Process
 
-    command: str = "/bin/bash" if sys.platform != "win32" else "cmd.exe"
+    command: str = "/bin/bash"
     _output_delay: float = 0.2  # seconds
     _timeout: float = 120.0  # seconds
     _sentinel: str = "<<exit>>"
@@ -25,26 +24,16 @@ class _BashSession:
             await asyncio.sleep(0)
             return
 
-        # Platform-specific subprocess configuration
-        kwargs = {
-            "shell": True,
-            "bufsize": 0,
-            "stdin": asyncio.subprocess.PIPE,
-            "stdout": asyncio.subprocess.PIPE,
-            "stderr": asyncio.subprocess.PIPE,
-        }
-        
-        # Unix-specific options
-        if sys.platform != "win32":
-            kwargs.update({
-                "preexec_fn": os.setsid,
-                "user": 1000,
-                "group": 1000,
-            })
-
         self._process = await asyncio.create_subprocess_shell(
             self.command,
-            **kwargs
+            preexec_fn=os.setsid,
+            shell=True,
+            bufsize=0,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            user=1000,
+            group=1000,
         )
 
         self._started = True
@@ -83,7 +72,7 @@ class _BashSession:
 
         # read output from the process, until the sentinel is found
         try:
-            async def read_until_sentinel():
+            async with asyncio.timeout(self._timeout):
                 while True:
                     await asyncio.sleep(self._output_delay)
                     # if we read directly from stdout/stderr, it will wait forever for
@@ -92,10 +81,8 @@ class _BashSession:
                     if self._sentinel in output:
                         # strip the sentinel and break
                         output = output[: output.index(self._sentinel)]
-                        return output
-            
-            output = await asyncio.wait_for(read_until_sentinel(), timeout=self._timeout)
-        except asyncio.TimeoutError:
+                        break
+        except TimeoutError:
             self._timed_out = True
             raise ToolError(
                 f"timed out: bash has not returned in {self._timeout} seconds and must be restarted",
