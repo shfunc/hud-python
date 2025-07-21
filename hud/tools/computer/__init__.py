@@ -1,11 +1,13 @@
 """Computer control tools for different agent APIs."""
 
-from .hud import HudComputerTool
+from __future__ import annotations
+
 from .anthropic import AnthropicComputerTool
+from .hud import HudComputerTool
 from .openai import OpenAIComputerTool
 
 __all__ = [
+    "AnthropicComputerTool",
     "HudComputerTool",
-    "AnthropicComputerTool", 
     "OpenAIComputerTool",
-] 
+]

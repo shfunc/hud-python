@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 from collections import defaultdict
 from pathlib import Path
-from typing import Literal, get_args
+from typing import Any, Literal, get_args
 
 from .base import CLIResult, ToolError, ToolResult
 from .utils import maybe_truncate, run
@@ -23,7 +25,7 @@ class EditTool:
 
     _file_history: dict[Path, list[str]]
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._file_history = defaultdict(list)
 
     async def __call__(
@@ -36,8 +38,8 @@ class EditTool:
         old_str: str | None = None,
         new_str: str | None = None,
         insert_line: int | None = None,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> CLIResult:
         _path = Path(path)
         self.validate_path(command, _path)
         if command == "view":
@@ -61,10 +63,11 @@ class EditTool:
         elif command == "undo_edit":
             return await self.undo_edit(_path)
         raise ToolError(
-            f"Unrecognized command {command}. The allowed commands for the {self.name} tool are: {', '.join(get_args(Command))}"
+            f"Unrecognized command {command}. The allowed commands for the {self.name} tool are: "
+            f"{', '.join(get_args(Command))}"
         )
 
-    def validate_path(self, command: str, path: Path):
+    def validate_path(self, command: str, path: Path) -> None:
         """
         Check that the path/command combination is valid.
         """
@@ -72,29 +75,36 @@ class EditTool:
         if not path.is_absolute():
             suggested_path = Path("") / path
             raise ToolError(
-                f"The path {path} is not an absolute path, it should start with `/`. Maybe you meant {suggested_path}?"
+                f"The path {path} is not an absolute path, it should start with `/`. "
+                f"Maybe you meant {suggested_path}?"
             )
         # Check if path exists
         if not path.exists() and command != "create":
             raise ToolError(f"The path {path} does not exist. Please provide a valid path.")
         if path.exists() and command == "create":
-            raise ToolError(f"File already exists at: {path}. Cannot overwrite files using command `create`.")
+            raise ToolError(
+                f"File already exists at: {path}. Cannot overwrite files using command `create`."
+            )
         # Check if the path points to a directory
-        if path.is_dir():
-            if command != "view":
-                raise ToolError(
-                    f"The path {path} is a directory and only the `view` command can be used on directories"
-                )
+        if path.is_dir() and command != "view":
+            raise ToolError(
+                f"The path {path} is a dir and only the `view` command can be used on dirs."
+            )
 
-    async def view(self, path: Path, view_range: list[int] | None = None):
+    async def view(self, path: Path, view_range: list[int] | None = None) -> CLIResult:
         """Implement the view command"""
         if path.is_dir():
             if view_range:
-                raise ToolError("The `view_range` parameter is not allowed when `path` points to a directory.")
+                raise ToolError(
+                    "The `view_range` parameter is not allowed when `path` points to a directory."
+                )
 
             _, stdout, stderr = await run(rf"find {path} -maxdepth 2 -not -path '*/\.*'")
             if not stderr:
-                stdout = f"Here's the files and directories up to 2 levels deep in {path}, excluding hidden items:\n{stdout}\n"
+                stdout = (
+                    f"Here's the files and directories up to 2 levels deep in {path}, "
+                    f"excluding hidden items:\n{stdout}\n"
+                )
             return CLIResult(output=stdout, error=stderr)
 
         file_content = await self.read_file(path)
@@ -107,15 +117,18 @@ class EditTool:
             init_line, final_line = view_range
             if init_line < 1 or init_line > n_lines_file:
                 raise ToolError(
-                    f"Invalid `view_range`: {view_range}. Its first element `{init_line}` should be within the range of lines of the file: {[1, n_lines_file]}"
+                    f"Invalid `view_range`: {view_range}. Its first element `{init_line}` "
+                    f"should be within the range of lines of the file: {[1, n_lines_file]}"
                 )
             if final_line > n_lines_file:
                 raise ToolError(
-                    f"Invalid `view_range`: {view_range}. Its second element `{final_line}` should be smaller than the number of lines in the file: `{n_lines_file}`"
+                    f"Invalid `view_range`: {view_range}. Its second element `{final_line}` "
+                    f"should be smaller than the number of lines in the file: `{n_lines_file}`"
                 )
             if final_line != -1 and final_line < init_line:
                 raise ToolError(
-                    f"Invalid `view_range`: {view_range}. Its second element `{final_line}` should be larger or equal than its first `{init_line}`"
+                    f"Invalid `view_range`: {view_range}. Its second element `{final_line}` "
+                    f"should be larger or equal than its first `{init_line}`"
                 )
 
             if final_line == -1:
@@ -125,8 +138,10 @@ class EditTool:
 
         return CLIResult(output=self._make_output(file_content, str(path), init_line=init_line))
 
-    async def str_replace(self, path: Path, old_str: str, new_str: str | None):
-        """Implement the str_replace command, which replaces old_str with new_str in the file content"""
+    async def str_replace(self, path: Path, old_str: str, new_str: str | None) -> CLIResult:
+        """
+        Implement the str_replace command, which replaces old_str with new_str in the file content.
+        """
         # Read the file content
         file_content = (await self.read_file(path)).expandtabs()
         old_str = old_str.expandtabs()
@@ -135,12 +150,16 @@ class EditTool:
         # Check if old_str is unique in the file
         occurrences = file_content.count(old_str)
         if occurrences == 0:
-            raise ToolError(f"No replacement was performed, old_str `{old_str}` did not appear verbatim in {path}.")
+            raise ToolError(
+                f"No replacement was performed, old_str `{old_str}` did not appear verbatim in "
+                f"{path}."
+            )
         elif occurrences > 1:
             file_content_lines = file_content.split("\n")
             lines = [idx + 1 for idx, line in enumerate(file_content_lines) if old_str in line]
             raise ToolError(
-                f"No replacement was performed. Multiple occurrences of old_str `{old_str}` in lines {lines}. Please ensure it is unique"
+                f"No replacement was performed. Multiple occurrences of old_str `{old_str}` "
+                f"in lines {lines}. Please ensure it is unique"
             )
 
         # Replace old_str with new_str
@@ -161,12 +180,17 @@ class EditTool:
         # Prepare the success message
         success_msg = f"The file {path} has been edited. "
         success_msg += self._make_output(snippet, f"a snippet of {path}", start_line + 1)
-        success_msg += "Review the changes and make sure they are as expected. Edit the file again if necessary."
+        success_msg += (
+            "Review the changes and make sure they are as expected. "
+            "Edit the file again if necessary."
+        )
 
         return CLIResult(output=success_msg)
 
-    async def insert(self, path: Path, insert_line: int, new_str: str):
-        """Implement the insert command, which inserts new_str at the specified line in the file content."""
+    async def insert(self, path: Path, insert_line: int, new_str: str) -> CLIResult:
+        """
+        Implement the insert command, which inserts new_str at the specified line in the file.
+        """
         file_text = (await self.read_file(path)).expandtabs()
         new_str = new_str.expandtabs()
         file_text_lines = file_text.split("\n")
@@ -174,11 +198,14 @@ class EditTool:
 
         if insert_line < 0 or insert_line > n_lines_file:
             raise ToolError(
-                f"Invalid `insert_line` parameter: {insert_line}. It should be within the range of lines of the file: {[0, n_lines_file]}"
+                f"Invalid `insert_line` parameter: {insert_line}. It should be within the range "
+                f"of lines of the file: {[0, n_lines_file]}"
             )
 
         new_str_lines = new_str.split("\n")
-        new_file_text_lines = file_text_lines[:insert_line] + new_str_lines + file_text_lines[insert_line:]
+        new_file_text_lines = (
+            file_text_lines[:insert_line] + new_str_lines + file_text_lines[insert_line:]
+        )
         snippet_lines = (
             file_text_lines[max(0, insert_line - SNIPPET_LINES) : insert_line]
             + new_str_lines
@@ -197,10 +224,13 @@ class EditTool:
             "a snippet of the edited file",
             max(1, insert_line - SNIPPET_LINES + 1),
         )
-        success_msg += "Review the changes and make sure they are as expected (correct indentation, no duplicate lines, etc). Edit the file again if necessary."
+        success_msg += (
+            "Review the changes and make sure they are as expected (correct indentation, "
+            "no duplicate lines, etc). Edit the file again if necessary."
+        )
         return CLIResult(output=success_msg)
 
-    async def undo_edit(self, path: Path):
+    async def undo_edit(self, path: Path) -> CLIResult:
         """Implement the undo_edit command."""
         if not self._file_history[path]:
             raise ToolError(f"No edit history found for {path}.")
@@ -208,9 +238,12 @@ class EditTool:
         old_text = self._file_history[path].pop()
         await self.write_file(path, old_text)
 
-        return CLIResult(output=f"Last edit to {path} undone successfully. {self._make_output(old_text, str(path))}")
+        return CLIResult(
+            output=f"Last edit to {path} undone successfully. "
+            f"{self._make_output(old_text, str(path))}"
+        )
 
-    async def read_file(self, path: Path):
+    async def read_file(self, path: Path) -> str:
         """Read the content of a file from a given path; raise a ToolError if an error occurs."""
         try:
             code, out, err = await run(f"cat {path}")
@@ -220,7 +253,7 @@ class EditTool:
         except Exception as e:
             raise ToolError(f"Ran into {e} while trying to read {path}") from None
 
-    async def write_file(self, path: Path, file: str):
+    async def write_file(self, path: Path, file: str) -> None:
         """Write the content of a file to a given path; raise a ToolError if an error occurs."""
         try:
             code, _, err = await run(f"cat > {path} << 'EOF'\n{file}\nEOF")
@@ -235,10 +268,14 @@ class EditTool:
         file_descriptor: str,
         init_line: int = 1,
         expand_tabs: bool = True,
-    ):
+    ) -> str:
         """Generate output for the CLI based on the content of a file."""
         file_content = maybe_truncate(file_content)
         if expand_tabs:
             file_content = file_content.expandtabs()
-        file_content = "\n".join([f"{i + init_line:6}\t{line}" for i, line in enumerate(file_content.split("\n"))])
-        return f"Here's the result of running `cat -n` on {file_descriptor}:\n" + file_content + "\n"
+        file_content = "\n".join(
+            [f"{i + init_line:6}\t{line}" for i, line in enumerate(file_content.split("\n"))]
+        )
+        return (
+            f"Here's the result of running `cat -n` on {file_descriptor}:\n" + file_content + "\n"
+        )

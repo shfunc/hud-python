@@ -1,5 +1,8 @@
-import asyncio  # noqa -- swapping to trio would be beneficial, but not blocking atm
+from __future__ import annotations
+
+import asyncio
 import os
+from typing import Any
 
 from .base import CLIResult, ToolError, ToolResult
 
@@ -15,16 +18,16 @@ class _BashSession:
     _timeout: float = 120.0  # seconds
     _sentinel: str = "<<exit>>"
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._started = False
         self._timed_out = False
 
-    async def start(self):
+    async def start(self) -> None:
         if self._started:
             await asyncio.sleep(0)
             return
 
-        self._process = await asyncio.create_subprocess_shell(
+        self._process = await asyncio.create_subprocess_shell(  # noqa: S604
             self.command,
             preexec_fn=os.setsid,
             shell=True,
@@ -38,7 +41,7 @@ class _BashSession:
 
         self._started = True
 
-    def stop(self):
+    def stop(self) -> None:
         """Terminate the bash shell."""
         if not self._started:
             raise ToolError("Session has not started.")
@@ -46,7 +49,7 @@ class _BashSession:
             return
         self._process.terminate()
 
-    async def run(self, command: str):
+    async def run(self, command: str) -> CLIResult:
         """Execute a command in the bash shell."""
         if not self._started:
             raise ToolError("Session has not started.")
@@ -58,13 +61,16 @@ class _BashSession:
             )
         if self._timed_out:
             raise ToolError(
-                f"timed out: bash has not returned in {self._timeout} seconds and must be restarted",
+                f"timed out: bash did not return in {self._timeout} seconds and must be restarted",
             )
 
         # we know these are not None because we created the process with PIPEs
-        assert self._process.stdin
-        assert self._process.stdout
-        assert self._process.stderr
+        if self._process.stdin is None:
+            raise ToolError("stdin is None")
+        if self._process.stdout is None:
+            raise ToolError("stdout is None")
+        if self._process.stderr is None:
+            raise ToolError("stderr is None")
 
         # send command to the process
         self._process.stdin.write(command.encode() + f"; echo '{self._sentinel}'\n".encode())
@@ -72,12 +78,12 @@ class _BashSession:
 
         # read output from the process, until the sentinel is found
         try:
-            async with asyncio.timeout(self._timeout):
+            async with asyncio.timeout(self._timeout):  # type: ignore
                 while True:
                     await asyncio.sleep(self._output_delay)
                     # if we read directly from stdout/stderr, it will wait forever for
                     # EOF. use the StreamReader buffer directly instead.
-                    output = self._process.stdout._buffer.decode()  # pyright: ignore[reportAttributeAccessIssue]
+                    output = self._process.stdout._buffer.decode()  # type: ignore[reportAttributeAccessIssue]
                     if self._sentinel in output:
                         # strip the sentinel and break
                         output = output[: output.index(self._sentinel)]
@@ -85,19 +91,19 @@ class _BashSession:
         except TimeoutError:
             self._timed_out = True
             raise ToolError(
-                f"timed out: bash has not returned in {self._timeout} seconds and must be restarted",
+                f"timed out: bash did not return in {self._timeout} seconds and must be restarted",
             ) from None
 
         if output.endswith("\n"):
             output = output[:-1]
 
-        error = self._process.stderr._buffer.decode()  # pyright: ignore[reportAttributeAccessIssue]
+        error = self._process.stderr._buffer.decode()  # type: ignore[reportAttributeAccessIssue]
         if error.endswith("\n"):
             error = error[:-1]
 
         # clear the buffers so that the next output can be read correctly
-        self._process.stdout._buffer.clear()  # pyright: ignore[reportAttributeAccessIssue]
-        self._process.stderr._buffer.clear()  # pyright: ignore[reportAttributeAccessIssue]
+        self._process.stdout._buffer.clear()  # type: ignore[reportAttributeAccessIssue]
+        self._process.stderr._buffer.clear()  # type: ignore[reportAttributeAccessIssue]
 
         return CLIResult(output=output, error=error)
 
@@ -110,10 +116,12 @@ class BashTool:
 
     _session: _BashSession | None
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._session = None
 
-    async def __call__(self, command: str | None = None, restart: bool = False, **kwargs) -> ToolResult:
+    async def __call__(
+        self, command: str | None = None, restart: bool = False, **kwargs: Any
+    ) -> ToolResult:
         if restart:
             if self._session:
                 self._session.stop()
