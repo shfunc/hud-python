@@ -4,6 +4,7 @@ import asyncio
 import logging
 import time
 import uuid
+from collections.abc import Callable  # noqa: TC003
 from contextlib import contextmanager
 from functools import wraps
 from typing import (
@@ -11,6 +12,7 @@ from typing import (
     Any,
     ParamSpec,
     TypeVar,
+    cast,
     overload,
 )
 
@@ -25,10 +27,7 @@ from hud.telemetry.exporter import submit_to_worker_loop
 from hud.telemetry.instrumentation.registry import registry
 
 if TYPE_CHECKING:
-    from collections.abc import (
-        Callable,
-        Generator,
-    )
+    from collections.abc import Generator
 
     from hud.telemetry.mcp_models import BaseMCPCall
 
@@ -180,27 +179,26 @@ def register_trace(
     """
 
     def decorator(f: Callable[P, R]) -> Callable[P, R]:
-        # Lazy initialization when the decorated function is actually called
-        _ensure_telemetry_initialized()
-
         trace_name = name if name is not None else f.__name__
 
         if asyncio.iscoroutinefunction(f):
 
             @wraps(f)
             async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+                _ensure_telemetry_initialized()
                 with trace(name=trace_name, attributes=attributes):
                     return await f(*args, **kwargs)
 
-            return async_wrapper
+            return cast("Callable[P, R]", async_wrapper)
         else:
 
             @wraps(f)
             def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+                _ensure_telemetry_initialized()
                 with trace(name=trace_name, attributes=attributes):
                     return f(*args, **kwargs)
 
-            return sync_wrapper
+            return cast("Callable[P, R]", sync_wrapper)
 
     if func is None:
         return decorator

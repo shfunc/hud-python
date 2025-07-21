@@ -49,6 +49,18 @@ async def test_bash_tool_restart_and_no_command():
 
     tool._session = _FakeSession()  # type: ignore[attr-defined]
 
+    # Monkey-patch _BashSession.start to avoid launching a real shell
+    async def _dummy_start(self):
+        self._started = True
+        from types import SimpleNamespace
+
+        # minimal fake process attributes used later
+        self._process = SimpleNamespace(returncode=None)
+
+    import hud.tools.bash as bash_mod
+
+    bash_mod._BashSession.start = _dummy_start  # type: ignore[assignment]
+
     # restart=True returns system message
     res = await tool(command="ignored", restart=True)
     assert res.system == "tool has been restarted."

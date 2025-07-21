@@ -35,8 +35,6 @@ class _BashSession:
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            user=1000,
-            group=1000,
         )
 
         self._started = True

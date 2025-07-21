@@ -33,7 +33,9 @@ def register_instance_tool(mcp: FastMCP, name: str, instance: Any) -> Callable[.
         for p in sig.parameters.values()
         if p.kind not in (p.VAR_POSITIONAL, p.VAR_KEYWORD)
     ]
-    public_sig = inspect.Signature(parameters=filtered, return_annotation=sig.return_annotation)
+    from typing import Any as _Any
+
+    public_sig = inspect.Signature(parameters=filtered, return_annotation=_Any)
 
     @wraps(call_fn)
     async def _wrapper(*args: Any, **kwargs: Any) -> Any:  # type: ignore[override]

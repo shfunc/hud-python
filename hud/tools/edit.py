@@ -99,7 +99,10 @@ class EditTool:
                     "The `view_range` parameter is not allowed when `path` points to a directory."
                 )
 
-            _, stdout, stderr = await run(rf"find {path} -maxdepth 2 -not -path '*/\.*'")
+            import shlex
+
+            safe_path = shlex.quote(str(path))
+            _, stdout, stderr = await run(rf"find {safe_path} -maxdepth 2 -not -path '*/\.*'")
             if not stderr:
                 stdout = (
                     f"Here's the files and directories up to 2 levels deep in {path}, "
@@ -246,7 +249,10 @@ class EditTool:
     async def read_file(self, path: Path) -> str:
         """Read the content of a file from a given path; raise a ToolError if an error occurs."""
         try:
-            code, out, err = await run(f"cat {path}")
+            import shlex
+
+            safe_path = shlex.quote(str(path))
+            code, out, err = await run(f"cat {safe_path}")
             if code != 0:
                 raise ToolError(f"Ran into {err} while trying to read {path}")
             return out
@@ -256,7 +262,10 @@ class EditTool:
     async def write_file(self, path: Path, file: str) -> None:
         """Write the content of a file to a given path; raise a ToolError if an error occurs."""
         try:
-            code, _, err = await run(f"cat > {path} << 'EOF'\n{file}\nEOF")
+            import shlex
+
+            safe_path = shlex.quote(str(path))
+            code, _, err = await run(f"cat > {safe_path} << 'EOF'\n{file}\nEOF")
             if code != 0:
                 raise ToolError(f"Ran into {err} while trying to write to {path}")
         except Exception as e:
