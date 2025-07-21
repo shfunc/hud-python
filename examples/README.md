@@ -12,8 +12,8 @@ This directory contains example notebooks demonstrating different aspects of the
    ```
 
 3. **Example Folders**:
-   - **[agents-tools/](agents-tools/)** - Examples of agent implementations with various tools, including MCP (Model Context Protocol) integration, browser automation, and secure handling of sensitive data
-   - **[environments/](environments/)** - Environment setup examples showcasing local and remote environment configurations, including emulator-based environments like Pokemon
+   - **[agents_tools/](agents_tools/)** - Examples of agent implementations with various tools, including MCP (Model Context Protocol) integration, browser automation, and secure handling of sensitive data
+   - **[environments/](environments/)** - Environment setup examples showcasing local and remote environment configurations, including emulator-based environments like Pokemon_tools
    - **[evaluations/](evaluations/)** - Evaluation and benchmarking examples including task creation, OS-level agent evaluation, and practical applications like SheetBench and Wordle
    - **[rl/](rl/)** - Reinforcement learning examples (currently in development)
 
