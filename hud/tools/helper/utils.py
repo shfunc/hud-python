@@ -28,12 +28,13 @@ def register_instance_tool(mcp: FastMCP, name: str, instance: Any) -> Callable[.
     sig = inspect.signature(call_fn)
 
     # Remove *args/**kwargs so Pydantic doesn't treat them as required fields
+    from typing import Any as _Any
+
     filtered = [
-        p.replace(kind=p.POSITIONAL_OR_KEYWORD)
+        p.replace(kind=p.POSITIONAL_OR_KEYWORD, annotation=_Any)
         for p in sig.parameters.values()
         if p.kind not in (p.VAR_POSITIONAL, p.VAR_KEYWORD)
     ]
-    from typing import Any as _Any
 
     public_sig = inspect.Signature(parameters=filtered, return_annotation=_Any)
 

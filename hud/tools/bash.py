@@ -60,7 +60,7 @@ class _BashSession:
         if self._timed_out:
             raise ToolError(
                 f"timed out: bash did not return in {self._timeout} seconds and must be restarted",
-            )
+            ) from None
 
         # we know these are not None because we created the process with PIPEs
         if self._process.stdin is None:
@@ -70,38 +70,32 @@ class _BashSession:
         if self._process.stderr is None:
             raise ToolError("stderr is None")
 
-        # send command to the process
+        # Send command to the process
         self._process.stdin.write(command.encode() + f"; echo '{self._sentinel}'\n".encode())
         await self._process.stdin.drain()
 
-        # read output from the process, until the sentinel is found
+        # Read output from the process, until the sentinel is found
+        sentinel_line = f"{self._sentinel}\n"
+        sentinel_bytes = sentinel_line.encode()
+
         try:
-            async with asyncio.timeout(self._timeout):  # type: ignore
-                while True:
-                    await asyncio.sleep(self._output_delay)
-                    # if we read directly from stdout/stderr, it will wait forever for
-                    # EOF. use the StreamReader buffer directly instead.
-                    output = self._process.stdout._buffer.decode()  # type: ignore[reportAttributeAccessIssue]
-                    if self._sentinel in output:
-                        # strip the sentinel and break
-                        output = output[: output.index(self._sentinel)]
-                        break
-        except TimeoutError:
+            raw_out: bytes = await asyncio.wait_for(
+                self._process.stdout.readuntil(sentinel_bytes),
+                timeout=self._timeout,
+            )
+            output = raw_out.decode()[: -len(sentinel_line)]
+        except (asyncio.TimeoutError, asyncio.LimitOverrunError):
             self._timed_out = True
             raise ToolError(
                 f"timed out: bash did not return in {self._timeout} seconds and must be restarted",
             ) from None
 
-        if output.endswith("\n"):
-            output = output[:-1]
-
-        error = self._process.stderr._buffer.decode()  # type: ignore[reportAttributeAccessIssue]
-        if error.endswith("\n"):
-            error = error[:-1]
-
-        # clear the buffers so that the next output can be read correctly
-        self._process.stdout._buffer.clear()  # type: ignore[reportAttributeAccessIssue]
-        self._process.stderr._buffer.clear()  # type: ignore[reportAttributeAccessIssue]
+        # Attempt non-blocking stderr fetch (may return empty)
+        try:
+            error_bytes = await asyncio.wait_for(self._process.stderr.read(), timeout=0.01)
+            error = error_bytes.decode().rstrip("\n")
+        except asyncio.TimeoutError:
+            error = ""
 
         return CLIResult(output=output, error=error)
 
