@@ -62,7 +62,6 @@ class _BashSession:
                 f"timed out: bash did not return in {self._timeout} seconds and must be restarted",
             ) from None
 
-        # we know these are not None because we created the process with PIPEs
         if self._process.stdin is None:
             raise ToolError("stdin is None")
         if self._process.stdout is None:
