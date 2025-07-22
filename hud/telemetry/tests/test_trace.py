@@ -2,27 +2,31 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from hud.telemetry._trace import (
     init_telemetry,
-    register_trace,
     trace,
+    trace_decorator,
+    trace_sync,
 )
 from hud.telemetry.context import get_current_task_run_id as actual_get_current_task_run_id
 from hud.telemetry.context import is_root_trace as actual_is_root_trace
-from hud.telemetry.context import reset_context
 from hud.telemetry.context import set_current_task_run_id as actual_set_current_task_run_id
 
 
 @pytest.fixture(autouse=True)
 def reset_telemetry_context_fixture():
     """Ensures telemetry context is reset before and after each test in this file."""
-    reset_context()
+    # Reset context before test
+    actual_set_current_task_run_id(None)
+    actual_is_root_trace.set(False)
     yield
-    reset_context()
+    # Reset context after test
+    actual_set_current_task_run_id(None)
+    actual_is_root_trace.set(False)
 
 
 class TestInitTelemetry:
@@ -113,10 +117,8 @@ class TestTrace:
         assert kwargs["mcp_calls"] == mock_mcp_calls
         assert kwargs["trace_attributes"]["trace_name"] == test_name
         assert kwargs["trace_attributes"]["custom_attr"] == "test_val"
-        assert "start_time" in kwargs["trace_attributes"]
-        assert "end_time" in kwargs["trace_attributes"]
-        assert "duration" in kwargs["trace_attributes"]
-        assert kwargs["trace_attributes"]["is_root"] is True
+        assert "duration_seconds" in kwargs["trace_attributes"]
+        assert kwargs["trace_attributes"]["is_root_trace"] is True
 
     def test_trace_nested(self, mocker):
         """Test nested traces, verifying context restoration and root trace logic."""
@@ -173,98 +175,126 @@ class TestTrace:
         mock_submit_loop.assert_not_called()
 
 
-class TestRegisterTrace:
-    """Test the register_trace decorator."""
+class TestTraceSync:
+    """Test the trace_sync context manager."""
 
-    def test_register_trace_sync_function(self, mocker):
-        mock_trace_context_manager = mocker.patch("hud.telemetry._trace.trace", autospec=True)
-        mock_trace_context_manager.return_value.__enter__.return_value = "mocked_task_id"
-        mock_trace_context_manager.return_value.__exit__.return_value = None
+    def test_trace_sync_basic(self, mocker):
+        """Test trace_sync calls trace and flush."""
+        mock_flush_global = mocker.patch("hud.flush", autospec=True)
 
-        @register_trace(name="test_func_sync")
+        with patch("hud.telemetry._trace.trace") as mock_trace:
+            mock_trace.return_value.__enter__.return_value = "test-task-id"
+            mock_trace.return_value.__exit__.return_value = None
+
+            with trace_sync(name="test_sync") as task_run_id:
+                assert task_run_id == "test-task-id"
+
+            mock_trace.assert_called_once_with(name="test_sync", attributes=None)
+            mock_flush_global.assert_called_once()
+
+    def test_trace_sync_with_attributes(self, mocker):
+        """Test trace_sync passes attributes correctly."""
+        mock_flush_global = mocker.patch("hud.flush", autospec=True)
+        attrs = {"key": "value"}
+
+        with patch("hud.telemetry._trace.trace") as mock_trace:
+            mock_trace.return_value.__enter__.return_value = "test-task-id"
+            mock_trace.return_value.__exit__.return_value = None
+
+            with trace_sync(name="test_sync", attributes=attrs):
+                pass
+
+            mock_trace.assert_called_once_with(name="test_sync", attributes=attrs)
+            mock_flush_global.assert_called_once()
+
+
+class TestTraceDecorator:
+    """Test the trace_decorator function decorator."""
+
+    def test_trace_decorator_sync_function(self, mocker):
+        """Test trace_decorator on synchronous functions."""
+        mock_trace = mocker.patch("hud.telemetry._trace.trace", autospec=True)
+        mock_trace.return_value.__enter__.return_value = "mocked_task_id"
+        mock_trace.return_value.__exit__.return_value = None
+
+        @trace_decorator(name="test_func_sync")
         def sync_function(x, y):
             return x + y
 
         result = sync_function(1, 2)
         assert result == 3
-        mock_trace_context_manager.assert_called_once_with(name="test_func_sync", attributes=None)
+        mock_trace.assert_called_once_with(name="test_func_sync", attributes=None)
 
-    def test_register_trace_async_function(self, mocker):
-        mock_trace_context_manager = mocker.patch("hud.telemetry._trace.trace", autospec=True)
-        mock_trace_context_manager.return_value.__enter__.return_value = "mocked_task_id"
-        mock_trace_context_manager.return_value.__exit__.return_value = None
+    def test_trace_decorator_async_function(self, mocker):
+        """Test trace_decorator on asynchronous functions."""
+        mock_trace = mocker.patch("hud.telemetry._trace.trace", autospec=True)
+        mock_trace.return_value.__enter__.return_value = "mocked_task_id"
+        mock_trace.return_value.__exit__.return_value = None
 
-        @register_trace(name="test_func_async")
+        @trace_decorator(name="test_func_async")
         async def async_function(x, y):
             return x + y
 
         async def run_test():
             result = await async_function(1, 2)
             assert result == 3
-            mock_trace_context_manager.assert_called_once_with(
-                name="test_func_async", attributes=None
-            )
+            mock_trace.assert_called_once_with(name="test_func_async", attributes=None)
 
         asyncio.run(run_test())
 
-    def test_register_trace_with_attributes(self, mocker):
-        """Test register_trace with attributes."""
-        mock_trace_context_manager = mocker.patch("hud.telemetry._trace.trace", autospec=True)
+    def test_trace_decorator_with_attributes(self, mocker):
+        """Test trace_decorator with attributes."""
+        mock_trace = mocker.patch("hud.telemetry._trace.trace", autospec=True)
+        mock_trace.return_value.__enter__.return_value = "task_id"
+        mock_trace.return_value.__exit__.return_value = None
 
-        class _MockTraceContextManager:
-            def __enter__(self):
-                return "task_id"
+        attrs = {"operation": "multiply"}
 
-            def __exit__(self, exc_type, exc_value, traceback):
-                return None
-
-        mock_trace_context_manager.return_value = _MockTraceContextManager()
-
-        attrs = {"operation": "add"}
-
-        @register_trace(name="test_func", attributes=attrs)
+        @trace_decorator(name="test_func", attributes=attrs)
         def func_with_attrs(x):
             return x * 2
 
         result = func_with_attrs(5)
         assert result == 10
-        mock_trace_context_manager.assert_called_once_with(name="test_func", attributes=attrs)
+        mock_trace.assert_called_once_with(name="test_func", attributes=attrs)
 
-    def test_register_trace_without_name(self, mocker):
-        """Test register_trace uses function name when name not provided."""
-        mock_trace_context_manager = mocker.patch("hud.telemetry._trace.trace", autospec=True)
-        mock_trace_context_manager.return_value.__enter__.return_value = "task_id"
-        mock_trace_context_manager.return_value.__exit__.return_value = None
+    def test_trace_decorator_without_name(self, mocker):
+        """Test trace_decorator uses module.function name when name not provided."""
+        mock_trace = mocker.patch("hud.telemetry._trace.trace", autospec=True)
+        mock_trace.return_value.__enter__.return_value = "task_id"
+        mock_trace.return_value.__exit__.return_value = None
 
-        @register_trace()
+        @trace_decorator()
         def my_function():
             return "result"
 
         result = my_function()
         assert result == "result"
-        mock_trace_context_manager.assert_called_once_with(name="my_function", attributes=None)
+        # Should use module.function name
+        expected_name = f"{my_function.__module__}.my_function"
+        mock_trace.assert_called_once_with(name=expected_name, attributes=None)
 
-    def test_register_trace_preserves_function_metadata(self):
-        """Test register_trace preserves original function metadata."""
+    def test_trace_decorator_preserves_function_metadata(self):
+        """Test trace_decorator preserves original function metadata."""
 
-        @register_trace(name="test")
+        @trace_decorator(name="test")
         def original_function():
             """Original docstring."""
 
         assert original_function.__name__ == "original_function"
         assert original_function.__doc__ == "Original docstring."
 
-    def test_register_trace_exception_propagation(self, mocker):
-        """Test register_trace propagates exceptions."""
-        mock_trace_context_manager = mocker.patch("hud.telemetry._trace.trace", autospec=True)
-        mock_trace_context_manager.return_value.__enter__.return_value = "task_id"
-        mock_trace_context_manager.return_value.__exit__.return_value = None
+    def test_trace_decorator_exception_propagation(self, mocker):
+        """Test trace_decorator propagates exceptions."""
+        mock_trace = mocker.patch("hud.telemetry._trace.trace", autospec=True)
+        mock_trace.return_value.__enter__.return_value = "task_id"
+        mock_trace.return_value.__exit__.return_value = None
 
-        @register_trace()
+        @trace_decorator()
         def failing_function():
             raise RuntimeError("Test error")
 
         with pytest.raises(RuntimeError, match="Test error"):
             failing_function()
 
-        mock_trace_context_manager.assert_called_once()
+        mock_trace.assert_called_once()

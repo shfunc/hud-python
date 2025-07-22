@@ -10,7 +10,7 @@ from .job import create_job, load_job, run_job
 from .job import job as register_job
 from .task import Task
 from .taskset import load_taskset
-from .telemetry import flush, trace
+from .telemetry import flush, trace, trace_sync
 from .version import __version__
 
 
@@ -51,6 +51,7 @@ __all__ = [
     "task",
     "taskset",
     "trace",
+    "trace_sync",
     "types",
     "utils",
 ]

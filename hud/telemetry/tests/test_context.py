@@ -64,21 +64,24 @@ class TestRootTraceContext:
 class TestMCPCallBuffer:
     """Test MCP call buffer management."""
 
-    def setUp(self):
+    def reset_context(self):
         """Clear buffer before each test."""
         # Flush any existing calls and reset context
+        set_current_task_run_id(None)
+        # Clear any existing buffers by setting a temporary task ID and flushing
+        set_current_task_run_id("temp-cleanup")
         flush_buffer()
         set_current_task_run_id(None)
 
     def test_flush_buffer_empty(self):
         """Test flushing empty buffer."""
-        self.setUp()
+        self.reset_context()
         result = flush_buffer()
         assert result == []
 
     def test_add_and_flush_mcp_call(self):
         """Test adding and flushing MCP calls."""
-        self.setUp()
+        self.reset_context()
 
         # Set active task run ID
         set_current_task_run_id("test-task")
@@ -101,7 +104,7 @@ class TestMCPCallBuffer:
 
     def test_add_multiple_mcp_calls(self):
         """Test adding multiple MCP calls."""
-        self.setUp()
+        self.reset_context()
 
         # Set active task run ID
         set_current_task_run_id("test-task")
@@ -122,7 +125,7 @@ class TestMCPCallBuffer:
 
     def test_buffer_isolation_per_task(self):
         """Test that MCP call buffers contain all calls regardless of task ID."""
-        self.setUp()
+        self.reset_context()
 
         # Set task run ID 1
         set_current_task_run_id("task-1")
@@ -150,7 +153,7 @@ class TestMCPCallBuffer:
 
     def test_buffer_mcp_call_without_task_id(self):
         """Test adding MCP call when no task run ID is set."""
-        self.setUp()
+        self.reset_context()
         set_current_task_run_id(None)
 
         mock_call = MagicMock(spec=BaseMCPCall)
