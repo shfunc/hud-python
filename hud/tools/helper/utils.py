@@ -24,6 +24,14 @@ def register_instance_tool(mcp: FastMCP, name: str, instance: Any) -> Callable[.
         Object with an ``async def __call__`` (or sync) implementing the tool.
     """
 
+    if inspect.isclass(instance):
+        class_name = instance.__name__
+        raise TypeError(
+            f"register_instance_tool() expects an instance, but got class '{class_name}'. "
+            f"Use: register_instance_tool(mcp, '{name}', {class_name}()) "
+            f"Not: register_instance_tool(mcp, '{name}', {class_name})"
+        )
+
     call_fn = instance.__call__
     sig = inspect.signature(call_fn)
 
