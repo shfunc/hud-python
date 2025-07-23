@@ -48,7 +48,7 @@ def register_instance_tool(mcp: FastMCP, name: str, instance: Any) -> Callable[.
 
     @wraps(call_fn)
     async def _wrapper(*args: Any, **kwargs: Any) -> Any:  # type: ignore[override]
-        result = call_fn(*args, **kwargs)
+        result = instance(*args, **kwargs)
         if asyncio.iscoroutine(result):
             result = await result
         return result
