@@ -17,8 +17,7 @@ logger = logging.getLogger(__name__)
 
 class OpenAIComputerTool(HudComputerTool):
     """
-    OpenAI Computer Use tool that converts OpenAI's action format
-    to HudComputerTool calls.
+    OpenAI Computer Use tool for interacting with the computer.
     """
 
     def __init__(

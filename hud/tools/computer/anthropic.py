@@ -20,8 +20,7 @@ logger = logging.getLogger(__name__)
 
 class AnthropicComputerTool(HudComputerTool):
     """
-    Anthropic Computer Use tool that converts Anthropic's action format
-    to HudComputerTool calls.
+    Anthropic Computer Use tool for interacting with the computer.
     """
 
     name: str = "computer"
@@ -54,7 +53,6 @@ class AnthropicComputerTool(HudComputerTool):
 
     async def __call__(
         self,
-        *,
         action: str = Field(..., description="The action to perform on the computer"),
         coordinate: list[int] | tuple[int, int] | None = Field(
             None, description="The coordinate to interact with on the computer [x, y]"

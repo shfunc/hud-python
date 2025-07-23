@@ -17,8 +17,7 @@ logger = logging.getLogger(__name__)
 
 class HudComputerTool:
     """
-    A tool that provides computer control methods matching CLA actions.
-    Each method corresponds to a specific CLA action type.
+    A tool that allows the agent to control the computer.
     """
 
     def __init__(
