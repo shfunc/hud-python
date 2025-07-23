@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import platform
 from typing import Literal
 
 from mcp import ErrorData, McpError
@@ -10,6 +11,7 @@ from mcp.types import INVALID_PARAMS, ImageContent, TextContent
 from pydantic import Field
 
 from hud.tools.base import ToolError, ToolResult, tool_result_to_content_blocks
+from hud.tools.executors.pyautogui import PyAutoGUIExecutor
 from hud.tools.executors.xdo import XDOExecutor
 
 logger = logging.getLogger(__name__)
@@ -21,7 +23,11 @@ class HudComputerTool:
     """
 
     def __init__(
-        self, width: int = 1920, height: int = 1080, display_num: int | None = None
+        self,
+        width: int = 1920,
+        height: int = 1080,
+        display_num: int | None = None,
+        platform_type: Literal["auto", "xdo", "pyautogui"] = "auto",
     ) -> None:
         """
         Initialize the HUD computer tool.
@@ -30,10 +36,37 @@ class HudComputerTool:
             width: Screen width in pixels
             height: Screen height in pixels
             display_num: X display number
+            platform_type: Which executor to use:
+                - "auto": Automatically detect based on platform
+                - "xdo": Use XDOExecutor (Linux/X11 only)
+                - "pyautogui": Use PyAutoGUIExecutor (cross-platform)
         """
         self.width = width
         self.height = height
-        self.executor = XDOExecutor(display_num=display_num)
+
+        # Choose executor based on platform_type
+        if platform_type == "auto":
+            # Auto-detect based on platform
+            system = platform.system().lower()
+            if system == "linux":
+                try:
+                    self.executor = XDOExecutor(display_num=display_num)
+                    if self.executor.is_simulation:
+                        logger.info("XDO in simulation mode, trying PyAutoGUI")
+                        self.executor = PyAutoGUIExecutor(display_num=display_num)
+                except Exception:
+                    logger.info("XDO failed, falling back to PyAutoGUI")
+                    self.executor = PyAutoGUIExecutor(display_num=display_num)
+            else:
+                self.executor = PyAutoGUIExecutor(display_num=display_num)
+        elif platform_type == "xdo":
+            self.executor = XDOExecutor(display_num=display_num)
+        elif platform_type == "pyautogui":
+            self.executor = PyAutoGUIExecutor(display_num=display_num)
+        else:
+            raise ValueError(f"Invalid platform_type: {platform_type}")
+
+        logger.info("Using executor: %s", type(self.executor).__name__)
 
     async def __call__(
         self,

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 from mcp import ErrorData, McpError
 from mcp.types import INTERNAL_ERROR, INVALID_PARAMS, ImageContent, TextContent
@@ -27,7 +27,11 @@ class AnthropicComputerTool(HudComputerTool):
     api_type: str = "computer_20250124"
 
     def __init__(
-        self, width: int = 1024, height: int = 768, display_num: int | None = None
+        self,
+        width: int = 1024,
+        height: int = 768,
+        display_num: int | None = None,
+        platform_type: Literal["auto", "xdo", "pyautogui"] = "auto",
     ) -> None:
         """
         Initialize with Anthropic's default dimensions.
@@ -36,8 +40,14 @@ class AnthropicComputerTool(HudComputerTool):
             width: Screen width (default: 1024 for Anthropic)
             height: Screen height (default: 768 for Anthropic)
             display_num: X display number
+            platform_type: Which executor to use:
+                - "auto": Automatically detect based on platform
+                - "xdo": Use XDOExecutor (Linux/X11 only)
+                - "pyautogui": Use PyAutoGUIExecutor (cross-platform)
         """
-        super().__init__(width=width, height=height, display_num=display_num)
+        super().__init__(
+            width=width, height=height, display_num=display_num, platform_type=platform_type
+        )
 
     def to_params(self) -> BetaToolComputerUse20250124Param:
         """Convert to Anthropic tool parameters."""

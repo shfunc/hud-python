@@ -50,6 +50,12 @@ class Settings(BaseSettings):
         validation_alias="FANCY_LOGGING",
     )
 
+    display: str = Field(
+        default=":0",
+        description="Display to use for the HUD SDK",
+        validation_alias="DISPLAY",
+    )
+
 
 # Create a singleton instance
 settings = Settings()

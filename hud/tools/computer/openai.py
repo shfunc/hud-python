@@ -21,7 +21,11 @@ class OpenAIComputerTool(HudComputerTool):
     """
 
     def __init__(
-        self, width: int = 1024, height: int = 768, display_num: int | None = None
+        self,
+        width: int = 1024,
+        height: int = 768,
+        display_num: int | None = None,
+        platform_type: Literal["auto", "xdo", "pyautogui"] = "auto",
     ) -> None:
         """
         Initialize with OpenAI's default dimensions.
@@ -30,8 +34,14 @@ class OpenAIComputerTool(HudComputerTool):
             width: Screen width (default: 1024 for OpenAI)
             height: Screen height (default: 768 for OpenAI)
             display_num: X display number
+            platform_type: Which executor to use:
+                - "auto": Automatically detect based on platform
+                - "xdo": Use XDOExecutor (Linux/X11 only)
+                - "pyautogui": Use PyAutoGUIExecutor (cross-platform)
         """
-        super().__init__(width=width, height=height, display_num=display_num)
+        super().__init__(
+            width=width, height=height, display_num=display_num, platform_type=platform_type
+        )
 
     async def __call__(
         self,
