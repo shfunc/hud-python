@@ -28,27 +28,19 @@ def register_instance_tool(mcp: FastMCP, name: str, instance: Any) -> Callable[.
     sig = inspect.signature(call_fn)
 
     # Remove *args/**kwargs so Pydantic doesn't treat them as required fields
-    # Also remove 'self' parameter for instance methods
     from typing import Any as _Any
 
-    param_list = list(sig.parameters.values())
-    filtered = []
-    
-    for i, p in enumerate(param_list):
-        # Skip 'self' parameter (first parameter of instance methods)
-        if i == 0 and p.name == "self":
-            continue
-        # Skip *args/**kwargs
-        if p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD):
-            continue
-        # Keep other parameters but normalize their type annotations
-        filtered.append(p.replace(kind=p.POSITIONAL_OR_KEYWORD, annotation=_Any))
+    filtered = [
+        p.replace(kind=p.POSITIONAL_OR_KEYWORD, annotation=_Any)
+        for p in sig.parameters.values()
+        if p.kind not in (p.VAR_POSITIONAL, p.VAR_KEYWORD)
+    ]
 
     public_sig = inspect.Signature(parameters=filtered, return_annotation=_Any)
 
     @wraps(call_fn)
     async def _wrapper(*args: Any, **kwargs: Any) -> Any:  # type: ignore[override]
-        result = instance(*args, **kwargs)
+        result = call_fn(*args, **kwargs)
         if asyncio.iscoroutine(result):
             result = await result
         return result
