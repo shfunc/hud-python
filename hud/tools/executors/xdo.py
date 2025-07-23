@@ -7,6 +7,7 @@ import os
 import shlex
 from pathlib import Path
 from tempfile import gettempdir
+from typing import Literal
 from uuid import uuid4
 
 from hud.tools.base import ToolResult
@@ -21,8 +22,9 @@ logger = logging.getLogger(__name__)
 class XDOExecutor(BaseExecutor):
     """
     Low-level executor for xdotool commands.
-    Handles display management and screenshot capture.
-    Falls back to simulation mode when no display is available.
+    Handles display management and screenshot capture on Linux/X11 systems.
+
+    This executor should only be instantiated when X11 display is available.
     """
 
     def __init__(self, display_num: int | None = None) -> None:
@@ -32,45 +34,37 @@ class XDOExecutor(BaseExecutor):
         Args:
             display_num: X display number (e.g. 0 for :0)
         """
-        self.display_num = display_num
+        super().__init__(display_num)
+
         if display_num is not None:
             self._display_prefix = f"DISPLAY=:{display_num} "
         else:
             self._display_prefix = ""
 
         self.xdotool = f"{self._display_prefix}xdotool"
-        self._screenshot_delay = 0.5  # Delay before taking screenshots
+        logger.info("XDOExecutor initialized")
 
-        # Check if display is available
-        self.is_simulation = not self._check_display_available()
-
-        if self.is_simulation:
-            logger.warning("No X11 display available - running in simulation mode")
-            # Initialize parent BaseExecutor
-            super().__init__(display_num)
-        else:
-            logger.info("X11 display available - running in real mode")
-
-    def _check_display_available(self) -> bool:
+    @classmethod
+    def is_available(cls) -> bool:
         """
-        Check if X11 display is available.
+        Check if xdotool and X11 display are available.
 
         Returns:
-            True if display is available, False otherwise
+            True if xdotool can be used, False otherwise
         """
         display = os.environ.get("DISPLAY")
         if not display:
             return False
 
-        # Try a simple xdotool command to test display availability
+        # Try a simple xdotool command to test availability
         try:
             import subprocess
 
+            # Try without display prefix if DISPLAY is already set
             result = subprocess.run(  # noqa: S603
-                [self.xdotool.split()[-1], "getdisplaygeometry"],
+                ["xdotool", "getdisplaygeometry"],  # noqa: S607
                 capture_output=True,
                 timeout=2,
-                env={**os.environ, **({"DISPLAY": display} if not self._display_prefix else {})},
             )
             return result.returncode == 0
         except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
@@ -78,7 +72,7 @@ class XDOExecutor(BaseExecutor):
 
     async def execute(self, command: str, take_screenshot: bool = True) -> ToolResult:
         """
-        Execute an xdotool command or simulate it if no display available.
+        Execute an xdotool command.
 
         Args:
             command: The xdotool command (without xdotool prefix)
@@ -87,11 +81,6 @@ class XDOExecutor(BaseExecutor):
         Returns:
             ToolResult with output, error, and optional screenshot
         """
-        # Fall back to simulation if no display
-        if self.is_simulation:
-            return await super().execute(command, take_screenshot)
-
-        # Real execution
         full_command = f"{self.xdotool} {command}"
 
         # Execute command
@@ -120,11 +109,7 @@ class XDOExecutor(BaseExecutor):
         Returns:
             Base64 encoded PNG image or None if failed
         """
-        # Fall back to simulation if no display
-        if self.is_simulation:
-            return await super().screenshot()
-
-        # Real screenshot
+        # Real screenshot using scrot
         if OUTPUT_DIR:
             output_dir = Path(OUTPUT_DIR)
             output_dir.mkdir(parents=True, exist_ok=True)
@@ -149,75 +134,307 @@ class XDOExecutor(BaseExecutor):
 
         return None
 
-    async def mouse_move(self, x: int, y: int, take_screenshot: bool = True) -> ToolResult:
-        """Move mouse to specified coordinates."""
-        return await self.execute(f"mousemove {x} {y}", take_screenshot=take_screenshot)
+    # ===== Helper Methods =====
+
+    async def _hold_keys_context(self, keys: list[str] | None) -> None:
+        """
+        Press and hold keys, to be used with try/finally.
+
+        Args:
+            keys: List of keys to hold
+
+        Example:
+            await self._hold_keys_context(['ctrl'])
+            try:
+                # Do action with ctrl held
+            finally:
+                await self._release_keys(['ctrl'])
+        """
+        if keys:
+            for key in keys:
+                escaped_key = shlex.quote(key)
+                await self.execute(f"keydown {escaped_key}", take_screenshot=False)
+
+    async def _release_keys(self, keys: list[str] | None) -> None:
+        """Release held keys."""
+        if keys:
+            for key in reversed(keys):  # Release in reverse order
+                escaped_key = shlex.quote(key)
+                await self.execute(f"keyup {escaped_key}", take_screenshot=False)
+
+    # ===== CLA Action Implementations =====
 
     async def click(
         self,
-        button: int = 1,
         x: int | None = None,
         y: int | None = None,
+        button: Literal["left", "right", "middle", "back", "forward"] = "left",
+        pattern: list[int] | None = None,
+        hold_keys: list[str] | None = None,
         take_screenshot: bool = True,
     ) -> ToolResult:
         """Click at specified coordinates or current position."""
-        if x is not None and y is not None:
-            return await self.execute(
-                f"mousemove {x} {y} click {button}", take_screenshot=take_screenshot
-            )
-        else:
-            return await self.execute(f"click {button}", take_screenshot=take_screenshot)
+        # Map button names to xdotool button numbers
+        button_map = {"left": 1, "right": 3, "middle": 2, "back": 8, "forward": 9}
+        button_num = button_map.get(button, 1)
 
-    async def type_text(
-        self, text: str, delay: int = 12, take_screenshot: bool = True
+        # Hold keys if specified
+        await self._hold_keys_context(hold_keys)
+
+        try:
+            # Handle multi-clicks based on pattern
+            if pattern:
+                click_count = len(pattern) + 1
+                delay = pattern[0] if pattern else 10  # Use first delay for all clicks
+
+                if x is not None and y is not None:
+                    cmd = f"mousemove {x} {y} click --repeat {click_count} --delay {delay} {button_num}"  # noqa: E501
+                else:
+                    cmd = f"click --repeat {click_count} --delay {delay} {button_num}"
+            else:
+                # Single click
+                if x is not None and y is not None:
+                    cmd = f"mousemove {x} {y} click {button_num}"
+                else:
+                    cmd = f"click {button_num}"
+
+            result = await self.execute(cmd, take_screenshot=take_screenshot)
+        finally:
+            # Release held keys
+            await self._release_keys(hold_keys)
+
+        return result
+
+    async def type(
+        self, text: str, enter_after: bool = False, delay: int = 12, take_screenshot: bool = True
     ) -> ToolResult:
         """Type text with specified delay between keystrokes."""
         # Escape text for shell
         escaped_text = shlex.quote(text)
-        return await self.execute(
-            f"type --delay {delay} -- {escaped_text}", take_screenshot=take_screenshot
-        )
+        cmd = f"type --delay {delay} -- {escaped_text}"
+        result = await self.execute(cmd, take_screenshot=False)
+
+        if enter_after:
+            enter_result = await self.key("Return", take_screenshot=False)
+            # Combine outputs
+            combined_output = (result.output or "") + "\n" + (enter_result.output or "")
+            combined_error = None
+            if result.error or enter_result.error:
+                combined_error = (result.error or "") + "\n" + (enter_result.error or "")
+            result = ToolResult(output=combined_output.strip(), error=combined_error)
+
+        if take_screenshot:
+            screenshot = await self.screenshot()
+            if screenshot:
+                result = ToolResult(
+                    output=result.output, error=result.error, base64_image=screenshot
+                )
+
+        return result
 
     async def key(self, key_sequence: str, take_screenshot: bool = True) -> ToolResult:
         """Press a key or key combination."""
         return await self.execute(f"key -- {key_sequence}", take_screenshot=take_screenshot)
 
+    async def press(self, keys: list[str], take_screenshot: bool = True) -> ToolResult:
+        """Press a key combination (hotkey)."""
+        # Convert list of keys to xdotool format
+        key_combo = "+".join(keys)
+        return await self.key(key_combo, take_screenshot=take_screenshot)
+
+    async def keydown(self, keys: list[str], take_screenshot: bool = True) -> ToolResult:
+        """Press and hold keys."""
+        last_result = None
+        for key in keys:
+            escaped_key = shlex.quote(key)
+            last_result = await self.execute(f"keydown {escaped_key}", take_screenshot=False)
+
+        if take_screenshot and last_result:
+            screenshot = await self.screenshot()
+            if screenshot:
+                last_result = ToolResult(
+                    output=last_result.output, error=last_result.error, base64_image=screenshot
+                )
+
+        return last_result or ToolResult()
+
+    async def keyup(self, keys: list[str], take_screenshot: bool = True) -> ToolResult:
+        """Release held keys."""
+        last_result = None
+        for key in keys:
+            escaped_key = shlex.quote(key)
+            last_result = await self.execute(f"keyup {escaped_key}", take_screenshot=False)
+
+        if take_screenshot and last_result:
+            screenshot = await self.screenshot()
+            if screenshot:
+                last_result = ToolResult(
+                    output=last_result.output, error=last_result.error, base64_image=screenshot
+                )
+
+        return last_result or ToolResult()
+
     async def scroll(
         self,
-        direction: str,
-        amount: int = 5,
         x: int | None = None,
         y: int | None = None,
+        scroll_x: int | None = None,
+        scroll_y: int | None = None,
+        hold_keys: list[str] | None = None,
         take_screenshot: bool = True,
     ) -> ToolResult:
-        """
-        Scroll in specified direction.
-
-        Args:
-            direction: "up", "down", "left", or "right"
-            amount: Number of scroll clicks
-            x, y: Optional coordinates to scroll at
-            take_screenshot: Whether to capture a screenshot after execution
-        """
+        """Scroll at specified position."""
+        # Convert scroll amounts to xdotool format
         scroll_button_map = {"up": 4, "down": 5, "left": 6, "right": 7}
 
-        button = scroll_button_map.get(direction, 5)  # Default to down
+        # Hold keys if specified
+        await self._hold_keys_context(hold_keys)
 
+        try:
+            # Handle vertical scroll
+            if scroll_y and scroll_y != 0:
+                direction = "down" if scroll_y > 0 else "up"
+                amount = abs(scroll_y)
+                button = scroll_button_map.get(direction, 5)
+
+                if x is not None and y is not None:
+                    cmd = f"mousemove {x} {y} click --repeat {amount} {button}"
+                else:
+                    cmd = f"click --repeat {amount} {button}"
+
+                result = await self.execute(cmd, take_screenshot=take_screenshot)
+
+            # Handle horizontal scroll
+            elif scroll_x and scroll_x != 0:
+                direction = "right" if scroll_x > 0 else "left"
+                amount = abs(scroll_x)
+                button = scroll_button_map.get(direction, 7)
+
+                if x is not None and y is not None:
+                    cmd = f"mousemove {x} {y} click --repeat {amount} {button}"
+                else:
+                    cmd = f"click --repeat {amount} {button}"
+
+                result = await self.execute(cmd, take_screenshot=take_screenshot)
+
+            else:
+                result = ToolResult(output="No scroll amount specified")
+        finally:
+            # Release held keys
+            await self._release_keys(hold_keys)
+
+        return result
+
+    async def move(
+        self,
+        x: int | None = None,
+        y: int | None = None,
+        offset_x: int | None = None,
+        offset_y: int | None = None,
+        take_screenshot: bool = True,
+    ) -> ToolResult:
+        """Move mouse cursor."""
         if x is not None and y is not None:
+            # Absolute move
+            return await self.execute(f"mousemove {x} {y}", take_screenshot=take_screenshot)
+        elif offset_x is not None or offset_y is not None:
+            # Relative move
+            offset_x = offset_x or 0
+            offset_y = offset_y or 0
             return await self.execute(
-                f"mousemove {x} {y} click --repeat {amount} {button}",
-                take_screenshot=take_screenshot,
+                f"mousemove_relative -- {offset_x} {offset_y}", take_screenshot=take_screenshot
             )
         else:
-            return await self.execute(
-                f"click --repeat {amount} {button}", take_screenshot=take_screenshot
-            )
+            return ToolResult(output="No move coordinates specified")
 
     async def drag(
-        self, start_x: int, start_y: int, end_x: int, end_y: int, take_screenshot: bool = True
+        self,
+        path: list[tuple[int, int]],
+        pattern: list[int] | None = None,
+        hold_keys: list[str] | None = None,
+        take_screenshot: bool = True,
     ) -> ToolResult:
-        """Drag from start coordinates to end coordinates."""
-        return await self.execute(
-            f"mousemove {start_x} {start_y} mousedown 1 mousemove {end_x} {end_y} mouseup 1",
-            take_screenshot=take_screenshot,
-        )
+        """Drag along a path."""
+        if len(path) < 2:
+            return ToolResult(error="Drag path must have at least 2 points")
+
+        # Hold keys if specified
+        await self._hold_keys_context(hold_keys)
+
+        try:
+            # Start drag
+            start_x, start_y = path[0]
+            await self.execute(f"mousemove {start_x} {start_y}", take_screenshot=False)
+            await self.execute("mousedown 1", take_screenshot=False)
+
+            # Move through intermediate points
+            for i, (x, y) in enumerate(path[1:], 1):
+                # Apply delay if pattern is specified
+                if pattern and i - 1 < len(pattern):
+                    await asyncio.sleep(pattern[i - 1] / 1000.0)  # Convert ms to seconds
+
+                await self.execute(f"mousemove {x} {y}", take_screenshot=False)
+
+            # End drag
+            await self.execute("mouseup 1", take_screenshot=False)
+
+            # Take final screenshot if requested
+            if take_screenshot:
+                screenshot = await self.screenshot()
+                result = ToolResult(
+                    output=f"Dragged along {len(path)} points", base64_image=screenshot
+                )
+            else:
+                result = ToolResult(output=f"Dragged along {len(path)} points")
+
+        finally:
+            # Release held keys
+            await self._release_keys(hold_keys)
+
+        return result
+
+    async def mouse_down(
+        self,
+        button: Literal["left", "right", "middle", "back", "forward"] = "left",
+        take_screenshot: bool = True,
+    ) -> ToolResult:
+        """Press and hold a mouse button."""
+        button_map = {"left": 1, "right": 3, "middle": 2, "back": 8, "forward": 9}
+        button_num = button_map.get(button, 1)
+        return await self.execute(f"mousedown {button_num}", take_screenshot=take_screenshot)
+
+    async def mouse_up(
+        self,
+        button: Literal["left", "right", "middle", "back", "forward"] = "left",
+        take_screenshot: bool = True,
+    ) -> ToolResult:
+        """Release a mouse button."""
+        button_map = {"left": 1, "right": 3, "middle": 2, "back": 8, "forward": 9}
+        button_num = button_map.get(button, 1)
+        return await self.execute(f"mouseup {button_num}", take_screenshot=take_screenshot)
+
+    async def hold_key(self, key: str, duration: float, take_screenshot: bool = True) -> ToolResult:
+        """Hold a key for a specified duration."""
+        escaped_key = shlex.quote(key)
+
+        # Press the key
+        await self.execute(f"keydown {escaped_key}", take_screenshot=False)
+
+        # Wait
+        await asyncio.sleep(duration)
+
+        # Release the key
+        result = await self.execute(f"keyup {escaped_key}", take_screenshot=False)
+
+        if take_screenshot:
+            screenshot = await self.screenshot()
+            if screenshot:
+                result = ToolResult(
+                    output=result.output, error=result.error, base64_image=screenshot
+                )
+
+        return result
+
+    async def position(self) -> ToolResult:
+        """Get current cursor position."""
+        return await self.execute("getmouselocation", take_screenshot=False)
