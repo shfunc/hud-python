@@ -52,7 +52,10 @@ def build_server(names: list[str] | None = None, *, port: int = 8040) -> FastMCP
         cls = TOOL_MAP.get(name)
         if cls is None:
             raise SystemExit(f"Unknown tool '{name}'. Choices: {list(TOOL_MAP)}")
-        register_instance_tool(server, name, cls())
+        if "computer" in name:
+            register_instance_tool(server, name, cls(display_num=3))
+        else:
+            register_instance_tool(server, name, cls())
     return server
 
 

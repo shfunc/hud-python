@@ -18,6 +18,49 @@ from .base import BaseExecutor
 OUTPUT_DIR = os.environ.get("SCREENSHOT_DIR")
 logger = logging.getLogger(__name__)
 
+# Map CLA standard keys to X11/XDO key names
+CLA_TO_XDO = {
+    "enter": "Return",
+    "tab": "Tab",
+    "space": "space",
+    "backspace": "BackSpace",
+    "delete": "Delete",
+    "escape": "Escape",
+    "esc": "Escape",
+    "up": "Up",
+    "down": "Down",
+    "left": "Left",
+    "right": "Right",
+    "shift": "Shift_L",
+    "shiftleft": "Shift_L",
+    "shiftright": "Shift_R",
+    "ctrl": "Control_L",
+    "ctrlleft": "Control_L",
+    "ctrlright": "Control_R",
+    "alt": "Alt_L",
+    "altleft": "Alt_L",
+    "altright": "Alt_R",
+    "win": "Super_L",
+    "winleft": "Super_L",
+    "winright": "Super_R",
+    "cmd": "Control_L",  # Map cmd to ctrl for Linux
+    "command": "Control_L",
+    "super": "Super_L",
+    "pageup": "Page_Up",
+    "pagedown": "Page_Down",
+    "home": "Home",
+    "end": "End",
+    "insert": "Insert",
+    "pause": "Pause",
+    "capslock": "Caps_Lock",
+    "numlock": "Num_Lock",
+    "scrolllock": "Scroll_Lock",
+    "printscreen": "Print",
+    "prtsc": "Print",
+    # Function keys
+    **{f"f{i}": f"F{i}" for i in range(1, 25)},
+}
+
 
 class XDOExecutor(BaseExecutor):
     """
@@ -28,12 +71,7 @@ class XDOExecutor(BaseExecutor):
     """
 
     def __init__(self, display_num: int | None = None) -> None:
-        """
-        Initialize the executor.
-
-        Args:
-            display_num: X display number (e.g. 0 for :0)
-        """
+        """Initialize with optional display number."""
         super().__init__(display_num)
 
         if display_num is not None:
@@ -43,6 +81,23 @@ class XDOExecutor(BaseExecutor):
 
         self.xdotool = f"{self._display_prefix}xdotool"
         logger.info("XDOExecutor initialized")
+
+    def _map_key(self, key: str) -> str:
+        """Map CLA standard key to XDO key."""
+        return CLA_TO_XDO.get(key.lower(), key)
+
+    def _map_keys(self, keys: list[str]) -> list[str]:
+        """Map CLA standard keys to XDO keys."""
+        mapped_keys = []
+        for key in keys:
+            # Handle key combinations like "ctrl+a"
+            if "+" in key:
+                parts = key.split("+")
+                mapped_parts = [self._map_key(part) for part in parts]
+                mapped_keys.append("+".join(mapped_parts))
+            else:
+                mapped_keys.append(self._map_key(key))
+        return mapped_keys
 
     @classmethod
     def is_available(cls) -> bool:
@@ -238,14 +293,18 @@ class XDOExecutor(BaseExecutor):
 
     async def press(self, keys: list[str], take_screenshot: bool = True) -> ToolResult:
         """Press a key combination (hotkey)."""
+        # Map CLA keys to XDO keys
+        mapped_keys = self._map_keys(keys)
         # Convert list of keys to xdotool format
-        key_combo = "+".join(keys)
+        key_combo = "+".join(mapped_keys)
         return await self.key(key_combo, take_screenshot=take_screenshot)
 
     async def keydown(self, keys: list[str], take_screenshot: bool = True) -> ToolResult:
         """Press and hold keys."""
+        # Map CLA keys to XDO keys
+        mapped_keys = self._map_keys(keys)
         last_result = None
-        for key in keys:
+        for key in mapped_keys:
             escaped_key = shlex.quote(key)
             last_result = await self.execute(f"keydown {escaped_key}", take_screenshot=False)
 
@@ -260,8 +319,10 @@ class XDOExecutor(BaseExecutor):
 
     async def keyup(self, keys: list[str], take_screenshot: bool = True) -> ToolResult:
         """Release held keys."""
+        # Map CLA keys to XDO keys
+        mapped_keys = self._map_keys(keys)
         last_result = None
-        for key in keys:
+        for key in mapped_keys:
             escaped_key = shlex.quote(key)
             last_result = await self.execute(f"keyup {escaped_key}", take_screenshot=False)
 
@@ -415,7 +476,9 @@ class XDOExecutor(BaseExecutor):
 
     async def hold_key(self, key: str, duration: float, take_screenshot: bool = True) -> ToolResult:
         """Hold a key for a specified duration."""
-        escaped_key = shlex.quote(key)
+        # Map CLA key to XDO key
+        mapped_key = self._map_key(key)
+        escaped_key = shlex.quote(mapped_key)
 
         # Press the key
         await self.execute(f"keydown {escaped_key}", take_screenshot=False)

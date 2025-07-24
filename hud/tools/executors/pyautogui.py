@@ -28,6 +28,19 @@ from .base import BaseExecutor
 
 logger = logging.getLogger(__name__)
 
+# Map CLA standard keys to PyAutoGUI keys (only where they differ)
+CLA_TO_PYAUTOGUI = {
+    # Most keys are the same in PyAutoGUI, only map the differences
+    "escape": "esc",
+    "enter": "return",
+    "pageup": "pgup",
+    "pagedown": "pgdn",
+    "printscreen": "prtscr",
+    "prtsc": "prtscr",
+    "super": "win",
+    "command": "cmd",
+}
+
 
 class PyAutoGUIExecutor(BaseExecutor):
     """
@@ -51,6 +64,23 @@ class PyAutoGUIExecutor(BaseExecutor):
         # Configure PyAutoGUI settings
         pyautogui.FAILSAFE = False  # Disable fail-safe feature
         pyautogui.PAUSE = 0.1  # Small pause between actions
+
+    def _map_key(self, key: str) -> str:
+        """Map CLA standard key to PyAutoGUI key."""
+        return CLA_TO_PYAUTOGUI.get(key.lower(), key.lower())
+
+    def _map_keys(self, keys: list[str]) -> list[str]:
+        """Map CLA standard keys to PyAutoGUI keys."""
+        mapped_keys = []
+        for key in keys:
+            # Handle key combinations like "ctrl+a"
+            if "+" in key:
+                parts = key.split("+")
+                mapped_parts = [self._map_key(part) for part in parts]
+                mapped_keys.append("+".join(mapped_parts))
+            else:
+                mapped_keys.append(self._map_key(key))
+        return mapped_keys
 
     @classmethod
     def is_available(cls) -> bool:
@@ -211,25 +241,8 @@ class PyAutoGUIExecutor(BaseExecutor):
                 result = ToolResult(output=f"Pressed hotkey: {key_sequence}")
             else:
                 # Map common key names from xdotool to PyAutoGUI
-                key_map = {
-                    "Return": "enter",
-                    "BackSpace": "backspace",
-                    "Delete": "delete",
-                    "Escape": "escape",
-                    "Tab": "tab",
-                    "Home": "home",
-                    "End": "end",
-                    "Page_Up": "pageup",
-                    "Page_Down": "pagedown",
-                    "Left": "left",
-                    "Right": "right",
-                    "Up": "up",
-                    "Down": "down",
-                    "Super_L": "winleft",
-                    "Super_R": "winright",
-                }
-                key = key_map.get(key_sequence, key_sequence.lower())
-                pyautogui.press(key)
+                key = key_sequence.lower()
+                pyautogui.press(CLA_TO_PYAUTOGUI.get(key, key))
                 result = ToolResult(output=f"Pressed key: {key_sequence}")
 
             if take_screenshot:
@@ -247,8 +260,23 @@ class PyAutoGUIExecutor(BaseExecutor):
     async def press(self, keys: list[str], take_screenshot: bool = True) -> ToolResult:
         """Press a key combination (hotkey)."""
         try:
-            pyautogui.hotkey(*keys)
-            result = ToolResult(output=f"Pressed hotkey: {'+'.join(keys)}")
+            # Map CLA keys to PyAutoGUI keys
+            mapped_keys = self._map_keys(keys)
+
+            # Handle single key or combination
+            if len(mapped_keys) == 1 and "+" not in mapped_keys[0]:
+                pyautogui.press(mapped_keys[0])
+                result = ToolResult(output=f"Pressed key: {keys[0]}")
+            else:
+                # For combinations, use hotkey
+                hotkey_parts = []
+                for key in mapped_keys:
+                    if "+" in key:
+                        hotkey_parts.extend(key.split("+"))
+                    else:
+                        hotkey_parts.append(key)
+                pyautogui.hotkey(*hotkey_parts)
+                result = ToolResult(output=f"Pressed hotkey: {'+'.join(keys)}")
 
             if take_screenshot:
                 await asyncio.sleep(self._screenshot_delay)
@@ -265,7 +293,9 @@ class PyAutoGUIExecutor(BaseExecutor):
     async def keydown(self, keys: list[str], take_screenshot: bool = True) -> ToolResult:
         """Press and hold keys."""
         try:
-            for key in keys:
+            # Map CLA keys to PyAutoGUI keys
+            mapped_keys = self._map_keys(keys)
+            for key in mapped_keys:
                 pyautogui.keyDown(key)
 
             result = ToolResult(output=f"Keys down: {', '.join(keys)}")
@@ -285,7 +315,9 @@ class PyAutoGUIExecutor(BaseExecutor):
     async def keyup(self, keys: list[str], take_screenshot: bool = True) -> ToolResult:
         """Release held keys."""
         try:
-            for key in reversed(keys):  # Release in reverse order
+            # Map CLA keys to PyAutoGUI keys
+            mapped_keys = self._map_keys(keys)
+            for key in reversed(mapped_keys):  # Release in reverse order
                 pyautogui.keyUp(key)
 
             result = ToolResult(output=f"Keys up: {', '.join(keys)}")
@@ -525,9 +557,11 @@ class PyAutoGUIExecutor(BaseExecutor):
     async def hold_key(self, key: str, duration: float, take_screenshot: bool = True) -> ToolResult:
         """Hold a key for a specified duration."""
         try:
-            pyautogui.keyDown(key)
+            # Map CLA key to PyAutoGUI key
+            mapped_key = self._map_key(key)
+            pyautogui.keyDown(mapped_key)
             await asyncio.sleep(duration)
-            pyautogui.keyUp(key)
+            pyautogui.keyUp(mapped_key)
 
             result = ToolResult(output=f"Held key '{key}' for {duration} seconds")
 

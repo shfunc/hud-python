@@ -14,6 +14,33 @@ from .hud import HudComputerTool
 
 logger = logging.getLogger(__name__)
 
+# Map OpenAI key names to CLA standard keys
+OPENAI_TO_CLA_KEYS = {
+    # Common variations
+    "return": "enter",
+    "escape": "escape",
+    "arrowup": "up",
+    "arrowdown": "down",
+    "arrowleft": "left",
+    "arrowright": "right",
+    "backspace": "backspace",
+    "delete": "delete",
+    "tab": "tab",
+    "space": "space",
+    "control": "ctrl",
+    "alt": "alt",
+    "shift": "shift",
+    "meta": "win",
+    "cmd": "cmd",
+    "command": "cmd",
+    "super": "win",
+    "pageup": "pageup",
+    "pagedown": "pagedown",
+    "home": "home",
+    "end": "end",
+    "insert": "insert",
+}
+
 
 class OpenAIComputerTool(HudComputerTool):
     """
@@ -26,22 +53,33 @@ class OpenAIComputerTool(HudComputerTool):
         height: int = 768,
         display_num: int | None = None,
         platform_type: Literal["auto", "xdo", "pyautogui"] = "auto",
+        rescale_images: bool = False,
     ) -> None:
         """
         Initialize with OpenAI's default dimensions.
 
         Args:
-            width: Screen width (default: 1024 for OpenAI)
-            height: Screen height (default: 768 for OpenAI)
+            width: Target width for rescaling (default: 1024 for OpenAI)
+            height: Target height for rescaling (default: 768 for OpenAI)
             display_num: X display number
             platform_type: Which executor to use:
                 - "auto": Automatically detect based on platform
                 - "xdo": Use XDOExecutor (Linux/X11 only)
                 - "pyautogui": Use PyAutoGUIExecutor (cross-platform)
+            rescale_images: If True, rescale screenshots. If False, only rescale action coordinates
         """
         super().__init__(
-            width=width, height=height, display_num=display_num, platform_type=platform_type
+            width=width,
+            height=height,
+            display_num=display_num,
+            platform_type=platform_type,
+            rescale_images=rescale_images,
         )
+
+    def _map_openai_key_to_cla(self, key: str) -> str:
+        """Map OpenAI key name to CLA standard key."""
+        # OpenAI uses lowercase key names
+        return OPENAI_TO_CLA_KEYS.get(key.lower(), key.lower())
 
     async def __call__(
         self,
@@ -87,7 +125,13 @@ class OpenAIComputerTool(HudComputerTool):
 
         # Process based on action type
         if type == "screenshot":
-            result = await self.screenshot()
+            screenshot_base64 = await self.executor.screenshot()
+            if screenshot_base64:
+                # Rescale screenshot if requested
+                screenshot_base64 = await self._rescale_screenshot(screenshot_base64)
+                result = ToolResult(base64_image=screenshot_base64)
+            else:
+                result = ToolResult(error="Failed to take screenshot")
 
         elif type == "click":
             if x is not None and y is not None:
@@ -95,7 +139,9 @@ class OpenAIComputerTool(HudComputerTool):
                 button_literal = cast(
                     "Literal['left', 'right', 'middle', 'back', 'forward']", button or "left"
                 )
-                result = await self.click(x=x, y=y, button=button_literal)
+                scaled_x, scaled_y = self._scale_coordinates(x, y)
+                logger.info("Scaled coordinates: %s, %s", scaled_x, scaled_y)
+                result = await self.executor.click(x=scaled_x, y=scaled_y, button=button_literal)
             else:
                 raise McpError(
                     ErrorData(code=INVALID_PARAMS, message="x and y coordinates required for click")
@@ -104,7 +150,10 @@ class OpenAIComputerTool(HudComputerTool):
         elif type == "double_click":
             if x is not None and y is not None:
                 # Use pattern for double-click
-                result = await self.click(x=x, y=y, button="left", pattern=[100])
+                scaled_x, scaled_y = self._scale_coordinates(x, y)
+                result = await self.executor.click(
+                    x=scaled_x, y=scaled_y, button="left", pattern=[100]
+                )
             else:
                 raise McpError(
                     ErrorData(
@@ -121,20 +170,24 @@ class OpenAIComputerTool(HudComputerTool):
                 )
 
             # scroll_x and scroll_y default to 0 if not provided
-            result = await self.scroll(x=x, y=y, scroll_x=scroll_x or 0, scroll_y=scroll_y or 0)
+            scaled_x, scaled_y = self._scale_coordinates(x, y)
+            result = await self.executor.scroll(
+                x=scaled_x, y=scaled_y, scroll_x=scroll_x or 0, scroll_y=scroll_y or 0
+            )
 
         elif type == "type":
             if text is None:
                 raise McpError(ErrorData(code=INVALID_PARAMS, message="text is required for type"))
-            result = await self.type(text=text, enter_after=False)
+            result = await self.executor.type(text=text, enter_after=False)
 
         elif type == "wait":
             wait_time = ms or 1000  # Default to 1 second
-            result = await self.wait(time=wait_time)
+            result = await self.executor.wait(time=wait_time)
 
         elif type == "move":
             if x is not None and y is not None:
-                result = await self.move(x=x, y=y)
+                scaled_x, scaled_y = self._scale_coordinates(x, y)
+                result = await self.executor.move(x=scaled_x, y=scaled_y)
             else:
                 raise McpError(
                     ErrorData(code=INVALID_PARAMS, message="x and y coordinates required for move")
@@ -146,23 +199,13 @@ class OpenAIComputerTool(HudComputerTool):
                     ErrorData(code=INVALID_PARAMS, message="keys is required for keypress")
                 )
 
-            # Map common key names
-            key_map = {
-                "return": "Return",
-                "arrowup": "Up",
-                "arrowdown": "Down",
-                "arrowleft": "Left",
-                "arrowright": "Right",
-                "cmd": "ctrl",  # Map cmd to ctrl
-                "super": "Super_L",  # Map super to Win key
-            }
-
-            mapped_keys = []
+            # Map OpenAI keys to CLA standard
+            cla_keys = []
             for key in keys:
-                mapped_key = key_map.get(key.lower(), key)
-                mapped_keys.append(mapped_key)
+                cla_key = self._map_openai_key_to_cla(key)
+                cla_keys.append(cla_key)
 
-            result = await self.press(keys=mapped_keys)
+            result = await self.executor.press(keys=cla_keys)
 
         elif type == "drag":
             if path is None or len(path) < 2:
@@ -184,7 +227,8 @@ class OpenAIComputerTool(HudComputerTool):
                         )
                     )
 
-            result = await self.drag(path=drag_path)
+            scaled_path = self._scale_path(drag_path)
+            result = await self.executor.drag(path=scaled_path)
 
         elif type == "response":
             if text is None:
@@ -202,6 +246,10 @@ class OpenAIComputerTool(HudComputerTool):
 
         else:
             raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Invalid action type: {type}"))
+
+        # Rescale screenshot in result if present
+        if isinstance(result, ToolResult) and result.base64_image and self.rescale_images:
+            result.base64_image = await self._rescale_screenshot(result.base64_image)
 
         # Handle screenshot for actions that need it
         screenshot_actions = {
@@ -224,6 +272,8 @@ class OpenAIComputerTool(HudComputerTool):
         ):
             screenshot_base64 = await self.executor.screenshot()
             if screenshot_base64:
+                # Rescale screenshot if requested
+                screenshot_base64 = await self._rescale_screenshot(screenshot_base64)
                 result = ToolResult(
                     output=result.output, error=result.error, base64_image=screenshot_base64
                 )

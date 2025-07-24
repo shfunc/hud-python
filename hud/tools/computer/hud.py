@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import platform
-from typing import Any, Literal
+from typing import Literal
 
 from mcp import ErrorData, McpError
 from mcp.types import INVALID_PARAMS, ImageContent, TextContent
@@ -16,6 +16,9 @@ from hud.tools.executors.xdo import XDOExecutor
 
 logger = logging.getLogger(__name__)
 
+BASE_SCREEN_WIDTH = 3200
+BASE_SCREEN_HEIGHT = 2000
+
 
 class HudComputerTool:
     """
@@ -24,25 +27,36 @@ class HudComputerTool:
 
     def __init__(
         self,
-        width: int = 1920,
-        height: int = 1080,
+        width: int | None = None,
+        height: int | None = None,
         display_num: int | None = None,
         platform_type: Literal["auto", "xdo", "pyautogui"] = "auto",
+        rescale_images: bool = False,
     ) -> None:
         """
         Initialize the HUD computer tool.
 
         Args:
-            width: Screen width in pixels
-            height: Screen height in pixels
+            width: Target width for rescaling (None = use actual screen width)
+            height: Target height for rescaling (None = use actual screen height)
             display_num: X display number
             platform_type: Which executor to use:
                 - "auto": Automatically detect based on platform
                 - "xdo": Use XDOExecutor (Linux/X11 only)
                 - "pyautogui": Use PyAutoGUIExecutor (cross-platform)
+            rescale_images: If True, rescale screenshots. If False, only rescale action coordinates
         """
-        self.width = width
-        self.height = height
+        # Use provided dimensions or defaults
+        self.width = width or BASE_SCREEN_WIDTH
+        self.height = height or BASE_SCREEN_HEIGHT
+        self.rescale_images = rescale_images
+
+        # Calculate scaling factors from base screen size to target size
+        self.scale_x = self.width / BASE_SCREEN_WIDTH
+        self.scale_y = self.height / BASE_SCREEN_HEIGHT
+
+        # Check if we need to scale
+        self.needs_scaling = self.scale_x != 1.0 or self.scale_y != 1.0
 
         # Choose executor based on platform_type
         if platform_type == "auto":
@@ -85,6 +99,53 @@ class HudComputerTool:
                 logger.warning("PyAutoGUI not available, using BaseExecutor (simulation mode)")
         else:
             raise ValueError(f"Invalid platform_type: {platform_type}")
+
+    def _scale_coordinates(self, x: int | None, y: int | None) -> tuple[int | None, int | None]:
+        """Scale coordinates from target space to screen space."""
+        if x is not None:
+            x = int(x / self.scale_x)
+        if y is not None:
+            y = int(y / self.scale_y)
+
+        return x, y
+
+    def _scale_path(self, path: list[tuple[int, int]]) -> list[tuple[int, int]]:
+        """Scale a path from target space to screen space."""
+        scaled_path = []
+        for x, y in path:
+            scaled_x, scaled_y = self._scale_coordinates(x, y)
+            if scaled_x is not None and scaled_y is not None:
+                scaled_path.append((scaled_x, scaled_y))
+
+        return scaled_path
+
+    async def _rescale_screenshot(self, screenshot_base64: str) -> str:
+        """Rescale a screenshot if rescale_images is True."""
+        if not self.rescale_images or not self.needs_scaling:
+            return screenshot_base64
+
+        try:
+            import base64
+            from io import BytesIO
+
+            from PIL import Image
+
+            # Decode base64 to image
+            image_data = base64.b64decode(screenshot_base64)
+            image = Image.open(BytesIO(image_data))
+
+            # Resize to exact target dimensions
+            resized = image.resize((self.width, self.height), Image.Resampling.LANCZOS)
+
+            # Convert back to base64
+            buffer = BytesIO()
+            resized.save(buffer, format="PNG")
+            resized_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+            return resized_base64
+        except Exception as e:
+            logger.warning("Failed to rescale screenshot: %s", e)
+            return screenshot_base64
 
     async def __call__(
         self,
@@ -132,8 +193,14 @@ class HudComputerTool:
         try:
             # Delegate to executor based on action
             if action == "click":
+                # Scale coordinates from client space to screen space
+                scaled_x, scaled_y = self._scale_coordinates(x, y)
                 result = await self.executor.click(
-                    x=x, y=y, button=button or "left", pattern=pattern, hold_keys=hold_keys
+                    x=scaled_x,
+                    y=scaled_y,
+                    button=button or "left",
+                    pattern=pattern,
+                    hold_keys=hold_keys,
                 )
 
             elif action == "press":
@@ -157,12 +224,23 @@ class HudComputerTool:
                 result = await self.executor.type(text=text, enter_after=enter_after or False)
 
             elif action == "scroll":
+                # Scale coordinates from client space to screen space
+                scaled_x, scaled_y = self._scale_coordinates(x, y)
                 result = await self.executor.scroll(
-                    x=x, y=y, scroll_x=scroll_x, scroll_y=scroll_y, hold_keys=hold_keys
+                    x=scaled_x,
+                    y=scaled_y,
+                    scroll_x=scroll_x,
+                    scroll_y=scroll_y,
+                    hold_keys=hold_keys,
                 )
 
             elif action == "move":
-                result = await self.executor.move(x=x, y=y, offset_x=offset_x, offset_y=offset_y)
+                # Scale coordinates from client space to screen space
+                scaled_x, scaled_y = self._scale_coordinates(x, y)
+                scaled_offset_x, scaled_offset_y = self._scale_coordinates(offset_x, offset_y)
+                result = await self.executor.move(
+                    x=scaled_x, y=scaled_y, offset_x=scaled_offset_x, offset_y=scaled_offset_y
+                )
 
             elif action == "wait":
                 if time is None:
@@ -172,7 +250,11 @@ class HudComputerTool:
             elif action == "drag":
                 if path is None:
                     raise ToolError("path parameter is required for drag")
-                result = await self.executor.drag(path=path, pattern=pattern, hold_keys=hold_keys)
+                # Scale path from client space to screen space
+                scaled_path = self._scale_path(path)
+                result = await self.executor.drag(
+                    path=scaled_path, pattern=pattern, hold_keys=hold_keys
+                )
 
             elif action == "response":
                 if text is None:
@@ -182,6 +264,8 @@ class HudComputerTool:
             elif action == "screenshot":
                 screenshot = await self.executor.screenshot()
                 if screenshot:
+                    # Rescale screenshot if requested
+                    screenshot = await self._rescale_screenshot(screenshot)
                     result = ToolResult(base64_image=screenshot)
                 else:
                     result = ToolResult(error="Failed to take screenshot")
@@ -205,6 +289,10 @@ class HudComputerTool:
             else:
                 raise McpError(ErrorData(code=INVALID_PARAMS, message=f"Unknown action: {action}"))
 
+            # Rescale screenshot in result if present
+            if isinstance(result, ToolResult) and result.base64_image and self.rescale_images:
+                result.base64_image = await self._rescale_screenshot(result.base64_image)
+
             # Convert result to content blocks
             return tool_result_to_content_blocks(result)
 
@@ -212,71 +300,3 @@ class HudComputerTool:
             raise McpError(
                 ErrorData(code=INVALID_PARAMS, message=f"Invalid parameters for {action}: {e!s}")
             ) from e
-
-    async def click(self, **kwargs: Any) -> ToolResult:
-        """Click at specified coordinates."""
-        return await self.executor.click(**kwargs)
-
-    async def press(self, keys: list[str]) -> ToolResult:
-        """Press a key combination."""
-        return await self.executor.press(keys)
-
-    async def keydown(self, keys: list[str]) -> ToolResult:
-        """Press and hold keys."""
-        return await self.executor.keydown(keys)
-
-    async def keyup(self, keys: list[str]) -> ToolResult:
-        """Release keys."""
-        return await self.executor.keyup(keys)
-
-    async def type(self, text: str, enter_after: bool = False) -> ToolResult:
-        """Type text using the keyboard."""
-        return await self.executor.type(text, enter_after=enter_after)
-
-    async def scroll(self, **kwargs: Any) -> ToolResult:
-        """Scroll at specified position."""
-        return await self.executor.scroll(**kwargs)
-
-    async def move(self, **kwargs: Any) -> ToolResult:
-        """Move mouse cursor."""
-        return await self.executor.move(**kwargs)
-
-    async def wait(self, time: int) -> ToolResult:
-        """Wait for specified time."""
-        return await self.executor.wait(time)
-
-    async def drag(self, **kwargs: Any) -> ToolResult:
-        """Drag along a path."""
-        return await self.executor.drag(**kwargs)
-
-    async def response(self, text: str) -> list[ImageContent | TextContent]:
-        """Return a text response."""
-        return [TextContent(text=text, type="text")]
-
-    async def screenshot(self) -> ToolResult:
-        """Take a screenshot of the current screen."""
-        screenshot_base64 = await self.executor.screenshot()
-        if screenshot_base64:
-            return ToolResult(base64_image=screenshot_base64)
-        else:
-            return ToolResult(error="Failed to take screenshot")
-
-    async def position(self) -> ToolResult:
-        """Get current cursor position."""
-        return await self.executor.position()
-
-    async def mouse_down(
-        self, button: Literal["left", "right", "middle", "back", "forward"] = "left"
-    ) -> ToolResult:
-        """Press and hold a mouse button."""
-        return await self.executor.mouse_down(button)
-
-    async def mouse_up(
-        self, button: Literal["left", "right", "middle", "back", "forward"] = "left"
-    ) -> ToolResult:
-        """Release a mouse button."""
-        return await self.executor.mouse_up(button)
-
-    async def hold_key(self, text: str, duration: float) -> ToolResult:
-        """Hold a key for a specified duration."""
-        return await self.executor.hold_key(text, duration)

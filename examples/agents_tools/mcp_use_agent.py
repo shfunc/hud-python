@@ -5,12 +5,13 @@ import asyncio
 from dotenv import load_dotenv
 import hud
 from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
 from mcp_use import MCPAgent, MCPClient
 
 load_dotenv()
 
 # Configuration
-BASE_URL = "http://localhost:8040/mcp"
+BASE_URL = "http://localhost:8039/mcp"
 
 
 async def main():
@@ -22,11 +23,17 @@ async def main():
     # Create client and agent
     client = MCPClient.from_dict(config)
     llm = ChatOpenAI(model="gpt-4o")
-    agent = MCPAgent(llm=llm, client=client, max_steps=30, verbose=True)
+    agent = MCPAgent(
+        llm=llm,
+        client=client,
+        max_steps=30,
+        verbose=True,
+        disallowed_tools=["edit", "bash", "computer_anthropic", "computer_openai"],
+    )
 
     try:
         # Run the agent
-        query = "Take a screenshot, then use bash to show the current date and time"
+        query = "Click on the chat in the bottom right corner, and type 'Hello, how are you?'"
         print(f"\n🤖 Running: {query}\n")
 
         # Use trace_debug to see MCP calls in real-time
