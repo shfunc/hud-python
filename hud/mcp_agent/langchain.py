@@ -87,7 +87,7 @@ class LangChainMCPAgent(BaseMCPAgent):
         return messages
 
     async def get_model_response(
-        self, messages: list[BaseMessage], iteration: int
+        self, messages: list[BaseMessage], step: int
     ) -> dict[str, Any]:
         """Get response from LangChain model including any tool calls."""
         # Get LangChain tools (created lazily)
@@ -124,7 +124,7 @@ class LangChainMCPAgent(BaseMCPAgent):
         executor = AgentExecutor(
             agent=agent,
             tools=langchain_tools,
-            max_iterations=1,  # We handle iterations in base class
+            max_steps=1,  # We handle steps in base class
             verbose=False,
         )
 

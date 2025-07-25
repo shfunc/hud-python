@@ -321,14 +321,14 @@ class BaseMCPAgent(ABC):
         }
 
     async def run(
-        self, prompt: str, max_iterations: int = 10, conversation_mode: bool = False
+        self, prompt: str, max_steps: int = 10, conversation_mode: bool = False
     ) -> str:
         """
         Run the agent with the given prompt.
 
         Args:
             prompt: The task to complete
-            max_iterations: Maximum number of iterations
+            max_steps: Maximum number of steps
             conversation_mode: If True, continue even when model returns text without tool calls
 
         Returns:
@@ -344,13 +344,13 @@ class BaseMCPAgent(ABC):
 
             messages = await self.create_initial_messages(prompt, latest_screenshot)
 
-            iteration = 0
-            while iteration < max_iterations:
-                iteration += 1
-                logger.info("Iteration %s/%s", iteration, max_iterations)
+            step = 0
+            while step < max_steps:
+                step += 1
+                logger.info("step %s/%s", step, max_steps)
 
                 try:
-                    response = await self.get_model_response(messages, iteration)
+                    response = await self.get_model_response(messages, step)
 
                     # Check if we should stop
                     if response.get("done", False) and not conversation_mode:
@@ -421,7 +421,7 @@ class BaseMCPAgent(ABC):
                     logger.error("Model call failed: %s", e)
                     return f"Error: {e}"
 
-            return f"Maximum iterations ({max_iterations}) reached without completion"
+            return f"Maximum steps ({max_steps}) reached without completion"
 
         except KeyboardInterrupt:
             logger.info("Agent execution interrupted by user")
@@ -444,13 +444,13 @@ class BaseMCPAgent(ABC):
         """
 
     @abstractmethod
-    async def get_model_response(self, messages: list[Any], iteration: int) -> dict[str, Any]:
+    async def get_model_response(self, messages: list[Any], step: int) -> dict[str, Any]:
         """
         Get response from the model including any tool calls.
 
         Args:
             messages: List of messages in provider-specific format
-            iteration: Current iteration number
+            step: Current step number
 
         Returns:
             Dict with 'content', 'tool_calls', and 'done' keys

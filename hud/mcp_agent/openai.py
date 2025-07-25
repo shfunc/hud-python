@@ -85,7 +85,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
         """  # noqa: E501
 
     async def run(
-        self, prompt: str, max_iterations: int = 10, conversation_mode: bool = False
+        self, prompt: str, max_steps: int = 10, conversation_mode: bool = False
     ) -> str:
         """
         Run the agent with the given prompt.
@@ -98,7 +98,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
         self.pending_safety_checks = []
 
         # Use base implementation
-        return await super().run(prompt, max_iterations, conversation_mode)
+        return await super().run(prompt, max_steps, conversation_mode)
 
     async def create_initial_messages(self, prompt: str, screenshot: str | None) -> list[Any]:
         """
@@ -111,7 +111,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
         # Just return a list with the prompt and screenshot
         return [{"prompt": prompt, "screenshot": screenshot}]
 
-    async def get_model_response(self, messages: list[Any], iteration: int) -> dict[str, Any]:
+    async def get_model_response(self, messages: list[Any], step: int) -> dict[str, Any]:
         """Get response from OpenAI including any tool calls."""
         # OpenAI's API is stateful, so we handle messages differently
 
@@ -138,9 +138,9 @@ class OpenAIMCPAgent(BaseMCPAgent):
             "environment": self.environment,
         }
 
-        # Build the request based on whether this is first iteration or follow-up
+        # Build the request based on whether this is first step or follow-up
         if self.pending_call_id is None and self.last_response_id is None:
-            # First iteration - extract prompt and screenshot from messages
+            # First step - extract prompt and screenshot from messages
             initial_data = messages[0]  # Our custom format from create_initial_messages
             prompt_text = initial_data.get("prompt", "")
             screenshot = initial_data.get("screenshot")
@@ -172,7 +172,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
                 reasoning={"summary": "auto"},
             )
         else:
-            # Follow-up iteration - check if this is user input or tool result
+            # Follow-up step - check if this is user input or tool result
             latest_message = messages[-1] if messages else {}
 
             if latest_message.get("type") == "user_input":
@@ -295,7 +295,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
         Format tool results for OpenAI's stateful API.
 
         OpenAI doesn't use a traditional message format - we just need to
-        preserve the screenshot for the next iteration.
+        preserve the screenshot for the next step.
         """
         # For OpenAI, we just need to track the latest screenshot
         # Return a simple dict that get_model_response can use

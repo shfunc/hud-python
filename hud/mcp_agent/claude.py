@@ -124,7 +124,7 @@ class ClaudeMCPAgent(BaseMCPAgent):
         ]
 
     async def get_model_response(
-        self, messages: list[BetaMessageParam], iteration: int
+        self, messages: list[BetaMessageParam], step: int
     ) -> dict[str, Any]:
         """Get response from Claude including any tool calls."""
         # Get Claude tools
@@ -166,7 +166,7 @@ class ClaudeMCPAgent(BaseMCPAgent):
                 else:
                     raise
 
-        # Add assistant response to messages (for next iteration)
+        # Add assistant response to messages (for next step)
         messages.append(
             cast(
                 "BetaMessageParam",

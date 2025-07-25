@@ -9,9 +9,12 @@ from hud.mcp_agent import ClaudeMCPAgent
 
 load_dotenv()
 
-# To run this locally: python -m hud.tools.helper.mcp_server http --port 8039
+# To run this locally: python -m hud.tools.helper.mcp_server http --port 8041
 # This will start the computer use MCP server on your machine.
-BASE_URL = "http://localhost:8039/mcp"
+
+# To run inside a docker container, see environments/simple_browser/README.md
+
+BASE_URL = "http://localhost:8041/mcp"
 
 
 async def main():
@@ -38,12 +41,15 @@ async def main():
 
     try:
         # Run the agent
-        query = "Click on the chat in the bottom right corner, and type 'Hello, how are you?'"
-        print(f"\n🤖 Running: {query}\n")
+        # query = "Find the hud-sdk repo on github and click on it"
+        # print(f"\n🤖 Running: {query}\n")
+
+        # Ask user for query in terminal
+        query = input("Enter a query: ")
 
         # Use trace_debug to see MCP calls in real-time
         with hud.trace_sync():
-            result = await agent.run(query, max_iterations=15)
+            result = await agent.run(query, max_steps=15)
 
         print(f"\n✅ Result: {result}")
 

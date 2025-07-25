@@ -54,9 +54,12 @@ class HudComputerTool:
         # Calculate scaling factors from base screen size to target size
         self.scale_x = self.width / BASE_SCREEN_WIDTH
         self.scale_y = self.height / BASE_SCREEN_HEIGHT
+        self.scale = min(self.scale_x, self.scale_y)
+
+        logger.info(f"Scaling factor: {self.scale}")
 
         # Check if we need to scale
-        self.needs_scaling = self.scale_x != 1.0 or self.scale_y != 1.0
+        self.needs_scaling = self.scale != 1.0
 
         # Choose executor based on platform_type
         if platform_type == "auto":
@@ -103,9 +106,9 @@ class HudComputerTool:
     def _scale_coordinates(self, x: int | None, y: int | None) -> tuple[int | None, int | None]:
         """Scale coordinates from target space to screen space."""
         if x is not None:
-            x = int(x / self.scale_x)
+            x = int(x / self.scale)
         if y is not None:
-            y = int(y / self.scale_y)
+            y = int(y / self.scale)
 
         return x, y
 
