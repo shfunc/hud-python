@@ -54,5 +54,7 @@ def register_instance_tool(mcp: FastMCP, name: str, instance: Any) -> Callable[.
         return result
 
     _wrapper.__signature__ = public_sig  # type: ignore[attr-defined]
+    # Preserve the original function's globals for type annotation evaluation
+    _wrapper.__globals__.update(call_fn.__globals__)
 
     return mcp.tool(name=name)(_wrapper)
