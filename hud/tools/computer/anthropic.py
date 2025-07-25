@@ -66,8 +66,8 @@ class AnthropicComputerTool(HudComputerTool):
 
     def __init__(
         self,
-        width: int = 1024,
-        height: int = 768,
+        width: int = 1400,
+        height: int = 850,
         display_num: int | None = None,
         platform_type: Literal["auto", "xdo", "pyautogui"] = "auto",
         rescale_images: bool = False,

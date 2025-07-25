@@ -57,8 +57,8 @@ class ClaudeMCPAgent(BaseMCPAgent):
         model_client: AsyncAnthropic | None = None,
         model: str = "claude-3-7-sonnet-20250219",
         max_tokens: int = 4096,
-        display_width_px: int = 1024,
-        display_height_px: int = 768,
+        display_width_px: int = 1400,
+        display_height_px: int = 850,
         use_computer_beta: bool = True,
         **kwargs: Any,
     ) -> None:
