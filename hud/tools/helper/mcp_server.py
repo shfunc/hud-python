@@ -44,18 +44,15 @@ TOOL_MAP = {
 logging.basicConfig(level=logging.INFO)
 
 
-def build_server(names: list[str] | None = None, *, port: int = 8040) -> FastMCP:
-    server = FastMCP("HUD", port=port)
+def build_server(names: list[str] | None = None, *, port: int = 8040, host: str = "0.0.0.0") -> FastMCP:
+    server = FastMCP("HUD", port=port, host=host)
     selected = names or list(TOOL_MAP.keys())
 
     for name in selected:
         cls = TOOL_MAP.get(name)
         if cls is None:
             raise SystemExit(f"Unknown tool '{name}'. Choices: {list(TOOL_MAP)}")
-        if "computer" in name:
-            register_instance_tool(server, name, cls(display_num=3))
-        else:
-            register_instance_tool(server, name, cls())
+        register_instance_tool(server, name, cls())
     return server
 
 
@@ -64,9 +61,10 @@ def main() -> None:
     parser.add_argument("transport", nargs="?", choices=["stdio", "http"], default="stdio")
     parser.add_argument("--tools", nargs="*", help="Tool names to expose (default: all)")
     parser.add_argument("--port", type=int, default=8040, help="HTTP port (default 8040)")
+    parser.add_argument("--host", type=str, default="0.0.0.0", help="HTTP host (default 0.0.0.0)")
     args = parser.parse_args()
 
-    mcp = build_server(args.tools, port=args.port)
+    mcp = build_server(args.tools, port=args.port, host=args.host)
 
     if args.transport == "http":
         mcp.run(transport="streamable-http")
