@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 from functools import wraps
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from collections.abc import Callable
