@@ -16,8 +16,8 @@ from hud.tools.executors.xdo import XDOExecutor
 
 logger = logging.getLogger(__name__)
 
-BASE_SCREEN_WIDTH = 3200
-BASE_SCREEN_HEIGHT = 2000
+BASE_SCREEN_WIDTH = 1920
+BASE_SCREEN_HEIGHT = 1080
 
 
 class HudComputerTool:
