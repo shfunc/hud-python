@@ -31,7 +31,7 @@ class HudComputerTool:
         height: int | None = None,
         display_num: int | None = None,
         platform_type: Literal["auto", "xdo", "pyautogui"] = "auto",
-        rescale_images: bool = False,
+        rescale_images: bool = True,
     ) -> None:
         """
         Initialize the HUD computer tool.
@@ -51,9 +51,14 @@ class HudComputerTool:
         self.height = height or BASE_SCREEN_HEIGHT
         self.rescale_images = rescale_images
 
+        logger.info(f"Width: {self.width}, Height: {self.height}")
+        logger.info(f"Base Screen Width: {BASE_SCREEN_WIDTH}, Base Screen Height: {BASE_SCREEN_HEIGHT}")
+
         # Calculate scaling factors from base screen size to target size
         self.scale_x = self.width / BASE_SCREEN_WIDTH
         self.scale_y = self.height / BASE_SCREEN_HEIGHT
+
+        logger.info(f"Scale X: {self.scale_x}, Scale Y: {self.scale_y}")
         self.scale = min(self.scale_x, self.scale_y)
 
         logger.info(f"Scaling factor: {self.scale}")
@@ -106,9 +111,9 @@ class HudComputerTool:
     def _scale_coordinates(self, x: int | None, y: int | None) -> tuple[int | None, int | None]:
         """Scale coordinates from target space to screen space."""
         if x is not None:
-            x = int(x / self.scale)
+            x = int(x / self.scale_x)
         if y is not None:
-            y = int(y / self.scale)
+            y = int(y / self.scale_y)
 
         return x, y
 
