@@ -32,8 +32,8 @@ async def main():
         model="claude-sonnet-4-20250514",
         max_tokens=4096,
         # initial_screenshot=True,
-        display_width_px=1024,
-        display_height_px=768,
+        display_width_px=1400,
+        display_height_px=850,
         # append_tool_system_prompt=True,
         # custom_system_prompt="You are a helpful assistant that can control the computer to help users with their tasks.",
         allowed_tools=["computer_anthropic"],  # Only allow the Anthropic computer tool

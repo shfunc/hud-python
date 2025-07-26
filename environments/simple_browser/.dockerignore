@@ -1,0 +1,52 @@
+# Git
+.git
+.gitignore
+
+# Node
+app/frontend/node_modules
+app/frontend/.next
+app/frontend/build
+app/frontend/dist
+apps/*/frontend/node_modules
+apps/*/frontend/.next
+apps/*/frontend/build
+apps/*/frontend/dist
+*.log
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info
+.pytest_cache
+.mypy_cache
+.coverage
+.venv
+venv
+env
+apps/*/.venv
+apps/*/backend/.venv
+apps/*/backend/venv
+
+# Database
+app/backend/*.db
+app/backend/*.sqlite
+apps/*/backend/*.db
+apps/*/backend/*.sqlite
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+!app/README.md
+!launch/README.md 
