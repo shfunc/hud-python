@@ -51,17 +51,21 @@ class HudComputerTool:
         self.height = height or BASE_SCREEN_HEIGHT
         self.rescale_images = rescale_images
 
-        logger.info(f"Width: {self.width}, Height: {self.height}")
-        logger.info(f"Base Screen Width: {BASE_SCREEN_WIDTH}, Base Screen Height: {BASE_SCREEN_HEIGHT}")
+        logger.info("Width: %s, Height: %s", self.width, self.height)
+        logger.info(
+            "Base Screen Width: %s, Base Screen Height: %s",
+            BASE_SCREEN_WIDTH,
+            BASE_SCREEN_HEIGHT,
+        )
 
         # Calculate scaling factors from base screen size to target size
         self.scale_x = self.width / BASE_SCREEN_WIDTH
         self.scale_y = self.height / BASE_SCREEN_HEIGHT
 
-        logger.info(f"Scale X: {self.scale_x}, Scale Y: {self.scale_y}")
+        logger.info("Scale X: %s, Scale Y: %s", self.scale_x, self.scale_y)
         self.scale = min(self.scale_x, self.scale_y)
 
-        logger.info(f"Scaling factor: {self.scale}")
+        logger.info("Scaling factor: %s", self.scale)
 
         # Check if we need to scale
         self.needs_scaling = self.scale != 1.0

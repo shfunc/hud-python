@@ -84,9 +84,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
         Remember: You are expected to complete tasks autonomously. The user trusts you to do what they asked.
         """  # noqa: E501
 
-    async def run(
-        self, prompt: str, max_steps: int = 10, conversation_mode: bool = False
-    ) -> str:
+    async def run(self, prompt: str, max_steps: int = 10, conversation_mode: bool = False) -> str:
         """
         Run the agent with the given prompt.
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
@@ -59,8 +59,10 @@ def register_instance_tool(mcp: FastMCP, name: str, instance: Any) -> Callable[.
 
     return mcp.tool(name=name)(_wrapper)
 
+
 class HudEnvStatus(BaseModel):
     """Environment status information."""
+
     status: str = Field(description="Status (e.g., 'initializing', 'running', 'ready')")
     message: str = Field(description="Human-readable status message")
     live_url: str | None = Field(default=None, description="Live URL when available")

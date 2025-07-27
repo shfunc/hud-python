@@ -21,7 +21,6 @@ transport   stdio (default) | http
 from __future__ import annotations
 
 import argparse
-import logging
 
 from mcp.server.fastmcp import FastMCP
 
@@ -41,10 +40,13 @@ TOOL_MAP = {
     "edit_file": EditTool,
 }
 
-logging.basicConfig(level=logging.INFO)
 
-
-def build_server(names: list[str] | None = None, *, port: int = 8040, host: str = "0.0.0.0") -> FastMCP:
+def build_server(
+    names: list[str] | None = None,
+    *,
+    port: int = 8040,
+    host: str = "0.0.0.0",  # noqa: S104
+) -> FastMCP:
     server = FastMCP("HUD", port=port, host=host)
     selected = names or list(TOOL_MAP.keys())
 
@@ -61,7 +63,7 @@ def main() -> None:
     parser.add_argument("transport", nargs="?", choices=["stdio", "http"], default="stdio")
     parser.add_argument("--tools", nargs="*", help="Tool names to expose (default: all)")
     parser.add_argument("--port", type=int, default=8040, help="HTTP port (default 8040)")
-    parser.add_argument("--host", type=str, default="0.0.0.0", help="HTTP host (default 0.0.0.0)")
+    parser.add_argument("--host", type=str, default="0.0.0.0", help="HTTP host (default 0.0.0.0)")  # noqa: S104
     args = parser.parse_args()
 
     mcp = build_server(args.tools, port=args.port, host=args.host)

@@ -320,9 +320,7 @@ class BaseMCPAgent(ABC):
             "results": results,  # List of (tool_name, content_blocks) for provider-specific use
         }
 
-    async def run(
-        self, prompt: str, max_steps: int = 10, conversation_mode: bool = False
-    ) -> str:
+    async def run(self, prompt: str, max_steps: int = 10, conversation_mode: bool = False) -> str:
         """
         Run the agent with the given prompt.
 
