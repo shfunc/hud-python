@@ -50,6 +50,12 @@ class Settings(BaseSettings):
         validation_alias="FANCY_LOGGING",
     )
 
+    log_stream: str = Field(
+        default="stdout",
+        description="Stream to use for logging output: 'stdout' or 'stderr'",
+        validation_alias="HUD_LOG_STREAM",
+    )
+
     display: str = Field(
         default=":0",
         description="Display to use for the HUD SDK",

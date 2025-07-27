@@ -22,13 +22,15 @@ def init_telemetry() -> None:
 
 if settings.settings.fancy_logging:
     import logging
+    import sys
 
     hud_logger = logging.getLogger("hud")
-    # TODO: Make this configurable
     hud_logger.setLevel(logging.INFO)
 
     if not hud_logger.handlers:
-        handler = logging.StreamHandler()
+        # Use the configured stream (defaults to stderr)
+        stream = sys.stderr if settings.settings.log_stream.lower() == "stderr" else sys.stdout
+        handler = logging.StreamHandler(stream)
         formatter = logging.Formatter("[%(levelname)s] %(asctime)s | %(name)s | %(message)s")
         handler.setFormatter(formatter)
         hud_logger.addHandler(handler)

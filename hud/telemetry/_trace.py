@@ -57,6 +57,7 @@ def _ensure_telemetry_initialized() -> None:
 @contextmanager
 def trace(
     name: str | None = None,
+    run_id: str | None = None,
     attributes: dict[str, Any] | None = None,
 ) -> Generator[str, None, None]:
     """
@@ -72,7 +73,7 @@ def trace(
     # Lazy initialization - only initialize telemetry when trace() is actually called
     _ensure_telemetry_initialized()
 
-    task_run_id = str(uuid.uuid4())
+    task_run_id = run_id or str(uuid.uuid4())
 
     logger.info("See your agent live at https://app.hud.so/trace/%s", task_run_id)
 

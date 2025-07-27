@@ -5,6 +5,8 @@ import inspect
 from functools import wraps
 from typing import TYPE_CHECKING, Any, Literal
 
+from pydantic import BaseModel, Field
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -56,3 +58,10 @@ def register_instance_tool(mcp: FastMCP, name: str, instance: Any) -> Callable[.
     _wrapper.__signature__ = public_sig  # type: ignore[attr-defined]
 
     return mcp.tool(name=name)(_wrapper)
+
+class HudEnvStatus(BaseModel):
+    """Environment status information."""
+    status: str = Field(description="Status (e.g., 'initializing', 'running', 'ready')")
+    message: str = Field(description="Human-readable status message")
+    live_url: str | None = Field(default=None, description="Live URL when available")
+    details: dict[str, Any] = Field(default_factory=dict)
