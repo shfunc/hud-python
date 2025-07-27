@@ -2,6 +2,7 @@
 """Claude MCP agent example for HUD tools via HTTP."""
 
 import asyncio
+import os
 from dotenv import load_dotenv
 import hud
 from mcp_use import MCPClient
@@ -9,19 +10,32 @@ from hud.mcp_agent import ClaudeMCPAgent
 
 load_dotenv()
 
-# To run this locally: python -m hud.tools.helper.mcp_server http --port 8041
+# To control your own computer: python -m hud.tools.helper.mcp_server http --port 8041
 # This will start the computer use MCP server on your machine.
+# BASE_URL = "http://localhost:8041/mcp"
 
 # To run inside a docker container, see environments/simple_browser/README.md
 
-BASE_URL = "http://localhost:8041/mcp"
+# To run on the cloud:
+BASE_URL = "https://orchestrator-v3.up.railway.app"
 
+HUD_API_KEY = os.getenv("HUD_API_KEY")
 
 async def main():
     """Run Claude MCP agent with HUD tools."""
 
     # Configure MCP client to connect to the router
-    config = {"mcpServers": {"hud": {"url": BASE_URL}}}
+    config = {
+        "mcpServers": {
+            "hud": {
+                "url": f"{BASE_URL}/api/v3/mcp",
+                "headers": { # This is how the cloud server is configured to work
+                    "Authorization": f"Bearer {HUD_API_KEY}",
+                    "Mcp-Image": "156041433621.dkr.ecr.us-east-1.amazonaws.com/docker-gym:psyopbench"
+                }
+            }
+        }
+    }
 
     # Create client
     client = MCPClient.from_dict(config)
@@ -40,15 +54,8 @@ async def main():
     )
 
     try:
-        # Run the agent
-        # query = "Find the hud-sdk repo on github and click on it"
-        # print(f"\n🤖 Running: {query}\n")
-
-        # Ask user for query in terminal
-        query = input("Enter a query: ")
-
-        # Use trace_debug to see MCP calls in real-time
-        with hud.trace_sync():
+        with hud.trace_sync(): # This will show you the agent live
+            query = input("Enter a query: ")
             result = await agent.run(query, max_steps=15)
 
         print(f"\n✅ Result: {result}")

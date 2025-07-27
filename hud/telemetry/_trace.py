@@ -74,6 +74,8 @@ def trace(
 
     task_run_id = str(uuid.uuid4())
 
+    logger.info("See your agent live at https://app.hud.so/trace/%s", task_run_id)
+
     local_attributes = attributes.copy() if attributes is not None else {}
     if name is not None:
         local_attributes["trace_name"] = name
