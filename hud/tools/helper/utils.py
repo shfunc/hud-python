@@ -65,5 +65,5 @@ class HudEnvStatus(BaseModel):
 
     status: str = Field(description="Status (e.g., 'initializing', 'running', 'ready')")
     message: str = Field(description="Human-readable status message")
-    live_url: str | None = Field(default=None, description="Live URL when available")
+    novnc_port: str | None = Field(default=None, description="noVNC port when available")
     details: dict[str, Any] = Field(default_factory=dict)
