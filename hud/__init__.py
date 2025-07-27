@@ -34,6 +34,7 @@ if settings.settings.fancy_logging:
         formatter = logging.Formatter("[%(levelname)s] %(asctime)s | %(name)s | %(message)s")
         handler.setFormatter(formatter)
         hud_logger.addHandler(handler)
+        hud_logger.propagate = False
 
 __all__ = [
     "Response",
