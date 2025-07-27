@@ -367,7 +367,8 @@ class AnthropicComputerTool(HudComputerTool):
 
         # Rescale screenshot in result if present
         if isinstance(result, ToolResult) and result.base64_image and self.rescale_images:
-            result.base64_image = await self._rescale_screenshot(result.base64_image)
+            rescaled_image = await self._rescale_screenshot(result.base64_image)
+            result = result.replace(base64_image=rescaled_image)
 
         # Handle screenshot for actions that need it
         screenshot_actions = {

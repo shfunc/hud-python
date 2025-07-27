@@ -31,7 +31,7 @@ class HudComputerTool:
         height: int | None = None,
         display_num: int | None = None,
         platform_type: Literal["auto", "xdo", "pyautogui"] = "auto",
-        rescale_images: bool = True,
+        rescale_images: bool = False,
     ) -> None:
         """
         Initialize the HUD computer tool.
@@ -299,7 +299,8 @@ class HudComputerTool:
 
             # Rescale screenshot in result if present
             if isinstance(result, ToolResult) and result.base64_image and self.rescale_images:
-                result.base64_image = await self._rescale_screenshot(result.base64_image)
+                rescaled_image = await self._rescale_screenshot(result.base64_image)
+                result = result.replace(base64_image=rescaled_image)
 
             # Convert result to content blocks
             return tool_result_to_content_blocks(result)
