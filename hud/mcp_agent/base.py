@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Union
 
 import mcp.types as types
 from mcp_use import MCPClient
@@ -84,11 +84,15 @@ class BaseMCPAgent(ABC):
                 # Get tools from the session
                 tools_result = await session.connector.client_session.list_tools()
                 for tool in tools_result.tools:
-                    # Apply filtering
-                    if self.allowed_tools and tool.name not in self.allowed_tools:
-                        continue
-                    if tool.name in self.disallowed_tools:
-                        continue
+                    # Always include setup/evaluate tools for framework use
+                    is_lifecycle_tool = tool.name in ["setup", "evaluate"]
+                    
+                    # Apply filtering (but always allow lifecycle tools)
+                    if not is_lifecycle_tool:
+                        if self.allowed_tools and tool.name not in self.allowed_tools:
+                            continue
+                        if tool.name in self.disallowed_tools:
+                            continue
 
                     self._available_tools.append(tool)
                     # Store tool with server reference for execution
@@ -104,8 +108,8 @@ class BaseMCPAgent(ABC):
         )
 
     def get_available_tools(self) -> list[types.Tool]:
-        """Get list of available MCP tools after filtering."""
-        return self._available_tools
+        """Get list of available MCP tools for LLM use (excludes lifecycle tools)."""
+        return [tool for tool in self._available_tools if tool.name not in ["setup", "evaluate"]]
 
     def get_tool_map(self) -> dict[str, tuple[str, types.Tool]]:
         """Get mapping of tool names to (server_name, tool) tuples."""
@@ -202,6 +206,10 @@ class BaseMCPAgent(ABC):
         """Get tool schemas in a format suitable for the model."""
         schemas = []
         for tool in self._available_tools:
+            # Filter out lifecycle tools from LLM conversation
+            if tool.name in ["setup", "evaluate"]:
+                continue
+                
             schema = {
                 "name": tool.name,
                 "description": tool.description,
@@ -217,7 +225,14 @@ class BaseMCPAgent(ABC):
             return None
 
         # Try different screenshot tools
-        for tool_name in ["computer", "screenshot", "computer_anthropic", "computer_openai"]:
+        for tool_name in [
+            "computer", 
+            "screenshot", 
+            "computer_anthropic", 
+            "computer_openai", 
+            "anthropic_computer", 
+            "openai_computer"
+        ]:
             if tool_name in self._tool_map:
                 try:
                     # Different tools have different APIs
@@ -320,7 +335,129 @@ class BaseMCPAgent(ABC):
             "results": results,  # List of (tool_name, content_blocks) for provider-specific use
         }
 
-    async def run(self, prompt: str, max_steps: int = 10, conversation_mode: bool = False) -> str:
+    async def run(
+        self, 
+        prompt_or_task: Union[str, "Task"], 
+        max_steps: int = 10, 
+        conversation_mode: bool = False
+    ) -> Union[str, dict[str, Any]]:
+        """
+        Run the agent with the given prompt or task.
+
+        Args:
+            prompt_or_task: Either a string prompt for simple execution or a Task object for full lifecycle
+            max_steps: Maximum number of steps
+            conversation_mode: If True, continue even when model returns text without tool calls
+
+        Returns:
+            For string prompts: The final response string
+            For Task objects: Evaluation result dict with 'reward', 'done', 'info' keys
+        """
+        # Import here to avoid circular imports
+        from hud.task import Task
+        
+        # Handle Task objects with full lifecycle
+        if isinstance(prompt_or_task, Task):
+            return await self._run_task(prompt_or_task, max_steps)
+        
+        # Handle simple string prompts (existing behavior)
+        return await self._run_prompt(prompt_or_task, max_steps, conversation_mode)
+
+    async def _run_task(self, task: "Task", max_steps: int = 10) -> dict[str, Any]:
+        """
+        Execute a task with setup and evaluate phases.
+        
+        Args:
+            task: Task object with prompt, setup, and evaluate configs
+            max_steps: Maximum steps for task execution
+            
+        Returns:
+            Evaluation result dict with 'reward', 'done', 'info' keys
+        """
+        try:
+            # Setup phase
+            if task.setup is not None:
+                await self._call_tool_safe("setup", task.setup)
+
+            # Execute the task prompt
+            execution_result = await self._run_prompt(task.prompt, max_steps, conversation_mode=False)
+            
+            # Evaluate phase
+            if task.evaluate is not None:
+                eval_result = await self._call_tool_safe("evaluate", task.evaluate)
+                
+                # Return evaluation result if it's properly formatted
+                if isinstance(eval_result, dict) and "reward" in eval_result and "done" in eval_result:
+                    return eval_result
+                else:
+                    # Fallback for invalid evaluation format
+                    return {
+                        "reward": 0.0,
+                        "done": True,
+                        "info": {"error": "Invalid evaluation result", "eval_result": eval_result}
+                    }
+            else:
+                # No evaluation - assume success
+                return {
+                    "reward": 0.0,
+                    "done": True,
+                    "info": {"message": "Task completed (no evaluation specified)"}
+                }
+                
+        except Exception as e:
+            return {
+                "reward": 0.0,
+                "done": True,
+                "info": {"error": str(e)}
+            }
+
+    async def _call_tool_safe(self, tool_name: str, arguments: Any) -> Any:
+        """
+        Safely call a tool and return its result.
+        
+        Args:
+            tool_name: Name of the tool to call
+            arguments: Arguments to pass to the tool (config from task)
+            
+        Returns:
+            Tool result or None if tool not available/failed
+        """
+        try:
+            if tool_name in self._tool_map:
+                tool_call = {"name": tool_name, "arguments": arguments}
+                result = await self.call_tool(tool_call)
+                
+                if result.isError:
+                    logger.error("Tool %s returned error: %s", tool_name, result.content)
+                    return {"error": result.content}
+                else:
+                    # Extract content from MCP result
+                    if hasattr(result, 'content') and result.content:
+                        if len(result.content) == 1:
+                            content_item = result.content[0]
+                            if hasattr(content_item, 'text'):
+                                # Try to parse as JSON if it looks like structured data
+                                text = content_item.text
+                                if text.strip().startswith('{') and text.strip().endswith('}'):
+                                    try:
+                                        import json
+                                        return json.loads(text)
+                                    except json.JSONDecodeError:
+                                        return text
+                                return text
+                            else:
+                                return content_item
+                        else:
+                            return result.content
+                    return result
+            else:
+                logger.warning("Tool %s not available", tool_name)
+                return None
+        except Exception as e:
+            logger.error("Failed to call tool %s: %s", tool_name, e)
+            return {"error": str(e)}
+
+    async def _run_prompt(self, prompt: str, max_steps: int = 10, conversation_mode: bool = False) -> str:
         """
         Run the agent with the given prompt.
 

@@ -272,7 +272,7 @@ class ClaudeMCPAgent(BaseMCPAgent):
 
         for tool in self._available_tools:
             # Special handling for computer use tools
-            if tool.name in ["computer", "computer_anthropic"]:
+            if tool.name in ["computer", "computer_anthropic", "anthropic_computer"]:
                 # Use Claude's native computer use format with configurable dimensions
                 claude_tool = {
                     "type": "computer_20250124",
