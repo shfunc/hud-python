@@ -25,7 +25,6 @@ Example:
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 import mcp.types as types
@@ -41,8 +40,6 @@ _original_received_request = ServerSession._received_request
 _init_function: Callable | None = None
 _initialized = False
 
-logger = logging.getLogger(__name__)
-
 async def _patched_received_request(
     self: ServerSession, responder: RequestResponder[types.ClientRequest, types.ServerResult]
 ) -> Awaitable[types.ServerResult]:
@@ -57,17 +54,13 @@ async def _patched_received_request(
         progress_token = None
         if hasattr(params, "_meta") and params._meta and hasattr(params._meta, "progressToken"):
             progress_token = params._meta.progressToken
-            logger.info("Captured progress token for initialization: %s", progress_token)
 
         # Run our initialization function if provided and not already done
         if _init_function and not _initialized:
-            logger.info("Running custom initialization with progress support...")
             try:
                 await _init_function(session=self, progress_token=progress_token)
                 _initialized = True
-                logger.info("Custom initialization completed successfully")
             except Exception as e:
-                logger.error("Custom initialization failed: %s", e)
                 if progress_token:
                     await self.send_progress_notification(
                         progress_token=progress_token,
@@ -101,13 +94,13 @@ def mcp_intialize_wrapper(
     global _init_function
 
     def decorator(func: Callable[[ServerSession | None, str | None], Awaitable[None]]) -> Callable:
+        global _init_function
         # Store the initialization function
         _init_function = func
 
         # Apply the monkey patch if not already applied
         if ServerSession._received_request != _patched_received_request:
             ServerSession._received_request = _patched_received_request
-            logger.info("Enabled initialization progress support via ServerSession patching")
 
         return func
 
@@ -133,4 +126,3 @@ def reset_initialization() -> None:
     _initialized = False
     _init_function = None
 
-    logger.info("Reset initialization state and restored original ServerSession")
