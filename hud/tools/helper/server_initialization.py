@@ -53,6 +53,11 @@ async def _patched_received_request(
         progress_token = None
         if hasattr(params, "meta") and params.meta and hasattr(params.meta, "progressToken"):
             progress_token = params.meta.progressToken
+            import sys
+            print(f"Found progress token: {progress_token}", file=sys.stderr)
+        else:
+            import sys
+            print(f"No progress token found: meta={getattr(params, 'meta', 'NO META')}", file=sys.stderr)
 
         # Run our initialization function if provided and not already done
         if _init_function and not _initialized:
