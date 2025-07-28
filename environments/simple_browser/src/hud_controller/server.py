@@ -5,6 +5,7 @@ import os
 import json
 from typing import Optional, Any
 from pathlib import Path
+from datetime import datetime
 
 # Configure logging before imports to go to stderr
 logging.basicConfig(
@@ -24,6 +25,12 @@ from mcp.server.models import InitializationOptions
 from hud.tools.helper import mcp_intialize_wrapper, register_instance_tool
 
 from .services import ServiceManager
+from .runtime import setup_tool, evaluate_tool
+
+# Import registries to trigger registration
+from .evaluators import EvaluatorRegistry
+from .setup import SetupRegistry  
+from .problems import ProblemRegistry
 
 service_manager = ServiceManager()
 
@@ -175,7 +182,115 @@ mcp = FastMCP(
 )
 
 
-# Tool that launches apps dynamically (doesn't need X11)
+# === PARAMETERIZED MCP RESOURCES ===
+
+@mcp.resource("evaluators://registry")
+async def get_evaluators_resource() -> str:
+    """MCP resource containing all available evaluators."""
+    return EvaluatorRegistry.to_json()
+
+
+@mcp.resource("evaluators://{env}")
+async def get_env_evaluators_resource(env: str) -> str:
+    """MCP resource containing environment-specific evaluators."""
+    env_evaluators = EvaluatorRegistry.get_evaluators_by_app(env)
+    return json.dumps({
+        "env": env,
+        "evaluators": env_evaluators,
+        "count": len(env_evaluators)
+    }, indent=2)
+
+
+@mcp.resource("setup://registry")
+async def get_setup_registry_resource() -> str:
+    """MCP resource containing all available setup tools."""
+    return SetupRegistry.to_json()
+
+
+@mcp.resource("setup://{env}")
+async def get_env_setup_resource(env: str) -> str:
+    """MCP resource containing environment-specific setup tools."""
+    env_setup = SetupRegistry.get_setup_tools_by_app(env)
+    return json.dumps({
+        "env": env, 
+        "setup_tools": env_setup,
+        "count": len(env_setup)
+    }, indent=2)
+
+
+@mcp.resource("problems://registry")
+async def get_problems_registry_resource() -> str:
+    """MCP resource containing all available problems."""
+    return ProblemRegistry.to_json()
+
+
+@mcp.resource("problems://{env}")
+async def get_env_problems_resource(env: str) -> str:
+    """MCP resource containing environment-specific problems."""
+    env_problems = ProblemRegistry.get_problems_by_app(env)
+    return json.dumps({
+        "env": env,
+        "problems": env_problems,
+        "count": len(env_problems)
+    }, indent=2)
+
+
+@mcp.resource("schema://evaluator/{evaluator_name}")
+async def get_evaluator_schema_resource(evaluator_name: str) -> str:
+    """MCP resource containing detailed schema for a specific evaluator."""
+    schema = EvaluatorRegistry.get_evaluator_schema(evaluator_name)
+    return json.dumps(schema, indent=2)
+
+
+@mcp.resource("schema://setup/{setup_name}")
+async def get_setup_schema_resource(setup_name: str) -> str:
+    """MCP resource containing detailed schema for a specific setup tool."""
+    schema = SetupRegistry.get_setup_schema(setup_name)
+    return json.dumps(schema, indent=2)
+
+
+@mcp.resource("schema://problem/{problem_name}")
+async def get_problem_schema_resource(problem_name: str) -> str:
+    """MCP resource containing detailed schema for a specific problem."""
+    schema = ProblemRegistry.get_problem_schema(problem_name)
+    return json.dumps(schema, indent=2)
+
+
+@mcp.resource("telemetry://live")
+async def get_telemetry_resource() -> str:
+    """MCP resource containing telemetry data including VNC live_url."""
+    telemetry_data = {
+        "live_url": "http://localhost:8080/vnc.html",
+        "display": os.getenv("DISPLAY", ":1"),
+        "vnc_port": 8080,
+        "websockify_port": 8080,
+        "status": "ready",
+        "timestamp": datetime.now().isoformat(),
+        "services": {
+            "x11": "running",
+            "vnc": "running", 
+            "websockify": "running"
+        }
+    }
+    return json.dumps(telemetry_data, indent=2)
+
+
+# === SETUP AND EVALUATION TOOLS ===
+
+@mcp.tool()
+async def setup(config: dict, ctx: Context) -> dict:
+    """Setup the environment based on configuration."""
+    return await setup_tool(config, ctx, service_manager)
+
+
+@mcp.tool()
+async def evaluate(config: dict, ctx: Context) -> dict:
+    """Evaluate the environment based on configuration."""
+    return await evaluate_tool(config, ctx, service_manager)
+
+
+# === APPLICATION TOOLS ===
+
 @mcp.tool()
 async def launch_app(app_name: str, ctx: Context) -> str:
     """Launch a specific application dynamically.
@@ -187,14 +302,11 @@ async def launch_app(app_name: str, ctx: Context) -> str:
         Success message with app URL
     """
     await ctx.info(f"Launching app: {app_name}")
-
-    # Use progress for app launch
     await ctx.report_progress(0, f"Starting {app_name} app...")
 
     app_info = await service_manager.launch_app(app_name)
 
     await ctx.report_progress(100, f"{app_name} app ready!")
-
     return f"Launched {app_name} at {app_info['url']}"
 
 
@@ -229,7 +341,6 @@ async def api_request(
         }
 
 
-# Database query tool (example)
 @mcp.tool()
 async def query_database(query: str, ctx: Context) -> list[dict]:
     """Execute a database query (mock implementation).
