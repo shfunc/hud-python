@@ -33,7 +33,7 @@ async def main():
         display_height=768,
         # append_tool_system_prompt=True,
         # custom_system_prompt="You are an autonomous agent that completes tasks without asking for confirmation. When asked to click on something or type a message, DO IT immediately without asking permission. The user has already authorized you by running this script.",
-        allowed_tools=["computer_openai"],  # Only allow the OpenAI computer tool
+        allowed_tools=["openai_computer"],  # Only allow the OpenAI computer tool
     )
 
     try:

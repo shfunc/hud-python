@@ -89,13 +89,15 @@ async def initialize_environment(session=None, progress_token=None):
         await send_progress(70, "Initializing tools...")
 
         # Create and register computer tool
-        from hud.tools import HudComputerTool, PlaywrightTool
+        from hud.tools import HudComputerTool, PlaywrightTool, AnthropicComputerTool, OpenAIComputerTool
 
         register_instance_tool(mcp, "computer", HudComputerTool())
-
-        # Create and register Playwright tool
+        register_instance_tool(mcp, "anthropic_computer", AnthropicComputerTool())
+        register_instance_tool(mcp, "openai_computer", OpenAIComputerTool())
+        
+        # Store playwright tool instance for browser launch
         playwright_tool = PlaywrightTool()
-        register_instance_tool(mcp, "playwright", playwright_tool)
+        register_instance_tool(mcp, "playwright", playwright_tool)  
 
         await send_progress(80, "Computer and Playwright tools ready")
 
@@ -278,15 +280,27 @@ async def get_telemetry_resource() -> str:
 # === SETUP AND EVALUATION TOOLS ===
 
 @mcp.tool()
-async def setup(config: dict, ctx: Context) -> dict:
-    """Setup the environment based on configuration."""
-    return await setup_tool(config, ctx, service_manager)
+async def setup(function: str = None, args: dict = None, name: str = None, ctx: Context = None) -> dict:
+    """Setup the environment based on configuration.
+    
+    Args:
+        function: Setup function name (e.g. 'todo_seed')
+        args: Arguments for the setup function
+        name: Problem name to lookup setup from problem registry
+    """
+    return await setup_tool(function, args, name, ctx, service_manager)
 
 
 @mcp.tool()
-async def evaluate(config: dict, ctx: Context) -> dict:
-    """Evaluate the environment based on configuration."""
-    return await evaluate_tool(config, ctx, service_manager)
+async def evaluate(function: str = None, args: dict = None, name: str = None, ctx: Context = None) -> dict:
+    """Evaluate the environment based on configuration.
+    
+    Args:
+        function: Evaluator function name (e.g. 'todo_completed')
+        args: Arguments for the evaluator function
+        name: Problem name to lookup evaluation from problem registry
+    """
+    return await evaluate_tool(function, args, name, ctx, service_manager)
 
 
 # === APPLICATION TOOLS ===

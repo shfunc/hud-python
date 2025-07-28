@@ -3,6 +3,7 @@
 from typing import Dict, Optional, Any
 import httpx
 import logging
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -79,23 +80,38 @@ class BrowserEnvironmentContext:
             JSON response from the app
             
         Raises:
-            Exception: If the API call fails
+            Exception: If the API call fails after retries
         """
         app_url = self.get_app_url(app_name)
         full_url = f"{app_url}{endpoint}"
         
         logger.debug(f"Making {method} request to {full_url}")
         
-        try:
-            response = await self._http_client.request(method, full_url, **kwargs)
-            response.raise_for_status()
-            return response.json()
-        except httpx.HTTPError as e:
-            logger.error(f"HTTP error calling {full_url}: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Error calling {full_url}: {e}")
-            raise
+        # Retry logic to handle app startup timing
+        max_retries = 3
+        retry_delay = 2.0  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                response = await self._http_client.request(method, full_url, **kwargs)
+                response.raise_for_status()
+                return response.json()
+            except httpx.HTTPError as e:
+                if attempt < max_retries - 1:
+                    logger.warning(f"HTTP error calling {full_url} (attempt {attempt + 1}/{max_retries}): {e}")
+                    await asyncio.sleep(retry_delay)
+                    continue
+                else:
+                    logger.error(f"HTTP error calling {full_url} after {max_retries} attempts: {e}")
+                    raise
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    logger.warning(f"Error calling {full_url} (attempt {attempt + 1}/{max_retries}): {e}")
+                    await asyncio.sleep(retry_delay)
+                    continue
+                else:
+                    logger.error(f"Error calling {full_url} after {max_retries} attempts: {e}")
+                    raise
     
     # === Browser Interactions ===
     

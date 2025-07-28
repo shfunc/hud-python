@@ -53,7 +53,7 @@ async def main():
             display_height_px=850,
             # append_tool_system_prompt=True,
             # custom_system_prompt="You are a helpful assistant that can control the computer to help users with their tasks.",
-            allowed_tools=["computer"],  # Only allow the Anthropic computer tool
+            allowed_tools=["anthropic_computer"],  # Only allow the Anthropic computer tool
         )
 
         try:

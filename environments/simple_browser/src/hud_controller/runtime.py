@@ -22,20 +22,22 @@ def get_environment_context(service_manager: ServiceManager):
     return BrowserEnvironmentContext(service_manager, playwright_tool)
 
 
-async def setup_tool(config: dict, ctx: Context, service_manager: ServiceManager) -> dict:
+async def setup_tool(function: str, args: dict, name: str, ctx: Context, service_manager: ServiceManager) -> dict:
     """Setup the environment based on configuration.
     
     Args:
-        config: {"function": "tool_name", "args": {...}} OR {"name": "problem_name"}
+        function: Setup function name (e.g. 'todo_seed')
+        args: Arguments for the setup function  
+        name: Problem name to lookup setup from problem registry
         ctx: FastMCP context
         service_manager: Service manager instance
     
     Returns:
         Setup result dictionary
     """
-    function_name = config.get('function')
-    problem_name = config.get('name')
-    args = config.get('args', {})
+    function_name = function
+    problem_name = name
+    args = args or {}
     
     await ctx.info(f"Setup - function: {function_name}, problem: {problem_name}")
     
@@ -74,20 +76,22 @@ async def setup_tool(config: dict, ctx: Context, service_manager: ServiceManager
         return {"status": "error", "message": f"Setup error: {str(e)}", "function": function_name, "args": args}
 
 
-async def evaluate_tool(config: dict, ctx: Context, service_manager: ServiceManager) -> dict:
+async def evaluate_tool(function: str, args: dict, name: str, ctx: Context, service_manager: ServiceManager) -> dict:
     """Evaluate the environment based on configuration.
     
     Args:
-        config: {"function": "evaluator_name", "args": {...}} OR {"name": "problem_name"}
+        function: Evaluator function name (e.g. 'todo_completed')
+        args: Arguments for the evaluator function
+        name: Problem name to lookup evaluation from problem registry
         ctx: FastMCP context
         service_manager: Service manager instance
     
     Returns:
         Evaluation result dictionary with standardized reward format
     """
-    function_name = config.get('function')
-    problem_name = config.get('name')
-    args = config.get('args', {})
+    function_name = function
+    problem_name = name
+    args = args or {}
     
     await ctx.info(f"Evaluation - function: {function_name}, problem: {problem_name}")
     
