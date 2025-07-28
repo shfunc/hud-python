@@ -59,11 +59,3 @@ def register_instance_tool(mcp: FastMCP, name: str, instance: Any) -> Callable[.
 
     return mcp.tool(name=name)(_wrapper)
 
-
-class HudEnvStatus(BaseModel):
-    """Environment status information."""
-
-    status: str = Field(description="Status (e.g., 'initializing', 'running', 'ready')")
-    message: str = Field(description="Human-readable status message")
-    novnc_port: str | None = Field(default=None, description="noVNC port when available")
-    details: dict[str, Any] = Field(default_factory=dict)
