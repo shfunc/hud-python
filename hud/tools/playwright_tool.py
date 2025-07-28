@@ -10,7 +10,7 @@ from mcp import ErrorData, McpError
 from mcp.types import INVALID_PARAMS, ImageContent, TextContent
 from pydantic import Field
 
-from hud.tools.base import BaseTool, ToolResult, tool_result_to_content_blocks
+from hud.tools.base import ToolResult, tool_result_to_content_blocks
 
 if TYPE_CHECKING:
     from playwright.async_api import Browser, BrowserContext, Page
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class PlaywrightTool(BaseTool):
+class PlaywrightTool:
     """Playwright tool for web automation."""
 
     def __init__(self) -> None:
