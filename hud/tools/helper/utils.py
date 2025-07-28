@@ -5,8 +5,6 @@ import inspect
 from functools import wraps
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, Field
-
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -58,4 +56,3 @@ def register_instance_tool(mcp: FastMCP, name: str, instance: Any) -> Callable[.
     _wrapper.__signature__ = public_sig  # type: ignore[attr-defined]
 
     return mcp.tool(name=name)(_wrapper)
-
