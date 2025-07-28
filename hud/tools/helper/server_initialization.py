@@ -49,16 +49,10 @@ async def _patched_received_request(
     # Check if this is an initialization request
     if isinstance(responder.request.root, types.InitializeRequest):
         params = responder.request.root.params
-        import sys
-        print(f"InitializeRequest params: {params}", file=sys.stderr)
-        print(f"Has _meta? {hasattr(params, '_meta')}", file=sys.stderr)
-        if hasattr(params, "_meta"):
-            print(f"_meta value: {params._meta}", file=sys.stderr)
-
         # Extract progress token if present
         progress_token = None
-        if hasattr(params, "_meta") and params._meta and hasattr(params._meta, "progressToken"):
-            progress_token = params._meta.progressToken
+        if hasattr(params, "meta") and params.meta and hasattr(params.meta, "progressToken"):
+            progress_token = params.meta.progressToken
 
         # Run our initialization function if provided and not already done
         if _init_function and not _initialized:
