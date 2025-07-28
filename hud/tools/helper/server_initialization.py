@@ -53,17 +53,14 @@ async def _patched_received_request(
         progress_token = None
         if hasattr(params, "meta") and params.meta and hasattr(params.meta, "progressToken"):
             progress_token = params.meta.progressToken
-            import sys
-            print(f"Found progress token: {progress_token}", file=sys.stderr)
-        else:
-            import sys
-            print(f"No progress token found: meta={getattr(params, 'meta', 'NO META')}", file=sys.stderr)
 
         # Run our initialization function if provided and not already done
         if _init_function and not _initialized:
             try:
                 await _init_function(session=self, progress_token=progress_token)
                 _initialized = True
+                # Restore the original handler after initialization
+                ServerSession._received_request = _original_received_request
             except Exception as e:
                 if progress_token:
                     await self.send_progress_notification(
@@ -114,19 +111,4 @@ def mcp_intialize_wrapper(
 
     # If used as @decorator
     return decorator
-
-
-def reset_initialization() -> None:
-    """Reset the initialization state and restore original ServerSession behavior.
-
-    This is mainly useful for testing or if you need to disable the patching.
-    """
-    global _initialized, _init_function
-
-    # Restore original method
-    ServerSession._received_request = _original_received_request
-
-    # Reset state
-    _initialized = False
-    _init_function = None
 
