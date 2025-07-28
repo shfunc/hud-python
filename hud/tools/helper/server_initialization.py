@@ -59,7 +59,9 @@ async def _patched_received_request(
         if _init_function and not _initialized:
             try:
                 await _init_function(session=self, progress_token=progress_token)
-                _initialized = True
+                ServerSession._received_request = _original_received_request
+                import sys
+                print("Restored original _received_request handler after initialization complete", file=sys.stderr)
             except Exception as e:
                 if progress_token:
                     await self.send_progress_notification(
@@ -72,10 +74,7 @@ async def _patched_received_request(
 
     # Call the original handler to send the InitializeResult
     result = await _original_received_request(self, responder)
-    
-    # If this was an initialization request and we've initialized, restore the original handler
-    if isinstance(responder.request.root, types.InitializeRequest) and _initialized:
-        ServerSession._received_request = _original_received_request
+    _initialized = True
 
     return result
 
