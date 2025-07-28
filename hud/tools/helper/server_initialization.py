@@ -40,6 +40,7 @@ _original_received_request = ServerSession._received_request
 _init_function: Callable | None = None
 _initialized = False
 
+
 async def _patched_received_request(
     self: ServerSession, responder: RequestResponder[types.ClientRequest, types.ServerResult]
 ) -> Awaitable[types.ServerResult]:
@@ -111,4 +112,3 @@ def mcp_intialize_wrapper(
 
     # If used as @decorator
     return decorator
-
