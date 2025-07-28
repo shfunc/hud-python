@@ -6,6 +6,7 @@ from .base import ToolError, ToolResult, tool_result_to_content_blocks
 from .bash import BashTool
 from .computer import AnthropicComputerTool, HudComputerTool, OpenAIComputerTool
 from .edit import EditTool
+from .playwright_tool import PlaywrightTool
 
 __all__ = [
     "AnthropicComputerTool",
@@ -13,6 +14,7 @@ __all__ = [
     "EditTool",
     "HudComputerTool",
     "OpenAIComputerTool",
+    "PlaywrightTool",
     "ToolError",
     "ToolResult",
     "tool_result_to_content_blocks",

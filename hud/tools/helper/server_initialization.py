@@ -60,8 +60,6 @@ async def _patched_received_request(
             try:
                 await _init_function(session=self, progress_token=progress_token)
                 ServerSession._received_request = _original_received_request
-                import sys
-                print("Restored original _received_request handler after initialization complete", file=sys.stderr)
             except Exception as e:
                 if progress_token:
                     await self.send_progress_notification(
