@@ -87,77 +87,71 @@ if __name__ == "__main__":
     mcp.run()
 ```
 
-## Testing
+## Testing Your Environment
 
-### Option 1: Direct Agent Interface (Simplified)
+### Unified Agent Interface
 
 ```python
+import asyncio
 from hud.mcp_agent import ClaudeMCPAgent
 from hud import Task
 from mcp_use import MCPClient
 
-# Setup MCP client
-config = {"mcpServers": {"env": {"command": "python", "args": ["my_env.py"]}}}
-client = MCPClient.from_dict(config)
+async def test_environment():
+    # Connect to your environment
+    config = {"mcpServers": {"env": {"command": "python", "args": ["my_env.py"]}}}
+    client = MCPClient.from_dict(config)
+    
+    # Create agent (only specify interaction tools)
+    agent = ClaudeMCPAgent(
+        client=client,
+        model="claude-sonnet-4-20250514",
+        allowed_tools=["computer", "api_request"]  # Interaction tools only
+    )
+    
+    # Simple query
+    result = await agent.run("Take a screenshot and describe what you see")
+    print(f"Query result: {result}")
+    
+    # Full task with lifecycle
+    task = Task(
+        prompt="Complete the todo app workflow",
+        setup={"function": "todo_seed", "args": {"num_items": 3}},
+        evaluate={"function": "todo_completed", "args": {"expected_count": 1}}
+    )
+    
+    eval_result = await agent.run(task)
+    print(f"Task result: {eval_result}")
+    # Returns: {"reward": 1.0, "done": True, "info": {...}}
+    
+    await client.close_all_sessions()
 
-# Create agent
-agent = ClaudeMCPAgent(
-    client=client,
-    model="claude-sonnet-4-20250514",
-    allowed_tools=["computer_anthropic"]  # Only interaction tools, setup/evaluate called internally
-)
-
-# Simple query
-result = await agent.run("Take a screenshot and tell me what you see")
-
-# Full task with setup/evaluate
-task = Task(
-    prompt="Complete the todo app test",
-    setup={"function": "todo_seed", "args": {"num_items": 3}},
-    evaluate={"function": "todo_completed", "args": {"expected_count": 1}}
-)
-eval_result = await agent.run(task)  # Returns {"reward": 1.0, "done": True, "info": {...}}
+# Run the test
+asyncio.run(test_environment())
 ```
 
-### Option 2: Traditional Job Interface
-
-```python
-from hud import Task, run_job
-from hud.mcp_agent import ClaudeMCPAgent
-
-task = Task(
-    prompt="Test task",
-    setup={"test": True},
-    evaluate={"test": True}
-)
-
-await run_job(
-    ClaudeMCPAgent, 
-    task, 
-    "test_job",
-    agent_kwargs={"allowed_tools": ["computer_anthropic"]}
-)
-```
-
-### Option 3: Basic MCP Testing
+### Direct MCP Tool Testing
 
 ```python
 from mcp_use import MCPClient
 
+# Test individual tools
 config = {"mcpServers": {"env": {"command": "python", "args": ["my_env.py"]}}}
 client = MCPClient.from_dict(config)
 session = await client.create_session("env")
 
-# Test tools directly
-await session.connector.call_tool("setup", {})
-await session.connector.call_tool("evaluate", {})
+# Test setup/evaluate tools directly
+setup_result = await session.connector.call_tool("setup", {"function": "test_setup"})
+eval_result = await session.connector.call_tool("evaluate", {"function": "test_eval"})
 ```
 
 ## Key Features
 
-✨ **Simplified Interface**: Use `agent.run(task)` for both simple queries and full task lifecycle  
+✨ **Unified Interface**: Single `agent.run()` method handles both simple queries and full task lifecycle  
+🔄 **Automatic Lifecycle**: Setup → Execute → Evaluate phases managed automatically  
 📋 **Flexible Config**: Support any setup/evaluate config format your environment needs  
 🔧 **Easy Integration**: Import HUD tools with `register_instance_tool()`  
+🛡️ **Smart Tool Filtering**: Lifecycle tools auto-discovered but hidden from LLM conversation  
 
 ## Examples
 
@@ -166,4 +160,4 @@ await session.connector.call_tool("evaluate", {})
 - [`qa_controller/`](./qa_controller/) - Text-based environment
 
 ### Usage Examples  
-- [`simple_task_example.py`](../examples/agents_tools/simple_task_example.py) - Full demo with simple_browser
+- [`simple_task_example.py`](../examples/agents_tools/simple_task_example.py) - Complete demo with simple_browser environment
