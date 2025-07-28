@@ -55,7 +55,7 @@ def _ensure_telemetry_initialized() -> None:
 
 
 @contextmanager
-def trace(
+def trace_open(
     name: str | None = None,
     run_id: str | None = None,
     attributes: dict[str, Any] | None = None,
@@ -125,7 +125,7 @@ def trace(
 
 
 @contextmanager
-def trace_sync(
+def trace(
     name: str | None = None,
     attributes: dict[str, Any] | None = None,
 ) -> Generator[str, None, None]:
@@ -142,7 +142,7 @@ def trace_sync(
     Returns:
         The generated task run ID (UUID string) used for this trace
     """
-    with trace(name=name, attributes=attributes) as task_run_id:
+    with trace_open(name=name, attributes=attributes) as task_run_id:
         yield task_run_id
 
     # Ensure telemetry is flushed synchronously
@@ -167,7 +167,7 @@ def trace_decorator(
             @wraps(func)
             async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
                 func_name = name or f"{func.__module__}.{func.__name__}"
-                with trace(name=func_name, attributes=attributes):
+                with trace_open(name=func_name, attributes=attributes):
                     return await func(*args, **kwargs)
 
             return async_wrapper
@@ -176,7 +176,7 @@ def trace_decorator(
             @wraps(func)
             def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
                 func_name = name or f"{func.__module__}.{func.__name__}"
-                with trace(name=func_name, attributes=attributes):
+                with trace_open(name=func_name, attributes=attributes):
                     return func(*args, **kwargs)
 
             return sync_wrapper

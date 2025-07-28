@@ -10,7 +10,7 @@ from hud.telemetry._trace import (
     init_telemetry,
     trace,
     trace_decorator,
-    trace_sync,
+    trace_open,
 )
 from hud.telemetry.context import get_current_task_run_id as actual_get_current_task_run_id
 from hud.telemetry.context import is_root_trace as actual_is_root_trace
@@ -53,7 +53,7 @@ class TestTrace:
 
         initial_root_state = actual_is_root_trace.get()
 
-        with trace() as task_run_id:
+        with trace_open() as task_run_id:
             assert isinstance(task_run_id, str)
             uuid.UUID(task_run_id)
             assert actual_get_current_task_run_id() == task_run_id
@@ -77,7 +77,7 @@ class TestTrace:
         trace_name = "test_trace_with_data"
         attrs = {"key": "value", "number": 42}
 
-        with trace(name=trace_name, attributes=attrs) as task_run_id:
+        with trace_open(name=trace_name, attributes=attrs) as task_run_id:
             assert isinstance(task_run_id, str)
 
         mock_flush.assert_called_once()
@@ -105,7 +105,7 @@ class TestTrace:
         test_attrs = {"custom_attr": "test_val"}
         test_name = "mcp_export_test"
 
-        with trace(name=test_name, attributes=test_attrs) as task_run_id:
+        with trace_open(name=test_name, attributes=test_attrs) as task_run_id:
             pass
 
         mock_flush.assert_called_once()
@@ -135,7 +135,7 @@ class TestTrace:
         assert actual_get_current_task_run_id() is None
         assert actual_is_root_trace.get() is False
 
-        with trace(name="outer") as outer_id:
+        with trace_open(name="outer") as outer_id:
             assert actual_get_current_task_run_id() == outer_id
             assert actual_is_root_trace.get() is True
             with trace(name="inner") as inner_id:
@@ -164,7 +164,7 @@ class TestTrace:
             "hud.telemetry._trace.submit_to_worker_loop", return_value=MagicMock(), autospec=True
         )
 
-        with pytest.raises(ValueError, match="Test exception"), trace(name="trace_with_exception"):
+        with pytest.raises(ValueError, match="Test exception"), trace_open(name="trace_with_exception"):  # noqa: E501
             assert actual_get_current_task_run_id() != initial_task_id_before_trace
             assert actual_is_root_trace.get() is False
             raise ValueError("Test exception")
@@ -186,7 +186,7 @@ class TestTraceSync:
             mock_trace.return_value.__enter__.return_value = "test-task-id"
             mock_trace.return_value.__exit__.return_value = None
 
-            with trace_sync(name="test_sync") as task_run_id:
+            with trace(name="test_sync") as task_run_id:
                 assert task_run_id == "test-task-id"
 
             mock_trace.assert_called_once_with(name="test_sync", attributes=None)
@@ -201,7 +201,7 @@ class TestTraceSync:
             mock_trace.return_value.__enter__.return_value = "test-task-id"
             mock_trace.return_value.__exit__.return_value = None
 
-            with trace_sync(name="test_sync", attributes=attrs):
+            with trace(name="test_sync", attributes=attrs):
                 pass
 
             mock_trace.assert_called_once_with(name="test_sync", attributes=attrs)
