@@ -11,20 +11,26 @@ logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s] Browser: %(message)s", stream=sys.stderr
 )
 
+
 # ---- BROWSER ----
 # The browser is launched by the ServiceManager
 # and is used to navigate to the default URL
-async def launch_browser(url: str):
-    """Launch Playwright Chromium browser."""
+async def launch_browser(url: str = None):
+    """Launch Playwright Chromium browser.
+
+    Args:
+        url: Optional URL to navigate to. If None, just launches browser without navigation.
+    """
     logging.info("Browser launcher starting...")
 
     # Ensure DISPLAY is set
     os.environ["DISPLAY"] = os.environ.get("DISPLAY", ":1")
     logging.info(f"Using DISPLAY: {os.environ['DISPLAY']}")
 
-    # Default URL - can be overridden by environment variable
-    default_url = url
-    logging.info(f"Default URL: {default_url}")
+    if url:
+        logging.info(f"Will navigate to: {url}")
+    else:
+        logging.info("Launching browser without navigation")
 
     async with async_playwright() as p:
         # Launch Chromium
@@ -61,9 +67,13 @@ async def launch_browser(url: str):
 
         page = await context.new_page()
 
-        # Navigate to default URL
-        logging.info(f"Navigating to {default_url}")
-        await page.goto(default_url)
+        # Navigate only if URL is provided
+        if url:
+            logging.info(f"Navigating to {url}")
+            await page.goto(url)
+        else:
+            # Navigate to a blank page
+            await page.goto("about:blank")
 
         # Keep browser running
         logging.info("Browser launched successfully")
@@ -89,8 +99,11 @@ async def launch_browser(url: str):
 
 
 if __name__ == "__main__":
-    url = sys.argv[1] if len(sys.argv) > 1 else "https://www.github.com"
-    logging.info(f"Launching browser with URL: {url}")
+    url = sys.argv[1] if len(sys.argv) > 1 else None
+    if url:
+        logging.info(f"Launching browser with URL: {url}")
+    else:
+        logging.info("Launching browser without navigation")
 
     try:
         asyncio.run(launch_browser(url))

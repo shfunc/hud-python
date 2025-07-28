@@ -75,50 +75,71 @@ async def initialize_environment(session=None, progress_token=None):
 
         # Start VNC and wait for it
         await service_manager.wait_for_vnc()
-        vnc_message = {
-            "message": "VNC server ready",
-            "live_url": "http://localhost:8080/vnc.html"
-        }
+        vnc_message = {"message": "VNC server ready", "live_url": "http://localhost:8080/vnc.html"}
         await send_progress(60, json.dumps(vnc_message))
 
         # Initialize tools now that X11 is ready
         await send_progress(70, "Initializing tools...")
 
         # Create and register computer tool
-        from hud.tools import HudComputerTool
+        from hud.tools import HudComputerTool, PlaywrightTool
 
         register_instance_tool(mcp, "computer", HudComputerTool())
 
-        await send_progress(80, "Computer tool ready")
+        # Create and register Playwright tool
+        playwright_tool = PlaywrightTool()
+        register_instance_tool(mcp, "playwright", playwright_tool)
 
-        # Launch apps and browser in parallel
+        await send_progress(80, "Computer and Playwright tools ready")
+
+        # Launch apps and browser in parallel (with error handling)
         launch_apps = os.getenv("LAUNCH_APPS", "")
+        browser_url = os.getenv("BROWSER_URL", "")
+
         if launch_apps:
-            await send_progress(85, f"Launching apps and browser in parallel: {launch_apps}")
-            
-            # Start app launches and browser launch concurrently
+            await send_progress(85, f"Launching apps: {launch_apps}")
+
+            # Launch apps first
             app_tasks = []
             for app in launch_apps.split(","):
                 app = app.strip()
                 if app:
                     app_tasks.append(service_manager.launch_app(app))
-            
-            # Start browser while apps are launching
-            browser_task = service_manager.launch_browser()
-            
-            # Wait for apps to be ready
+
+            # Wait for apps with error handling
             if app_tasks:
-                await asyncio.gather(*app_tasks)
-                await send_progress(90, "Apps launched")
-            
-            # Browser should be starting in background
-            await send_progress(95, "Browser starting...")
-            
-        else:
-            # No apps to launch, just start browser
-            await send_progress(90, "No apps specified, starting browser")
-            await service_manager.launch_browser()
-            await send_progress(95, "Browser starting...")
+                try:
+                    await asyncio.gather(*app_tasks, return_exceptions=True)
+                    await send_progress(90, "Apps launched (some may have failed)")
+                except Exception as e:
+                    logger.error(f"App launch failed: {e}")
+                    await send_progress(90, f"Apps failed to launch: {e}")
+
+        # Now launch browser using PlaywrightTool after apps are ready
+        try:
+            await send_progress(93, "Launching browser...")
+            # Just ensure browser is ready (will launch on first use)
+            await playwright_tool._ensure_browser()
+            await send_progress(95, "Browser launched")
+
+            # Navigate if URL specified
+            if browser_url:
+                await send_progress(97, f"Navigating to {browser_url}")
+                nav_result = await playwright_tool.navigate(browser_url)
+                if nav_result.get("success"):
+                    await send_progress(
+                        98, f"Navigation successful: {nav_result.get('title', browser_url)}"
+                    )
+                else:
+                    await send_progress(
+                        98, f"Navigation failed: {nav_result.get('error', 'Unknown error')}"
+                    )
+            else:
+                await send_progress(98, "Browser ready (no navigation URL specified)")
+
+        except Exception as e:
+            logger.error(f"Browser launch failed: {e}")
+            await send_progress(95, f"Browser failed: {e}")
 
         await send_progress(100, "Environment ready!")
 

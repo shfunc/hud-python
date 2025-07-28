@@ -8,6 +8,7 @@ import sys
 import argparse
 import logging
 import os
+import socket
 from pathlib import Path
 from typing import Optional
 
@@ -43,7 +44,6 @@ def signal_handler(sig, frame):
 
 def check_port_available(port: int) -> bool:
     """Check if a port is available."""
-    import socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(1)
     try:
@@ -68,7 +68,9 @@ def launch_app(frontend_port: int = 3000, backend_port: int = 5000):
         frontend_dir = app_dir / "frontend"
         backend_dir = app_dir / "backend"
 
-        logging.info(f"Starting todo app - Frontend port: {frontend_port}, Backend port: {backend_port}")
+        logging.info(
+            f"Starting todo app - Frontend port: {frontend_port}, Backend port: {backend_port}"
+        )
 
         # Check if ports are available
         if not check_port_available(backend_port):
@@ -86,12 +88,30 @@ def launch_app(frontend_port: int = 3000, backend_port: int = 5000):
         # Check if we can use uv, otherwise fall back to system python
         try:
             subprocess.run(["uv", "--version"], check=True, capture_output=True)
-            backend_cmd = ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", str(backend_port)]
+            backend_cmd = [
+                "uv",
+                "run",
+                "uvicorn",
+                "main:app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                str(backend_port),
+            ]
             logging.info("Using uv for backend")
         except (subprocess.CalledProcessError, FileNotFoundError):
             # Fall back to system python with uvicorn
             logging.info("uv not available, using system python for backend")
-            backend_cmd = ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", str(backend_port)]
+            backend_cmd = [
+                "python3",
+                "-m",
+                "uvicorn",
+                "main:app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                str(backend_port),
+            ]
 
         # Prepare frontend command
         frontend_env = {
@@ -105,9 +125,13 @@ def launch_app(frontend_port: int = 3000, backend_port: int = 5000):
             node_modules = frontend_dir / "node_modules"
             if not node_modules.exists():
                 logging.info("Installing frontend dependencies...")
-                npm_install = subprocess.run(["npm", "install"], cwd=frontend_dir, capture_output=True)
+                npm_install = subprocess.run(
+                    ["npm", "install"], cwd=frontend_dir, capture_output=True
+                )
                 if npm_install.returncode != 0:
-                    logging.error(f"Failed to install npm dependencies: {npm_install.stderr.decode()}")
+                    logging.error(
+                        f"Failed to install npm dependencies: {npm_install.stderr.decode()}"
+                    )
                     cleanup_processes()
                     raise RuntimeError("npm install failed")
 
@@ -139,43 +163,43 @@ def launch_app(frontend_port: int = 3000, backend_port: int = 5000):
 
         # 🚀 START BOTH PROCESSES IN PARALLEL
         logging.info("Starting backend and frontend in parallel...")
-        
-        # Start backend
+
+        # Start backend - UPDATE GLOBAL VARIABLE
         backend_process = subprocess.Popen(
             backend_cmd,
             cwd=backend_dir,
             env=backend_env,
             stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,  # Don't capture - may interfere with MCP
-            stderr=subprocess.DEVNULL,  # Don't capture - may interfere with MCP
+            stdout=subprocess.DEVNULL,  # Don't capture stdout - reserved for MCP
+            stderr=subprocess.DEVNULL,  # Don't capture stderr - reserved for MCP
         )
 
-        # Start frontend immediately (in parallel)
+        # Start frontend immediately (in parallel) - UPDATE GLOBAL VARIABLE
         if frontend_dir.exists():
             frontend_process = subprocess.Popen(
-                frontend_cmd, 
-                cwd=frontend_dir, 
+                frontend_cmd,
+                cwd=frontend_dir,
                 env=frontend_env,
                 stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,  # Don't capture - may interfere with MCP
-                stderr=subprocess.DEVNULL,  # Don't capture - may interfere with MCP
+                stdout=subprocess.DEVNULL,  # Don't capture stdout - reserved for MCP
+                stderr=subprocess.DEVNULL,  # Don't capture stderr - reserved for MCP
             )
 
         # 🚀 WAIT FOR BOTH IN PARALLEL WITH FAST POLLING
         backend_ready = False
         frontend_ready = False
-        
+
         # Use faster polling (every 200ms instead of 1s)
         max_attempts_backend = 150  # 30 seconds at 200ms intervals
         max_attempts_frontend = 600  # 120 seconds at 200ms intervals
-        
+
         for attempt in range(max(max_attempts_backend, max_attempts_frontend)):
             # Check if processes are still alive
             if backend_process and backend_process.poll() is not None:
                 logging.error(f"Backend process died with exit code {backend_process.returncode}")
                 cleanup_processes()
                 raise RuntimeError("Backend failed to start")
-                
+
             if frontend_process and frontend_process.poll() is not None:
                 logging.error(f"Frontend process died with exit code {frontend_process.returncode}")
                 cleanup_processes()
@@ -210,15 +234,15 @@ def launch_app(frontend_port: int = 3000, backend_port: int = 5000):
             # Exit early if both are ready
             if backend_ready and frontend_ready:
                 break
-                
+
             time.sleep(0.2)  # 200ms intervals instead of 1s
-        
+
         # Check final status
         if not backend_ready:
             logging.error("Backend did not start within 30 seconds")
             cleanup_processes()
             raise RuntimeError("Backend startup timeout")
-            
+
         if not frontend_ready:
             logging.error("Frontend did not start within 2 minutes")
             cleanup_processes()

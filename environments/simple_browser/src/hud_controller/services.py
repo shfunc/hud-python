@@ -14,6 +14,7 @@ import socket
 
 logger = logging.getLogger(__name__)
 
+
 # ---- SERVICES ----
 # All services that are needed for the environment to run
 # (e.g. X11, VNC, apps, browser)
@@ -23,16 +24,14 @@ logger = logging.getLogger(__name__)
 #
 # The server will launch the services and wait for them to be ready.
 class ServiceManager:
-    """Manages environment services (X11, VNC, apps, browser)."""
+    """Manages environment services (X11, VNC, apps)."""
 
     def __init__(self):
         self.x11_proc: Optional[subprocess.Popen] = None
         self.vnc_proc: Optional[subprocess.Popen] = None
         self.websockify_proc: Optional[subprocess.Popen] = None
         self._launched_apps: List[str] = []
-        self._browser_url = os.getenv("BROWSER_URL", "http://localhost:3000")
         self._app_processes: Dict[str, subprocess.Popen] = {}
-        self._browser_proc: Optional[subprocess.Popen] = None
 
     async def start_services(self):
         """Start all core services in parallel where possible."""
@@ -106,23 +105,6 @@ class ServiceManager:
                 if isinstance(result, Exception):
                     logger.error(f"Failed to launch app '{app.strip()}': {result}")
 
-    async def launch_browser(self):
-        """Launch browser with configured URL."""
-        # Launch browser using Python module
-        # Note: Can't monitor stderr as stdio is reserved for MCP
-        self._browser_proc = subprocess.Popen(
-            ["python3", "-m", "hud_controller.browser", self._browser_url],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,  # Must be DEVNULL to avoid MCP interference
-            stderr=subprocess.DEVNULL,  # Must be DEVNULL to avoid MCP interference
-            env={**os.environ, "DISPLAY": ":1"},
-        )
-        logger.info(f"Browser launched to {self._browser_url}")
-        
-        if self._browser_proc.poll() is not None:
-            logger.error(f"Browser process exited immediately with code {self._browser_proc.returncode}")
-            raise RuntimeError("Browser failed to start")
-
     async def launch_app(self, app_name: str) -> Dict[str, str]:
         """Launch a specific app dynamically.
 
@@ -153,7 +135,14 @@ class ServiceManager:
         # Launch the app with both frontend and backend ports
         # Note: Can't use stdout/stderr pipes as stdio is reserved for MCP
         proc = subprocess.Popen(
-            ["python3", str(launch_script), "--frontend-port", str(frontend_port), "--backend-port", str(backend_port)],
+            [
+                "python3",
+                str(launch_script),
+                "--frontend-port",
+                str(frontend_port),
+                "--backend-port",
+                str(backend_port),
+            ],
             cwd=app_path,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,  # Must be DEVNULL to avoid MCP interference
@@ -167,12 +156,14 @@ class ServiceManager:
         # Wait for frontend to be ready using HTTP health checks
         try:
             await self._wait_for_port(frontend_port, f"app '{app_name}' frontend", timeout=60)
-            
+
             # Additional HTTP health check for web apps with faster timeout
             if app_name == "todo":
                 await self._wait_for_http_health(f"http://localhost:{frontend_port}", timeout=10)
-            
-            logger.info(f"Launched app '{app_name}' - Frontend: {frontend_port}, Backend: {backend_port}")
+
+            logger.info(
+                f"Launched app '{app_name}' - Frontend: {frontend_port}, Backend: {backend_port}"
+            )
         except TimeoutError:
             # Check if process is still running
             if proc.poll() is not None:
@@ -185,14 +176,6 @@ class ServiceManager:
 
     async def shutdown(self):
         """Shutdown all services gracefully."""
-        # Stop browser first
-        if self._browser_proc and self._browser_proc.poll() is None:
-            self._browser_proc.terminate()
-            await asyncio.sleep(2)
-            if self._browser_proc.poll() is None:
-                self._browser_proc.kill()
-            logger.info("Stopped browser")
-
         # Stop app processes
         for name, proc in self._app_processes.items():
             if proc.poll() is None:
@@ -239,7 +222,7 @@ class ServiceManager:
     async def _wait_for_http_health(self, url: str, timeout: int = 10):
         """Wait for HTTP endpoint to be healthy."""
         import httpx
-        
+
         async with httpx.AsyncClient() as client:
             for i in range(timeout * 5):  # Check every 200ms instead of 500ms
                 try:
@@ -250,7 +233,7 @@ class ServiceManager:
                 except (httpx.RequestError, httpx.TimeoutException):
                     pass
                 await asyncio.sleep(0.2)  # 200ms intervals for faster detection
-        
+
         raise TimeoutError(f"HTTP health check failed for {url}")
 
     async def _wait_for_port(self, port: int, service_name: str = "service", timeout: int = 30):
