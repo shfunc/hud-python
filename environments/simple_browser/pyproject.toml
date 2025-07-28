@@ -11,9 +11,7 @@ dependencies = [
 ]
 
 [project.scripts]
-hud-controller = "hud_controller.__main__:app"
-launch-browser = "hud_controller.browser:launch_browser_script"
-hud-launcher = "hud_controller.launcher:main"
+hud-controller = "hud_controller.__main__:main"
 
 [build-system]
 requires = ["hatchling"]

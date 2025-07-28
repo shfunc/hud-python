@@ -1,0 +1,244 @@
+import asyncio
+import sys
+import logging
+import os
+import json
+from typing import Optional, Any
+from pathlib import Path
+
+# Configure logging before imports to go to stderr
+logging.basicConfig(
+    stream=sys.stderr,
+    level=logging.INFO,
+    format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
+    force=True,
+)
+logger = logging.getLogger(__name__)
+
+from mcp.server.fastmcp import FastMCP, Context
+from mcp.types import InitializeRequest, InitializeResult, Implementation
+from mcp.shared.context import RequestContext
+from mcp.server.models import InitializationOptions
+
+# Import the helper for initialization progress and tool registration
+from hud.tools.helper import mcp_intialize_wrapper, register_instance_tool
+
+from .services import ServiceManager
+
+service_manager = ServiceManager()
+
+# --- IMPORTANT ---
+# Two options for initializing the environment:
+# 1. Use the decorator to enable progress notifications during MCP initialization
+# 2. Just launch the server and initialize the mcp server after
+
+
+# --- OPTION 1 ---
+# The decorator intercepts the MCP initialization to provide session and progress_token
+@mcp_intialize_wrapper()
+async def initialize_environment(session=None, progress_token=None):
+    """
+    Initialize the environment with progress reporting.
+
+    This function works with or without session/progress_token parameters.
+    - With them: Sends progress notifications during MCP initialization
+    - Without them: Can be called directly before creating the MCP server
+    - The decorator intercepts the MCP initialization to provide session and progress_token
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.info(
+        f"initialize_environment called! session={session}, progress_token={progress_token}"
+    )
+
+    async def send_progress(progress: float, message: str):
+        """Send progress notification through the session."""
+        if progress_token:
+            logger.info(f"Sending progress: {progress}% - {message}")
+            await session.send_progress_notification(
+                progress_token=progress_token, progress=progress, total=100, message=message
+            )
+        else:
+            logger.info(f"No progress token, skipping: {progress}% - {message}")
+
+    try:
+        await send_progress(0, "Starting environment services...")
+
+        # Start core services
+        await service_manager.start_services()
+        await send_progress(20, "X11 server started")
+
+        # Wait for X11 to be ready
+        await service_manager.wait_for_x11()
+        await send_progress(40, "X11 ready")
+
+        # Start VNC and wait for it
+        await service_manager.wait_for_vnc()
+        vnc_message = {
+            "message": "VNC server ready",
+            "live_url": "http://localhost:8080/vnc.html"
+        }
+        await send_progress(60, json.dumps(vnc_message))
+
+        # Initialize tools now that X11 is ready
+        await send_progress(70, "Initializing tools...")
+
+        # Create and register computer tool
+        from hud.tools import HudComputerTool
+
+        register_instance_tool(mcp, "computer", HudComputerTool())
+
+        await send_progress(80, "Computer tool ready")
+
+        # Launch apps and browser in parallel
+        launch_apps = os.getenv("LAUNCH_APPS", "")
+        if launch_apps:
+            await send_progress(85, f"Launching apps and browser in parallel: {launch_apps}")
+            
+            # Start app launches and browser launch concurrently
+            app_tasks = []
+            for app in launch_apps.split(","):
+                app = app.strip()
+                if app:
+                    app_tasks.append(service_manager.launch_app(app))
+            
+            # Start browser while apps are launching
+            browser_task = service_manager.launch_browser()
+            
+            # Wait for apps to be ready
+            if app_tasks:
+                await asyncio.gather(*app_tasks)
+                await send_progress(90, "Apps launched")
+            
+            # Browser should be starting in background
+            await send_progress(95, "Browser starting...")
+            
+        else:
+            # No apps to launch, just start browser
+            await send_progress(90, "No apps specified, starting browser")
+            await service_manager.launch_browser()
+            await send_progress(95, "Browser starting...")
+
+        await send_progress(100, "Environment ready!")
+
+    except Exception as e:
+        if progress_token:
+            await session.send_progress_notification(
+                progress_token=progress_token,
+                progress=0,
+                total=100,
+                message=f"Initialization failed: {str(e)}",
+            )
+        raise
+
+
+# --- OPTION 2 ---
+# Just launch the server and initialize the mcp server after
+# Or run the services in any other way (e.g. in a separate process)
+# await initialize_environment()
+# mcp = FastMCP("HUD Browser Environment")
+# mcp.run()
+
+
+# --- MCP SERVER & BASIC TOOLS ---
+# Create FastMCP instance
+# Note: The mcp_intialize_wrapper above handles the response to the initialize request with progress
+mcp = FastMCP(
+    name="HUD Browser Environment",
+    instructions="""
+    This is a browser automation environment with full GUI access.
+    Use the computer tool to interact with the browser and applications.
+    You can also launch additional apps dynamically with launch_app.
+    """,
+)
+
+
+# Tool that launches apps dynamically (doesn't need X11)
+@mcp.tool()
+async def launch_app(app_name: str, ctx: Context) -> str:
+    """Launch a specific application dynamically.
+
+    Args:
+        app_name: Name of the app to launch (e.g., 'todo', 'chat')
+
+    Returns:
+        Success message with app URL
+    """
+    await ctx.info(f"Launching app: {app_name}")
+
+    # Use progress for app launch
+    await ctx.report_progress(0, f"Starting {app_name} app...")
+
+    app_info = await service_manager.launch_app(app_name)
+
+    await ctx.report_progress(100, f"{app_name} app ready!")
+
+    return f"Launched {app_name} at {app_info['url']}"
+
+
+# API request tool (doesn't need X11)
+@mcp.tool()
+async def api_request(
+    url: str, method: str = "GET", data: dict | None = None, ctx: Context | None = None
+) -> dict:
+    """Make HTTP API requests.
+
+    Args:
+        url: The URL to request
+        method: HTTP method (GET, POST, etc.)
+        data: Optional JSON data for POST/PUT requests
+        ctx: Optional context for logging
+
+    Returns:
+        Response data as dict
+    """
+    import httpx
+
+    if ctx:
+        await ctx.debug(f"Making {method} request to {url}")
+
+    async with httpx.AsyncClient() as client:
+        response = await client.request(method, url, json=data)
+        return {
+            "status": response.status_code,
+            "data": response.json()
+            if response.headers.get("content-type", "").startswith("application/json")
+            else response.text,
+        }
+
+
+# Database query tool (example)
+@mcp.tool()
+async def query_database(query: str, ctx: Context) -> list[dict]:
+    """Execute a database query (mock implementation).
+
+    Args:
+        query: SQL query to execute
+        ctx: Context for logging
+
+    Returns:
+        Query results as list of dicts
+    """
+    await ctx.warning("This is a mock database query tool")
+
+    # Mock implementation
+    if "users" in query.lower():
+        return [
+            {"id": 1, "name": "Alice", "email": "alice@example.com"},
+            {"id": 2, "name": "Bob", "email": "bob@example.com"},
+        ]
+    return []
+
+
+if __name__ == "__main__":
+    import typer
+
+    app = typer.Typer()
+
+    @app.command()
+    def run(transport: str = "stdio"):
+        """Run the MCP server."""
+        mcp.run(transport=transport)
+
+    app()

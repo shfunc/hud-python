@@ -24,7 +24,7 @@ dependencies = [
     "langchain",
     "langchain-openai",
     "langchain-anthropic",
-    "mcp==1.12.1",
+    "mcp==1.12.2",
     "wrapt>=1.14.0",
     "dotenv>=0.9.9",
     "pathspec>=0.12.1",

@@ -1,33 +1,76 @@
-# Launch Scripts
+# HUD Controller
 
-This directory contains scripts that orchestrate the environment components.
+MCP server implementation for the browser automation environment.
 
-## Scripts
+## Architecture
 
-- **browser.py** - Launches Playwright browser pointing to the app
-- **mcp_tools.py** - MCP server with tools to interact with browser and backend
-- **app_starter.py** - Starts the frontend and backend services
+The controller manages:
+- X11 display server (Xvfb)
+- VNC server (x11vnc + websockify)
+- Browser automation (via HudComputerTool)
+- Dynamic app launching
 
-## How It Works
+## Key Files
 
-1. **app_starter.py** starts the Next.js frontend and FastAPI backend
-2. **browser.py** waits for the app to be ready, then opens it in Playwright
-3. **mcp_tools.py** exposes tools that can:
-   - Control the browser (screenshots, clicks, etc.)
-   - Make API calls to the backend
-   - Query the SQLite database directly
+- **__main__.py** - Entry point that routes to server or other commands
+- **server.py** - FastMCP server with tool registration and initialization
+- **services.py** - Service management (X11, VNC, browser, apps)
+- **browser.py** - Browser control utilities
 
-## Adding Custom Tools
+## Initialization Flow
 
-To add new tools, edit `mcp_tools.py`:
+1. `start.sh` starts Xvfb and waits for X11
+2. `server.py` uses `@mcp_intialize_wrapper` for progress notifications
+3. `initialize_environment()` runs during MCP initialization:
+   - Starts core services via `ServiceManager`
+   - Waits for X11 and VNC to be ready
+   - Registers HudComputerTool after X11 is available
+   - Launches browser and any requested apps
+   - Sends progress notifications throughout
 
+## Adding Tools
+
+Tools can be added in two ways:
+
+### 1. Decorator-based (loaded at module import)
 ```python
-# Example: Add a custom database query tool
 @mcp.tool()
-def query_database(sql: str) -> dict:
-    """Execute a SQL query on the app database"""
-    conn = sqlite3.connect('/app/backend/app.db')
-    # ... implementation
+async def my_tool(param: str, ctx: Context) -> str:
+    """Tool that doesn't need X11"""
+    return f"Result: {param}"
 ```
 
-The MCP server automatically exposes any registered tools. 
+### 2. Instance-based (registered during initialization)
+```python
+# In initialize_environment()
+from hud.tools import HudComputerTool
+computer_tool = HudComputerTool(width=1024, height=768)
+register_instance_tool(mcp, "computer", computer_tool)
+```
+
+## Service Manager
+
+The `ServiceManager` class handles:
+- Starting/stopping X11, VNC, and websockify
+- Launching the browser with initial URL
+- Dynamic app launching with port allocation
+- Health checks and readiness waiting
+
+## Environment Variables
+
+- `DISPLAY=:1` - X11 display number
+- `BROWSER_URL` - Initial browser URL
+- `LAUNCH_APPS` - Comma-separated list of apps to launch
+
+## Debugging
+
+All logs go to stderr to keep stdout clean for JSON-RPC:
+```python
+logger = logging.getLogger(__name__)
+logger.info("Debug message")  # Goes to stderr
+```
+
+Monitor logs during testing:
+```bash
+docker run -i --rm hud-browser 2>debug.log
+``` 

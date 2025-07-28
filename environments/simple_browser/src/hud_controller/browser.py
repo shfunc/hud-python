@@ -1,93 +1,101 @@
-"""Browser launcher module."""
+"""Browser automation module."""
 
 import os
 import asyncio
-import time
-import httpx
+import logging
+import sys
 from playwright.async_api import async_playwright
 
+# Configure logging to stderr to avoid stdio contamination
+logging.basicConfig(
+    level=logging.INFO, format="[%(asctime)s] Browser: %(message)s", stream=sys.stderr
+)
 
-async def wait_for_url(url: str, timeout: int = 30):
-    """Wait for a URL to be ready."""
-    print(f"Waiting for {url}...")
-    start_time = time.time()
-    
-    async with httpx.AsyncClient() as client:
-        while time.time() - start_time < timeout:
-            try:
-                response = await client.get(url, timeout=2)
-                if response.status_code == 200:
-                    print(f"{url} is ready!")
-                    return True
-            except:
-                pass
-            await asyncio.sleep(1)
-    
-    print(f"Warning: {url} did not become ready in time")
-    return False
-
-
-async def launch_browser():
+# ---- BROWSER ----
+# The browser is launched by the ServiceManager
+# and is used to navigate to the default URL
+async def launch_browser(url: str):
     """Launch Playwright Chromium browser."""
-    print("Browser launcher starting...")
-    
+    logging.info("Browser launcher starting...")
+
     # Ensure DISPLAY is set
-    os.environ['DISPLAY'] = os.environ.get('DISPLAY', ':1')
-    print(f"Using DISPLAY: {os.environ['DISPLAY']}")
-    
+    os.environ["DISPLAY"] = os.environ.get("DISPLAY", ":1")
+    logging.info(f"Using DISPLAY: {os.environ['DISPLAY']}")
+
     # Default URL - can be overridden by environment variable
-    default_url = os.environ.get('DEFAULT_URL', 'https://www.google.com')
-    print(f"Default URL: {default_url}")
-    
+    default_url = url
+    logging.info(f"Default URL: {default_url}")
+
     async with async_playwright() as p:
         # Launch Chromium
         browser = await p.chromium.launch(
             headless=False,
             args=[
-                '--no-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu',
-                '--disable-web-security',
-                '--disable-features=IsolateOrigins,site-per-process',
-                '--disable-blink-features=AutomationControlled',
-                '--window-size=1920,1080',
-                '--window-position=0,0',
-                '--start-maximized',
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--disable-web-security",
+                "--disable-features=IsolateOrigins,site-per-process",
+                "--disable-blink-features=AutomationControlled",
+                "--window-size=1920,1080",
+                "--window-position=0,0",
+                "--start-maximized",
                 # Lightweight options
-                '--disable-background-timer-throttling',
-                '--disable-backgrounding-occluded-windows',
-                '--disable-renderer-backgrounding',
-                '--disable-features=TranslateUI',
-                '--disable-ipc-flooding-protection',
-                '--disable-default-apps',
-                '--no-first-run',
-                '--disable-sync',
-                '--no-default-browser-check',
-            ]
+                "--disable-background-timer-throttling",
+                "--disable-backgrounding-occluded-windows",
+                "--disable-renderer-backgrounding",
+                "--disable-features=TranslateUI",
+                "--disable-ipc-flooding-protection",
+                "--disable-default-apps",
+                "--no-first-run",
+                "--disable-sync",
+                "--no-default-browser-check",
+            ],
         )
-        
+
         # Create context and page
         context = await browser.new_context(
-            viewport={'width': 1920, 'height': 1080},
+            viewport={"width": 1920, "height": 1080},
             ignore_https_errors=True,
         )
-        
+
         page = await context.new_page()
-        
+
         # Navigate to default URL
-        print(f"Navigating to {default_url}")
+        logging.info(f"Navigating to {default_url}")
         await page.goto(default_url)
-        
+
         # Keep browser running
-        print("Browser launched successfully")
+        logging.info("Browser launched successfully")
+
+        # Keep the browser running indefinitely
         try:
+            # Wait for the browser to be closed by the user or external signal
             while True:
                 await asyncio.sleep(1)
+                # Check if browser is still connected
+                if browser.is_connected() is False:
+                    break
         except asyncio.CancelledError:
-            await browser.close()
-            raise
+            logging.info("Browser session cancelled")
+        except Exception as e:
+            logging.error(f"Browser error: {e}")
+        finally:
+            try:
+                await browser.close()
+                logging.info("Browser closed")
+            except Exception as e:
+                logging.error(f"Error closing browser: {e}")
 
 
-def launch_browser_script():
-    """Script entry point for launching browser."""
-    asyncio.run(launch_browser()) 
+if __name__ == "__main__":
+    url = sys.argv[1] if len(sys.argv) > 1 else "https://www.github.com"
+    logging.info(f"Launching browser with URL: {url}")
+
+    try:
+        asyncio.run(launch_browser(url))
+    except KeyboardInterrupt:
+        logging.info("Browser interrupted by user")
+    except Exception as e:
+        logging.error(f"Browser launch failed: {e}")
+        sys.exit(1)

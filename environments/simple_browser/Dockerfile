@@ -1,29 +1,17 @@
 FROM hudpython/novnc-base:latest
-
-# Build-time configuration with sensible defaults
-ARG DEFAULT_BROWSER_URL="https://google.com"
-ARG DEFAULT_FRONTEND_PORT="3000"
-ARG DEFAULT_BACKEND_PORT="5000"
-
-# Runtime configuration via ENV (can be overridden)
-ENV BROWSER_URL=${DEFAULT_BROWSER_URL}
-ENV FRONTEND_PORT_START=${DEFAULT_FRONTEND_PORT}
-ENV BACKEND_PORT_START=${DEFAULT_BACKEND_PORT}
-ENV LAUNCH_APPS=""
-ENV WAIT_FOR_APPS="true"
-ENV PORT_ALLOCATION="auto"
-
-# Install the package
+# Install package
 WORKDIR /app
 COPY pyproject.toml .
 COPY src/ ./src/
 RUN uv pip install --system --break-system-packages -e .
 
-# Copy apps directory
+# Copy apps
 COPY apps/ /app/apps/
-RUN find /app/apps -name "*.py" -type f -exec chmod +x {} \;
 
-# Pre-install npm dependencies and build frontend apps
+# Make launch scripts executable
+RUN find /app/apps -name "launch.py" -type f -exec chmod +x {} \;
+
+# Pre-install npm dependencies for all frontend apps
 RUN for app in /app/apps/*/frontend; do \
         if [ -f "$app/package.json" ]; then \
             echo "Installing npm dependencies for $app"; \
@@ -34,17 +22,17 @@ RUN for app in /app/apps/*/frontend; do \
         fi \
     done
 
-# Copy start script
-COPY start.sh /start.sh
-RUN chmod +x /start.sh
+# Set defaults
+ENV MCP_TRANSPORT="stdio"
+ENV HUD_LOG_STREAM="stderr"
+ENV PYTHONUNBUFFERED="1"
 
-# Set working directory
-WORKDIR /
+# Expose all the ports we need
+EXPOSE 8080 8040-8050 3000-3010 5000-5010
 
-# Expose ports
-EXPOSE 3000 5000 8040 8080
+# Copy and use start script
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
 
-# Support both ENV-based config and CLI arguments
-# ENV vars are used if no CLI args provided
-ENTRYPOINT ["/start.sh"]
-CMD [] 
+# Run via start script to ensure X11 is ready
+CMD ["/app/start.sh"] 
