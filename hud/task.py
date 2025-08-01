@@ -62,6 +62,7 @@ class Task(BaseModel):
     # Description of the task, for extra information about its purpose and context
     description: str | None = None
 
+    # Gold file url for the task
     gold_file_url: str | None = None
 
     @classmethod
