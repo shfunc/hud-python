@@ -10,7 +10,7 @@ DEFAULT_TIMEOUT = 10.0
 async def run(
     command: str | list[str],
     input: str | None = None,
-    timeout: float | None = DEFAULT_TIMEOUT,
+    timeout: float | None = DEFAULT_TIMEOUT,  # noqa: ASYNC109
 ) -> tuple[int, str, str]:
     """
     Run a command asynchronously and return the result.

@@ -1,7 +1,7 @@
 [project]
 name = "hud-python"
-version = "0.2.10"
-description = "SDK for the HUD evaluation platform."
+version = "0.3.0"
+description = "SDK for the HUD platform."
 readme = "README.md"
 requires-python = ">=3.11, <3.14"
 authors = [
@@ -35,7 +35,6 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -44,7 +43,7 @@ classifiers = [
 [project.urls]
 "Homepage" = "https://github.com/hud-evals/hud-sdk"
 "Bug Tracker" = "https://github.com/hud-evals/hud-sdk/issues"
-"Documentation" = "https://hud.so"
+"Documentation" = "https://docs.hud.so"
 
 [build-system]
 requires = ["hatchling"]
@@ -76,6 +75,7 @@ dev = [
     "pytest-asyncio",
     "pytest-mock",
     "pyright==1.1.401",
+    "playwright",
     "ipykernel",
     "ipython <9",
     "jupyter_client",
@@ -93,6 +93,7 @@ dev = [
     "pytest-asyncio",
     "pytest-mock",
     "pyright==1.1.401",
+    "playwright",
     "ipykernel",
     "ipython <9",
     "jupyter_client",
@@ -104,7 +105,7 @@ dev = [
 ]
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 100
 exclude = [
     "environments/qa_controller",
@@ -167,7 +168,7 @@ exclude = [
     "src/typestubs",
     "**/venv",
 ]
-pythonVersion = "3.10"
+pythonVersion = "3.11"
 typeCheckingMode = "basic"
 
 [tool.coverage.run]

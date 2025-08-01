@@ -57,7 +57,7 @@ class LangChainMCPAgent(BaseMCPAgent):
 
         # Convert tools using the adapter
         for connector, tools in tools_by_connector.items():
-            langchain_tools = self.adapter._convert_tools(tools, connector)
+            langchain_tools = self.adapter._convert_tools(tools, connector)  # type: ignore[reportAttributeAccessIssue]
             self._langchain_tools.extend(langchain_tools)
 
         logger.info("Created %s LangChain tools from MCP tools", len(self._langchain_tools))
@@ -98,7 +98,7 @@ class LangChainMCPAgent(BaseMCPAgent):
 
         for msg in messages:
             if isinstance(msg, SystemMessage):
-                system_content = msg.content
+                system_content = str(msg.content)
             else:
                 non_system_messages.append(msg)
 
@@ -122,7 +122,6 @@ class LangChainMCPAgent(BaseMCPAgent):
         executor = AgentExecutor(
             agent=agent,
             tools=langchain_tools,
-            max_steps=1,  # We handle steps in base class
             verbose=False,
         )
 

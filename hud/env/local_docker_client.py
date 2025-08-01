@@ -222,7 +222,7 @@ class LocalDockerClient(DockerClient):
         self,
         command: list[str],
         *,
-        timeout: int | None = None,
+        timeout: int | None = None,  # noqa: ASYNC109
     ) -> ExecuteResult:
         """
         Execute a command in the container.

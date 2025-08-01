@@ -6,7 +6,7 @@ import json
 import logging
 import threading
 import time
-from datetime import datetime, timezone  # For ISO timestamp conversion
+from datetime import UTC, datetime  # For ISO timestamp conversion
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -157,7 +157,7 @@ async def export_telemetry(
         actual_start_time_float = getattr(mcp_call_model, "start_time", None)
         if actual_start_time_float:
             start_ts_iso = (
-                datetime.fromtimestamp(actual_start_time_float, timezone.utc)
+                datetime.fromtimestamp(actual_start_time_float, UTC)
                 .isoformat()
                 .replace("+00:00", "Z")
             )
@@ -170,7 +170,7 @@ async def export_telemetry(
 
         if effective_end_timestamp_float:
             end_ts_iso = (
-                datetime.fromtimestamp(effective_end_timestamp_float, timezone.utc)
+                datetime.fromtimestamp(effective_end_timestamp_float, UTC)
                 .isoformat()
                 .replace("+00:00", "Z")
             )

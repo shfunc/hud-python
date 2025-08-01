@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
 from typing import Any
 
 from .base import CLIResult, ToolError, ToolResult
@@ -27,15 +28,20 @@ class _BashSession:
             await asyncio.sleep(0)
             return
 
-        self._process = await asyncio.create_subprocess_shell(  # noqa: S604
-            self.command,
-            preexec_fn=os.setsid,
-            shell=True,
-            bufsize=0,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        # Platform-specific subprocess creation
+        kwargs = {
+            "shell": True,
+            "bufsize": 0,
+            "stdin": asyncio.subprocess.PIPE,
+            "stdout": asyncio.subprocess.PIPE,
+            "stderr": asyncio.subprocess.PIPE,
+        }
+
+        # Only use setsid on Unix-like systems
+        if sys.platform != "win32":
+            kwargs["preexec_fn"] = os.setsid
+
+        self._process = await asyncio.create_subprocess_shell(self.command, **kwargs)
 
         self._started = True
 
@@ -83,7 +89,7 @@ class _BashSession:
                 timeout=self._timeout,
             )
             output = raw_out.decode()[: -len(sentinel_line)]
-        except (asyncio.TimeoutError, asyncio.LimitOverrunError):
+        except (TimeoutError, asyncio.LimitOverrunError):
             self._timed_out = True
             raise ToolError(
                 f"timed out: bash did not return in {self._timeout} seconds and must be restarted",
@@ -93,7 +99,7 @@ class _BashSession:
         try:
             error_bytes = await asyncio.wait_for(self._process.stderr.read(), timeout=0.01)
             error = error_bytes.decode().rstrip("\n")
-        except asyncio.TimeoutError:
+        except TimeoutError:
             error = ""
 
         return CLIResult(output=output, error=error)

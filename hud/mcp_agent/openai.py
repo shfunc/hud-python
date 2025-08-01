@@ -67,7 +67,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
         # State tracking for OpenAI's stateful API
         self.last_response_id: str | None = None
         self.pending_call_id: str | None = None
-        self.pending_safety_checks: list[str] = []
+        self.pending_safety_checks: list[Any] = []
 
         # Base system prompt for autonomous operation
         self.base_system_prompt = """
@@ -84,7 +84,9 @@ class OpenAIMCPAgent(BaseMCPAgent):
         Remember: You are expected to complete tasks autonomously. The user trusts you to do what they asked.
         """  # noqa: E501
 
-    async def run(self, prompt: str, max_steps: int = 10, conversation_mode: bool = False) -> str:
+    async def run(
+        self, prompt: str, max_steps: int = 10, conversation_mode: bool = False
+    ) -> dict[str, Any]:
         """
         Run the agent with the given prompt.
 
@@ -129,7 +131,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
             }
 
         # Define the computer use tool
-        computer_tool: ToolParam = {
+        computer_tool: ToolParam = {  # type: ignore[reportAssignmentType]
             "type": "computer_use_preview",
             "display_width": self.display_width,
             "display_height": self.display_height,
@@ -154,7 +156,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
                     }
                 )
 
-            input_param: ResponseInputParam = [{"role": "user", "content": input_content}]
+            input_param: ResponseInputParam = [{"role": "user", "content": input_content}]  # type: ignore[reportUnknownMemberType]
 
             # Combine base system prompt with any custom system prompt
             full_instructions = self.base_system_prompt
@@ -198,8 +200,8 @@ class OpenAIMCPAgent(BaseMCPAgent):
                     }
 
                 # Create response to previous action
-                input_param_followup = [
-                    {
+                input_param_followup: ResponseInputParam = [  # type: ignore[reportAssignmentType]
+                    {  # type: ignore[reportAssignmentType]
                         "call_id": self.pending_call_id,
                         "type": "computer_call_output",
                         "output": {

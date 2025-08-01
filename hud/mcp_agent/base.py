@@ -64,6 +64,9 @@ class BaseMCPAgent(ABC):
     async def initialize(self) -> None:
         """Initialize the agent and discover available tools."""
         # Get existing sessions or create new ones
+        if self.client is None:
+            raise ValueError("Client is not initialized")
+
         sessions = self.client.get_all_active_sessions()
 
         if not sessions:
@@ -84,7 +87,9 @@ class BaseMCPAgent(ABC):
                 ):
                     await session.initialize()
 
-                # Get tools from the session
+                if session.connector.client_session is None:
+                    raise ValueError("Client session is not initialized")
+
                 tools_result = await session.connector.client_session.list_tools()
                 for tool in tools_result.tools:
                     # Always include setup/evaluate tools for framework use
@@ -181,6 +186,9 @@ class BaseMCPAgent(ABC):
         if tool_name not in self._tool_map:
             raise ValueError(f"Tool '{tool_name}' not found or not allowed")
 
+        if self.client is None:
+            raise ValueError("Client is not initialized")
+
         server_name, tool = self._tool_map[tool_name]
         session = self.client.get_session(server_name)
 
@@ -190,6 +198,9 @@ class BaseMCPAgent(ABC):
             server_name,
             tool_args,
         )
+        if session.connector.client_session is None:
+            raise ValueError("Client session is not initialized")
+
         result = await session.connector.client_session.call_tool(tool_name, tool_args)
 
         # Log result for debugging
@@ -340,7 +351,7 @@ class BaseMCPAgent(ABC):
 
     async def run(
         self, prompt_or_task: str | Task, max_steps: int = 10, conversation_mode: bool = False
-    ) -> str | dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Run the agent with the given prompt or task.
 
@@ -435,17 +446,19 @@ class BaseMCPAgent(ABC):
                     if hasattr(result, "content") and result.content:
                         if len(result.content) == 1:
                             content_item = result.content[0]
-                            if hasattr(content_item, "text"):
-                                # Try to parse as JSON if it looks like structured data
-                                text = content_item.text
-                                if text.strip().startswith("{") and text.strip().endswith("}"):
-                                    try:
-                                        import json
+                            # Check if content_item is a text type
+                            if hasattr(content_item, "text") and hasattr(content_item, "type"):
+                                if getattr(content_item, "type", None) == "text":
+                                    # Try to parse as JSON if it looks like structured data
+                                    text = content_item.text  # type: ignore[reportAttributeAccessIssue]
+                                    if text.strip().startswith("{") and text.strip().endswith("}"):
+                                        try:
+                                            import json
 
-                                        return json.loads(text)
-                                    except json.JSONDecodeError:
-                                        return text
-                                return text
+                                            return json.loads(text)
+                                        except json.JSONDecodeError:
+                                            return text
+                                    return text
                             else:
                                 return content_item
                         else:
@@ -464,7 +477,7 @@ class BaseMCPAgent(ABC):
         max_steps: int = 10,
         conversation_mode: bool = False,
         gold_file_url: str | None = None,
-    ) -> str:
+    ) -> dict[str, Any]:
         """
         Run the agent with the given prompt.
 
@@ -508,7 +521,11 @@ class BaseMCPAgent(ABC):
                                 print(f"\n🤖 Agent: {model_response}")  # noqa: T201
                                 user_input = input("\n👤 You: ").strip()
                                 if user_input.lower() in ["exit", "quit", "bye"]:
-                                    return "Conversation ended by user."
+                                    return {
+                                        "done": True,
+                                        "reward": 0.0,
+                                        "info": {"message": "Conversation ended by user."},
+                                    }
                                 # Add user's response to the conversation
                                 # This needs to be handled by subclass-specific format
                                 user_message = await self.create_user_message(user_input)
@@ -516,10 +533,20 @@ class BaseMCPAgent(ABC):
                                 continue
                             else:
                                 # No content and no tools - something went wrong
-                                return "No response generated"
+                                return {
+                                    "done": False,
+                                    "reward": 0.0,
+                                    "info": {"message": "No response generated"},
+                                }
                         else:
                             # In task mode, no tool calls means we're done
-                            return response.get("content", "No response generated")
+                            return {
+                                "done": True,
+                                "reward": 0.0,
+                                "info": {
+                                    "message": response.get("content", "No response generated"),
+                                },
+                            }
 
                     # Execute tool calls
                     tool_results = []
@@ -561,16 +588,20 @@ class BaseMCPAgent(ABC):
 
                 except Exception as e:
                     logger.error("Model call failed: %s", e)
-                    return f"Error: {e}"
+                    return {"done": False, "reward": 0.0, "info": {"message": f"Error: {e}"}}
 
             return {"done": True, "reward": 0.0, "info": {"message": "Task completed"}}
 
         except KeyboardInterrupt:
             logger.info("Agent execution interrupted by user")
-            return "Execution interrupted by user (Ctrl+C)"
+            return {
+                "done": False,
+                "reward": 0.0,
+                "info": {"message": "Execution interrupted by user (Ctrl+C)"},
+            }
         except asyncio.CancelledError:
             logger.info("Agent execution cancelled")
-            return "Execution cancelled"
+            return {"done": False, "reward": 0.0, "info": {"message": "Execution cancelled"}}
 
     @abstractmethod
     async def create_initial_messages(self, prompt: str, screenshot: str | None) -> list[Any]:

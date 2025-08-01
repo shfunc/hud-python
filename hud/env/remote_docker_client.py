@@ -23,7 +23,7 @@ logger = logging.getLogger("hud.env.remote_env_client")
 async def upload_bytes_to_presigned_url(
     presigned_url: str,
     data_bytes: bytes,
-    timeout: float = 600,
+    timeout: float = 600,  # noqa: ASYNC109
 ) -> None:
     try:
         async with httpx.AsyncClient() as client:
@@ -206,7 +206,7 @@ class RemoteDockerClient(DockerClient):
         command: list[str],
         *,
         workdir: str | None = None,
-        timeout: float | None = None,
+        timeout: float | None = None,  # noqa: ASYNC109
     ) -> ExecuteResult:
         """
         Execute a command in the environment.

@@ -43,7 +43,7 @@ _initialized = False
 
 async def _patched_received_request(
     self: ServerSession, responder: RequestResponder[types.ClientRequest, types.ServerResult]
-) -> Awaitable[types.ServerResult]:
+) -> types.ServerResult | None:
     """Intercept initialization to run custom setup with progress notifications."""
     global _initialized, _init_function
 
@@ -103,7 +103,7 @@ def mcp_intialize_wrapper(
 
         # Apply the monkey patch if not already applied
         if ServerSession._received_request != _patched_received_request:
-            ServerSession._received_request = _patched_received_request
+            ServerSession._received_request = _patched_received_request  # type: ignore[assignment]
 
         return func
 

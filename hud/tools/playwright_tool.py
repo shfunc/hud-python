@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from mcp import ErrorData, McpError
 from mcp.types import INVALID_PARAMS, ImageContent, TextContent
@@ -28,6 +28,13 @@ class PlaywrightTool:
         self._context: BrowserContext | None = None
         self._page: Page | None = None
 
+    @property
+    def page(self) -> Page:
+        """Get the current page, raising an error if not initialized."""
+        if self._page is None:
+            raise RuntimeError("Browser page is not initialized. Call ensure_browser_launched().")
+        return self._page
+
     async def __call__(
         self,
         action: str = Field(
@@ -42,12 +49,10 @@ class PlaywrightTool:
         path: str | None = Field(
             None, description="File path to save screenshot (for screenshot action)"
         ),
-        wait_for_load_state: str | None = Field(
+        wait_for_load_state: Literal["commit", "domcontentloaded", "load", "networkidle"]
+        | None = Field(
             None,
-            description="State to wait for: load, domcontentloaded, networkidle (default: networkidle)",  # noqa: E501
-        ),
-        timeout: int | None = Field(
-            None, description="Timeout in milliseconds for wait_for_element (default: 30000)"
+            description="State to wait for: commit, domcontentloaded, load, networkidle (default: networkidle)",  # noqa: E501
         ),
     ) -> list[ImageContent | TextContent]:
         """
@@ -106,7 +111,7 @@ class PlaywrightTool:
                             message="selector parameter is required for wait_for_element",
                         )
                     )
-                result = await self.wait_for_element(selector, timeout or 30000)
+                result = await self.wait_for_element(selector)
 
             else:
                 raise McpError(ErrorData(code=INVALID_PARAMS, message=f"Unknown action: {action}"))
@@ -144,9 +149,14 @@ class PlaywrightTool:
             os.environ["DISPLAY"] = os.environ.get("DISPLAY", ":1")
 
             if self._playwright is None:
-                from playwright.async_api import async_playwright
+                try:
+                    from playwright.async_api import async_playwright
 
-                self._playwright = await async_playwright().start()
+                    self._playwright = await async_playwright().start()
+                except ImportError:
+                    raise ImportError(
+                        "Playwright is not installed. Please install with: pip install playwright"
+                    ) from None
 
             self._browser = await self._playwright.chromium.launch(
                 headless=False,
@@ -172,15 +182,27 @@ class PlaywrightTool:
                 ],
             )
 
+            if self._browser is None:
+                raise RuntimeError("Browser failed to initialize")
+
             self._context = await self._browser.new_context(
                 viewport={"width": 1920, "height": 1080},
                 ignore_https_errors=True,
             )
 
+            if self._context is None:
+                raise RuntimeError("Browser context failed to initialize")
+
             self._page = await self._context.new_page()
             logger.info("Playwright browser launched successfully")
 
-    async def navigate(self, url: str, wait_for_load_state: str = "networkidle") -> dict[str, Any]:
+    async def navigate(
+        self,
+        url: str,
+        wait_for_load_state: Literal[
+            "commit", "domcontentloaded", "load", "networkidle"
+        ] = "networkidle",
+    ) -> dict[str, Any]:
         """Navigate to a URL.
 
         Args:
@@ -194,9 +216,9 @@ class PlaywrightTool:
 
         logger.info("Navigating to %s", url)
         try:
-            await self._page.goto(url, wait_until=wait_for_load_state)
-            current_url = self._page.url
-            title = await self._page.title()
+            await self.page.goto(url, wait_until=wait_for_load_state)
+            current_url = self.page.url
+            title = await self.page.title()
 
             return {
                 "success": True,
@@ -225,11 +247,11 @@ class PlaywrightTool:
 
         try:
             if path:
-                await self._page.screenshot(path=path, full_page=True)
+                await self.page.screenshot(path=path, full_page=True)
                 return {"success": True, "path": path, "message": f"Screenshot saved to {path}"}
             else:
                 # Return base64 encoded screenshot
-                screenshot_bytes = await self._page.screenshot(full_page=True)
+                screenshot_bytes = await self.page.screenshot(full_page=True)
                 import base64
 
                 screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
@@ -254,7 +276,7 @@ class PlaywrightTool:
         await self._ensure_browser()
 
         try:
-            await self._page.click(selector)
+            await self.page.click(selector)
             return {"success": True, "message": f"Clicked element: {selector}"}
         except Exception as e:
             logger.error("Click failed: %s", e)
@@ -277,7 +299,7 @@ class PlaywrightTool:
         await self._ensure_browser()
 
         try:
-            await self._page.fill(selector, text)
+            await self.page.fill(selector, text)
             return {"success": True, "message": f"Typed '{text}' into {selector}"}
         except Exception as e:
             logger.error("Type failed: %s", e)
@@ -296,8 +318,8 @@ class PlaywrightTool:
         await self._ensure_browser()
 
         try:
-            url = self._page.url
-            title = await self._page.title()
+            url = self.page.url
+            title = await self.page.title()
             return {
                 "success": True,
                 "url": url,
@@ -308,12 +330,11 @@ class PlaywrightTool:
             logger.error("Get page info failed: %s", e)
             return {"success": False, "error": str(e), "message": f"Failed to get page info: {e}"}
 
-    async def wait_for_element(self, selector: str, timeout: int = 30000) -> dict[str, Any]:
+    async def wait_for_element(self, selector: str) -> dict[str, Any]:
         """Wait for an element to appear.
 
         Args:
             selector: CSS selector for element
-            timeout: Timeout in milliseconds
 
         Returns:
             Dict with wait result
@@ -321,14 +342,14 @@ class PlaywrightTool:
         await self._ensure_browser()
 
         try:
-            await self._page.wait_for_selector(selector, timeout=timeout)
+            await self.page.wait_for_selector(selector, timeout=30000)
             return {"success": True, "message": f"Element {selector} appeared"}
         except Exception as e:
             logger.error("Wait for element failed: %s", e)
             return {
                 "success": False,
                 "error": str(e),
-                "message": f"Element {selector} did not appear within {timeout}ms: {e}",
+                "message": f"Element {selector} did not appear within 30000ms: {e}",
             }
 
     async def close(self) -> None:

@@ -311,6 +311,6 @@ class ClaudeMCPAgent(BaseMCPAgent):
                 for block in last_content:
                     if block.get("type") not in ["thinking", "redacted_thinking"]:
                         cache_control: BetaCacheControlEphemeralParam = {"type": "ephemeral"}
-                        block["cache_control"] = cache_control
+                        block["cache_control"] = cache_control  # type: ignore[reportGeneralTypeIssues]
 
         return messages_cached
