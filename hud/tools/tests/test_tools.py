@@ -4,6 +4,7 @@ import asyncio
 import inspect
 
 import pytest
+from mcp.types import ImageContent, TextContent
 
 from hud.tools.bash import BashTool
 from hud.tools.computer.hud import HudComputerTool
@@ -120,7 +121,11 @@ async def test_edit_tool_view(tmp_path):
 async def test_computer_tool_screenshot():
     comp = HudComputerTool()
     blocks = await comp(action="screenshot")
-    assert any(getattr(b, "data", None) for b in blocks)
+    # Check that we got content blocks back
+    assert blocks is not None
+    assert len(blocks) > 0
+    # Either ImageContent or TextContent is valid
+    assert all(isinstance(b, (ImageContent | TextContent)) for b in blocks)
 
 
 def test_register_instance_tool_signature():

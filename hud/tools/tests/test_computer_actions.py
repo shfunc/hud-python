@@ -8,13 +8,13 @@ from hud.tools.computer.hud import HudComputerTool
 # (action, kwargs)
 CASES = [
     ("screenshot", {}),
-    ("click", {"x": 1, "y": 1, "pattern": []}),
+    ("click", {"x": 1, "y": 1}),  # Removed pattern=[] to use Field default
     ("press", {"keys": ["ctrl", "c"]}),
     ("keydown", {"keys": ["shift"]}),
     ("keyup", {"keys": ["shift"]}),
     ("type", {"text": "hello"}),
-    ("scroll", {"scroll_y": 20}),
-    ("move", {"x": 5, "y": 5}),
+    ("scroll", {"x": 10, "y": 10, "scroll_y": 20}),  # Added required x,y coordinates
+    ("move", {"x": 5, "y": 5}),  # x,y are for absolute positioning
     ("wait", {"time": 5}),
     ("drag", {"path": [(0, 0), (10, 10)]}),
     ("mouse_down", {}),
