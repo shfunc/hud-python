@@ -16,8 +16,8 @@ load_dotenv()
 
 # To run inside a docker container, see environments/simple_browser/README.md
 
-# To run on the cloud:
-BASE_URL = "https://orchestrator-v3.up.railway.app"
+# To run on the cloud (IN DEVELOPMENT)
+BASE_URL = "http://localhost:8041/mcp"
 
 HUD_API_KEY = os.getenv("HUD_API_KEY")
 

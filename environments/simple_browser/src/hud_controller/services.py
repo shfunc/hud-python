@@ -32,7 +32,9 @@ class ServiceManager:
         self.websockify_proc: Optional[subprocess.Popen] = None
         self._launched_apps: List[str] = []
         self._app_processes: Dict[str, subprocess.Popen] = {}
-        self._app_ports: Dict[str, Dict[str, int]] = {}  # Store frontend and backend ports for each app
+        self._app_ports: Dict[
+            str, Dict[str, int]
+        ] = {}  # Store frontend and backend ports for each app
 
     async def start_services(self):
         """Start all core services in parallel where possible."""
@@ -165,12 +167,9 @@ class ServiceManager:
             logger.info(
                 f"Launched app '{app_name}' - Frontend: {frontend_port}, Backend: {backend_port}"
             )
-            
+
             # Store port information for later retrieval
-            self._app_ports[app_name] = {
-                "frontend": frontend_port,
-                "backend": backend_port
-            }
+            self._app_ports[app_name] = {"frontend": frontend_port, "backend": backend_port}
         except TimeoutError:
             # Check if process is still running
             if proc.poll() is not None:
@@ -183,52 +182,56 @@ class ServiceManager:
 
     def get_app_port(self, app_name: str) -> int:
         """Get the port for a running app.
-        
+
         Args:
             app_name: Name of the app (e.g., 'todo')
-            
+
         Returns:
             Backend port number where the app is running (for API calls)
-            
+
         Raises:
             ValueError: If app is not known or not running
         """
         # Check if app is running
         if app_name not in self._app_processes:
             raise ValueError(f"Could not find running app '{app_name}': app not launched")
-        
+
         # Get the process and check if it's still running
         proc = self._app_processes[app_name]
         if proc.poll() is not None:
             raise ValueError(f"Could not find running app '{app_name}': process has exited")
-        
+
         # Get stored port information
         if app_name not in self._app_ports:
-            raise ValueError(f"Could not find port information for app '{app_name}': not properly launched")
-        
+            raise ValueError(
+                f"Could not find port information for app '{app_name}': not properly launched"
+            )
+
         # Return backend port (where APIs are served)
         return self._app_ports[app_name]["backend"]
 
     def get_app_frontend_port(self, app_name: str) -> int:
         """Get the frontend port for a running app.
-        
+
         Args:
             app_name: Name of the app (e.g., 'todo')
-            
+
         Returns:
             Frontend port number where the app UI is served
-            
+
         Raises:
             ValueError: If app is not known or not running
         """
         # Check if app is running
         if app_name not in self._app_processes:
             raise ValueError(f"Could not find running app '{app_name}': app not launched")
-        
+
         # Get stored port information
         if app_name not in self._app_ports:
-            raise ValueError(f"Could not find port information for app '{app_name}': not properly launched")
-        
+            raise ValueError(
+                f"Could not find port information for app '{app_name}': not properly launched"
+            )
+
         # Return frontend port (where UI is served)
         return self._app_ports[app_name]["frontend"]
 

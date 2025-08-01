@@ -9,66 +9,75 @@ logger = logging.getLogger(__name__)
 
 # === BASE PROBLEM CLASSES (for inheritance) ===
 
+
 class BaseSetupResetProblem:
     """Base class for problems that need a clean start."""
-    
+
     def get_setup(self) -> Dict[str, Any]:
         """Default setup that resets the database."""
-        return {
-            "function": "todo_reset",
-            "args": {}
-        }
+        return {"function": "todo_reset", "args": {}}
 
 
 class BaseSeedProblem:
     """Base class for problems that need seeded data."""
-    
+
     def get_setup(self) -> Dict[str, Any]:
         """Default setup that seeds test data."""
-        return {
-            "function": "todo_seed",
-            "args": {"num_items": 5}
-        }
+        return {"function": "todo_seed", "args": {"num_items": 5}}
 
 
 class BaseCompletionProblem:
     """Base class for problems that test completion functionality."""
-    
+
     def get_evaluation(self) -> Dict[str, Any]:
         """Default evaluation for completion count."""
-        return {
-            "function": "todo_completed",
-            "args": {"expected_count": 2}
-        }
+        return {"function": "todo_completed", "args": {"expected_count": 2}}
 
 
 # === CONCRETE PROBLEM CLASSES ===
 
-@problem("todo_basic_usage", app="todo", description="Basic todo app usage test", difficulty="easy", task_type="functional")
+
+@problem(
+    "todo_basic_usage",
+    app="todo",
+    description="Basic todo app usage test",
+    difficulty="easy",
+    task_type="functional",
+)
 class TodoBasicUsageProblem(BaseSeedProblem, BaseCompletionProblem):
     """Test basic todo app functionality with seeded data.
-    
+
     Inherits setup from BaseSeedProblem and evaluation from BaseCompletionProblem.
     """
+
     pass
 
 
-@problem("todo_empty_start", app="todo", description="Test starting with empty todo list", difficulty="easy", task_type="edge_case")
+@problem(
+    "todo_empty_start",
+    app="todo",
+    description="Test starting with empty todo list",
+    difficulty="easy",
+    task_type="edge_case",
+)
 class TodoEmptyStartProblem(BaseSetupResetProblem):
     """Test behavior with empty todo list."""
-    
+
     def get_evaluation(self) -> Dict[str, Any]:
         """Evaluate that completion rate handles empty case gracefully."""
-        return {
-            "function": "todo_completion_rate",
-            "args": {"min_rate": 0.0}
-        }
+        return {"function": "todo_completion_rate", "args": {"min_rate": 0.0}}
 
 
-@problem("todo_composite_weighted", app="todo", description="Composite evaluation with weighted criteria", difficulty="medium", task_type="functional")
+@problem(
+    "todo_composite_weighted",
+    app="todo",
+    description="Composite evaluation with weighted criteria",
+    difficulty="medium",
+    task_type="functional",
+)
 class TodoCompositeWeightedProblem:
     """Test composite evaluation with multiple weighted criteria."""
-    
+
     def get_setup(self) -> Dict[str, Any]:
         """Setup with mixed completion state."""
         return {
@@ -76,12 +85,16 @@ class TodoCompositeWeightedProblem:
             "args": {
                 "items": [
                     {"title": "Important task", "description": "High priority", "completed": True},
-                    {"title": "Buy groceries", "description": "Weekly shopping", "completed": False},
+                    {
+                        "title": "Buy groceries",
+                        "description": "Weekly shopping",
+                        "completed": False,
+                    },
                     {"title": "Meeting prep", "description": "Prepare slides", "completed": True},
                 ]
-            }
+            },
         }
-    
+
     def get_evaluation(self) -> Dict[str, Any]:
         """Composite evaluation with weights."""
         return {
@@ -89,35 +102,50 @@ class TodoCompositeWeightedProblem:
             "args": {
                 "evaluators": [
                     {"function": "todo_completed", "args": {"expected_count": 2}, "weight": 0.6},
-                    {"function": "todo_exists", "args": {"text": "important"}, "weight": 0.4}
+                    {"function": "todo_exists", "args": {"text": "important"}, "weight": 0.4},
                 ]
-            }
+            },
         }
 
 
-@problem("todo_high_completion_rate", app="todo", description="Test high completion rate requirement", difficulty="medium", task_type="performance")
+@problem(
+    "todo_high_completion_rate",
+    app="todo",
+    description="Test high completion rate requirement",
+    difficulty="medium",
+    task_type="performance",
+)
 class TodoHighCompletionRateProblem(BaseSeedProblem):
     """Test that requires a high completion rate."""
-    
+
     def get_evaluation(self) -> Dict[str, Any]:
         """Evaluate that completion rate is at least 60%."""
-        return {
-            "function": "todo_completion_rate",
-            "args": {"min_rate": 0.6}
-        }
+        return {"function": "todo_completion_rate", "args": {"min_rate": 0.6}}
 
 
-@problem("todo_setup_only", app="todo", description="Setup-only problem for testing", difficulty="easy", task_type="setup_test")
+@problem(
+    "todo_setup_only",
+    app="todo",
+    description="Setup-only problem for testing",
+    difficulty="easy",
+    task_type="setup_test",
+)
 class TodoSetupOnlyProblem(BaseSeedProblem):
     """Problem that only does setup, no evaluation - useful for preparation."""
-    
+
     # No get_evaluation method - this problem only does setup
 
 
-@problem("todo_direct_db_test", app="todo", description="Direct database access test", difficulty="hard", task_type="technical")
+@problem(
+    "todo_direct_db_test",
+    app="todo",
+    description="Direct database access test",
+    difficulty="hard",
+    task_type="technical",
+)
 class TodoDirectDbTestProblem(BaseSetupResetProblem):
     """Test direct database access functionality."""
-    
+
     def get_setup(self) -> Dict[str, Any]:
         """Setup with a specific item for testing."""
         return {
@@ -126,12 +154,9 @@ class TodoDirectDbTestProblem(BaseSetupResetProblem):
                 "items": [
                     {"title": "Test item", "description": "For direct access", "completed": True}
                 ]
-            }
+            },
         }
-    
+
     def get_evaluation(self) -> Dict[str, Any]:
         """Evaluate specific item state via direct access."""
-        return {
-            "function": "todo_db_direct",
-            "args": {"todo_id": "1", "expected_completed": True}
-        } 
+        return {"function": "todo_db_direct", "args": {"todo_id": "1", "expected_completed": True}}

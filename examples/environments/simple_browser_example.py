@@ -37,10 +37,15 @@ async def main(use_stdio=False):
                 "browser": {
                     "command": "docker",
                     "args": [
-                        "run", "--rm", "-i",
-                        "-p", "8080:8080",  # Port for VNC viewer
-                        "-e", "LAUNCH_APPS=todo",  # Launch todo app
-                        "-e", "BROWSER_URL=http://localhost:3000",  # Navigate to todo app
+                        "run",
+                        "--rm",
+                        "-i",
+                        "-p",
+                        "8080:8080",  # Port for VNC viewer
+                        "-e",
+                        "LAUNCH_APPS=todo",  # Launch todo app
+                        "-e",
+                        "BROWSER_URL=http://localhost:3000",  # Navigate to todo app
                         "hud-browser",  # Docker image name
                     ],
                 }

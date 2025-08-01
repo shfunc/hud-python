@@ -5,10 +5,13 @@ from __future__ import annotations
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Union
+from typing import TYPE_CHECKING, Any
 
 import mcp.types as types
 from mcp_use import MCPClient
+
+if TYPE_CHECKING:
+    from hud.task import Task
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +89,7 @@ class BaseMCPAgent(ABC):
                 for tool in tools_result.tools:
                     # Always include setup/evaluate tools for framework use
                     is_lifecycle_tool = tool.name in ["setup", "evaluate"]
-                    
+
                     # Apply filtering (but always allow lifecycle tools)
                     if not is_lifecycle_tool:
                         if self.allowed_tools and tool.name not in self.allowed_tools:
@@ -209,7 +212,7 @@ class BaseMCPAgent(ABC):
             # Filter out lifecycle tools from LLM conversation
             if tool.name in ["setup", "evaluate"]:
                 continue
-                
+
             schema = {
                 "name": tool.name,
                 "description": tool.description,
@@ -226,12 +229,12 @@ class BaseMCPAgent(ABC):
 
         # Try different screenshot tools
         for tool_name in [
-            "computer", 
-            "screenshot", 
-            "computer_anthropic", 
-            "computer_openai", 
-            "anthropic_computer", 
-            "openai_computer"
+            "computer",
+            "screenshot",
+            "computer_anthropic",
+            "computer_openai",
+            "anthropic_computer",
+            "openai_computer",
         ]:
             if tool_name in self._tool_map:
                 try:
@@ -336,16 +339,13 @@ class BaseMCPAgent(ABC):
         }
 
     async def run(
-        self, 
-        prompt_or_task: Union[str, "Task"], 
-        max_steps: int = 10, 
-        conversation_mode: bool = False
-    ) -> Union[str, dict[str, Any]]:
+        self, prompt_or_task: str | Task, max_steps: int = 10, conversation_mode: bool = False
+    ) -> str | dict[str, Any]:
         """
         Run the agent with the given prompt or task.
 
         Args:
-            prompt_or_task: Either a string prompt for simple execution or a Task object for full lifecycle
+            prompt_or_task: Either a string prompt for simple execution or a Task object
             max_steps: Maximum number of steps
             conversation_mode: If True, continue even when model returns text without tool calls
 
@@ -355,22 +355,22 @@ class BaseMCPAgent(ABC):
         """
         # Import here to avoid circular imports
         from hud.task import Task
-        
+
         # Handle Task objects with full lifecycle
         if isinstance(prompt_or_task, Task):
             return await self._run_task(prompt_or_task, max_steps)
-        
+
         # Handle simple string prompts (existing behavior)
         return await self._run_prompt(prompt_or_task, max_steps, conversation_mode)
 
-    async def _run_task(self, task: "Task", max_steps: int = 10) -> dict[str, Any]:
+    async def _run_task(self, task: Task, max_steps: int = 10) -> dict[str, Any]:
         """
         Execute a task with setup and evaluate phases.
-        
+
         Args:
             task: Task object with prompt, setup, and evaluate configs
             max_steps: Maximum steps for task execution
-            
+
         Returns:
             Evaluation result dict with 'reward', 'done', 'info' keys
         """
@@ -380,45 +380,45 @@ class BaseMCPAgent(ABC):
                 await self._call_tool_safe("setup", task.setup)
 
             # Execute the task prompt
-            execution_result = await self._run_prompt(task.prompt, max_steps, conversation_mode=False)
-            
+            await self._run_prompt(task.prompt, max_steps, conversation_mode=False)
+
             # Evaluate phase
             if task.evaluate is not None:
                 eval_result = await self._call_tool_safe("evaluate", task.evaluate)
-                
+
                 # Return evaluation result if it's properly formatted
-                if isinstance(eval_result, dict) and "reward" in eval_result and "done" in eval_result:
+                if (
+                    isinstance(eval_result, dict)
+                    and "reward" in eval_result
+                    and "done" in eval_result
+                ):
                     return eval_result
                 else:
                     # Fallback for invalid evaluation format
                     return {
                         "reward": 0.0,
                         "done": True,
-                        "info": {"error": "Invalid evaluation result", "eval_result": eval_result}
+                        "info": {"error": "Invalid evaluation result", "eval_result": eval_result},
                     }
             else:
                 # No evaluation - assume success
                 return {
                     "reward": 0.0,
                     "done": True,
-                    "info": {"message": "Task completed (no evaluation specified)"}
+                    "info": {"message": "Task completed (no evaluation specified)"},
                 }
-                
+
         except Exception as e:
-            return {
-                "reward": 0.0,
-                "done": True,
-                "info": {"error": str(e)}
-            }
+            return {"reward": 0.0, "done": True, "info": {"error": str(e)}}
 
     async def _call_tool_safe(self, tool_name: str, arguments: Any) -> Any:
         """
         Safely call a tool and return its result.
-        
+
         Args:
             tool_name: Name of the tool to call
             arguments: Arguments to pass to the tool (config from task)
-            
+
         Returns:
             Tool result or None if tool not available/failed
         """
@@ -426,21 +426,22 @@ class BaseMCPAgent(ABC):
             if tool_name in self._tool_map:
                 tool_call = {"name": tool_name, "arguments": arguments}
                 result = await self.call_tool(tool_call)
-                
+
                 if result.isError:
                     logger.error("Tool %s returned error: %s", tool_name, result.content)
                     return {"error": result.content}
                 else:
                     # Extract content from MCP result
-                    if hasattr(result, 'content') and result.content:
+                    if hasattr(result, "content") and result.content:
                         if len(result.content) == 1:
                             content_item = result.content[0]
-                            if hasattr(content_item, 'text'):
+                            if hasattr(content_item, "text"):
                                 # Try to parse as JSON if it looks like structured data
                                 text = content_item.text
-                                if text.strip().startswith('{') and text.strip().endswith('}'):
+                                if text.strip().startswith("{") and text.strip().endswith("}"):
                                     try:
                                         import json
+
                                         return json.loads(text)
                                     except json.JSONDecodeError:
                                         return text
@@ -457,7 +458,13 @@ class BaseMCPAgent(ABC):
             logger.error("Failed to call tool %s: %s", tool_name, e)
             return {"error": str(e)}
 
-    async def _run_prompt(self, prompt: str, max_steps: int = 10, conversation_mode: bool = False) -> str:
+    async def _run_prompt(
+        self,
+        prompt: str,
+        max_steps: int = 10,
+        conversation_mode: bool = False,
+        gold_file_url: str | None = None,
+    ) -> str:
         """
         Run the agent with the given prompt.
 
@@ -556,7 +563,7 @@ class BaseMCPAgent(ABC):
                     logger.error("Model call failed: %s", e)
                     return f"Error: {e}"
 
-            return f"Maximum steps ({max_steps}) reached without completion"
+            return {"done": True, "reward": 0.0, "info": {"message": "Task completed"}}
 
         except KeyboardInterrupt:
             logger.info("Agent execution interrupted by user")

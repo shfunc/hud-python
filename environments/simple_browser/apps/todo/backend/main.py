@@ -64,6 +64,7 @@ init_db()
 
 # === CORE TODO API ROUTES ===
 
+
 @app.get("/api/status")
 def status():
     return {"status": "ok", "timestamp": datetime.now().isoformat()}
@@ -119,11 +120,12 @@ def update_item(item_id: int, item: ItemCreate):
         (item.title, item.description, item.completed, item_id),
     )
     conn.commit()
-    conn.close()
 
     if c.rowcount == 0:
+        conn.close()
         raise HTTPException(status_code=404, detail="Item not found")
 
+    conn.close()
     return get_item(item_id)
 
 
@@ -133,15 +135,17 @@ def delete_item(item_id: int):
     c = conn.cursor()
     c.execute("DELETE FROM items WHERE id = ?", (item_id,))
     conn.commit()
-    conn.close()
 
     if c.rowcount == 0:
+        conn.close()
         raise HTTPException(status_code=404, detail="Item not found")
 
+    conn.close()
     return {"message": "Item deleted successfully"}
 
 
 # === EVALUATION API ROUTES ===
+
 
 @app.get("/api/eval/health")
 def eval_health():
@@ -152,19 +156,15 @@ def eval_health():
         c.execute("SELECT COUNT(*) FROM items")
         count = c.fetchone()[0]
         conn.close()
-        
+
         return {
             "status": "healthy",
             "database_accessible": True,
             "total_items": count,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        return {
-            "status": "unhealthy", 
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
-        }
+        return {"status": "unhealthy", "error": str(e), "timestamp": datetime.now().isoformat()}
 
 
 @app.get("/api/eval/stats", response_model=EvaluationStats)
@@ -173,18 +173,18 @@ def get_evaluation_stats():
     conn = sqlite3.connect("app.db")
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
-    
+
     # Get total counts
     c.execute("SELECT COUNT(*) as total FROM items")
     total = c.fetchone()[0]
-    
+
     c.execute("SELECT COUNT(*) as completed FROM items WHERE completed = 1")
     completed = c.fetchone()[0]
-    
+
     # Get all items with details
     c.execute("SELECT * FROM items ORDER BY created_at DESC")
     items = [dict(row) for row in c.fetchall()]
-    
+
     # Get timing information
     c.execute("""
         SELECT created_at 
@@ -194,7 +194,7 @@ def get_evaluation_stats():
     """)
     last_created_row = c.fetchone()
     last_created = last_created_row[0] if last_created_row else None
-    
+
     c.execute("""
         SELECT created_at 
         FROM items 
@@ -204,19 +204,16 @@ def get_evaluation_stats():
     """)
     last_completed_row = c.fetchone()
     last_completed = last_completed_row[0] if last_completed_row else None
-    
+
     conn.close()
-    
+
     return EvaluationStats(
         total_items=total,
         completed_items=completed,
         pending_items=total - completed,
         completion_rate=completed / total if total > 0 else 0.0,
         items=items,
-        timestamps={
-            "last_created": last_created,
-            "last_completed": last_completed
-        }
+        timestamps={"last_created": last_created, "last_completed": last_completed},
     )
 
 
@@ -226,21 +223,24 @@ def check_todo_exists(text: str):
     conn = sqlite3.connect("app.db")
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
-    c.execute("""
+    c.execute(
+        """
         SELECT * FROM items 
         WHERE title LIKE ? OR description LIKE ?
         ORDER BY created_at DESC
-    """, (f"%{text}%", f"%{text}%"))
-    
+    """,
+        (f"%{text}%", f"%{text}%"),
+    )
+
     items = [dict(row) for row in c.fetchall()]
     conn.close()
-    
+
     return {
         "exists": len(items) > 0,
         "count": len(items),
         "search_text": text,
         "matches": items,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
     }
 
 
@@ -249,55 +249,71 @@ def get_completion_rate():
     """Get the current completion rate as a percentage."""
     conn = sqlite3.connect("app.db")
     c = conn.cursor()
-    
+
     c.execute("SELECT COUNT(*) as total FROM items")
     total = c.fetchone()[0]
-    
+
     c.execute("SELECT COUNT(*) as completed FROM items WHERE completed = 1")
     completed = c.fetchone()[0]
-    
+
     conn.close()
-    
+
     rate = completed / total if total > 0 else 0.0
-    
+
     return {
         "completion_rate": rate,
         "completion_percentage": rate * 100,
         "completed_items": completed,
         "total_items": total,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
     }
 
 
 # === EVALUATION UTILITY ROUTES ===
+
 
 @app.post("/api/eval/seed")
 def seed_test_data():
     """Seed the database with test data for evaluation purposes."""
     test_items = [
         {"title": "Buy groceries", "description": "Get milk, eggs, and bread", "completed": True},
-        {"title": "Walk the dog", "description": "Take Max for a 30-minute walk", "completed": True},
-        {"title": "Finish project", "description": "Complete the Q4 presentation", "completed": False},
+        {
+            "title": "Walk the dog",
+            "description": "Take Max for a 30-minute walk",
+            "completed": True,
+        },
+        {
+            "title": "Finish project",
+            "description": "Complete the Q4 presentation",
+            "completed": False,
+        },
         {"title": "Call mom", "description": "Weekly check-in call", "completed": False},
-        {"title": "Schedule dentist", "description": "Book appointment for cleaning", "completed": False},
+        {
+            "title": "Schedule dentist",
+            "description": "Book appointment for cleaning",
+            "completed": False,
+        },
     ]
-    
+
     conn = sqlite3.connect("app.db")
     c = conn.cursor()
-    
+
     for item in test_items:
-        c.execute("""
+        c.execute(
+            """
             INSERT INTO items (title, description, completed) 
             VALUES (?, ?, ?)
-        """, (item["title"], item["description"], item["completed"]))
-    
+        """,
+            (item["title"], item["description"], item["completed"]),
+        )
+
     conn.commit()
     conn.close()
-    
+
     return {
         "message": "Test data seeded successfully",
         "items_added": len(test_items),
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
     }
 
 
@@ -309,8 +325,5 @@ def reset_database():
     c.execute("DELETE FROM items")
     conn.commit()
     conn.close()
-    
-    return {
-        "message": "Database reset successfully", 
-        "timestamp": datetime.now().isoformat()
-    }
+
+    return {"message": "Database reset successfully", "timestamp": datetime.now().isoformat()}

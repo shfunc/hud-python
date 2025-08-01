@@ -74,6 +74,8 @@ class Task(BaseModel):
     # Description of the task, for extra information about its purpose and context
     description: str | None = None
 
+    gold_file_url: str | None = None
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Task:
         return cls(**data)
@@ -110,6 +112,7 @@ class Task(BaseModel):
             description=data.get("description"),
             sensitive_data=data.get("sensitive_data", {}),
             metadata=data.get("metadata", {}),
+            gold_file_url=data.get("gold_file_url"),
         )
 
     @classmethod
@@ -221,4 +224,5 @@ class Task(BaseModel):
             "gym": parsed_gym,
             "sensitive_data": self.sensitive_data,
             "metadata": self.metadata,
+            "gold_file_url": self.gold_file_url,
         }

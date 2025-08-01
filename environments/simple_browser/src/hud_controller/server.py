@@ -29,7 +29,7 @@ from .runtime import setup_tool, evaluate_tool
 
 # Import registries to trigger registration
 from .evaluators import EvaluatorRegistry
-from .setup import SetupRegistry  
+from .setup import SetupRegistry
 from .problems import ProblemRegistry
 
 service_manager = ServiceManager()
@@ -89,15 +89,20 @@ async def initialize_environment(session=None, progress_token=None):
         await send_progress(70, "Initializing tools...")
 
         # Create and register computer tool
-        from hud.tools import HudComputerTool, PlaywrightTool, AnthropicComputerTool, OpenAIComputerTool
+        from hud.tools import (
+            HudComputerTool,
+            PlaywrightTool,
+            AnthropicComputerTool,
+            OpenAIComputerTool,
+        )
 
         register_instance_tool(mcp, "computer", HudComputerTool())
         register_instance_tool(mcp, "anthropic_computer", AnthropicComputerTool())
         register_instance_tool(mcp, "openai_computer", OpenAIComputerTool())
-        
+
         # Store playwright tool instance for browser launch
         playwright_tool = PlaywrightTool()
-        register_instance_tool(mcp, "playwright", playwright_tool)  
+        register_instance_tool(mcp, "playwright", playwright_tool)
 
         await send_progress(80, "Computer and Playwright tools ready")
 
@@ -186,6 +191,7 @@ mcp = FastMCP(
 
 # === PARAMETERIZED MCP RESOURCES ===
 
+
 @mcp.resource("evaluators://registry")
 async def get_evaluators_resource() -> str:
     """MCP resource containing all available evaluators."""
@@ -196,11 +202,9 @@ async def get_evaluators_resource() -> str:
 async def get_env_evaluators_resource(env: str) -> str:
     """MCP resource containing environment-specific evaluators."""
     env_evaluators = EvaluatorRegistry.get_evaluators_by_app(env)
-    return json.dumps({
-        "env": env,
-        "evaluators": env_evaluators,
-        "count": len(env_evaluators)
-    }, indent=2)
+    return json.dumps(
+        {"env": env, "evaluators": env_evaluators, "count": len(env_evaluators)}, indent=2
+    )
 
 
 @mcp.resource("setup://registry")
@@ -213,11 +217,7 @@ async def get_setup_registry_resource() -> str:
 async def get_env_setup_resource(env: str) -> str:
     """MCP resource containing environment-specific setup tools."""
     env_setup = SetupRegistry.get_setup_tools_by_app(env)
-    return json.dumps({
-        "env": env, 
-        "setup_tools": env_setup,
-        "count": len(env_setup)
-    }, indent=2)
+    return json.dumps({"env": env, "setup_tools": env_setup, "count": len(env_setup)}, indent=2)
 
 
 @mcp.resource("problems://registry")
@@ -230,11 +230,7 @@ async def get_problems_registry_resource() -> str:
 async def get_env_problems_resource(env: str) -> str:
     """MCP resource containing environment-specific problems."""
     env_problems = ProblemRegistry.get_problems_by_app(env)
-    return json.dumps({
-        "env": env,
-        "problems": env_problems,
-        "count": len(env_problems)
-    }, indent=2)
+    return json.dumps({"env": env, "problems": env_problems, "count": len(env_problems)}, indent=2)
 
 
 @mcp.resource("schema://evaluator/{evaluator_name}")
@@ -268,21 +264,20 @@ async def get_telemetry_resource() -> str:
         "websockify_port": 8080,
         "status": "ready",
         "timestamp": datetime.now().isoformat(),
-        "services": {
-            "x11": "running",
-            "vnc": "running", 
-            "websockify": "running"
-        }
+        "services": {"x11": "running", "vnc": "running", "websockify": "running"},
     }
     return json.dumps(telemetry_data, indent=2)
 
 
 # === SETUP AND EVALUATION TOOLS ===
 
+
 @mcp.tool()
-async def setup(function: str = None, args: dict = None, name: str = None, ctx: Context = None) -> dict:
+async def setup(
+    function: str = None, args: dict = None, name: str = None, ctx: Context = None
+) -> dict:
     """Setup the environment based on configuration.
-    
+
     Args:
         function: Setup function name (e.g. 'todo_seed')
         args: Arguments for the setup function
@@ -292,9 +287,11 @@ async def setup(function: str = None, args: dict = None, name: str = None, ctx: 
 
 
 @mcp.tool()
-async def evaluate(function: str = None, args: dict = None, name: str = None, ctx: Context = None) -> dict:
+async def evaluate(
+    function: str = None, args: dict = None, name: str = None, ctx: Context = None
+) -> dict:
     """Evaluate the environment based on configuration.
-    
+
     Args:
         function: Evaluator function name (e.g. 'todo_completed')
         args: Arguments for the evaluator function
@@ -304,6 +301,7 @@ async def evaluate(function: str = None, args: dict = None, name: str = None, ct
 
 
 # === APPLICATION TOOLS ===
+
 
 @mcp.tool()
 async def launch_app(app_name: str, ctx: Context) -> str:

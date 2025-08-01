@@ -12,7 +12,7 @@ from .todo import *
 
 __all__ = [
     "EvaluatorRegistry",
-    "evaluator", 
+    "evaluator",
     "BrowserEnvironmentContext",
-    "BrowserEvaluationContext"  # Backward compatibility
-] 
+    "BrowserEvaluationContext",  # Backward compatibility
+]

@@ -7,7 +7,4 @@ as MCP resources and for direct setup calls.
 from .registry import SetupRegistry, setup
 from .todo import *
 
-__all__ = [
-    "SetupRegistry",
-    "setup"
-] 
+__all__ = ["SetupRegistry", "setup"]

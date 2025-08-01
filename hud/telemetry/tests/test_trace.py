@@ -164,7 +164,10 @@ class TestTrace:
             "hud.telemetry._trace.submit_to_worker_loop", return_value=MagicMock(), autospec=True
         )
 
-        with pytest.raises(ValueError, match="Test exception"), trace_open(name="trace_with_exception"):  # noqa: E501
+        with (
+            pytest.raises(ValueError, match="Test exception"),
+            trace_open(name="trace_with_exception"),
+        ):
             assert actual_get_current_task_run_id() != initial_task_id_before_trace
             assert actual_is_root_trace.get() is False
             raise ValueError("Test exception")

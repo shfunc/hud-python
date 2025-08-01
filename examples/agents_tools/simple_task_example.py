@@ -10,7 +10,7 @@ Usage:
     # First, build and start the simple_browser environment:
     cd environments/simple_browser
     docker build -t hud-browser .
-    
+
     # Then run this example:
     python examples/agents_tools/simple_task_example.py
 """
@@ -36,10 +36,15 @@ async def main():
             "browser": {
                 "command": "docker",
                 "args": [
-                    "run", "--rm", "-i",
-                    "-p", "8080:8080",  # VNC port
-                    "-e", "LAUNCH_APPS=todo",  # Launch todo app
-                    "-e", "BROWSER_URL=http://localhost:3000",  # Navigate to todo app
+                    "run",
+                    "--rm",
+                    "-i",
+                    "-p",
+                    "8080:8080",  # VNC port
+                    "-e",
+                    "LAUNCH_APPS=todo",  # Launch todo app
+                    "-e",
+                    "BROWSER_URL=http://localhost:3000",  # Navigate to todo app
                     "hud-browser",
                 ],
             }
@@ -49,12 +54,12 @@ async def main():
     # Create MCP client and agent
     print("📡 Connecting to browser environment...")
     client = MCPClient.from_dict(config)
-    
+
     agent = ClaudeMCPAgent(
         client=client,
         model="claude-sonnet-4-20250514",
         allowed_tools=["anthropic_computer", "api_request"],
-        initial_screenshot=True
+        initial_screenshot=True,
     )
 
     try:
@@ -63,7 +68,7 @@ async def main():
         # Example 1: Simple Query (string)
         print("🔍 Example 1: Simple Query")
         print("-" * 30)
-        
+
         simple_result = await agent.run("Take a screenshot and describe what you see on the page")
         print(f"📝 Query Result: {simple_result}\n")
 
@@ -73,28 +78,22 @@ async def main():
 
         task = Task(
             prompt="Add a new todo item called 'Test automated task' and mark it as completed",
-            setup={
-                "function": "todo_seed", 
-                "args": {"num_items": 2}
-            },
-            evaluate={
-                "function": "todo_completed", 
-                "args": {"expected_count": 1}
-            }
+            setup={"function": "todo_seed", "args": {"num_items": 2}},
+            evaluate={"function": "todo_completed", "args": {"expected_count": 1}},
         )
 
         print(f"📋 Task: {task.prompt}")
         print(f"⚙️  Setup: {task.setup}")
         print(f"📊 Evaluate: {task.evaluate}")
-        
+
         eval_result = await agent.run(task)
         print(f"🎉 Task Result: {eval_result}")
-        
+
         # Show formatted results
         reward = eval_result.get("reward", 0.0)
         success = reward > 0.5
         info = eval_result.get("info", {})
-        
+
         print(f"\n📈 Task Performance:")
         print(f"   ✅ Success: {success}")
         print(f"   🏆 Reward: {reward}")
@@ -103,23 +102,20 @@ async def main():
         # Example 3: Task without evaluation (setup only)
         print("\n🔧 Example 3: Setup-Only Task")
         print("-" * 30)
-        
+
         setup_task = Task(
             prompt="Take a screenshot and count how many todo items are visible",
-            setup={
-                "function": "todo_seed",
-                "args": {"num_items": 5}
-            }
+            setup={"function": "todo_seed", "args": {"num_items": 5}},
             # No evaluate - will return success automatically
         )
-        
+
         setup_result = await agent.run(setup_task)
         print(f"🔧 Setup-only Result: {setup_result}")
 
     except Exception as e:
         logger.error(f"Example failed: {e}")
         print(f"❌ Error: {e}")
-    
+
     finally:
         # Cleanup
         print("\n🧹 Cleaning up...")
@@ -132,9 +128,9 @@ if __name__ == "__main__":
     print("   cd environments/simple_browser")
     print("   docker build -t hud-browser .")
     print("\nPress Enter to continue or Ctrl+C to cancel...")
-    
+
     try:
         input()
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\nCancelled.") 
+        print("\nCancelled.")
