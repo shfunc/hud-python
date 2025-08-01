@@ -182,33 +182,31 @@ class TestTraceSync:
     """Test the trace_sync context manager."""
 
     def test_trace_sync_basic(self, mocker):
-        """Test trace_sync calls trace and flush."""
-        mock_flush_global = mocker.patch("hud.flush", autospec=True)
+        """Test trace calls trace_open and flush."""
+        mock_flush = mocker.patch("hud.flush", autospec=True)
+        mock_trace_open = mocker.patch("hud.telemetry._trace.trace_open")
+        mock_trace_open.return_value.__enter__.return_value = "test-task-id"
+        mock_trace_open.return_value.__exit__.return_value = None
 
-        with patch("hud.telemetry._trace.trace") as mock_trace:
-            mock_trace.return_value.__enter__.return_value = "test-task-id"
-            mock_trace.return_value.__exit__.return_value = None
+        with trace(name="test_sync") as task_run_id:
+            assert task_run_id == "test-task-id"
 
-            with trace(name="test_sync") as task_run_id:
-                assert task_run_id == "test-task-id"
-
-            mock_trace.assert_called_once_with(name="test_sync", attributes=None)
-            mock_flush_global.assert_called_once()
+        mock_trace_open.assert_called_once_with(name="test_sync", attributes=None)
+        mock_flush.assert_called_once()
 
     def test_trace_sync_with_attributes(self, mocker):
-        """Test trace_sync passes attributes correctly."""
-        mock_flush_global = mocker.patch("hud.flush", autospec=True)
+        """Test trace passes attributes correctly."""
+        mock_flush = mocker.patch("hud.flush", autospec=True)
+        mock_trace_open = mocker.patch("hud.telemetry._trace.trace_open")
+        mock_trace_open.return_value.__enter__.return_value = "test-task-id"
+        mock_trace_open.return_value.__exit__.return_value = None
         attrs = {"key": "value"}
 
-        with patch("hud.telemetry._trace.trace") as mock_trace:
-            mock_trace.return_value.__enter__.return_value = "test-task-id"
-            mock_trace.return_value.__exit__.return_value = None
+        with trace(name="test_sync", attributes=attrs):
+            pass
 
-            with trace(name="test_sync", attributes=attrs):
-                pass
-
-            mock_trace.assert_called_once_with(name="test_sync", attributes=attrs)
-            mock_flush_global.assert_called_once()
+        mock_trace_open.assert_called_once_with(name="test_sync", attributes=attrs)
+        mock_flush.assert_called_once()
 
 
 class TestTraceDecorator:
@@ -216,9 +214,9 @@ class TestTraceDecorator:
 
     def test_trace_decorator_sync_function(self, mocker):
         """Test trace_decorator on synchronous functions."""
-        mock_trace = mocker.patch("hud.telemetry._trace.trace", autospec=True)
-        mock_trace.return_value.__enter__.return_value = "mocked_task_id"
-        mock_trace.return_value.__exit__.return_value = None
+        mock_trace_open = mocker.patch("hud.telemetry._trace.trace_open", autospec=True)
+        mock_trace_open.return_value.__enter__.return_value = "mocked_task_id"
+        mock_trace_open.return_value.__exit__.return_value = None
 
         @trace_decorator(name="test_func_sync")
         def sync_function(x, y):
@@ -226,13 +224,13 @@ class TestTraceDecorator:
 
         result = sync_function(1, 2)
         assert result == 3
-        mock_trace.assert_called_once_with(name="test_func_sync", attributes=None)
+        mock_trace_open.assert_called_once_with(name="test_func_sync", attributes=None)
 
     def test_trace_decorator_async_function(self, mocker):
         """Test trace_decorator on asynchronous functions."""
-        mock_trace = mocker.patch("hud.telemetry._trace.trace", autospec=True)
-        mock_trace.return_value.__enter__.return_value = "mocked_task_id"
-        mock_trace.return_value.__exit__.return_value = None
+        mock_trace_open = mocker.patch("hud.telemetry._trace.trace_open", autospec=True)
+        mock_trace_open.return_value.__enter__.return_value = "mocked_task_id"
+        mock_trace_open.return_value.__exit__.return_value = None
 
         @trace_decorator(name="test_func_async")
         async def async_function(x, y):
@@ -241,15 +239,15 @@ class TestTraceDecorator:
         async def run_test():
             result = await async_function(1, 2)
             assert result == 3
-            mock_trace.assert_called_once_with(name="test_func_async", attributes=None)
+            mock_trace_open.assert_called_once_with(name="test_func_async", attributes=None)
 
         asyncio.run(run_test())
 
     def test_trace_decorator_with_attributes(self, mocker):
         """Test trace_decorator with attributes."""
-        mock_trace = mocker.patch("hud.telemetry._trace.trace", autospec=True)
-        mock_trace.return_value.__enter__.return_value = "task_id"
-        mock_trace.return_value.__exit__.return_value = None
+        mock_trace_open = mocker.patch("hud.telemetry._trace.trace_open", autospec=True)
+        mock_trace_open.return_value.__enter__.return_value = "task_id"
+        mock_trace_open.return_value.__exit__.return_value = None
 
         attrs = {"operation": "multiply"}
 
@@ -259,13 +257,13 @@ class TestTraceDecorator:
 
         result = func_with_attrs(5)
         assert result == 10
-        mock_trace.assert_called_once_with(name="test_func", attributes=attrs)
+        mock_trace_open.assert_called_once_with(name="test_func", attributes=attrs)
 
     def test_trace_decorator_without_name(self, mocker):
         """Test trace_decorator uses module.function name when name not provided."""
-        mock_trace = mocker.patch("hud.telemetry._trace.trace", autospec=True)
-        mock_trace.return_value.__enter__.return_value = "task_id"
-        mock_trace.return_value.__exit__.return_value = None
+        mock_trace_open = mocker.patch("hud.telemetry._trace.trace_open", autospec=True)
+        mock_trace_open.return_value.__enter__.return_value = "task_id"
+        mock_trace_open.return_value.__exit__.return_value = None
 
         @trace_decorator()
         def my_function():
@@ -275,7 +273,7 @@ class TestTraceDecorator:
         assert result == "result"
         # Should use module.function name
         expected_name = f"{my_function.__module__}.my_function"
-        mock_trace.assert_called_once_with(name=expected_name, attributes=None)
+        mock_trace_open.assert_called_once_with(name=expected_name, attributes=None)
 
     def test_trace_decorator_preserves_function_metadata(self):
         """Test trace_decorator preserves original function metadata."""
@@ -289,9 +287,9 @@ class TestTraceDecorator:
 
     def test_trace_decorator_exception_propagation(self, mocker):
         """Test trace_decorator propagates exceptions."""
-        mock_trace = mocker.patch("hud.telemetry._trace.trace", autospec=True)
-        mock_trace.return_value.__enter__.return_value = "task_id"
-        mock_trace.return_value.__exit__.return_value = None
+        mock_trace_open = mocker.patch("hud.telemetry._trace.trace_open", autospec=True)
+        mock_trace_open.return_value.__enter__.return_value = "task_id"
+        mock_trace_open.return_value.__exit__.return_value = None
 
         @trace_decorator()
         def failing_function():
@@ -300,4 +298,4 @@ class TestTraceDecorator:
         with pytest.raises(RuntimeError, match="Test error"):
             failing_function()
 
-        mock_trace.assert_called_once()
+        mock_trace_open.assert_called_once()

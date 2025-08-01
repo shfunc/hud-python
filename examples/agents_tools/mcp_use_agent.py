@@ -37,7 +37,7 @@ async def main():
         print(f"\n🤖 Running: {query}\n")
 
         # Use trace_debug to see MCP calls in real-time
-        with hud.trace_sync():
+        with hud.trace():
             result = await agent.run(query)
         print(f"\n✅ Result: {result}")
 

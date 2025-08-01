@@ -44,8 +44,8 @@ async def main():
         # Ask user for query in terminal
         query = input("Enter a query: ")
 
-        # Use trace_debug to see MCP calls in real-time
-        with hud.trace_sync():
+        # Use trace to see MCP calls in real-time
+        with hud.trace():
             result = await agent.run(query, max_steps=15, conversation_mode=True)
 
         print(f"\n✅ Result: {result}")
