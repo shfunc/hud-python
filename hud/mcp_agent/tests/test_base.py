@@ -115,6 +115,9 @@ class TestBaseMCPAgent:
         # Create proper async mock for session
         mock_session = MagicMock()
         
+        # Mock the initialize method
+        mock_session.initialize = AsyncMock()
+        
         # Create async function for list_tools
         async def mock_list_tools():
             return types.ListToolsResult(
@@ -126,6 +129,8 @@ class TestBaseMCPAgent:
             )
         
         mock_session.list_tools = mock_list_tools
+        
+        # Set up connector after list_tools is called
         mock_session.connector = MagicMock()
         mock_session.connector.client_session = MagicMock()
         
@@ -151,6 +156,9 @@ class TestBaseMCPAgent:
         
         # Create proper async mock for session
         mock_session = MagicMock()
+        
+        # Mock the initialize method
+        mock_session.initialize = AsyncMock()
         
         async def mock_list_tools():
             return types.ListToolsResult(
@@ -186,6 +194,7 @@ class TestBaseMCPAgent:
         
         # Initialize with a tool
         mock_session = MagicMock()
+        mock_session.initialize = AsyncMock()
         
         async def mock_list_tools():
             return types.ListToolsResult(
@@ -258,11 +267,11 @@ class TestBaseMCPAgent:
         
         prompt = agent.get_system_prompt()
         
-        # Should include tool descriptions
+        # Should include ALL tool descriptions (including lifecycle tools)
         assert "tool1" in prompt
         assert "Tool 1" in prompt
-        # Should not include lifecycle tools
-        assert "setup" not in prompt
+        assert "setup" in prompt
+        assert "Setup" in prompt
 
     def test_get_system_prompt_custom(self):
         """Test get_system_prompt with custom prompt."""
@@ -323,6 +332,7 @@ class TestBaseMCPAgent:
         
         # Set up screenshot tool
         mock_session = MagicMock()
+        mock_session.initialize = AsyncMock()
         
         async def mock_list_tools():
             return types.ListToolsResult(
@@ -358,8 +368,7 @@ class TestBaseMCPAgent:
         
         tool_results = [
             {
-                "role": "tool",
-                "name": "test_tool",
+                "tool_name": "test_tool",
                 "content": [
                     {"type": "text", "text": "Result text"},
                     {"type": "image", "data": "imagedata", "mimeType": "image/png"}
@@ -369,9 +378,10 @@ class TestBaseMCPAgent:
         
         processed = agent.process_tool_results(tool_results)
         
-        assert "outputs" in processed
-        assert "test_tool" in processed["outputs"]
-        assert processed["outputs"]["test_tool"] == "Result text"
+        assert "text" in processed
+        assert "Result text" in processed["text"]
+        assert "results" in processed
+        assert len(processed["results"]) == 1
 
     def test_get_tools_by_server(self):
         """Test getting tools grouped by server."""
