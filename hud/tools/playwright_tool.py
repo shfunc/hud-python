@@ -21,8 +21,9 @@ logger = logging.getLogger(__name__)
 class PlaywrightTool:
     """Playwright tool for web automation."""
 
-    def __init__(self) -> None:
+    def __init__(self, cdp_url: str | None = None) -> None:
         super().__init__()
+        self._cdp_url = cdp_url
         self._playwright = None
         self._browser: Browser | None = None
         self._context: BrowserContext | None = None
@@ -143,10 +144,14 @@ class PlaywrightTool:
     async def _ensure_browser(self) -> None:
         """Ensure browser is launched and ready."""
         if self._browser is None or not self._browser.is_connected():
-            logger.info("Launching Playwright browser...")
+            if self._cdp_url:
+                logger.info(f"Connecting to remote browser via CDP: {self._cdp_url}")
+            else:
+                logger.info("Launching Playwright browser...")
 
-            # Ensure DISPLAY is set
-            os.environ["DISPLAY"] = os.environ.get("DISPLAY", ":1")
+            # Ensure DISPLAY is set (only needed for local browser)
+            if not self._cdp_url:
+                os.environ["DISPLAY"] = os.environ.get("DISPLAY", ":1")
 
             if self._playwright is None:
                 try:
@@ -158,37 +163,56 @@ class PlaywrightTool:
                         "Playwright is not installed. Please install with: pip install playwright"
                     ) from None
 
-            self._browser = await self._playwright.chromium.launch(
-                headless=False,
-                args=[
-                    "--no-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-gpu",
-                    "--disable-web-security",
-                    "--disable-features=IsolateOrigins,site-per-process",
-                    "--disable-blink-features=AutomationControlled",
-                    "--window-size=1920,1080",
-                    "--window-position=0,0",
-                    "--start-maximized",
-                    "--disable-background-timer-throttling",
-                    "--disable-backgrounding-occluded-windows",
-                    "--disable-renderer-backgrounding",
-                    "--disable-features=TranslateUI",
-                    "--disable-ipc-flooding-protection",
-                    "--disable-default-apps",
-                    "--no-first-run",
-                    "--disable-sync",
-                    "--no-default-browser-check",
-                ],
-            )
+            # Connect via CDP URL or launch local browser
+            if self._cdp_url:
+                # Connect to remote browser via CDP
+                self._browser = await self._playwright.chromium.connect_over_cdp(self._cdp_url)
+                
+                if self._browser is None:
+                    raise RuntimeError("Failed to connect to remote browser")
+                
+                # Use existing context or create new one
+                contexts = self._browser.contexts
+                if contexts:
+                    self._context = contexts[0]
+                else:
+                    self._context = await self._browser.new_context(
+                        viewport={"width": 1920, "height": 1080},
+                        ignore_https_errors=True,
+                    )
+            else:
+                # Launch local browser
+                self._browser = await self._playwright.chromium.launch(
+                    headless=False,
+                    args=[
+                        "--no-sandbox",
+                        "--disable-dev-shm-usage",
+                        "--disable-gpu",
+                        "--disable-web-security",
+                        "--disable-features=IsolateOrigins,site-per-process",
+                        "--disable-blink-features=AutomationControlled",
+                        "--window-size=1920,1080",
+                        "--window-position=0,0",
+                        "--start-maximized",
+                        "--disable-background-timer-throttling",
+                        "--disable-backgrounding-occluded-windows",
+                        "--disable-renderer-backgrounding",
+                        "--disable-features=TranslateUI",
+                        "--disable-ipc-flooding-protection",
+                        "--disable-default-apps",
+                        "--no-first-run",
+                        "--disable-sync",
+                        "--no-default-browser-check",
+                    ],
+                )
 
-            if self._browser is None:
-                raise RuntimeError("Browser failed to initialize")
+                if self._browser is None:
+                    raise RuntimeError("Browser failed to initialize")
 
-            self._context = await self._browser.new_context(
-                viewport={"width": 1920, "height": 1080},
-                ignore_https_errors=True,
-            )
+                self._context = await self._browser.new_context(
+                    viewport={"width": 1920, "height": 1080},
+                    ignore_https_errors=True,
+                )
 
             if self._context is None:
                 raise RuntimeError("Browser context failed to initialize")
