@@ -20,7 +20,7 @@ async def main():
                             "--rm",  # remove the container after it exits
                             "-p",
                             "6080:6080",  # map port 6080 to the host for noVNC
-                            "gmail-clone",  # the name of the docker image
+                            "hudpython/gmail-clone:latest",  # use hud gmail image
                         ],
                     }
                 },
