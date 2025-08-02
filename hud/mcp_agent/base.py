@@ -34,6 +34,7 @@ class BaseMCPAgent(ABC):
         max_screenshot_history: int = 3,
         append_tool_system_prompt: bool = True,
         custom_system_prompt: str | None = None,
+        lifecycle_tools: dict[str, str] | None = None,
     ) -> None:
         """
         Initialize the base MCP agent.
@@ -46,6 +47,11 @@ class BaseMCPAgent(ABC):
             max_screenshot_history: Maximum number of screenshots to keep in context
             append_tool_system_prompt: Whether to append available tools to system prompt
             custom_system_prompt: Custom system prompt to use
+            lifecycle_tools: Dict mapping lifecycle phases to tool names. Default:
+                {
+                    "setup": "setup",      # Setup phase tool
+                    "evaluate": "evaluate"  # Evaluation phase tool
+                }
         """
         self.client = client
         self.allowed_tools = allowed_tools
@@ -54,6 +60,11 @@ class BaseMCPAgent(ABC):
         self.max_screenshot_history = max_screenshot_history
         self.append_tool_system_prompt = append_tool_system_prompt
         self.custom_system_prompt = custom_system_prompt
+
+        # Default lifecycle tool mapping
+        default_lifecycle = {"setup": "setup", "evaluate": "evaluate"}
+        self.lifecycle_tools = {**default_lifecycle, **(lifecycle_tools or {})}
+
         self._available_tools: list[types.Tool] = []
         self._tool_map: dict[str, tuple[str, types.Tool]] = {}
         self._sessions: dict[str, Any] = {}
@@ -91,17 +102,17 @@ class BaseMCPAgent(ABC):
                     raise ValueError("Client session is not initialized")
 
                 tools_result = await session.connector.client_session.list_tools()
-                
+
                 # Log all tools before filtering
                 logger.info(
                     "Tools from '%s' (pre-filter): %s",
                     server_name,
-                    [tool.name for tool in tools_result.tools]
+                    [tool.name for tool in tools_result.tools],
                 )
-                
+
                 for tool in tools_result.tools:
-                    # Always include setup/evaluate tools for framework use
-                    is_lifecycle_tool = tool.name in ["setup", "evaluate"]
+                    # Always include lifecycle tools for framework use
+                    is_lifecycle_tool = tool.name in self.lifecycle_tools.values()
 
                     # Apply filtering (but always allow lifecycle tools)
                     if not is_lifecycle_tool:
@@ -125,7 +136,8 @@ class BaseMCPAgent(ABC):
 
     def get_available_tools(self) -> list[types.Tool]:
         """Get list of available MCP tools for LLM use (excludes lifecycle tools)."""
-        return [tool for tool in self._available_tools if tool.name not in ["setup", "evaluate"]]
+        lifecycle_tool_names = list(self.lifecycle_tools.values())
+        return [tool for tool in self._available_tools if tool.name not in lifecycle_tool_names]
 
     def get_tool_map(self) -> dict[str, tuple[str, types.Tool]]:
         """Get mapping of tool names to (server_name, tool) tuples."""
@@ -229,7 +241,7 @@ class BaseMCPAgent(ABC):
         schemas = []
         for tool in self._available_tools:
             # Filter out lifecycle tools from LLM conversation
-            if tool.name in ["setup", "evaluate"]:
+            if tool.name in self.lifecycle_tools.values():
                 continue
 
             schema = {
@@ -396,14 +408,16 @@ class BaseMCPAgent(ABC):
         try:
             # Setup phase
             if task.setup is not None:
-                await self._call_tool_safe("setup", task.setup)
+                setup_tool = self.lifecycle_tools.get("setup", "setup")
+                await self._call_tool_safe(setup_tool, task.setup)
 
             # Execute the task prompt
             await self._run_prompt(task.prompt, max_steps, conversation_mode=False)
 
             # Evaluate phase
             if task.evaluate is not None:
-                eval_result = await self._call_tool_safe("evaluate", task.evaluate)
+                evaluate_tool = self.lifecycle_tools.get("evaluate", "evaluate")
+                eval_result = await self._call_tool_safe(evaluate_tool, task.evaluate)
 
                 # Return evaluation result if it's properly formatted
                 if (
