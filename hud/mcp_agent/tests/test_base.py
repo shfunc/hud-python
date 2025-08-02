@@ -133,6 +133,7 @@ class TestBaseMCPAgent:
 
         mock_session.connector.client_session.list_tools = mock_list_tools
 
+        assert agent.client is not None
         agent.client.get_all_active_sessions = MagicMock(return_value={"server1": mock_session})
 
         await agent.initialize()
@@ -172,6 +173,7 @@ class TestBaseMCPAgent:
 
         mock_session.connector.client_session.list_tools = mock_list_tools
 
+        assert agent.client is not None
         agent.client.get_all_active_sessions = MagicMock(return_value={"server1": mock_session})
 
         await agent.initialize()
@@ -214,6 +216,7 @@ class TestBaseMCPAgent:
 
         mock_session.connector.client_session.call_tool = mock_call_tool
 
+        assert agent.client is not None
         agent.client.get_all_active_sessions = MagicMock(return_value={"server1": mock_session})
         agent.client.get_session = MagicMock(return_value=mock_session)
 
@@ -237,6 +240,7 @@ class TestBaseMCPAgent:
             return types.ListToolsResult(tools=[])
 
         mock_session.list_tools = mock_list_tools
+        assert agent.client is not None
         agent.client.get_all_active_sessions = MagicMock(return_value={"server1": mock_session})
 
         await agent.initialize()
@@ -356,6 +360,7 @@ class TestBaseMCPAgent:
 
         mock_session.connector.client_session.call_tool = mock_call_tool
 
+        assert agent.client is not None
         agent.client.get_all_active_sessions = MagicMock(return_value={"server1": mock_session})
         agent.client.get_session = MagicMock(return_value=mock_session)
 
@@ -415,12 +420,15 @@ class TestBaseMCPAgent:
 
         # Test various executor actions
         click_result = await agent.executor.click(100, 200, take_screenshot=False)
+        assert click_result.output is not None
         assert "[SIMULATED] Click at (100, 200)" in click_result.output
 
         type_result = await agent.executor.type("Test input", take_screenshot=False)
+        assert type_result.output is not None
         assert "[SIMULATED] Type 'Test input'" in type_result.output
 
         scroll_result = await agent.executor.scroll(x=50, y=50, scroll_y=5, take_screenshot=False)
+        assert scroll_result.output is not None
         assert "[SIMULATED] Scroll" in scroll_result.output
 
         # Test screenshot

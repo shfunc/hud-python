@@ -51,6 +51,7 @@ class TestBaseExecutor:
         result = await executor.click(x=100, y=200, pattern=[100, 50], take_screenshot=False)
 
         assert isinstance(result, ToolResult)
+        assert result.output is not None
         assert (
             "[SIMULATED] Click at (100, 200) with left button (multi-click pattern: [100, 50])"
             in result.output
@@ -65,6 +66,7 @@ class TestBaseExecutor:
         )
 
         assert isinstance(result, ToolResult)
+        assert result.output is not None
         assert "while holding ['ctrl', 'shift']" in result.output
 
     @pytest.mark.asyncio
@@ -128,6 +130,7 @@ class TestBaseExecutor:
         result = await executor.scroll(x=100, y=200, scroll_y=5, take_screenshot=False)
 
         assert isinstance(result, ToolResult)
+        assert result.output is not None
         assert "[SIMULATED] Scroll at (100, 200)" in result.output
         assert "vertically by 5" in result.output
 
@@ -138,6 +141,7 @@ class TestBaseExecutor:
         result = await executor.scroll(scroll_x=10, take_screenshot=False)
 
         assert isinstance(result, ToolResult)
+        assert result.output is not None
         assert "[SIMULATED] Scroll" in result.output
         assert "horizontally by 10" in result.output
 
@@ -150,6 +154,7 @@ class TestBaseExecutor:
         )
 
         assert isinstance(result, ToolResult)
+        assert result.output is not None
         assert "while holding ['shift']" in result.output
 
     @pytest.mark.asyncio
@@ -197,6 +202,7 @@ class TestBaseExecutor:
         result = await executor.drag(path, take_screenshot=False)
 
         assert isinstance(result, ToolResult)
+        assert result.output is not None
         assert (
             "[SIMULATED] Drag from (100, 100) to (200, 200) via 1 intermediate points"
             in result.output
@@ -220,6 +226,7 @@ class TestBaseExecutor:
         result = await executor.drag(path, hold_keys=["alt"], take_screenshot=False)
 
         assert isinstance(result, ToolResult)
+        assert result.output is not None
         assert "while holding ['alt']" in result.output
 
     @pytest.mark.asyncio

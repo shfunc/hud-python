@@ -386,22 +386,22 @@ class BaseMCPAgent(ABC):
         """
         # Import here to avoid circular imports
         from hud.task import Task
-        
+
         if not self._available_tools:
             await self.initialize()
-        
-        logger.info(f"Running agent with prompt: {prompt_or_task}")
-        logger.info(f"type of prompt_or_task: {type(prompt_or_task)}")
-        
+
+        logger.info("Running agent with prompt: %s", prompt_or_task)
+        logger.info("type of prompt_or_task: %s", type(prompt_or_task))
+
         # Handle Task objects with full lifecycle
         if type(prompt_or_task) is Task:
-            logger.info(f"Running task with prompt: {prompt_or_task}")
+            logger.info("Running task with prompt: %s", prompt_or_task)
             return await self._run_task(prompt_or_task, max_steps)
 
         # Handle simple string prompts (existing behavior)
         elif isinstance(prompt_or_task, str):
             return await self._run_prompt(prompt_or_task, max_steps, conversation_mode)
-        
+
         else:
             raise TypeError(f"prompt_or_task must be str or Task, got {type(prompt_or_task)}")
 
@@ -523,7 +523,6 @@ class BaseMCPAgent(ABC):
             The final response or result
         """
         try:
-
             latest_screenshot = None
             if self.initial_screenshot:
                 latest_screenshot = await self.capture_screenshot()
