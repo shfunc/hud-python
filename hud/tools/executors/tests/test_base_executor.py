@@ -1,7 +1,7 @@
 """Tests for BaseExecutor."""
+
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import patch
 
 import pytest
@@ -29,7 +29,7 @@ class TestBaseExecutor:
         """Test basic click action."""
         executor = BaseExecutor()
         result = await executor.click(x=100, y=200, button="left", take_screenshot=False)
-        
+
         assert isinstance(result, ToolResult)
         assert result.output == "[SIMULATED] Click at (100, 200) with left button"
         assert result.base64_image is None  # No screenshot requested
@@ -39,7 +39,7 @@ class TestBaseExecutor:
         """Test click with screenshot."""
         executor = BaseExecutor()
         result = await executor.click(x=100, y=200, take_screenshot=True)
-        
+
         assert isinstance(result, ToolResult)
         assert result.output == "[SIMULATED] Click at (100, 200) with left button"
         assert result.base64_image is not None  # Screenshot included
@@ -49,16 +49,21 @@ class TestBaseExecutor:
         """Test click with multi-click pattern."""
         executor = BaseExecutor()
         result = await executor.click(x=100, y=200, pattern=[100, 50], take_screenshot=False)
-        
+
         assert isinstance(result, ToolResult)
-        assert "[SIMULATED] Click at (100, 200) with left button (multi-click pattern: [100, 50])" in result.output
+        assert (
+            "[SIMULATED] Click at (100, 200) with left button (multi-click pattern: [100, 50])"
+            in result.output
+        )
 
     @pytest.mark.asyncio
     async def test_click_with_hold_keys(self):
         """Test click while holding keys."""
         executor = BaseExecutor()
-        result = await executor.click(x=100, y=200, hold_keys=["ctrl", "shift"], take_screenshot=False)
-        
+        result = await executor.click(
+            x=100, y=200, hold_keys=["ctrl", "shift"], take_screenshot=False
+        )
+
         assert isinstance(result, ToolResult)
         assert "while holding ['ctrl', 'shift']" in result.output
 
@@ -67,7 +72,7 @@ class TestBaseExecutor:
         """Test basic typing."""
         executor = BaseExecutor()
         result = await executor.type("Hello World", take_screenshot=False)
-        
+
         assert isinstance(result, ToolResult)
         assert result.output == "[SIMULATED] Type 'Hello World'"
 
@@ -76,7 +81,7 @@ class TestBaseExecutor:
         """Test typing with enter."""
         executor = BaseExecutor()
         result = await executor.type("Hello", enter_after=True, take_screenshot=False)
-        
+
         assert isinstance(result, ToolResult)
         assert result.output == "[SIMULATED] Type 'Hello' followed by Enter"
 
@@ -85,7 +90,7 @@ class TestBaseExecutor:
         """Test pressing key combination."""
         executor = BaseExecutor()
         result = await executor.press(["ctrl", "c"], take_screenshot=False)
-        
+
         assert isinstance(result, ToolResult)
         assert result.output == "[SIMULATED] Press key combination: ctrl+c"
 
@@ -94,7 +99,7 @@ class TestBaseExecutor:
         """Test pressing single key."""
         executor = BaseExecutor()
         result = await executor.key("Return", take_screenshot=False)
-        
+
         assert isinstance(result, ToolResult)
         assert result.output == "[SIMULATED] Press key: Return"
 
@@ -103,7 +108,7 @@ class TestBaseExecutor:
         """Test key down action."""
         executor = BaseExecutor()
         result = await executor.keydown(["shift", "ctrl"], take_screenshot=False)
-        
+
         assert isinstance(result, ToolResult)
         assert result.output == "[SIMULATED] Key down: shift, ctrl"
 
@@ -112,7 +117,7 @@ class TestBaseExecutor:
         """Test key up action."""
         executor = BaseExecutor()
         result = await executor.keyup(["shift", "ctrl"], take_screenshot=False)
-        
+
         assert isinstance(result, ToolResult)
         assert result.output == "[SIMULATED] Key up: shift, ctrl"
 
@@ -121,7 +126,7 @@ class TestBaseExecutor:
         """Test basic scroll."""
         executor = BaseExecutor()
         result = await executor.scroll(x=100, y=200, scroll_y=5, take_screenshot=False)
-        
+
         assert isinstance(result, ToolResult)
         assert "[SIMULATED] Scroll at (100, 200)" in result.output
         assert "vertically by 5" in result.output
@@ -131,7 +136,7 @@ class TestBaseExecutor:
         """Test horizontal scroll."""
         executor = BaseExecutor()
         result = await executor.scroll(scroll_x=10, take_screenshot=False)
-        
+
         assert isinstance(result, ToolResult)
         assert "[SIMULATED] Scroll" in result.output
         assert "horizontally by 10" in result.output
@@ -140,8 +145,10 @@ class TestBaseExecutor:
     async def test_scroll_with_hold_keys(self):
         """Test scroll with held keys."""
         executor = BaseExecutor()
-        result = await executor.scroll(x=100, y=200, scroll_y=5, hold_keys=["shift"], take_screenshot=False)
-        
+        result = await executor.scroll(
+            x=100, y=200, scroll_y=5, hold_keys=["shift"], take_screenshot=False
+        )
+
         assert isinstance(result, ToolResult)
         assert "while holding ['shift']" in result.output
 
@@ -150,7 +157,7 @@ class TestBaseExecutor:
         """Test absolute mouse movement."""
         executor = BaseExecutor()
         result = await executor.move(x=300, y=400, take_screenshot=False)
-        
+
         assert isinstance(result, ToolResult)
         assert result.output == "[SIMULATED] Move mouse to (300, 400)"
 
@@ -159,7 +166,7 @@ class TestBaseExecutor:
         """Test relative mouse movement."""
         executor = BaseExecutor()
         result = await executor.move(offset_x=50, offset_y=-30, take_screenshot=False)
-        
+
         assert isinstance(result, ToolResult)
         assert result.output == "[SIMULATED] Move mouse by offset (50, -30)"
 
@@ -168,7 +175,7 @@ class TestBaseExecutor:
         """Test move with no coordinates."""
         executor = BaseExecutor()
         result = await executor.move(take_screenshot=False)
-        
+
         assert isinstance(result, ToolResult)
         assert result.output == "[SIMULATED] Move mouse (no coordinates specified)"
 
@@ -178,7 +185,7 @@ class TestBaseExecutor:
         executor = BaseExecutor()
         path = [(100, 100), (200, 200)]
         result = await executor.drag(path, take_screenshot=False)
-        
+
         assert isinstance(result, ToolResult)
         assert result.output == "[SIMULATED] Drag from (100, 100) to (200, 200)"
 
@@ -188,16 +195,19 @@ class TestBaseExecutor:
         executor = BaseExecutor()
         path = [(100, 100), (150, 150), (200, 200)]
         result = await executor.drag(path, take_screenshot=False)
-        
+
         assert isinstance(result, ToolResult)
-        assert "[SIMULATED] Drag from (100, 100) to (200, 200) via 1 intermediate points" in result.output
+        assert (
+            "[SIMULATED] Drag from (100, 100) to (200, 200) via 1 intermediate points"
+            in result.output
+        )
 
     @pytest.mark.asyncio
     async def test_drag_invalid_path(self):
         """Test drag with invalid path."""
         executor = BaseExecutor()
         result = await executor.drag([(100, 100)], take_screenshot=False)  # Only one point
-        
+
         assert isinstance(result, ToolResult)
         assert result.error == "Drag path must have at least 2 points"
         assert result.output is None
@@ -208,7 +218,7 @@ class TestBaseExecutor:
         executor = BaseExecutor()
         path = [(100, 100), (200, 200)]
         result = await executor.drag(path, hold_keys=["alt"], take_screenshot=False)
-        
+
         assert isinstance(result, ToolResult)
         assert "while holding ['alt']" in result.output
 
@@ -217,7 +227,7 @@ class TestBaseExecutor:
         """Test mouse down action."""
         executor = BaseExecutor()
         result = await executor.mouse_down(button="right", take_screenshot=False)
-        
+
         assert isinstance(result, ToolResult)
         assert result.output == "[SIMULATED] Mouse down: right button"
 
@@ -226,7 +236,7 @@ class TestBaseExecutor:
         """Test mouse up action."""
         executor = BaseExecutor()
         result = await executor.mouse_up(button="middle", take_screenshot=False)
-        
+
         assert isinstance(result, ToolResult)
         assert result.output == "[SIMULATED] Mouse up: middle button"
 
@@ -234,11 +244,11 @@ class TestBaseExecutor:
     async def test_hold_key(self):
         """Test holding a key for duration."""
         executor = BaseExecutor()
-        
+
         # Mock sleep to avoid actual wait
         with patch("asyncio.sleep") as mock_sleep:
             result = await executor.hold_key("shift", 0.5, take_screenshot=False)
-            
+
             assert isinstance(result, ToolResult)
             assert result.output == "[SIMULATED] Hold key 'shift' for 0.5 seconds"
             mock_sleep.assert_called_once_with(0.5)
@@ -247,11 +257,11 @@ class TestBaseExecutor:
     async def test_wait(self):
         """Test wait action."""
         executor = BaseExecutor()
-        
+
         # Mock sleep to avoid actual wait
         with patch("asyncio.sleep") as mock_sleep:
             result = await executor.wait(1000)  # 1000ms
-            
+
             assert isinstance(result, ToolResult)
             assert result.output == "Waited 1000ms"
             mock_sleep.assert_called_once_with(1.0)
@@ -261,7 +271,7 @@ class TestBaseExecutor:
         """Test screenshot action."""
         executor = BaseExecutor()
         result = await executor.screenshot()
-        
+
         assert isinstance(result, str)
         # Check it's a valid base64 string (starts with PNG header)
         assert result.startswith("iVBORw0KGgo")
@@ -271,7 +281,7 @@ class TestBaseExecutor:
         """Test getting cursor position."""
         executor = BaseExecutor()
         result = await executor.position()
-        
+
         assert isinstance(result, ToolResult)
         assert result.output == "[SIMULATED] Mouse position: (0, 0)"
 
@@ -280,7 +290,7 @@ class TestBaseExecutor:
         """Test execute command."""
         executor = BaseExecutor()
         result = await executor.execute("custom command", take_screenshot=False)
-        
+
         assert isinstance(result, ToolResult)
         assert result.output == "[SIMULATED] Execute: custom command"
 
@@ -289,7 +299,7 @@ class TestBaseExecutor:
         """Test type_text alias method."""
         executor = BaseExecutor()
         result = await executor.type_text("test", delay=20, take_screenshot=False)
-        
+
         assert isinstance(result, ToolResult)
         assert result.output == "[SIMULATED] Type 'test'"
 
@@ -298,7 +308,7 @@ class TestBaseExecutor:
         """Test mouse_move alias method."""
         executor = BaseExecutor()
         result = await executor.mouse_move(100, 200, take_screenshot=False)
-        
+
         assert isinstance(result, ToolResult)
         assert result.output == "[SIMULATED] Move mouse to (100, 200)"
 
@@ -306,16 +316,16 @@ class TestBaseExecutor:
     async def test_multiple_actions_with_screenshots(self):
         """Test multiple actions with screenshots to ensure consistency."""
         executor = BaseExecutor()
-        
+
         # Test that screenshots are consistent
         screenshot1 = await executor.screenshot()
         screenshot2 = await executor.screenshot()
-        
+
         assert screenshot1 == screenshot2  # Simulated screenshots should be identical
-        
+
         # Test actions with screenshots
         result1 = await executor.click(10, 20, take_screenshot=True)
         result2 = await executor.type("test", take_screenshot=True)
-        
+
         assert result1.base64_image == screenshot1
         assert result2.base64_image == screenshot1

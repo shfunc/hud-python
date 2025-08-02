@@ -1,16 +1,18 @@
 """Tests for BaseMCPAgent using simulated actions."""
+
 from __future__ import annotations
 
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch, create_autospec
+from typing import TYPE_CHECKING, Any
+from unittest.mock import MagicMock
 
 import pytest
 from mcp import types
-from mcp_use import MCPClient
 
 from hud.mcp_agent.base import BaseMCPAgent
-from hud.task import Task
 from hud.tools.executors.base import BaseExecutor
+
+if TYPE_CHECKING:
+    from hud.task import Task
 
 
 class MockMCPAgent(BaseMCPAgent):
@@ -25,7 +27,9 @@ class MockMCPAgent(BaseMCPAgent):
         """Mock run method."""
         return self._messages
 
-    def create_initial_messages(self, prompt: str, screenshot: str | None = None) -> list[dict[str, Any]]:
+    def create_initial_messages(
+        self, prompt: str, screenshot: str | None = None
+    ) -> list[dict[str, Any]]:
         """Mock create initial messages."""
         messages = [{"role": "user", "content": prompt}]
         if screenshot:
@@ -54,10 +58,6 @@ class MockMCPAgent(BaseMCPAgent):
         """Mock create user message."""
         return {"role": "user", "content": text}
 
-    async def get_model_response(self, messages: list[Any], step: int) -> dict[str, Any]:
-        """Mock get model response."""
-        return {"role": "assistant", "content": f"Response for step {step}"}
-
 
 class TestBaseMCPAgent:
     """Tests for BaseMCPAgent with simulated actions."""
@@ -65,7 +65,7 @@ class TestBaseMCPAgent:
     def test_init_defaults(self):
         """Test initialization with default values."""
         agent = MockMCPAgent()
-        
+
         assert agent.client is not None
         assert agent.allowed_tools is None
         assert agent.disallowed_tools == []
@@ -86,9 +86,9 @@ class TestBaseMCPAgent:
             max_screenshot_history=5,
             append_tool_system_prompt=False,
             custom_system_prompt="Custom prompt",
-            lifecycle_tools={"setup": "custom_setup", "evaluate": "custom_eval"}
+            lifecycle_tools={"setup": "custom_setup", "evaluate": "custom_eval"},
         )
-        
+
         assert agent.client == client
         assert agent.allowed_tools == ["tool1", "tool2"]
         assert agent.disallowed_tools == ["bad_tool"]
@@ -103,7 +103,7 @@ class TestBaseMCPAgent:
         """Test initialize fails without client."""
         agent = MockMCPAgent()
         agent.client = None
-        
+
         with pytest.raises(ValueError, match="Client is not initialized"):
             await agent.initialize()
 
@@ -111,35 +111,37 @@ class TestBaseMCPAgent:
     async def test_initialize_with_sessions(self):
         """Test initialize with existing sessions."""
         agent = MockMCPAgent()
-        
+
         # Create proper async mock for session
         mock_session = MagicMock()
-        
+
         # Set up the connector and client_session structure
         mock_session.connector = MagicMock()
         mock_session.connector.client_session = MagicMock()
-        
+
         # Mock list_tools on the client_session
         async def mock_list_tools():
             return types.ListToolsResult(
                 tools=[
                     types.Tool(name="tool1", description="Tool 1", inputSchema={"type": "object"}),
                     types.Tool(name="tool2", description="Tool 2", inputSchema={"type": "object"}),
-                    types.Tool(name="setup", description="Setup tool", inputSchema={"type": "object"}),
+                    types.Tool(
+                        name="setup", description="Setup tool", inputSchema={"type": "object"}
+                    ),
                 ]
             )
-        
+
         mock_session.connector.client_session.list_tools = mock_list_tools
-        
+
         agent.client.get_all_active_sessions = MagicMock(return_value={"server1": mock_session})
-        
+
         await agent.initialize()
-        
-        # Check available tools were populated
+
+        # Check available tools were populated (excludes lifecycle tools)
         tools = agent.get_available_tools()
-        assert len(tools) == 3
-        
-        # Check tool map was populated
+        assert len(tools) == 2  # tool1 and tool2 (setup is excluded as lifecycle tool)
+
+        # Check tool map was populated (includes all tools)
         tool_map = agent.get_tool_map()
         assert len(tool_map) == 3
         assert "tool1" in tool_map
@@ -150,14 +152,14 @@ class TestBaseMCPAgent:
     async def test_initialize_with_filtering(self):
         """Test initialize with tool filtering."""
         agent = MockMCPAgent(allowed_tools=["tool1"], disallowed_tools=["tool3"])
-        
+
         # Create proper async mock for session
         mock_session = MagicMock()
-        
+
         # Set up the connector and client_session structure
         mock_session.connector = MagicMock()
         mock_session.connector.client_session = MagicMock()
-        
+
         async def mock_list_tools():
             return types.ListToolsResult(
                 tools=[
@@ -167,19 +169,19 @@ class TestBaseMCPAgent:
                     types.Tool(name="setup", description="Setup", inputSchema={"type": "object"}),
                 ]
             )
-        
+
         mock_session.connector.client_session.list_tools = mock_list_tools
-        
+
         agent.client.get_all_active_sessions = MagicMock(return_value={"server1": mock_session})
-        
+
         await agent.initialize()
-        
-        # Check filtering worked - should have tool1 and setup (lifecycle tool)
+
+        # Check filtering worked - get_available_tools excludes lifecycle tools
         tools = agent.get_available_tools()
         tool_names = [t.name for t in tools]
-        assert len(tools) == 2
+        assert len(tools) == 1  # Only tool1 (setup is excluded as lifecycle tool)
         assert "tool1" in tool_names
-        assert "setup" in tool_names  # Lifecycle tool always included
+        assert "setup" not in tool_names  # Lifecycle tool excluded from available tools
         assert "tool2" not in tool_names  # Not in allowed list
         assert "tool3" not in tool_names  # In disallowed list
 
@@ -187,38 +189,39 @@ class TestBaseMCPAgent:
     async def test_call_tool_success(self):
         """Test successful tool call."""
         agent = MockMCPAgent()
-        
+
         # Initialize with a tool
         mock_session = MagicMock()
         mock_session.connector = MagicMock()
         mock_session.connector.client_session = MagicMock()
-        
+
         async def mock_list_tools():
             return types.ListToolsResult(
-                tools=[types.Tool(name="test_tool", description="Test", inputSchema={"type": "object"})]
+                tools=[
+                    types.Tool(name="test_tool", description="Test", inputSchema={"type": "object"})
+                ]
             )
-        
+
         mock_session.connector.client_session.list_tools = mock_list_tools
-        
+
         # Mock the call_tool method on the client session
         mock_result = types.CallToolResult(
-            content=[types.TextContent(type="text", text="Tool result")],
-            isError=False
+            content=[types.TextContent(type="text", text="Tool result")], isError=False
         )
-        
+
         async def mock_call_tool(name, args):
             return mock_result
-        
+
         mock_session.connector.client_session.call_tool = mock_call_tool
-        
+
         agent.client.get_all_active_sessions = MagicMock(return_value={"server1": mock_session})
         agent.client.get_session = MagicMock(return_value=mock_session)
-        
+
         await agent.initialize()
-        
+
         # Call the tool
         result = await agent.call_tool({"name": "test_tool", "arguments": {"param": "value"}})
-        
+
         assert result == mock_result
         assert not result.isError
 
@@ -226,18 +229,18 @@ class TestBaseMCPAgent:
     async def test_call_tool_not_found(self):
         """Test calling non-existent tool."""
         agent = MockMCPAgent()
-        
+
         # Initialize without tools
         mock_session = MagicMock()
-        
+
         async def mock_list_tools():
             return types.ListToolsResult(tools=[])
-        
+
         mock_session.list_tools = mock_list_tools
         agent.client.get_all_active_sessions = MagicMock(return_value={"server1": mock_session})
-        
+
         await agent.initialize()
-        
+
         # Try to call unknown tool
         with pytest.raises(ValueError, match="Tool 'unknown_tool' not found"):
             await agent.call_tool({"name": "unknown_tool", "arguments": {}})
@@ -246,22 +249,22 @@ class TestBaseMCPAgent:
     async def test_call_tool_no_name(self):
         """Test calling tool without name."""
         agent = MockMCPAgent()
-        
+
         with pytest.raises(ValueError, match="Tool call must have a 'name' field"):
             await agent.call_tool({"arguments": {}})
 
     def test_get_system_prompt_default(self):
         """Test get_system_prompt with default settings."""
         agent = MockMCPAgent()
-        
+
         # Add some tools
         agent._available_tools = [
             types.Tool(name="tool1", description="Tool 1", inputSchema={"type": "object"}),
             types.Tool(name="setup", description="Setup", inputSchema={"type": "object"}),
         ]
-        
+
         prompt = agent.get_system_prompt()
-        
+
         # Should include ALL tool descriptions (including lifecycle tools)
         assert "tool1" in prompt
         assert "Tool 1" in prompt
@@ -271,26 +274,25 @@ class TestBaseMCPAgent:
     def test_get_system_prompt_custom(self):
         """Test get_system_prompt with custom prompt."""
         agent = MockMCPAgent(
-            custom_system_prompt="My custom prompt",
-            append_tool_system_prompt=False
+            custom_system_prompt="My custom prompt", append_tool_system_prompt=False
         )
-        
+
         prompt = agent.get_system_prompt()
         assert prompt == "My custom prompt"
 
     def test_has_computer_tools(self):
         """Test checking for computer tools."""
         agent = MockMCPAgent()
-        
+
         # No tools
         assert not agent.has_computer_tools()
-        
+
         # With computer tool
         agent._available_tools = [
             types.Tool(name="computer", description="Computer", inputSchema={"type": "object"})
         ]
         assert agent.has_computer_tools()
-        
+
         # With screenshot tool
         agent._available_tools = [
             types.Tool(name="screenshot", description="Screenshot", inputSchema={"type": "object"})
@@ -300,14 +302,14 @@ class TestBaseMCPAgent:
     def test_get_tool_schemas(self):
         """Test getting tool schemas."""
         agent = MockMCPAgent()
-        
+
         agent._available_tools = [
             types.Tool(name="tool1", description="Tool 1", inputSchema={"type": "object"}),
             types.Tool(name="setup", description="Setup", inputSchema={"type": "object"}),
         ]
-        
+
         schemas = agent.get_tool_schemas()
-        
+
         # Should include non-lifecycle tools
         assert len(schemas) == 1
         assert schemas[0]["name"] == "tool1"
@@ -316,7 +318,7 @@ class TestBaseMCPAgent:
     async def test_capture_screenshot_no_tool(self):
         """Test screenshot capture without screenshot tool."""
         agent = MockMCPAgent()
-        
+
         screenshot = await agent.capture_screenshot()
         assert screenshot is None
 
@@ -324,60 +326,61 @@ class TestBaseMCPAgent:
     async def test_capture_screenshot_with_tool(self):
         """Test screenshot capture with screenshot tool."""
         agent = MockMCPAgent()
-        
+
         # Set up screenshot tool
         mock_session = MagicMock()
         mock_session.connector = MagicMock()
         mock_session.connector.client_session = MagicMock()
-        
+
         async def mock_list_tools():
             return types.ListToolsResult(
-                tools=[types.Tool(name="screenshot", description="Screenshot", inputSchema={"type": "object"})]
+                tools=[
+                    types.Tool(
+                        name="screenshot", description="Screenshot", inputSchema={"type": "object"}
+                    )
+                ]
             )
-        
+
         mock_session.connector.client_session.list_tools = mock_list_tools
-        
+
         # Mock screenshot result
         mock_result = types.CallToolResult(
-            content=[types.ImageContent(type="image", data="base64imagedata", mimeType="image/png")],
-            isError=False
+            content=[
+                types.ImageContent(type="image", data="base64imagedata", mimeType="image/png")
+            ],
+            isError=False,
         )
-        
+
         async def mock_call_tool(name, args):
             return mock_result
-        
+
         mock_session.connector.client_session.call_tool = mock_call_tool
-        
+
         agent.client.get_all_active_sessions = MagicMock(return_value={"server1": mock_session})
         agent.client.get_session = MagicMock(return_value=mock_session)
-        
+
         await agent.initialize()
-        
+
         screenshot = await agent.capture_screenshot()
         assert screenshot == "base64imagedata"
 
     def test_process_tool_results_extracts_text(self):
         """Test processing tool results extracts text content."""
         agent = MockMCPAgent()
-        
+
         # Create a proper CallToolResult object
         result = types.CallToolResult(
             content=[
                 types.TextContent(type="text", text="Result text"),
-                types.ImageContent(type="image", data="imagedata", mimeType="image/png")
+                types.ImageContent(type="image", data="imagedata", mimeType="image/png"),
             ],
-            isError=False
+            isError=False,
         )
-        
-        tool_results = [
-            {
-                "tool_name": "test_tool",
-                "result": result
-            }
-        ]
-        
+
+        tool_results = [{"tool_name": "test_tool", "result": result}]
+
         processed = agent.process_tool_results(tool_results)
-        
+
         assert "text" in processed
         assert "Result text" in processed["text"]
         assert "results" in processed
@@ -386,19 +389,19 @@ class TestBaseMCPAgent:
     def test_get_tools_by_server(self):
         """Test getting tools grouped by server."""
         agent = MockMCPAgent()
-        
+
         # Set up tools from different servers
         tool1 = types.Tool(name="tool1", description="Tool 1", inputSchema={"type": "object"})
         tool2 = types.Tool(name="tool2", description="Tool 2", inputSchema={"type": "object"})
-        
+
         agent._available_tools = [tool1, tool2]
         agent._tool_map = {
             "tool1": ("server1", tool1),
             "tool2": ("server2", tool2),
         }
-        
+
         tools_by_server = agent.get_tools_by_server()
-        
+
         assert len(tools_by_server) == 2
         assert "server1" in tools_by_server
         assert "server2" in tools_by_server
@@ -409,17 +412,17 @@ class TestBaseMCPAgent:
     async def test_executor_integration(self):
         """Test integration with BaseExecutor for simulated actions."""
         agent = MockMCPAgent()
-        
+
         # Test various executor actions
         click_result = await agent.executor.click(100, 200, take_screenshot=False)
         assert "[SIMULATED] Click at (100, 200)" in click_result.output
-        
+
         type_result = await agent.executor.type("Test input", take_screenshot=False)
         assert "[SIMULATED] Type 'Test input'" in type_result.output
-        
+
         scroll_result = await agent.executor.scroll(x=50, y=50, scroll_y=5, take_screenshot=False)
         assert "[SIMULATED] Scroll" in scroll_result.output
-        
+
         # Test screenshot
         screenshot = await agent.executor.screenshot()
         assert isinstance(screenshot, str)

@@ -1,4 +1,5 @@
 """Tests for tools utils."""
+
 from __future__ import annotations
 
 import asyncio
@@ -18,10 +19,10 @@ class TestRun:
         mock_proc = AsyncMock()
         mock_proc.returncode = 0
         mock_proc.communicate = AsyncMock(return_value=(b"output", b""))
-        
+
         with patch("asyncio.create_subprocess_shell", return_value=mock_proc) as mock_shell:
             return_code, stdout, stderr = await run("echo test")
-            
+
             assert return_code == 0
             assert stdout == "output"
             assert stderr == ""
@@ -33,18 +34,20 @@ class TestRun:
         mock_proc = AsyncMock()
         mock_proc.returncode = 0
         mock_proc.communicate = AsyncMock(return_value=(b"hello world", b""))
-        
+
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
             return_code, stdout, stderr = await run(["echo", "hello", "world"])
-            
+
             assert return_code == 0
             assert stdout == "hello world"
             assert stderr == ""
             mock_exec.assert_called_once_with(
-                "echo", "hello", "world",
+                "echo",
+                "hello",
+                "world",
                 stdin=None,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
             )
 
     @pytest.mark.asyncio
@@ -53,10 +56,10 @@ class TestRun:
         mock_proc = AsyncMock()
         mock_proc.returncode = 0
         mock_proc.communicate = AsyncMock(return_value=(b"processed", b""))
-        
-        with patch("asyncio.create_subprocess_shell", return_value=mock_proc) as mock_shell:
+
+        with patch("asyncio.create_subprocess_shell", return_value=mock_proc):
             return_code, stdout, stderr = await run("cat", input="test input")
-            
+
             assert return_code == 0
             assert stdout == "processed"
             mock_proc.communicate.assert_called_once_with(input=b"test input")
@@ -67,10 +70,10 @@ class TestRun:
         mock_proc = AsyncMock()
         mock_proc.returncode = 1
         mock_proc.communicate = AsyncMock(return_value=(b"", b"error message"))
-        
+
         with patch("asyncio.create_subprocess_shell", return_value=mock_proc):
             return_code, stdout, stderr = await run("false")
-            
+
             assert return_code == 1
             assert stdout == ""
             assert stderr == "error message"
@@ -81,15 +84,15 @@ class TestRun:
         mock_proc = AsyncMock()
         mock_proc.returncode = 0
         mock_proc.communicate = AsyncMock(return_value=(b"done", b""))
-        
+
         with (
             patch("asyncio.create_subprocess_shell", return_value=mock_proc),
-            patch("asyncio.wait_for") as mock_wait_for
+            patch("asyncio.wait_for") as mock_wait_for,
         ):
             mock_wait_for.return_value = (b"done", b"")
-            
+
             return_code, stdout, stderr = await run("sleep 1", timeout=5.0)
-            
+
             # Check that wait_for was called with the correct timeout
             mock_wait_for.assert_called_once()
             assert mock_wait_for.call_args[1]["timeout"] == 5.0
@@ -98,13 +101,13 @@ class TestRun:
     async def test_run_timeout_exception(self):
         """Test running a command that times out."""
         mock_proc = AsyncMock()
-        
+
         with (
             patch("asyncio.create_subprocess_shell", return_value=mock_proc),
-            patch("asyncio.wait_for", side_effect=asyncio.TimeoutError())
+            patch("asyncio.wait_for", side_effect=TimeoutError()),
+            pytest.raises(asyncio.TimeoutError),
         ):
-            with pytest.raises(asyncio.TimeoutError):
-                await run("sleep infinity", timeout=0.1)
+            await run("sleep infinity", timeout=0.1)
 
 
 class TestMaybeTruncate:
@@ -120,7 +123,7 @@ class TestMaybeTruncate:
         """Test that long text is truncated with default limit."""
         text = "x" * 30000  # Much longer than default limit
         result = maybe_truncate(text)
-        
+
         assert len(result) < len(text)
         assert result.endswith("... (truncated)")
         assert len(result) == 20480 + len("... (truncated)")
@@ -129,14 +132,14 @@ class TestMaybeTruncate:
         """Test truncation with custom limit."""
         text = "abcdefghijklmnopqrstuvwxyz"
         result = maybe_truncate(text, max_length=10)
-        
+
         assert result == "abcdefghij... (truncated)"
 
     def test_maybe_truncate_exact_limit(self):
         """Test text exactly at limit is not truncated."""
         text = "x" * 100
         result = maybe_truncate(text, max_length=100)
-        
+
         assert result == text
 
     def test_maybe_truncate_empty_string(self):
@@ -148,6 +151,6 @@ class TestMaybeTruncate:
         """Test truncation with unicode characters."""
         text = "🎉" * 5000
         result = maybe_truncate(text, max_length=10)
-        
+
         assert len(result) > 10  # Because of "... (truncated)" suffix
         assert result.endswith("... (truncated)")

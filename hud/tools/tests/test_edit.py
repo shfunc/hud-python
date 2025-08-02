@@ -1,10 +1,11 @@
 """Tests for edit tool."""
+
 from __future__ import annotations
 
 import os
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -25,34 +26,34 @@ class TestEditTool:
     async def test_validate_path_not_absolute(self):
         """Test validate_path with non-absolute path."""
         tool = EditTool()
-        
+
         with pytest.raises(ToolError) as exc_info:
             tool.validate_path("create", Path("relative/path.txt"))
-        
+
         assert "not an absolute path" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_validate_path_not_exists(self):
         """Test validate_path when file doesn't exist for non-create commands."""
         tool = EditTool()
-        
+
         with pytest.raises(ToolError) as exc_info:
             tool.validate_path("view", Path("/nonexistent/file.txt"))
-        
+
         assert "does not exist" in str(exc_info.value)
 
-    @pytest.mark.asyncio 
+    @pytest.mark.asyncio
     async def test_validate_path_exists_for_create(self):
         """Test validate_path when file exists for create command."""
         tool = EditTool()
-        
+
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
             tmp_path = Path(tmp.name)
-            
+
         try:
             with pytest.raises(ToolError) as exc_info:
                 tool.validate_path("create", tmp_path)
-            
+
             assert "already exists" in str(exc_info.value)
         finally:
             os.unlink(tmp_path)
@@ -61,19 +62,15 @@ class TestEditTool:
     async def test_create_file(self):
         """Test creating a new file."""
         tool = EditTool()
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             file_path = Path(tmpdir) / "test.txt"
             content = "Hello, World!"
-            
+
             # Mock write_file to avoid actual file I/O
             with patch.object(tool, "write_file", new_callable=AsyncMock) as mock_write:
-                result = await tool(
-                    command="create",
-                    path=str(file_path),
-                    file_text=content
-                )
-                
+                result = await tool(command="create", path=str(file_path), file_text=content)
+
                 assert isinstance(result, ToolResult)
                 assert result.output is not None
                 assert "created successfully" in result.output
@@ -86,37 +83,31 @@ class TestEditTool:
     async def test_create_file_no_text(self):
         """Test creating file without file_text raises error."""
         tool = EditTool()
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             file_path = Path(tmpdir) / "test.txt"
-            
+
             with pytest.raises(ToolError) as exc_info:
-                await tool(
-                    command="create",
-                    path=str(file_path)
-                )
-            
+                await tool(command="create", path=str(file_path))
+
             assert "file_text` is required" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_view_file(self):
         """Test viewing a file."""
         tool = EditTool()
-        
+
         file_content = "Line 1\nLine 2\nLine 3"
-        
+
         # Mock read_file and validate_path
         with (
             patch.object(tool, "read_file", new_callable=AsyncMock) as mock_read,
-            patch.object(tool, "validate_path") as mock_validate
+            patch.object(tool, "validate_path"),
         ):
             mock_read.return_value = file_content
-            
-            result = await tool(
-                command="view",
-                path="/tmp/test.txt"
-            )
-            
+
+            result = await tool(command="view", path="/tmp/test.txt")
+
             assert isinstance(result, ToolResult)
             assert result.output is not None
             assert "Line 1" in result.output
@@ -127,27 +118,23 @@ class TestEditTool:
     async def test_view_with_range(self):
         """Test viewing a file with line range."""
         tool = EditTool()
-        
+
         file_content = "\n".join([f"Line {i}" for i in range(1, 11)])
-        
+
         # Mock read_file and validate_path
         with (
             patch.object(tool, "read_file", new_callable=AsyncMock) as mock_read,
-            patch.object(tool, "validate_path") as mock_validate
+            patch.object(tool, "validate_path"),
         ):
             mock_read.return_value = file_content
-            
-            result = await tool(
-                command="view",
-                path="/tmp/test.txt",
-                view_range=[3, 5]
-            )
-            
+
+            result = await tool(command="view", path="/tmp/test.txt", view_range=[3, 5])
+
             assert isinstance(result, ToolResult)
             assert result.output is not None
             # Lines 3-5 should be in output (using tab format)
             assert "3\tLine 3" in result.output
-            assert "4\tLine 4" in result.output  
+            assert "4\tLine 4" in result.output
             assert "5\tLine 5" in result.output
             # Line 1 and 10 should not be in output (outside range)
             assert "1\tLine 1" not in result.output
@@ -157,25 +144,22 @@ class TestEditTool:
     async def test_str_replace_success(self):
         """Test successful string replacement."""
         tool = EditTool()
-        
+
         file_content = "Hello, World!\nThis is a test."
         expected_content = "Hello, Universe!\nThis is a test."
-        
+
         # Mock read_file, write_file and validate_path
         with (
             patch.object(tool, "read_file", new_callable=AsyncMock) as mock_read,
             patch.object(tool, "write_file", new_callable=AsyncMock) as mock_write,
-            patch.object(tool, "validate_path") as mock_validate
+            patch.object(tool, "validate_path"),
         ):
             mock_read.return_value = file_content
-            
+
             result = await tool(
-                command="str_replace",
-                path="/tmp/test.txt",
-                old_str="World",
-                new_str="Universe"
+                command="str_replace", path="/tmp/test.txt", old_str="World", new_str="Universe"
             )
-            
+
             assert isinstance(result, ToolResult)
             assert result.output is not None
             assert "has been edited" in result.output
@@ -185,68 +169,65 @@ class TestEditTool:
     async def test_str_replace_not_found(self):
         """Test string replacement when old_str not found."""
         tool = EditTool()
-        
+
         file_content = "Hello, World!"
-        
+
         # Mock read_file and validate_path
         with (
             patch.object(tool, "read_file", new_callable=AsyncMock) as mock_read,
-            patch.object(tool, "validate_path") as mock_validate
+            patch.object(tool, "validate_path"),
         ):
             mock_read.return_value = file_content
-            
+
             with pytest.raises(ToolError) as exc_info:
                 await tool(
                     command="str_replace",
                     path="/tmp/test.txt",
                     old_str="Universe",
-                    new_str="Galaxy"
+                    new_str="Galaxy",
                 )
-            
+
             assert "did not appear verbatim" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_str_replace_multiple_occurrences(self):
         """Test string replacement with multiple occurrences."""
         tool = EditTool()
-        
+
         file_content = "Test test\nAnother test line"
-        
+
         # Mock read_file and validate_path
         with (
             patch.object(tool, "read_file", new_callable=AsyncMock) as mock_read,
-            patch.object(tool, "validate_path") as mock_validate
+            patch.object(tool, "validate_path"),
         ):
             mock_read.return_value = file_content
-            
+
             with pytest.raises(ToolError) as exc_info:
                 await tool(
-                    command="str_replace", 
-                    path="/tmp/test.txt",
-                    old_str="test",
-                    new_str="example"
+                    command="str_replace", path="/tmp/test.txt", old_str="test", new_str="example"
                 )
-            
+
             assert "Multiple occurrences" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_invalid_command(self):
         """Test invalid command raises error."""
         tool = EditTool()
-        
+
         # Since EditTool has a bug where it references self.name without defining it,
         # we'll test by passing a Command that isn't in the literal
         with tempfile.TemporaryDirectory() as tmpdir:
             file_path = Path(tmpdir) / "test.txt"
             # Create the file so validate_path doesn't fail
             file_path.write_text("test content")
-            
+
             with pytest.raises((ToolError, AttributeError)) as exc_info:
                 await tool(
                     command="invalid_command",  # type: ignore
-                    path=str(file_path)
+                    path=str(file_path),
                 )
-            
+
             # Accept either the expected error or AttributeError from the bug
             error_msg = str(exc_info.value)
             assert "Unrecognized command" in error_msg or "name" in error_msg
