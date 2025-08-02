@@ -369,10 +369,12 @@ class TestBaseMCPAgent:
         tool_results = [
             {
                 "tool_name": "test_tool",
-                "content": [
-                    {"type": "text", "text": "Result text"},
-                    {"type": "image", "data": "imagedata", "mimeType": "image/png"}
-                ]
+                "result": {
+                    "content": [
+                        {"type": "text", "text": "Result text"},
+                        {"type": "image", "data": "imagedata", "mimeType": "image/png"}
+                    ]
+                }
             }
         ]
         
