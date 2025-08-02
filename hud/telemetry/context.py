@@ -115,10 +115,13 @@ def create_response_record(
         logger.warning("No active task_run_id, response record will not be created")
         raise ValueError("No active task_run_id")
 
+    # Default to COMPLETED status if not provided
+    if "status" not in kwargs:
+        kwargs["status"] = StatusType.COMPLETED
+
     record = MCPResponseCall(
         task_run_id=task_run_id,
         method=method,
-        status=StatusType.COMPLETED,
         related_request_id=related_request_id,
         is_error=is_error,
         **kwargs,

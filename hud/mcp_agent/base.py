@@ -128,11 +128,25 @@ class BaseMCPAgent(ABC):
             except Exception as e:
                 logger.error("Failed to list tools from server %s: %s", server_name, e)
 
+        # Separate lifecycle tools from regular tools for clearer logging
+        lifecycle_tool_names = list(self.lifecycle_tools.values())
+        regular_tools = [
+            t.name for t in self._available_tools if t.name not in lifecycle_tool_names
+        ]
+        lifecycle_tools_found = [
+            t.name for t in self._available_tools if t.name in lifecycle_tool_names
+        ]
+
         logger.info(
-            "Agent initialized with %s tools: %s",
+            "Agent initialized with %s tools (%s regular, %s lifecycle)",
             len(self._available_tools),
-            [t.name for t in self._available_tools],
+            len(regular_tools),
+            len(lifecycle_tools_found),
         )
+        if regular_tools:
+            logger.info("Regular tools: %s", regular_tools)
+        if lifecycle_tools_found:
+            logger.info("Lifecycle tools: %s", lifecycle_tools_found)
 
     def get_available_tools(self) -> list[types.Tool]:
         """Get list of available MCP tools for LLM use (excludes lifecycle tools)."""
@@ -390,12 +404,8 @@ class BaseMCPAgent(ABC):
         if not self._available_tools:
             await self.initialize()
 
-        logger.info("Running agent with prompt: %s", prompt_or_task)
-        logger.info("type of prompt_or_task: %s", type(prompt_or_task))
-
         # Handle Task objects with full lifecycle
-        if type(prompt_or_task) is Task:
-            logger.info("Running task with prompt: %s", prompt_or_task)
+        if isinstance(prompt_or_task, Task):
             return await self._run_task(prompt_or_task, max_steps)
 
         # Handle simple string prompts (existing behavior)
@@ -437,6 +447,16 @@ class BaseMCPAgent(ABC):
                     and "done" in eval_result
                 ):
                     return eval_result
+                elif isinstance(eval_result, dict) and "grade" in eval_result:
+                    return {
+                        "reward": eval_result.get("grade", 0.0),
+                        "done": True,
+                        "info": {
+                            "error": eval_result.get("error"),
+                            "logs": eval_result.get("logs", ""),
+                            "original_result": eval_result,
+                        },
+                    }
                 else:
                     # Fallback for invalid evaluation format
                     return {
@@ -509,7 +529,6 @@ class BaseMCPAgent(ABC):
         prompt: str,
         max_steps: int = 10,
         conversation_mode: bool = False,
-        gold_file_url: str | None = None,
     ) -> dict[str, Any]:
         """
         Run the agent with the given prompt.
@@ -536,6 +555,14 @@ class BaseMCPAgent(ABC):
 
                 try:
                     response = await self.get_model_response(messages, step)
+
+                    # Log the model's response
+                    logger.info("Model response - Content: %s", response.get("content", ""))
+                    logger.info(
+                        "Model response - Tool calls: %s",
+                        [tc.get("name") for tc in response.get("tool_calls", [])],
+                    )
+                    logger.info("Model response - Done: %s", response.get("done", False))
 
                     # Check if we should stop
                     if response.get("done", False) and not conversation_mode:
@@ -570,6 +597,11 @@ class BaseMCPAgent(ABC):
                                 }
                         else:
                             # In task mode, no tool calls means we're done
+                            logger.info("In task mode with no tool calls - stopping execution")
+                            logger.info(
+                                "Final message: %s",
+                                response.get("content", "No response generated"),
+                            )
                             return {
                                 "done": True,
                                 "reward": 0.0,

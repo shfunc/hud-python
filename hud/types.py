@@ -33,6 +33,15 @@ class CustomGym(BaseModel):
     host_config: dict[str, Any] | None = None
 
 
+class MCPConfig(BaseModel):
+    """
+    MCP config for the environment.
+    """
+
+    type: Literal["mcp"] = "mcp"
+    config: dict[str, Any]
+
+
 class EnvironmentStatus(str, enum.Enum):
     """
     Status of the environment.
@@ -54,7 +63,7 @@ class EnvironmentStatus(str, enum.Enum):
 ServerGym: TypeAlias = Literal["qa", "hud-browser", "OSWorld-Ubuntu", "docker"]
 
 # Gyms can be either custom or server-side
-Gym: TypeAlias = CustomGym | ServerGym
+Gym: TypeAlias = CustomGym | MCPConfig | ServerGym
 
 
 # Metadata keys for the environment.

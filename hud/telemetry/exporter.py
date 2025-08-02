@@ -375,8 +375,9 @@ def flush(timeout: float = 10.0) -> None:
         # This check is racy, but it's the best we can do without more complex inter-thread
         # sync for task completion. Give some time for the task to process the sentinel and
         # clear itself.
-        # Max wait for task to clear
-        attempt_timeout = time.time() + (timeout / 2 if timeout else 2.0)
+        # Max wait for task to clear - should be longer than EXPORT_INTERVAL to ensure
+        # the task has time to wake from sleep and process the sentinel
+        attempt_timeout = time.time() + (timeout / 2 if timeout else 2.0) + EXPORT_INTERVAL + 1.0
         while _export_task_async is not None and time.time() < attempt_timeout:
             time.sleep(0.1)
             # _export_task_async is set to None by _process_export_queue_async upon its exit.

@@ -29,8 +29,8 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
-async def main(use_stdio=False):
-    if use_stdio:
+async def main(use_http=False):
+    if not use_http:
         # Launch Docker container and connect via stdio
         config = {
             "mcpServers": {
@@ -41,12 +41,14 @@ async def main(use_stdio=False):
                         "--rm",
                         "-i",
                         "-p",
-                        "8080:8080",  # Port for VNC viewer
-                        "-e",
-                        "LAUNCH_APPS=todo",  # Launch todo app
-                        "-e",
-                        "BROWSER_URL=http://localhost:3000",  # Navigate to todo app
-                        "hud-browser",  # Docker image name
+                        "6080:6080",  # Port for VNC viewer
+                        # "-e",
+                        # "LAUNCH_APPS=todo",  # Launch todo app
+                        # "-e",
+                        # "BROWSER_URL=http://localhost:3000",  # Navigate to todo app
+                        # "-e",
+                        # "ID=example-send-email",
+                        "gmail-clone",  # Docker image name
                     ],
                 }
             }
@@ -114,9 +116,9 @@ async def main(use_stdio=False):
 
 if __name__ == "__main__":
     # Check command line flags
-    use_stdio = "--stdio" in sys.argv
+    use_http = "--http" in sys.argv
 
-    if use_stdio:
+    if not use_http:
         print("🐳 Simple Browser MCP Environment Example")
         print("=" * 50)
         print("\nMake sure you have built the Docker image:")
@@ -128,9 +130,9 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
             print("\nCancelled.")
             sys.exit(0)
-        asyncio.run(main(use_stdio))
+        asyncio.run(main(use_http))
     else:
         print("🚀 Using HTTP transport (Docker Compose mode)")
         print("Make sure Docker Compose is running:")
         print("  cd environments/simple_browser && docker-compose up -d")
-        asyncio.run(main(use_stdio))
+        asyncio.run(main(use_http))
