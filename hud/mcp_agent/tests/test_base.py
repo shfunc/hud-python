@@ -115,10 +115,11 @@ class TestBaseMCPAgent:
         # Create proper async mock for session
         mock_session = MagicMock()
         
-        # Mock the initialize method
-        mock_session.initialize = AsyncMock()
+        # Set up the connector and client_session structure
+        mock_session.connector = MagicMock()
+        mock_session.connector.client_session = MagicMock()
         
-        # Create async function for list_tools
+        # Mock list_tools on the client_session
         async def mock_list_tools():
             return types.ListToolsResult(
                 tools=[
@@ -128,11 +129,7 @@ class TestBaseMCPAgent:
                 ]
             )
         
-        mock_session.list_tools = mock_list_tools
-        
-        # Set up connector after list_tools is called
-        mock_session.connector = MagicMock()
-        mock_session.connector.client_session = MagicMock()
+        mock_session.connector.client_session.list_tools = mock_list_tools
         
         agent.client.get_all_active_sessions = MagicMock(return_value={"server1": mock_session})
         
@@ -157,8 +154,9 @@ class TestBaseMCPAgent:
         # Create proper async mock for session
         mock_session = MagicMock()
         
-        # Mock the initialize method
-        mock_session.initialize = AsyncMock()
+        # Set up the connector and client_session structure
+        mock_session.connector = MagicMock()
+        mock_session.connector.client_session = MagicMock()
         
         async def mock_list_tools():
             return types.ListToolsResult(
@@ -170,9 +168,7 @@ class TestBaseMCPAgent:
                 ]
             )
         
-        mock_session.list_tools = mock_list_tools
-        mock_session.connector = MagicMock()
-        mock_session.connector.client_session = MagicMock()
+        mock_session.connector.client_session.list_tools = mock_list_tools
         
         agent.client.get_all_active_sessions = MagicMock(return_value={"server1": mock_session})
         
@@ -194,16 +190,15 @@ class TestBaseMCPAgent:
         
         # Initialize with a tool
         mock_session = MagicMock()
-        mock_session.initialize = AsyncMock()
+        mock_session.connector = MagicMock()
+        mock_session.connector.client_session = MagicMock()
         
         async def mock_list_tools():
             return types.ListToolsResult(
                 tools=[types.Tool(name="test_tool", description="Test", inputSchema={"type": "object"})]
             )
         
-        mock_session.list_tools = mock_list_tools
-        mock_session.connector = MagicMock()
-        mock_session.connector.client_session = MagicMock()
+        mock_session.connector.client_session.list_tools = mock_list_tools
         
         # Mock the call_tool method on the client session
         mock_result = types.CallToolResult(
@@ -332,16 +327,15 @@ class TestBaseMCPAgent:
         
         # Set up screenshot tool
         mock_session = MagicMock()
-        mock_session.initialize = AsyncMock()
+        mock_session.connector = MagicMock()
+        mock_session.connector.client_session = MagicMock()
         
         async def mock_list_tools():
             return types.ListToolsResult(
                 tools=[types.Tool(name="screenshot", description="Screenshot", inputSchema={"type": "object"})]
             )
         
-        mock_session.list_tools = mock_list_tools
-        mock_session.connector = MagicMock()
-        mock_session.connector.client_session = MagicMock()
+        mock_session.connector.client_session.list_tools = mock_list_tools
         
         # Mock screenshot result
         mock_result = types.CallToolResult(
@@ -366,15 +360,19 @@ class TestBaseMCPAgent:
         """Test processing tool results extracts text content."""
         agent = MockMCPAgent()
         
+        # Create a proper CallToolResult object
+        result = types.CallToolResult(
+            content=[
+                types.TextContent(type="text", text="Result text"),
+                types.ImageContent(type="image", data="imagedata", mimeType="image/png")
+            ],
+            isError=False
+        )
+        
         tool_results = [
             {
                 "tool_name": "test_tool",
-                "result": {
-                    "content": [
-                        {"type": "text", "text": "Result text"},
-                        {"type": "image", "data": "imagedata", "mimeType": "image/png"}
-                    ]
-                }
+                "result": result
             }
         ]
         
