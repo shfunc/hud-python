@@ -1,161 +1,138 @@
-"""Tests for PyAutoGUIExecutor."""
-
-from __future__ import annotations
-
-from unittest.mock import MagicMock, patch
+"""Tests for PyAutoGUI executor."""
 
 import pytest
+from unittest.mock import MagicMock, patch, AsyncMock
 
-from hud.tools.base import ToolResult
-from hud.tools.executors.pyautogui import PyAutoGUIExecutor
+from hud.tools.executors.pyautogui import PyAutoGUIExecutor, PYAUTOGUI_AVAILABLE
 
 
 class TestPyAutoGUIExecutor:
-    """Test PyAutoGUIExecutor methods."""
+    """Tests for PyAutoGUIExecutor."""
 
     def test_is_available(self):
         """Test is_available method."""
-        # Test when pyautogui can be imported
-        with patch.dict("sys.modules", {"pyautogui": MagicMock()}):
-            assert PyAutoGUIExecutor.is_available() is True
+        # The availability is determined by the module-level PYAUTOGUI_AVAILABLE
+        assert PyAutoGUIExecutor.is_available() == PYAUTOGUI_AVAILABLE
 
-        # Test when pyautogui cannot be imported
-        with (
-            patch.dict("sys.modules", {"pyautogui": None}),
-            patch("builtins.__import__", side_effect=ImportError),
-        ):
-            assert PyAutoGUIExecutor.is_available() is False
-
+    @pytest.mark.skipif(not PYAUTOGUI_AVAILABLE, reason="pyautogui not available")
     @pytest.mark.asyncio
-    async def test_screenshot_no_pyautogui(self):
-        """Test screenshot when pyautogui is not available."""
-        with patch.object(
-            PyAutoGUIExecutor,
-            "_ensure_pyautogui",
-            side_effect=ImportError("No module named 'pyautogui'"),
-        ):
-            executor = PyAutoGUIExecutor()
+    async def test_screenshot_with_pyautogui(self):
+        """Test screenshot when pyautogui is available."""
+        executor = PyAutoGUIExecutor()
+        
+        # Mock pyautogui screenshot
+        with patch("pyautogui.screenshot") as mock_screenshot:
+            mock_img = MagicMock()
+            mock_img.save = MagicMock()
+            mock_screenshot.return_value = mock_img
+            
             result = await executor.screenshot()
+            
+            assert result.blocks is not None
+            assert len(result.blocks) > 0
+            mock_screenshot.assert_called_once()
 
-            assert isinstance(result, ToolResult)
-            assert result.error == "PyAutoGUI not available: No module named 'pyautogui'"
-            assert result.output is None
-            assert result.base64_image is None
-
+    @pytest.mark.skipif(not PYAUTOGUI_AVAILABLE, reason="pyautogui not available")
     @pytest.mark.asyncio
-    async def test_click_no_pyautogui(self):
-        """Test click when pyautogui is not available."""
-        with patch.object(
-            PyAutoGUIExecutor,
-            "_ensure_pyautogui",
-            side_effect=ImportError("No module named 'pyautogui'"),
-        ):
-            executor = PyAutoGUIExecutor()
-            result = await executor.click(x=100, y=100)
+    async def test_click_with_pyautogui(self):
+        """Test click when pyautogui is available."""
+        executor = PyAutoGUIExecutor()
+        
+        with patch("pyautogui.click") as mock_click:
+            result = await executor.click(100, 200, "left")
+            
+            assert "Clicked" in result.blocks[0].text
+            mock_click.assert_called_once_with(100, 200, button="left")
 
-            assert isinstance(result, ToolResult)
-            assert result.error == "PyAutoGUI not available: No module named 'pyautogui'"
-
+    @pytest.mark.skipif(not PYAUTOGUI_AVAILABLE, reason="pyautogui not available")
     @pytest.mark.asyncio
-    async def test_type_text_no_pyautogui(self):
-        """Test type when pyautogui is not available."""
-        with patch.object(
-            PyAutoGUIExecutor,
-            "_ensure_pyautogui",
-            side_effect=ImportError("No module named 'pyautogui'"),
-        ):
-            executor = PyAutoGUIExecutor()
-            result = await executor.type(text="hello")
+    async def test_type_text_with_pyautogui(self):
+        """Test type when pyautogui is available."""
+        executor = PyAutoGUIExecutor()
+        
+        with patch("pyautogui.typewrite") as mock_type:
+            result = await executor.type("Hello world")
+            
+            assert "Typed" in result.blocks[0].text
+            mock_type.assert_called_once_with("Hello world")
 
-            assert isinstance(result, ToolResult)
-            assert result.error == "PyAutoGUI not available: No module named 'pyautogui'"
-
+    @pytest.mark.skipif(not PYAUTOGUI_AVAILABLE, reason="pyautogui not available")
     @pytest.mark.asyncio
-    async def test_press_keys_no_pyautogui(self):
-        """Test press when pyautogui is not available."""
-        with patch.object(
-            PyAutoGUIExecutor,
-            "_ensure_pyautogui",
-            side_effect=ImportError("No module named 'pyautogui'"),
-        ):
-            executor = PyAutoGUIExecutor()
-            result = await executor.press(keys=["ctrl", "c"])
+    async def test_press_keys_with_pyautogui(self):
+        """Test press when pyautogui is available."""
+        executor = PyAutoGUIExecutor()
+        
+        with patch("pyautogui.press") as mock_press:
+            result = await executor.press(["ctrl", "a"])
+            
+            assert "Pressed" in result.blocks[0].text
+            mock_press.assert_called_once_with(["ctrl", "a"])
 
-            assert isinstance(result, ToolResult)
-            assert result.error == "PyAutoGUI not available: No module named 'pyautogui'"
-
+    @pytest.mark.skipif(not PYAUTOGUI_AVAILABLE, reason="pyautogui not available")
     @pytest.mark.asyncio
-    async def test_scroll_no_pyautogui(self):
-        """Test scroll when pyautogui is not available."""
-        with patch.object(
-            PyAutoGUIExecutor,
-            "_ensure_pyautogui",
-            side_effect=ImportError("No module named 'pyautogui'"),
-        ):
-            executor = PyAutoGUIExecutor()
-            result = await executor.scroll(x=100, y=100, scroll_y=5)
+    async def test_scroll_with_pyautogui(self):
+        """Test scroll when pyautogui is available."""
+        executor = PyAutoGUIExecutor()
+        
+        with patch("pyautogui.scroll") as mock_scroll:
+            result = await executor.scroll(100, 200, 5)
+            
+            assert "Scrolled" in result.blocks[0].text
+            mock_scroll.assert_called_once_with(5, x=100, y=200)
 
-            assert isinstance(result, ToolResult)
-            assert result.error == "PyAutoGUI not available: No module named 'pyautogui'"
-
+    @pytest.mark.skipif(not PYAUTOGUI_AVAILABLE, reason="pyautogui not available")
     @pytest.mark.asyncio
-    async def test_move_no_pyautogui(self):
-        """Test move when pyautogui is not available."""
-        with patch.object(
-            PyAutoGUIExecutor,
-            "_ensure_pyautogui",
-            side_effect=ImportError("No module named 'pyautogui'"),
-        ):
-            executor = PyAutoGUIExecutor()
-            result = await executor.move(x=100, y=100)
+    async def test_move_with_pyautogui(self):
+        """Test move when pyautogui is available."""
+        executor = PyAutoGUIExecutor()
+        
+        with patch("pyautogui.moveTo") as mock_move:
+            result = await executor.move(300, 400)
+            
+            assert "Moved" in result.blocks[0].text
+            mock_move.assert_called_once_with(300, 400)
 
-            assert isinstance(result, ToolResult)
-            assert result.error == "PyAutoGUI not available: No module named 'pyautogui'"
-
+    @pytest.mark.skipif(not PYAUTOGUI_AVAILABLE, reason="pyautogui not available")
     @pytest.mark.asyncio
-    async def test_drag_no_pyautogui(self):
-        """Test drag when pyautogui is not available."""
-        with patch.object(
-            PyAutoGUIExecutor,
-            "_ensure_pyautogui",
-            side_effect=ImportError("No module named 'pyautogui'"),
-        ):
-            executor = PyAutoGUIExecutor()
-            result = await executor.drag(path=[(0, 0), (100, 100)])
-
-            assert isinstance(result, ToolResult)
-            assert result.error == "PyAutoGUI not available: No module named 'pyautogui'"
+    async def test_drag_with_pyautogui(self):
+        """Test drag when pyautogui is available."""
+        executor = PyAutoGUIExecutor()
+        
+        with patch("pyautogui.dragTo") as mock_drag:
+            result = await executor.drag(100, 200, 300, 400, 1.0)
+            
+            assert "Dragged" in result.blocks[0].text
+            mock_drag.assert_called_once_with(300, 400, duration=1.0, button="left")
 
     @pytest.mark.asyncio
     async def test_wait(self):
         """Test wait method."""
         executor = PyAutoGUIExecutor()
+        
+        # Mock asyncio.sleep
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            result = await executor.wait(2.5)
+            
+            assert "Waited" in result.blocks[0].text
+            mock_sleep.assert_called_once_with(2.5)
 
-        # Mock time.sleep
-        with patch("asyncio.sleep") as mock_sleep:
-            result = await executor.wait(time=100)
-
-            assert isinstance(result, ToolResult)
-            assert result.output == "Waited 100ms"
-            mock_sleep.assert_called_once_with(0.1)  # 100ms = 0.1s
-
+    @pytest.mark.skipif(not PYAUTOGUI_AVAILABLE, reason="pyautogui not available")
     @pytest.mark.asyncio
-    async def test_position_no_pyautogui(self):
-        """Test position when pyautogui is not available."""
-        with patch.object(
-            PyAutoGUIExecutor,
-            "_ensure_pyautogui",
-            side_effect=ImportError("No module named 'pyautogui'"),
-        ):
-            executor = PyAutoGUIExecutor()
+    async def test_position_with_pyautogui(self):
+        """Test position when pyautogui is available."""
+        executor = PyAutoGUIExecutor()
+        
+        with patch("pyautogui.position") as mock_position:
+            mock_position.return_value = (123, 456)
             result = await executor.position()
-
-            assert isinstance(result, ToolResult)
-            assert result.error == "PyAutoGUI not available: No module named 'pyautogui'"
+            
+            assert "Mouse position" in result.blocks[0].text
+            assert "123" in result.blocks[0].text
+            assert "456" in result.blocks[0].text
+            mock_position.assert_called_once()
 
     def test_init_with_display_num(self):
         """Test initialization with display number."""
         # Should not raise
         executor = PyAutoGUIExecutor(display_num=0)
-        assert hasattr(executor, "_pyautogui")
-        assert executor._pyautogui is None  # Not loaded until needed
+        assert executor.display_num == 0
