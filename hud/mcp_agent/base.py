@@ -54,7 +54,7 @@ class BaseMCPAgent(ABC):
                 }
         """
         self.client = client
-        self.allowed_tools = allowed_tools or []
+        self.allowed_tools = allowed_tools
         self.disallowed_tools = disallowed_tools or []
         self.initial_screenshot = initial_screenshot
         self.max_screenshot_history = max_screenshot_history
@@ -116,7 +116,7 @@ class BaseMCPAgent(ABC):
 
                     # Apply filtering (but always allow lifecycle tools)
                     if not is_lifecycle_tool:
-                        if tool.name not in self.allowed_tools:
+                        if self.allowed_tools and tool.name not in self.allowed_tools:
                             continue
                         if tool.name in self.disallowed_tools:
                             continue
