@@ -91,6 +91,14 @@ class BaseMCPAgent(ABC):
                     raise ValueError("Client session is not initialized")
 
                 tools_result = await session.connector.client_session.list_tools()
+                
+                # Log all tools before filtering
+                logger.info(
+                    "Tools from '%s' (pre-filter): %s",
+                    server_name,
+                    [tool.name for tool in tools_result.tools]
+                )
+                
                 for tool in tools_result.tools:
                     # Always include setup/evaluate tools for framework use
                     is_lifecycle_tool = tool.name in ["setup", "evaluate"]
