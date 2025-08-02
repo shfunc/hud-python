@@ -1,0 +1,230 @@
+"""Tests for edit tool."""
+from __future__ import annotations
+
+import os
+import tempfile
+from pathlib import Path
+from unittest.mock import patch, AsyncMock
+
+import pytest
+
+from hud.tools.base import ToolResult
+from hud.tools.edit import EditTool, ToolError
+
+
+class TestEditTool:
+    """Tests for EditTool."""
+
+    def test_edit_tool_init(self):
+        """Test EditTool initialization."""
+        tool = EditTool()
+        assert tool is not None
+        assert tool._file_history == {}
+
+    @pytest.mark.asyncio
+    async def test_validate_path_not_absolute(self):
+        """Test validate_path with non-absolute path."""
+        tool = EditTool()
+        
+        with pytest.raises(ToolError) as exc_info:
+            tool.validate_path("create", Path("relative/path.txt"))
+        
+        assert "not an absolute path" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_validate_path_not_exists(self):
+        """Test validate_path when file doesn't exist for non-create commands."""
+        tool = EditTool()
+        
+        with pytest.raises(ToolError) as exc_info:
+            tool.validate_path("view", Path("/nonexistent/file.txt"))
+        
+        assert "does not exist" in str(exc_info.value)
+
+    @pytest.mark.asyncio 
+    async def test_validate_path_exists_for_create(self):
+        """Test validate_path when file exists for create command."""
+        tool = EditTool()
+        
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+            
+        try:
+            with pytest.raises(ToolError) as exc_info:
+                tool.validate_path("create", tmp_path)
+            
+            assert "already exists" in str(exc_info.value)
+        finally:
+            os.unlink(tmp_path)
+
+    @pytest.mark.asyncio
+    async def test_create_file(self):
+        """Test creating a new file."""
+        tool = EditTool()
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            file_path = Path(tmpdir) / "test.txt"
+            content = "Hello, World!"
+            
+            # Mock write_file to avoid actual file I/O
+            with patch.object(tool, "write_file", new_callable=AsyncMock) as mock_write:
+                result = await tool(
+                    command="create",
+                    path=str(file_path),
+                    file_text=content
+                )
+                
+                assert isinstance(result, ToolResult)
+                assert result.output is not None
+                assert "created successfully" in result.output
+                mock_write.assert_called_once_with(file_path, content)
+                # Check history
+                assert file_path in tool._file_history
+                assert tool._file_history[file_path] == [content]
+
+    @pytest.mark.asyncio
+    async def test_create_file_no_text(self):
+        """Test creating file without file_text raises error."""
+        tool = EditTool()
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            file_path = Path(tmpdir) / "test.txt"
+            
+            with pytest.raises(ToolError) as exc_info:
+                await tool(
+                    command="create",
+                    path=str(file_path)
+                )
+            
+            assert "file_text` is required" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_view_file(self):
+        """Test viewing a file."""
+        tool = EditTool()
+        
+        file_content = "Line 1\nLine 2\nLine 3"
+        
+        # Mock read_file
+        with patch.object(tool, "read_file", new_callable=AsyncMock) as mock_read:
+            mock_read.return_value = file_content
+            
+            result = await tool(
+                command="view",
+                path="/tmp/test.txt"
+            )
+            
+            assert isinstance(result, ToolResult)
+            assert result.output is not None
+            assert "Line 1" in result.output
+            assert "Line 2" in result.output
+            assert "Line 3" in result.output
+
+    @pytest.mark.asyncio
+    async def test_view_with_range(self):
+        """Test viewing a file with line range."""
+        tool = EditTool()
+        
+        file_content = "\n".join([f"Line {i}" for i in range(1, 11)])
+        
+        # Mock read_file
+        with patch.object(tool, "read_file", new_callable=AsyncMock) as mock_read:
+            mock_read.return_value = file_content
+            
+            result = await tool(
+                command="view",
+                path="/tmp/test.txt",
+                view_range=[3, 5]
+            )
+            
+            assert isinstance(result, ToolResult)
+            assert result.output is not None
+            # Lines 3-5 should be in output
+            assert "3: Line 3" in result.output
+            assert "4: Line 4" in result.output  
+            assert "5: Line 5" in result.output
+            # Line 1 and 10 should not be in output (outside range)
+            assert "1: Line 1" not in result.output
+            assert "10: Line 10" not in result.output
+
+    @pytest.mark.asyncio
+    async def test_str_replace_success(self):
+        """Test successful string replacement."""
+        tool = EditTool()
+        
+        file_content = "Hello, World!\nThis is a test."
+        expected_content = "Hello, Universe!\nThis is a test."
+        
+        # Mock read_file and write_file
+        with (
+            patch.object(tool, "read_file", new_callable=AsyncMock) as mock_read,
+            patch.object(tool, "write_file", new_callable=AsyncMock) as mock_write
+        ):
+            mock_read.return_value = file_content
+            
+            result = await tool(
+                command="str_replace",
+                path="/tmp/test.txt",
+                old_str="World",
+                new_str="Universe"
+            )
+            
+            assert isinstance(result, ToolResult)
+            assert result.output is not None
+            assert "has been edited" in result.output
+            mock_write.assert_called_once_with(Path("/tmp/test.txt"), expected_content)
+
+    @pytest.mark.asyncio
+    async def test_str_replace_not_found(self):
+        """Test string replacement when old_str not found."""
+        tool = EditTool()
+        
+        file_content = "Hello, World!"
+        
+        # Mock read_file
+        with patch.object(tool, "read_file", new_callable=AsyncMock) as mock_read:
+            mock_read.return_value = file_content
+            
+            with pytest.raises(ToolError) as exc_info:
+                await tool(
+                    command="str_replace",
+                    path="/tmp/test.txt",
+                    old_str="Universe",
+                    new_str="Galaxy"
+                )
+            
+            assert "did not appear verbatim" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_str_replace_multiple_occurrences(self):
+        """Test string replacement with multiple occurrences."""
+        tool = EditTool()
+        
+        file_content = "Test test\nAnother test line"
+        
+        # Mock read_file
+        with patch.object(tool, "read_file", new_callable=AsyncMock) as mock_read:
+            mock_read.return_value = file_content
+            
+            with pytest.raises(ToolError) as exc_info:
+                await tool(
+                    command="str_replace", 
+                    path="/tmp/test.txt",
+                    old_str="test",
+                    new_str="example"
+                )
+            
+            assert "Multiple occurrences" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_invalid_command(self):
+        """Test invalid command raises error."""
+        tool = EditTool()
+        
+        with pytest.raises(ToolError) as exc_info:
+            await tool(
+                command="invalid_command",  # type: ignore
+                path="/tmp/test.txt"
+            )
+        
+        assert "Unrecognized command" in str(exc_info.value)

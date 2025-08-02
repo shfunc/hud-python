@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch, ANY
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from mcp.shared.exceptions import McpError
