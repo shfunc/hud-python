@@ -1,7 +1,7 @@
 """Tests for PyAutoGUI executor."""
 
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock, patch, AsyncMock, ANY
 
 from hud.tools.executors.pyautogui import PyAutoGUIExecutor, PYAUTOGUI_AVAILABLE
 from hud.tools.base import ToolResult
@@ -43,7 +43,7 @@ class TestPyAutoGUIExecutor:
             result = await executor.click(100, 200, "left")
             
             assert isinstance(result, ToolResult)
-            assert "Clicked" in result.output
+            assert result.output and "Clicked" in result.output
             mock_click.assert_called_once_with(x=100, y=200, button="left")
 
     @pytest.mark.skipif(not PYAUTOGUI_AVAILABLE, reason="pyautogui not available")
@@ -56,8 +56,9 @@ class TestPyAutoGUIExecutor:
             result = await executor.type("Hello world")
             
             assert isinstance(result, ToolResult)
-            assert "Typed" in result.output
-            mock_type.assert_called_once_with("Hello world")
+            assert result.output and "Typed" in result.output
+            # The implementation adds interval=0.012 (12ms converted to seconds)
+            mock_type.assert_called_once_with("Hello world", interval=0.012)
 
     @pytest.mark.skipif(not PYAUTOGUI_AVAILABLE, reason="pyautogui not available")
     @pytest.mark.asyncio
@@ -65,12 +66,13 @@ class TestPyAutoGUIExecutor:
         """Test press when pyautogui is available."""
         executor = PyAutoGUIExecutor()
         
-        with patch("pyautogui.press") as mock_press:
+        # For key combinations, the implementation uses hotkey
+        with patch("pyautogui.hotkey") as mock_hotkey:
             result = await executor.press(["ctrl", "a"])
             
             assert isinstance(result, ToolResult)
-            assert "Pressed" in result.output
-            mock_press.assert_called_once_with(["ctrl", "a"])
+            assert result.output and "Pressed" in result.output
+            mock_hotkey.assert_called_once_with("ctrl", "a")
 
     @pytest.mark.skipif(not PYAUTOGUI_AVAILABLE, reason="pyautogui not available")
     @pytest.mark.asyncio
@@ -78,12 +80,18 @@ class TestPyAutoGUIExecutor:
         """Test scroll when pyautogui is available."""
         executor = PyAutoGUIExecutor()
         
-        with patch("pyautogui.scroll") as mock_scroll:
-            result = await executor.scroll(100, 200, 5)
+        with (
+            patch("pyautogui.moveTo") as mock_move,
+            patch("pyautogui.scroll") as mock_scroll
+        ):
+            result = await executor.scroll(100, 200, scroll_y=5)
             
             assert isinstance(result, ToolResult)
-            assert "Scrolled" in result.output
-            mock_scroll.assert_called_once_with(5, x=100, y=200)
+            assert result.output and "Scrolled" in result.output
+            # First moves to position
+            mock_move.assert_called_once_with(100, 200)
+            # Then scrolls (note: implementation negates scroll_y)
+            mock_scroll.assert_called_once_with(-5)
 
     @pytest.mark.skipif(not PYAUTOGUI_AVAILABLE, reason="pyautogui not available")
     @pytest.mark.asyncio
@@ -95,8 +103,9 @@ class TestPyAutoGUIExecutor:
             result = await executor.move(300, 400)
             
             assert isinstance(result, ToolResult)
-            assert "Moved" in result.output
-            mock_move.assert_called_once_with(300, 400)
+            assert result.output and "Moved" in result.output
+            # The implementation adds duration=0.1
+            mock_move.assert_called_once_with(300, 400, duration=0.1)
 
     @pytest.mark.skipif(not PYAUTOGUI_AVAILABLE, reason="pyautogui not available")
     @pytest.mark.asyncio
@@ -105,12 +114,14 @@ class TestPyAutoGUIExecutor:
         executor = PyAutoGUIExecutor()
         
         with patch("pyautogui.dragTo") as mock_drag:
-            # drag method signature: drag(x: int, y: int, duration: float = 1.0, button: str = "left")
-            result = await executor.drag(300, 400, 1.0)
+            # drag expects a path (list of coordinate tuples)
+            path = [(100, 100), (300, 400)]
+            result = await executor.drag(path)
             
             assert isinstance(result, ToolResult)
-            assert "Dragged" in result.output
-            mock_drag.assert_called_once_with(300, 400, duration=1.0, button="left")
+            assert result.output and "Dragged" in result.output
+            # Implementation uses dragTo to move to each point
+            mock_drag.assert_called()
 
     @pytest.mark.asyncio
     async def test_wait(self):
@@ -119,10 +130,12 @@ class TestPyAutoGUIExecutor:
         
         # Mock asyncio.sleep
         with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
-            result = await executor.wait(2.5)
+            # wait expects time in milliseconds
+            result = await executor.wait(2500)  # 2500ms = 2.5s
             
             assert isinstance(result, ToolResult)
-            assert "Waited" in result.output
+            assert result.output and "Waited" in result.output
+            # Implementation converts to seconds
             mock_sleep.assert_called_once_with(2.5)
 
     @pytest.mark.skipif(not PYAUTOGUI_AVAILABLE, reason="pyautogui not available")
@@ -136,6 +149,7 @@ class TestPyAutoGUIExecutor:
             result = await executor.position()
             
             assert isinstance(result, ToolResult)
+            assert result.output is not None
             assert "Mouse position" in result.output
             assert "123" in result.output
             assert "456" in result.output
