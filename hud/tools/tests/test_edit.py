@@ -105,8 +105,11 @@ class TestEditTool:
         
         file_content = "Line 1\nLine 2\nLine 3"
         
-        # Mock read_file
-        with patch.object(tool, "read_file", new_callable=AsyncMock) as mock_read:
+        # Mock read_file and validate_path
+        with (
+            patch.object(tool, "read_file", new_callable=AsyncMock) as mock_read,
+            patch.object(tool, "validate_path") as mock_validate
+        ):
             mock_read.return_value = file_content
             
             result = await tool(
@@ -127,8 +130,11 @@ class TestEditTool:
         
         file_content = "\n".join([f"Line {i}" for i in range(1, 11)])
         
-        # Mock read_file
-        with patch.object(tool, "read_file", new_callable=AsyncMock) as mock_read:
+        # Mock read_file and validate_path
+        with (
+            patch.object(tool, "read_file", new_callable=AsyncMock) as mock_read,
+            patch.object(tool, "validate_path") as mock_validate
+        ):
             mock_read.return_value = file_content
             
             result = await tool(
@@ -155,10 +161,11 @@ class TestEditTool:
         file_content = "Hello, World!\nThis is a test."
         expected_content = "Hello, Universe!\nThis is a test."
         
-        # Mock read_file and write_file
+        # Mock read_file, write_file and validate_path
         with (
             patch.object(tool, "read_file", new_callable=AsyncMock) as mock_read,
-            patch.object(tool, "write_file", new_callable=AsyncMock) as mock_write
+            patch.object(tool, "write_file", new_callable=AsyncMock) as mock_write,
+            patch.object(tool, "validate_path") as mock_validate
         ):
             mock_read.return_value = file_content
             
@@ -181,8 +188,11 @@ class TestEditTool:
         
         file_content = "Hello, World!"
         
-        # Mock read_file
-        with patch.object(tool, "read_file", new_callable=AsyncMock) as mock_read:
+        # Mock read_file and validate_path
+        with (
+            patch.object(tool, "read_file", new_callable=AsyncMock) as mock_read,
+            patch.object(tool, "validate_path") as mock_validate
+        ):
             mock_read.return_value = file_content
             
             with pytest.raises(ToolError) as exc_info:
@@ -202,8 +212,11 @@ class TestEditTool:
         
         file_content = "Test test\nAnother test line"
         
-        # Mock read_file
-        with patch.object(tool, "read_file", new_callable=AsyncMock) as mock_read:
+        # Mock read_file and validate_path
+        with (
+            patch.object(tool, "read_file", new_callable=AsyncMock) as mock_read,
+            patch.object(tool, "validate_path") as mock_validate
+        ):
             mock_read.return_value = file_content
             
             with pytest.raises(ToolError) as exc_info:
@@ -221,10 +234,12 @@ class TestEditTool:
         """Test invalid command raises error."""
         tool = EditTool()
         
-        with pytest.raises(ToolError) as exc_info:
-            await tool(
-                command="invalid_command",  # type: ignore
-                path="/tmp/test.txt"
-            )
-        
-        assert "Unrecognized command" in str(exc_info.value)
+        # Mock validate_path to bypass file existence check
+        with patch.object(tool, "validate_path") as mock_validate:
+            with pytest.raises(ToolError) as exc_info:
+                await tool(
+                    command="invalid_command",  # type: ignore
+                    path="/tmp/test.txt"
+                )
+            
+            assert "Unrecognized command" in str(exc_info.value)
