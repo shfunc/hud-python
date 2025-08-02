@@ -41,13 +41,25 @@ class Settings(BaseSettings):
     telemetry_enabled: bool = Field(
         default=True,
         description="Enable telemetry for the HUD SDK",
-        validation_alias="TELEMETRY_ENABLED",
+        validation_alias="HUD_TELEMETRY_ENABLED",
     )
 
     fancy_logging: bool = Field(
         default=True,
         description="Enable fancy logging for the HUD SDK",
-        validation_alias="FANCY_LOGGING",
+        validation_alias="HUD_FANCY_LOGGING",
+    )
+
+    log_stream: str = Field(
+        default="stdout",
+        description="Stream to use for logging output: 'stdout' or 'stderr'",
+        validation_alias="HUD_LOG_STREAM",
+    )
+
+    display: str = Field(
+        default=":0",
+        description="Display to use for the HUD SDK",
+        validation_alias="HUD_DISPLAY",
     )
 
 

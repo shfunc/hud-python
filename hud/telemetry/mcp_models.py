@@ -28,16 +28,14 @@ class StatusType(str, Enum):
 
 
 class MCPCallType(str, Enum):
-    """Known MCP call types"""
+    """Enum for different types of MCP calls in telemetry."""
 
-    SEND_REQUEST = "mcp.shared.session.send_request"
-    SEND_NOTIFICATION = "mcp.shared.session.send_notification"
-    RECEIVE_RESPONSE = "mcp.shared.session.receive_response"
-    RECEIVE_REQUEST = "mcp.shared.session.receive_request"
-    STREAM_READ = "mcp.stream.read"
-    STREAM_WRITE = "mcp.stream.write"
-    HANDLE_INCOMING = "mcp.handle_incoming"
-    MANUAL_TEST = "manual.test"
+    # Requests and Notifications
+    SEND_REQUEST = "mcp.send_request"
+    SEND_NOTIFICATION = "mcp.send_notification"
+
+    # Responses
+    RECEIVE_RESPONSE = "mcp.receive_response"
 
 
 class BaseMCPCall(BaseModel):
@@ -87,6 +85,8 @@ class MCPRequestCall(BaseMCPCall):
     duration: float | None = None
     request_id: str | int | None = None
     request_data: dict[str, Any] | None = None
+    error: str | None = None
+    error_type: str | None = None
 
     @classmethod
     def from_jsonrpc_request(
@@ -191,6 +191,8 @@ class MCPNotificationCall(BaseMCPCall):
     end_time: float | None = None
     duration: float | None = None
     notification_data: dict[str, Any] | None = None
+    error: str | None = None
+    error_type: str | None = None
 
     @classmethod
     def from_jsonrpc_notification(
@@ -230,69 +232,6 @@ class MCPNotificationCall(BaseMCPCall):
         return None
 
 
-class MCPStreamEvent(BaseMCPCall):
-    """Record for an MCP stream event (read or write)"""
-
-    stream_event: bool = True
-    event_type: str = Field(..., description="Type of stream event: read or write")
-    item_type: str | None = None
-    is_response_or_error: bool = False
-    message_data: dict[str, Any] | None = None
-
-    @classmethod
-    def from_session_message(
-        cls, message: SessionMessage, task_run_id: str, event_type: str, **kwargs: Any
-    ) -> MCPStreamEvent:
-        """Create telemetry record for a stream event"""
-        method_name = "unknown_stream_operation"
-        is_response = False
-        item_type = "unknown"
-        message_data = None
-
-        if hasattr(message, "message") and hasattr(message.message, "root"):
-            msg_root = message.message.root
-            item_type = type(msg_root).__name__
-            message_data = msg_root.model_dump(exclude_none=True)
-
-            # Check type first before accessing attributes
-            if isinstance(msg_root, JSONRPCRequest | JSONRPCNotification) and hasattr(
-                msg_root, "method"
-            ):
-                method_name = msg_root.method
-            elif isinstance(msg_root, JSONRPCResponse | JSONRPCError) and hasattr(msg_root, "id"):
-                method_name = f"response_to_id_{msg_root.id}"
-                is_response = True
-
-        return cls(
-            task_run_id=task_run_id,
-            status=StatusType.COMPLETED,
-            method=method_name,
-            event_type=event_type,
-            item_type=item_type,
-            is_response_or_error=is_response,
-            message_data=message_data,
-            timestamp=datetime.now().timestamp(),
-            **kwargs,
-        )
-
-
-class MCPManualTestCall(BaseMCPCall):
-    """Record for a manual test record"""
-
-    call_type: str = MCPCallType.MANUAL_TEST
-    custom_data: dict[str, Any] = Field(default_factory=dict)
-
-    @classmethod
-    def create(cls, task_run_id: str, **custom_data: Any) -> MCPManualTestCall:
-        """Create a manual test record with custom data"""
-        return cls(
-            task_run_id=task_run_id,
-            status=StatusType.COMPLETED,
-            custom_data=custom_data,
-            timestamp=datetime.now().timestamp(),
-        )
-
-
 class MCPTelemetryRecord(BaseModel):
     """Container for a set of related MCP telemetry records"""
 
@@ -320,9 +259,9 @@ class MCPTelemetryRecord(BaseModel):
 
 
 class TrajectoryStep(BaseModel):
-    """Model representing a single step in a trajectory, for export."""
+    """Model for telemetry export format."""
 
-    type: str = Field(default="mcp-step")  # Default for MCP calls
+    type: str = Field(default="mcp-step")
     observation_url: str | None = None
     observation_text: str | None = None
     actions: list[dict[str, Any]] = Field(default_factory=list)

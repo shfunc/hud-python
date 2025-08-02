@@ -14,9 +14,15 @@ from hud.exceptions import GymMakeException
 from hud.gym import make
 from hud.job import Job
 from hud.task import Task
-from hud.telemetry.context import reset_context
+from hud.telemetry.context import set_current_task_run_id
 from hud.types import CustomGym, EnvironmentStatus
 from hud.utils.config import FunctionConfig
+
+
+# Create a reset_context function for tests
+def reset_context():
+    """Reset the telemetry context for tests."""
+    set_current_task_run_id(None)
 
 
 class MockClient(Client):

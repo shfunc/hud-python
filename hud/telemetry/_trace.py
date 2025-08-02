@@ -11,7 +11,6 @@ from typing import (
     Any,
     ParamSpec,
     TypeVar,
-    overload,
 )
 
 from hud.telemetry import exporter
@@ -25,42 +24,58 @@ from hud.telemetry.exporter import submit_to_worker_loop
 from hud.telemetry.instrumentation.registry import registry
 
 if TYPE_CHECKING:
-    from collections.abc import (
-        Callable,
-        Coroutine,
-        Generator,
-    )
+    from collections.abc import Generator
 
-    from hud.telemetry.mcp_models import BaseMCPCall
 
 logger = logging.getLogger("hud.telemetry")
 T = TypeVar("T")
+P = ParamSpec("P")
+
+# Track whether telemetry has been initialized
+_telemetry_initialized = False
 
 
 def init_telemetry() -> None:
     """Initialize telemetry instrumentors and ensure worker is started if telemetry is active."""
+    global _telemetry_initialized
+    if _telemetry_initialized:
+        return
+
     registry.install_all()
     logger.info("Telemetry initialized.")
+    _telemetry_initialized = True
+
+
+def _ensure_telemetry_initialized() -> None:
+    """Ensure telemetry is initialized - called lazily by trace functions."""
+    from hud.settings import settings
+
+    if settings.telemetry_enabled and not _telemetry_initialized:
+        init_telemetry()
 
 
 @contextmanager
-def trace(
+def trace_open(
     name: str | None = None,
+    run_id: str | None = None,
     attributes: dict[str, Any] | None = None,
 ) -> Generator[str, None, None]:
     """
     Context manager for tracing a block of code.
-    The task_run_id is always generated internally as a UUID.
-    Telemetry export is handled by a background worker thread.
 
     Args:
-        attributes: Optional dictionary of attributes to associate with this trace
         name: Optional name for this trace, will be added to attributes.
+        attributes: Optional dictionary of attributes to associate with this trace
 
     Returns:
         The generated task run ID (UUID string) used for this trace
     """
-    task_run_id = str(uuid.uuid4())
+    # Lazy initialization - only initialize telemetry when trace() is actually called
+    _ensure_telemetry_initialized()
+
+    task_run_id = run_id or str(uuid.uuid4())
+
+    logger.info("See your agent live at https://app.hud.so/trace/%s", task_run_id)
 
     local_attributes = attributes.copy() if attributes is not None else {}
     if name is not None:
@@ -81,91 +96,87 @@ def trace(
     finally:
         end_time = time.time()
         duration = end_time - start_time
+        local_attributes["duration_seconds"] = duration
+        local_attributes["is_root_trace"] = is_root
 
-        mcp_calls: list[BaseMCPCall] = flush_buffer()
+        logger.debug("Finishing trace %s after %.2f seconds", task_run_id, duration)
 
-        trace_attributes_final = {
-            **local_attributes,
-            "start_time": start_time,
-            "end_time": end_time,
-            "duration": duration,
-            "is_root": is_root,
-        }
+        # Always flush the buffer for the current task
+        mcp_calls = flush_buffer(export=True)
+        logger.debug("Flushed %d MCP calls for trace %s", len(mcp_calls), task_run_id)
 
+        # Submit the telemetry payload to the worker queue
         if is_root and mcp_calls:
-            try:
-                coro_to_submit = exporter.export_telemetry(
-                    task_run_id=task_run_id,
-                    trace_attributes=trace_attributes_final,
-                    mcp_calls=mcp_calls,
-                )
-                future = submit_to_worker_loop(coro_to_submit)
-                if future:
-                    logger.debug(
-                        "Telemetry for trace %s submitted to background worker.", task_run_id
-                    )
-                else:
-                    logger.warning(
-                        "Failed to submit telemetry for trace %s to"
-                        "background worker (loop not available).",
-                        task_run_id,
-                    )
-            except Exception as e:
-                logger.warning("Failed to submit telemetry for trace %s: %s", task_run_id, e)
+            coro = exporter.export_telemetry(
+                task_run_id=task_run_id,
+                trace_attributes=local_attributes,
+                mcp_calls=mcp_calls,
+            )
+            submit_to_worker_loop(coro)
 
+        # Restore previous context
         set_current_task_run_id(previous_task_id)
         is_root_trace.set(was_root)
 
-        logger.debug(
-            "Ended trace %s (Name: %s) with %d MCP call(s)",
-            task_run_id,
-            name if name else "Unnamed",
-            len(mcp_calls),
-        )
-
-        logger.info("View trace at https://app.hud.so/jobs/traces/%s", task_run_id)
+        # Log at the end
+        if is_root:
+            view_url = f"https://app.hud.so/trace/{task_run_id}"
+            logger.info("View trace at %s", view_url)
 
 
-P = ParamSpec("P")
-R = TypeVar("R")
-
-
-def register_trace(
-    name: str | None = None, attributes: dict[str, Any] | None = None
-) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+@contextmanager
+def trace(
+    name: str | None = None,
+    attributes: dict[str, Any] | None = None,
+) -> Generator[str, None, None]:
     """
-    Decorator to wrap a synchronous or asynchronous function call
-    within a hud._telemetry.trace context.
+    Synchronous context manager that traces and blocks until telemetry is sent.
+
+    This is the "worry-free" option when you want to ensure telemetry is
+    sent immediately before continuing, rather than relying on background workers.
 
     Args:
-        name: Optional name for the trace.
-        attributes: Optional dictionary of attributes for the trace.
+        name: Optional name for this trace
+        attributes: Optional attributes for the trace
+
+    Returns:
+        The generated task run ID (UUID string) used for this trace
+    """
+    with trace_open(name=name, attributes=attributes) as task_run_id:
+        yield task_run_id
+
+    # Ensure telemetry is flushed synchronously
+    from hud import flush
+
+    flush()
+
+
+def trace_decorator(
+    name: str | None = None,
+    attributes: dict[str, Any] | None = None,
+) -> Any:
+    """
+    Decorator for tracing functions.
+
+    Can be used on both sync and async functions.
     """
 
-    @overload
-    def decorator(
-        func: Callable[P, Coroutine[Any, Any, R]],
-    ) -> Callable[P, Coroutine[Any, Any, R]]: ...
-
-    @overload
-    def decorator(func: Callable[P, R]) -> Callable[P, R]: ...
-
-    def decorator(func: Callable[P, Any]) -> Callable[P, Any]:
+    def decorator(func: Any) -> Any:
         if asyncio.iscoroutinefunction(func):
 
             @wraps(func)
-            async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> Any:
-                effective_name = name if name else func.__name__
-                with trace(name=effective_name, attributes=attributes):
+            async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+                func_name = name or f"{func.__module__}.{func.__name__}"
+                with trace_open(name=func_name, attributes=attributes):
                     return await func(*args, **kwargs)
 
             return async_wrapper
         else:
 
             @wraps(func)
-            def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> Any:
-                effective_name = name if name else func.__name__
-                with trace(name=effective_name, attributes=attributes):
+            def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+                func_name = name or f"{func.__module__}.{func.__name__}"
+                with trace_open(name=func_name, attributes=attributes):
                     return func(*args, **kwargs)
 
             return sync_wrapper

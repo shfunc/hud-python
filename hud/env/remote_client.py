@@ -147,7 +147,7 @@ class RemoteClient(Client):
         command: list[str],
         *,
         workdir: str | None = None,
-        timeout: float | None = None,
+        timeout: float | None = None,  # noqa: ASYNC109
     ) -> ExecuteResult:
         """
         Execute a command in the environment.

@@ -6,7 +6,7 @@ import json
 import logging
 import threading
 import time
-from datetime import datetime, timezone  # For ISO timestamp conversion
+from datetime import UTC, datetime  # For ISO timestamp conversion
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -157,7 +157,7 @@ async def export_telemetry(
         actual_start_time_float = getattr(mcp_call_model, "start_time", None)
         if actual_start_time_float:
             start_ts_iso = (
-                datetime.fromtimestamp(actual_start_time_float, timezone.utc)
+                datetime.fromtimestamp(actual_start_time_float, UTC)
                 .isoformat()
                 .replace("+00:00", "Z")
             )
@@ -170,7 +170,7 @@ async def export_telemetry(
 
         if effective_end_timestamp_float:
             end_ts_iso = (
-                datetime.fromtimestamp(effective_end_timestamp_float, timezone.utc)
+                datetime.fromtimestamp(effective_end_timestamp_float, UTC)
                 .isoformat()
                 .replace("+00:00", "Z")
             )
@@ -375,8 +375,9 @@ def flush(timeout: float = 10.0) -> None:
         # This check is racy, but it's the best we can do without more complex inter-thread
         # sync for task completion. Give some time for the task to process the sentinel and
         # clear itself.
-        # Max wait for task to clear
-        attempt_timeout = time.time() + (timeout / 2 if timeout else 2.0)
+        # Max wait for task to clear - should be longer than EXPORT_INTERVAL to ensure
+        # the task has time to wake from sleep and process the sentinel
+        attempt_timeout = time.time() + (timeout / 2 if timeout else 2.0) + EXPORT_INTERVAL + 1.0
         while _export_task_async is not None and time.time() < attempt_timeout:
             time.sleep(0.1)
             # _export_task_async is set to None by _process_export_queue_async upon its exit.

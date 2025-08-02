@@ -1,0 +1,13 @@
+services:
+  hud-controller:
+    build: .
+    container_name: hud-controller
+    ports:
+      - "3000-3010:3000-3010"  # Frontend ports range
+      - "5000-5010:5000-5010"  # Backend ports range
+      - "8041:8040"  # MCP server (HTTP mode)
+      - "8080:8080"  # noVNC
+    environment:
+      - LAUNCH_APPS=todo
+      - BROWSER_URL=http://localhost:3000
+      - MCP_TRANSPORT=streamable-http

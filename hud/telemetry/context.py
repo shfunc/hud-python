@@ -8,7 +8,6 @@ from typing import Any, TypeVar
 
 from hud.telemetry.mcp_models import (
     BaseMCPCall,
-    MCPManualTestCall,
     MCPNotificationCall,
     MCPRequestCall,
     MCPResponseCall,
@@ -21,7 +20,7 @@ logger = logging.getLogger("hud.telemetry")
 current_task_run_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "current_task_run_id", default=None
 )
-# NEW: Global dictionary for buffering, keyed by task_run_id
+# Global dictionary for buffering, keyed by task_run_id
 _GLOBAL_MCP_CALL_BUFFERS: defaultdict[str, list[BaseMCPCall]] = defaultdict(list)
 is_root_trace: contextvars.ContextVar[bool] = contextvars.ContextVar("is_root_trace", default=False)
 
@@ -43,6 +42,7 @@ def set_current_task_run_id(task_run_id: str | None) -> None:
 
 
 def buffer_mcp_call(record: BaseMCPCall | dict[str, Any]) -> None:
+    """Buffer an MCP call record for the current trace."""
     task_run_id = get_current_task_run_id()
 
     if not task_run_id:
@@ -51,7 +51,7 @@ def buffer_mcp_call(record: BaseMCPCall | dict[str, Any]) -> None:
         )
         return
 
-    # Ensure 'record' is a Pydantic model instance from here
+    # Ensure 'record' is a Pydantic model instance
     if isinstance(record, dict):
         try:
             record_model = BaseMCPCall.from_dict(record)
@@ -82,11 +82,8 @@ def flush_buffer(export: bool = False) -> list[BaseMCPCall]:
         logger.warning("FLUSH_BUFFER: No current task_run_id. Cannot flush.")
         return []
 
-    buffer_for_task = _GLOBAL_MCP_CALL_BUFFERS.pop(
-        task_run_id, []
-    )  # Get and remove the list for this task
-
-    return buffer_for_task  # Return the flushed items
+    buffer_for_task = _GLOBAL_MCP_CALL_BUFFERS.pop(task_run_id, [])
+    return buffer_for_task
 
 
 def create_request_record(
@@ -118,10 +115,13 @@ def create_response_record(
         logger.warning("No active task_run_id, response record will not be created")
         raise ValueError("No active task_run_id")
 
+    # Default to COMPLETED status if not provided
+    if "status" not in kwargs:
+        kwargs["status"] = StatusType.COMPLETED
+
     record = MCPResponseCall(
         task_run_id=task_run_id,
         method=method,
-        status=StatusType.COMPLETED,
         related_request_id=related_request_id,
         is_error=is_error,
         **kwargs,
@@ -149,21 +149,3 @@ def create_notification_record(
     )
     buffer_mcp_call(record)
     return record
-
-
-def create_manual_test_record(**custom_data: Any) -> MCPManualTestCall | None:
-    """Create and buffer a manual test record"""
-    task_run_id = get_current_task_run_id()
-    if not task_run_id:
-        logger.warning("No active task_run_id, manual test record will not be created")
-        return None
-
-    record = MCPManualTestCall.create(task_run_id=task_run_id, **custom_data)
-    buffer_mcp_call(record)
-    return record
-
-
-def reset_context() -> None:
-    """Reset all telemetry context variables. Useful for test isolation."""
-    set_current_task_run_id(None)
-    is_root_trace.set(False)

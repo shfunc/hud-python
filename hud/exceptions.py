@@ -4,8 +4,9 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from typing import Self
+
     import httpx
-    from typing_extensions import Self
 
 logger = logging.getLogger(__name__)
 

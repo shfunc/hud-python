@@ -262,7 +262,7 @@ class DockerClient(Client):
         self,
         command: list[str],
         *,
-        timeout: int | None = None,
+        timeout: int | None = None,  # noqa: ASYNC109
     ) -> ExecuteResult:
         """
         Execute a command in the environment. May not be supported by all environments.

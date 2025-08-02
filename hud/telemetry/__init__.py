@@ -1,21 +1,25 @@
 """
-HUD telemetry module for capturing and reporting telemetry data from MCP calls.
+HUD Telemetry module.
 
-This module provides functionality to trace MCP calls and export telemetry data
-to the HUD platform for analysis.
+Provides context managers and utilities for capturing MCP telemetry data.
 """
 
 from __future__ import annotations
 
-from hud.telemetry._trace import init_telemetry, register_trace, trace
-from hud.telemetry.context import get_current_task_run_id, set_current_task_run_id
+# Main trace functions
+from hud.telemetry._trace import init_telemetry, trace, trace_open
+from hud.telemetry.context import flush_buffer, get_current_task_run_id
 from hud.telemetry.exporter import flush
 
 __all__ = [
+    # Management
     "flush",
+    "flush_buffer",
+    # Context management
     "get_current_task_run_id",
+    # Management
     "init_telemetry",
-    "register_trace",
-    "set_current_task_run_id",
+    # Trace functions
     "trace",
+    "trace_open",
 ]
