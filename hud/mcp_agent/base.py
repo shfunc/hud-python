@@ -54,7 +54,7 @@ class BaseMCPAgent(ABC):
                 }
         """
         self.client = client
-        self.allowed_tools = allowed_tools
+        self.allowed_tools = allowed_tools or []
         self.disallowed_tools = disallowed_tools or []
         self.initial_screenshot = initial_screenshot
         self.max_screenshot_history = max_screenshot_history
@@ -116,7 +116,7 @@ class BaseMCPAgent(ABC):
 
                     # Apply filtering (but always allow lifecycle tools)
                     if not is_lifecycle_tool:
-                        if self.allowed_tools and tool.name not in self.allowed_tools:
+                        if tool.name not in self.allowed_tools:
                             continue
                         if tool.name in self.disallowed_tools:
                             continue
@@ -386,13 +386,24 @@ class BaseMCPAgent(ABC):
         """
         # Import here to avoid circular imports
         from hud.task import Task
-
+        
+        if not self._available_tools:
+            await self.initialize()
+        
+        logger.info(f"Running agent with prompt: {prompt_or_task}")
+        logger.info(f"type of prompt_or_task: {type(prompt_or_task)}")
+        
         # Handle Task objects with full lifecycle
-        if isinstance(prompt_or_task, Task):
+        if type(prompt_or_task) is Task:
+            logger.info(f"Running task with prompt: {prompt_or_task}")
             return await self._run_task(prompt_or_task, max_steps)
 
         # Handle simple string prompts (existing behavior)
-        return await self._run_prompt(prompt_or_task, max_steps, conversation_mode)
+        elif isinstance(prompt_or_task, str):
+            return await self._run_prompt(prompt_or_task, max_steps, conversation_mode)
+        
+        else:
+            raise TypeError(f"prompt_or_task must be str or Task, got {type(prompt_or_task)}")
 
     async def _run_task(self, task: Task, max_steps: int = 10) -> dict[str, Any]:
         """
@@ -512,8 +523,6 @@ class BaseMCPAgent(ABC):
             The final response or result
         """
         try:
-            if not self._available_tools:
-                await self.initialize()
 
             latest_screenshot = None
             if self.initial_screenshot:
