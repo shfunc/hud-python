@@ -2,17 +2,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, TypeAlias
 
-import numpy as np
 from pydantic import TypeAdapter, ValidationError
 
 from .types import CLA
 
 if TYPE_CHECKING:
-    from typing_extensions import TypeIs
+    import numpy as np
     from PIL import Image
+    from typing_extensions import TypeIs
     ImageType: TypeAlias = np.ndarray[Any, Any] | Image.Image | str | None
 else:
-    ImageType: TypeAlias = np.ndarray[Any, Any] | Any | str | None
+    ImageType: TypeAlias = Any | str | None
 
 
 def _is_numpy_array(observation: Any) -> TypeIs[np.ndarray]:
