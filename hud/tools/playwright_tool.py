@@ -47,9 +47,6 @@ class PlaywrightTool:
             None, description="CSS selector for element (for click, type, wait_for_element actions)"
         ),
         text: str | None = Field(None, description="Text to type (for type action)"),
-        path: str | None = Field(
-            None, description="File path to save screenshot (for screenshot action)"
-        ),
         wait_for_load_state: Literal["commit", "domcontentloaded", "load", "networkidle"]
         | None = Field(
             None,
@@ -75,7 +72,7 @@ class PlaywrightTool:
                 result = await self.navigate(url, wait_for_load_state or "networkidle")
 
             elif action == "screenshot":
-                result = await self.screenshot(path)
+                result = await self.screenshot()
 
             elif action == "click":
                 if selector is None:
@@ -120,17 +117,13 @@ class PlaywrightTool:
             # Convert dict result to ToolResult
             if isinstance(result, dict):
                 if result.get("success"):
-                    if "screenshot" in result:
-                        # Return screenshot as image content
-                        tool_result = ToolResult(
-                            output=result.get("message", ""), base64_image=result["screenshot"]
-                        )
-                    else:
-                        tool_result = ToolResult(output=result.get("message", ""))
+                    tool_result = ToolResult(output=result.get("message", ""))
                 else:
                     tool_result = ToolResult(error=result.get("error", "Unknown error"))
-            else:
+            elif isinstance(result, ToolResult):
                 tool_result = result
+            else:
+                tool_result = ToolResult(output=str(result))
 
             # Convert result to content blocks
             return tool_result_to_content_blocks(tool_result)
@@ -258,35 +251,24 @@ class PlaywrightTool:
                 "message": f"Failed to navigate to {url}: {e}",
             }
 
-    async def screenshot(self, path: str | None = None) -> dict[str, Any]:
+    async def screenshot(self) -> ToolResult:
         """Take a screenshot of the current page.
 
-        Args:
-            path: Optional path to save screenshot
-
         Returns:
-            Dict with screenshot result
+            ToolResult with base64_image
         """
         await self._ensure_browser()
 
         try:
-            if path:
-                await self.page.screenshot(path=path, full_page=True)
-                return {"success": True, "path": path, "message": f"Screenshot saved to {path}"}
-            else:
-                # Return base64 encoded screenshot
-                screenshot_bytes = await self.page.screenshot(full_page=True)
-                import base64
+            # Always return base64 encoded screenshot as ToolResult
+            screenshot_bytes = await self.page.screenshot(full_page=True)
+            import base64
 
-                screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
-                return {
-                    "success": True,
-                    "screenshot": screenshot_b64,
-                    "message": "Screenshot captured",
-                }
+            screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
+            return ToolResult(base64_image=screenshot_b64)
         except Exception as e:
             logger.error("Screenshot failed: %s", e)
-            return {"success": False, "error": str(e), "message": f"Failed to take screenshot: {e}"}
+            return ToolResult(error=f"Failed to take screenshot: {e}")
 
     async def click(self, selector: str) -> dict[str, Any]:
         """Click an element by selector.
