@@ -105,6 +105,23 @@ if __name__ == "__main__":
 
 *(Replace `start_services()` with whatever takes noticeable startup time – browsers, DBs, X servers, …)*
 
+### Adapt Dockerfile
+
+At the end of your Dockerfile, you must launch the MCP server as the container's main process, ensuring it communicates over stdio (stdin/stdout). This is typically done by setting the `CMD` or `ENTRYPOINT` to run your server module directly, for example:
+
+
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+COPY . .
+
+# Optional: install requirements
+# RUN pip install --no-cache-dir -r requirements.txt
+
+CMD ["uv", "pip", "run", "python", "-m", "your_module_name"]  # Replace 'your_module_name' with your actual entrypoint module
+```
+
 ### Three validation steps (run them **in order**)
 
 | # | What you do | Why it matters |
