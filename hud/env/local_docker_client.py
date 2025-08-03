@@ -9,8 +9,14 @@ import time
 import uuid
 from typing import TYPE_CHECKING, Any
 
-import aiodocker
-from aiohttp import ClientTimeout
+try:
+    import aiodocker
+    from aiohttp import ClientTimeout
+    AIODOCKER_AVAILABLE = True
+except ImportError:
+    AIODOCKER_AVAILABLE = False
+    aiodocker = None  # type: ignore
+    ClientTimeout = None  # type: ignore
 
 from hud.env.docker_client import DockerClient, EnvironmentStatus
 from hud.utils import ExecuteResult
@@ -40,6 +46,11 @@ class LocalDockerClient(DockerClient):
         image_tag = f"hud-env-{uuid.uuid4().hex[:8]}"
 
         # Initialize Docker client
+        if not AIODOCKER_AVAILABLE:
+            raise ImportError(
+                "aiodocker is required for LocalDockerClient. "
+                "Please install it with 'pip install aiodocker'"
+            )
         docker_client = aiodocker.Docker()
 
         # Create a tar file from the path
@@ -82,6 +93,11 @@ class LocalDockerClient(DockerClient):
         """
 
         # Initialize Docker client
+        if not AIODOCKER_AVAILABLE:
+            raise ImportError(
+                "aiodocker is required for LocalDockerClient. "
+                "Please install it with 'pip install aiodocker'"
+            )
         docker_client = aiodocker.Docker()
 
         # Default host config
@@ -164,6 +180,11 @@ class LocalDockerClient(DockerClient):
             docker_conn: Docker client connection
             container_id: ID of the Docker container to control
         """
+        if not AIODOCKER_AVAILABLE:
+            raise ImportError(
+                "aiodocker is required for LocalDockerClient. "
+                "Please install it with 'pip install aiodocker'"
+            )
         super().__init__()
 
         # Store container ID instead of container object

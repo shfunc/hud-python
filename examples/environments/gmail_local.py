@@ -1,7 +1,7 @@
 import asyncio
 import hud
 from hud.mcp_agent import ClaudeMCPAgent, OpenAIMCPAgent
-from hud import Task
+from hud.task import TaskConfig
 from mcp_use import MCPClient
 
 
@@ -9,32 +9,40 @@ async def main():
     with hud.trace("gmail_local"):
         task_dict = {
             "prompt": "Open Sent mail, search for the Series B pitch deck, forward it to billgates@microsoft.com, and mark the original message as important.",
-            "gym": {
-                "type": "mcp",
-                "config": {
-                    "gmail": {
-                        "command": "docker",
-                        "args": [
-                            "run",
-                            "-i",  # interactive mode for stdio MCP server
-                            "--rm",  # remove the container after it exits
-                            "-p",
-                            "6080:6080",  # map port 6080 to the host for noVNC
-                            "hudpython/gmail-clone:latest",  # use hud gmail image
-                        ],
-                    }
+            "mcpServers": {
+                "gmail": {
+                    "command": "docker",
+                    "args": [
+                        "run",
+                        "-i",  # interactive mode for stdio MCP server
+                        "--rm",  # remove the container after it exits
+                        "-p",
+                        "6080:6080",  # map port 6080 to the host for noVNC
+                        "hudpython/gmail-clone:latest",  # use hud gmail image
+                    ],
+                }
+            },
+            "setup_tool": {
+                "name": "setup",
+                "arguments": {
+                    "problem_id": "forward-series-b-deck-to-billgates",
                 },
             },
-            "setup": {"problem_id": "forward-series-b-deck-to-billgates"},
-            "evaluate": {"problem_id": "forward-series-b-deck-to-billgates"},
+            "evaluate_tool": {
+                "name": "evaluate",
+                "arguments": {
+                    "problem_id": "forward-series-b-deck-to-billgates",
+                },
+            },
             "metadata": {"id": "forward-series-b-deck-to-billgates"},
         }
 
-        task = Task(**task_dict)
+        # Create TaskConfig from dict
+        task = TaskConfig(**task_dict)
 
         print("📡 Defining the environment...")
         print("🔴 See the agent live at http://localhost:6080/vnc.html")
-        client = MCPClient.from_dict({"mcpServers": task.gym.config})
+        client = MCPClient.from_dict({"mcpServers": task.mcpServers})
 
         agent = ClaudeMCPAgent(  # or OpenAIMCPAgent
             client=client,
@@ -44,8 +52,8 @@ async def main():
         )
 
         print(f"📋 Task: {task.prompt}")
-        print(f"⚙️  Setup: {task.setup}")
-        print(f"📊 Evaluate: {task.evaluate}")
+        print(f"⚙️  Setup: {task.setup_tool}")
+        print(f"📊 Evaluate: {task.evaluate_tool}")
 
         # Run the task
         print("🚀 Running the task...")

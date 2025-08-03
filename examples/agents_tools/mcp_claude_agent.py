@@ -2,11 +2,11 @@
 """Claude MCP agent example for HUD tools via HTTP."""
 
 import asyncio
-import os
 from dotenv import load_dotenv
 import hud
 from mcp_use import MCPClient
 from hud.mcp_agent import ClaudeMCPAgent
+from hud.settings import settings
 
 load_dotenv()
 
@@ -15,11 +15,6 @@ load_dotenv()
 # BASE_URL = "http://localhost:8041/mcp"
 
 # To run inside a docker container, see environments/simple_browser/README.md
-
-# To run on the cloud (IN DEVELOPMENT)
-BASE_URL = "http://localhost:8041/mcp"
-
-HUD_API_KEY = os.getenv("HUD_API_KEY")
 
 
 async def main():
@@ -30,9 +25,9 @@ async def main():
         config = {
             "mcpServers": {
                 "hud": {
-                    "url": f"{BASE_URL}/v3/mcp",
+                    "url": settings.mcp_url,
                     "headers": {  # This is how the cloud server is configured to work
-                        "Authorization": f"Bearer {HUD_API_KEY}",
+                        "Authorization": f"Bearer {settings.api_key}",
                         "Mcp-Image": "hudpython/hud-browser:latest",
                         "Run-Id": run_id,
                     },
@@ -67,5 +62,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    print(f"🚀 Connecting to MCP router at {BASE_URL}")
+    print(f"🚀 Connecting to MCP router")
     asyncio.run(main())

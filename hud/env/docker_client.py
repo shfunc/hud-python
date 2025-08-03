@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import toml
+
 
 from hud.env.client import Client
 from hud.types import EnvironmentStatus
@@ -97,6 +97,13 @@ class DockerClient(Client):
             raise FileNotFoundError(f"pyproject.toml not found in {source_path}")
 
         # validate package name
+        try:
+            import toml
+        except ImportError:
+            raise ImportError(
+                "toml is required for parsing pyproject.toml files. "
+                "Please install it with 'pip install toml'"
+            )
         pyproject_data = toml.load(pyproject_path)
         package_name = pyproject_data.get("project", {}).get("name")
         if not package_name:
@@ -241,6 +248,13 @@ class DockerClient(Client):
             or self._last_pyproject_toml_str != current_pyproject_content
         ):
             # Update package name if pyproject.toml changed
+            try:
+                import toml
+            except ImportError:
+                raise ImportError(
+                    "toml is required for parsing pyproject.toml files. "
+                    "Please install it with 'pip install toml'"
+                )
             pyproject_data = toml.loads(current_pyproject_content)
             self._package_name = pyproject_data.get("project", {}).get("name")
             if not self._package_name:

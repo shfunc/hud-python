@@ -18,7 +18,8 @@ Usage:
 import asyncio
 import logging
 from hud.mcp_agent import ClaudeMCPAgent
-from hud import Task
+from hud.task import TaskConfig
+from mcp.types import CallToolRequestParams as MCPToolCall
 from mcp_use import MCPClient
 
 # Setup logging
@@ -76,15 +77,15 @@ async def main():
         print("🎯 Example 2: Full Task Lifecycle")
         print("-" * 30)
 
-        task = Task(
+        task = TaskConfig(
             prompt="Add a new todo item called 'Test automated task' and mark it as completed",
-            setup={"function": "todo_seed", "args": {"num_items": 2}},
-            evaluate={"function": "todo_completed", "args": {"expected_count": 1}},
+            setup_tool=MCPToolCall(name="todo_seed", arguments={"num_items": 2}),
+            evaluate_tool=MCPToolCall(name="todo_completed", arguments={"expected_count": 1}),
         )
 
         print(f"📋 Task: {task.prompt}")
-        print(f"⚙️  Setup: {task.setup}")
-        print(f"📊 Evaluate: {task.evaluate}")
+        print(f"⚙️  Setup: {task.setup_tool}")
+        print(f"📊 Evaluate: {task.evaluate_tool}")
 
         eval_result = await agent.run(task)
         print(f"🎉 Task Result: {eval_result}")
@@ -103,9 +104,9 @@ async def main():
         print("\n🔧 Example 3: Setup-Only Task")
         print("-" * 30)
 
-        setup_task = Task(
+        setup_task = TaskConfig(
             prompt="Take a screenshot and count how many todo items are visible",
-            setup={"function": "todo_seed", "args": {"num_items": 5}},
+            setup_tool=MCPToolCall(name="todo_seed", arguments={"num_items": 5}),
             # No evaluate - will return success automatically
         )
 

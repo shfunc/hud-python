@@ -5,7 +5,6 @@ from pathlib import Path
 from string import Template
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-from inspect_ai.util._sandbox import SandboxEnvironmentSpec
 from mcp.types import CallToolRequestParams as MCPToolParams
 from pydantic import BaseModel, Field, field_validator
 
@@ -14,6 +13,7 @@ from hud.utils.common import FunctionConfig, FunctionConfigs
 
 if TYPE_CHECKING:
     from inspect_ai.dataset import Sample
+    from inspect_ai.util._sandbox import SandboxEnvironmentSpec
 
     from hud.agent import Agent
 
@@ -232,7 +232,7 @@ class Task(BaseModel):
                     image_or_build_context="ubuntu:latest",
                     location="local",
                 )
-            case SandboxEnvironmentSpec(type="docker", config=str()):
+            case sandbox if hasattr(sandbox, 'type') and hasattr(sandbox, 'config') and sandbox.type == "docker" and isinstance(sandbox.config, str):
                 # create temp dir and put dockerfile there, then use that path
                 temp_dir = tempfile.mkdtemp()
                 temp_dir_path = Path(temp_dir)
