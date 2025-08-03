@@ -246,6 +246,124 @@ docker run -d --rm -p 8080:8080 --name browser-debug hud-browser
 # Open http://localhost:8080/vnc.html
 ```
 
+## Using MCP Inspector
+
+The [MCP Inspector](https://modelcontextprotocol.io/legacy/tools/inspector) is an interactive developer tool for testing and debugging MCP servers. You can use it to test the simple_browser environment locally.
+
+### Installation
+The Inspector runs directly through `npx` without requiring installation:
+
+```bash
+# Make sure you have Node.js installed first
+npx @modelcontextprotocol/inspector --help
+```
+
+### Testing with MCP Inspector
+
+#### Option 1: Running with Docker (Recommended)
+```bash
+# From the simple_browser directory
+npx @modelcontextprotocol/inspector docker run --rm -i -p 8080:8080 -e LAUNCH_APPS=todo hud-browser
+```
+
+npx @modelcontextprotocol/inspector docker run --rm -i -e ANCHOR_API_KEY=sk-9b85fdbd2b497bf4def463cc3b69b44b hud-remote-browser
+
+#### Option 2: Running Python module directly
+```bash
+# First install the package locally
+cd environments/simple_browser
+pip install -e .
+
+# Then run with the Inspector
+npx @modelcontextprotocol/inspector python -m hud_controller
+```
+
+### Using the Inspector
+
+Once connected, the Inspector provides several interactive features:
+
+1. **Resources Tab**: View available resources like evaluators, setup tools, and problems
+   - Explore `/evaluators`, `/setup`, `/problems` resources
+   - Check their metadata and configurations
+
+2. **Tools Tab**: Test the available tools
+   - **setup**: Configure and initialize problems
+     ```json
+     {
+       "config": {
+         "name": "todo_basic_usage"
+       }
+     }
+     ```
+   - **evaluate**: Run evaluations
+     ```json
+     {
+       "config": {
+         "name": "todo_basic_usage"
+       }
+     }
+     ```
+   - **computer**: Perform browser automation actions
+     ```json
+     {
+       "action": "screenshot"
+     }
+     ```
+
+3. **Notifications Pane**: Monitor logs and server notifications
+   - View initialization progress
+   - See debug messages and errors
+   - Track tool execution results
+
+### Development Workflow with Inspector
+
+1. **Start Development**
+   - Launch Inspector with your server
+   - Verify tools are properly registered
+   - Check that resources are available
+
+2. **Test Setup and Evaluation**
+   - Use the setup tool to initialize a problem
+   - Take screenshots to verify the browser state
+   - Run evaluations to test your evaluation logic
+   - Monitor logs for any issues
+
+3. **Test Browser Automation**
+   - Use the computer tool for actions like:
+     - `screenshot` - Capture current state
+     - `left_click` - Click at coordinates
+     - `type` - Enter text
+     - `key` - Press keyboard keys
+   - Verify actions work as expected
+
+4. **Debug Issues**
+   - Check the Notifications pane for errors
+   - Verify services are running (X11, VNC)
+   - Ensure apps are launched properly
+   - Test evaluation API endpoints directly
+
+### Example Testing Session
+
+```bash
+# 1. Start the Inspector with the simple_browser
+npx @modelcontextprotocol/inspector docker run --rm -i -p 8080:8080 -e LAUNCH_APPS=todo hud-browser
+
+# 2. In the Inspector UI:
+# - Go to Tools tab
+# - Test setup tool with: {"config": {"name": "todo_basic_usage"}}
+# - Test computer tool with: {"action": "screenshot"}
+# - Test evaluate tool with: {"config": {"name": "todo_basic_usage"}}
+
+# 3. Monitor the Notifications pane for progress and results
+```
+
+The Inspector is particularly useful for:
+- Verifying your MCP server implementation
+- Testing tool schemas and responses
+- Debugging evaluation logic
+- Understanding the server's resource structure
+- Monitoring real-time logs and notifications
+
 ## Extending to New Environments
 
 When creating new MCP environments:
