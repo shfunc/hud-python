@@ -9,27 +9,22 @@ authors = [
 ]
 license = { file = "LICENSE" }
 dependencies = [
+    # Core v3 dependencies
     "httpx>=0.23.0,<1",
     "pydantic>=2,<3",
     "pydantic-settings>=2,<3",
-    "textdistance>=4.5.0,<5",
-    "inspect-ai>=0.3.80",
-    "aiodocker>=0.24.0",
-    "toml>=0.10.2",
-    "pillow>=11.1.0",
-    "numpy",
-    "ipykernel",
+    "mcp==1.12.2",
+    "mcp-use>=1.3.7",
+    "pathspec>=0.12.1",
+    "wrapt>=1.14.0",
+    # MCP agent dependencies
     "anthropic",
     "openai",
     "langchain",
     "langchain-openai",
     "langchain-anthropic",
-    "mcp==1.12.2",
-    "wrapt>=1.14.0",
+    # Common utilities
     "dotenv>=0.9.9",
-    "pathspec>=0.12.1",
-    "mcp-use>=1.3.7",
-    "pyautogui>=0.9.54",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -64,8 +59,7 @@ packages = ["hud"]
 # but not in the wheel (binary distribution)
 [tool.hatch.envs.examples]
 dependencies = [
-  "ipykernel",
-  "jupyter",
+  # All example dependencies are now in core
 ]
 
 [dependency-groups]
@@ -84,9 +78,24 @@ dev = [
     "anthropic",
     "dotenv",
     "pytest-cov",
+    "distutils",
+    "setuptools",
 ]
 
 [project.optional-dependencies]
+# Legacy v2 dependencies for backward compatibility
+v2 = [
+    "textdistance>=4.5.0,<5",
+    "inspect-ai>=0.3.80",
+    "aiodocker>=0.24.0",
+    "toml>=0.10.2",
+    "pillow>=11.1.0",
+    "numpy",
+    "ipykernel",
+    "pyautogui>=0.9.54",
+]
+
+# Development dependencies
 dev = [
     "ruff ==0.11.8",
     "pytest >=8.1.1,<9",
