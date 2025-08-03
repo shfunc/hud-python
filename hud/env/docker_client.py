@@ -8,8 +8,6 @@ import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-
-
 from hud.env.client import Client
 from hud.types import EnvironmentStatus
 from hud.utils.common import _compile_pathspec, directory_to_tar_bytes
@@ -103,7 +101,7 @@ class DockerClient(Client):
             raise ImportError(
                 "toml is required for parsing pyproject.toml files. "
                 "Please install it with 'pip install toml'"
-            )
+            ) from None
         pyproject_data = toml.load(pyproject_path)
         package_name = pyproject_data.get("project", {}).get("name")
         if not package_name:
@@ -254,7 +252,7 @@ class DockerClient(Client):
                 raise ImportError(
                     "toml is required for parsing pyproject.toml files. "
                     "Please install it with 'pip install toml'"
-                )
+                ) from None
             pyproject_data = toml.loads(current_pyproject_content)
             self._package_name = pyproject_data.get("project", {}).get("name")
             if not self._package_name:

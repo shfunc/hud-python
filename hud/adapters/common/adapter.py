@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     import numpy as np
     from PIL import Image
     from typing_extensions import TypeIs
+
     ImageType: TypeAlias = np.ndarray[Any, Any] | Image.Image | str | None
 else:
     ImageType: TypeAlias = Any | str | None
@@ -77,8 +78,8 @@ class Adapter:
             raise ImportError(
                 "PIL (Pillow) is required for image processing. "
                 "Please install it with 'pip install Pillow'"
-            )
-        
+            ) from None
+
         # Handle different input types.
         if _is_numpy_array(observation):
             # Convert numpy array to PIL Image
