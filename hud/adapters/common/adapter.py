@@ -3,15 +3,16 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, TypeAlias
 
 import numpy as np
-from PIL import Image
 from pydantic import TypeAdapter, ValidationError
 
 from .types import CLA
 
 if TYPE_CHECKING:
     from typing_extensions import TypeIs
-
-ImageType: TypeAlias = np.ndarray[Any, Any] | Image.Image | str | None
+    from PIL import Image
+    ImageType: TypeAlias = np.ndarray[Any, Any] | Image.Image | str | None
+else:
+    ImageType: TypeAlias = np.ndarray[Any, Any] | Any | str | None
 
 
 def _is_numpy_array(observation: Any) -> TypeIs[np.ndarray]:
@@ -69,6 +70,15 @@ class Adapter:
         if observation is None:
             return None
 
+        # Import PIL only when needed
+        try:
+            from PIL import Image
+        except ImportError:
+            raise ImportError(
+                "PIL (Pillow) is required for image processing. "
+                "Please install it with 'pip install Pillow'"
+            )
+        
         # Handle different input types.
         if _is_numpy_array(observation):
             # Convert numpy array to PIL Image
