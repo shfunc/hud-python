@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import datetime
 
-from IPython.display import HTML, Markdown, display
 from pydantic import BaseModel, Field
 
 from .adapters.common.types import LogType
@@ -30,6 +29,11 @@ class Trajectory(BaseModel):
     trajectory: list[TrajectoryStep] = Field(default_factory=list)
 
     def display(self) -> None:
+        try:
+            from IPython.display import HTML, Markdown, display
+        except ImportError:
+            raise ImportError("IPython is required for trajectory display") from None
+        
         trajectory_start_timestamp_str = self.trajectory[0].start_timestamp
         t_start_dt = (
             datetime.datetime.fromisoformat(trajectory_start_timestamp_str.replace("Z", "+00:00"))
