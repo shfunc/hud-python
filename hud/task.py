@@ -39,7 +39,7 @@ class TaskConfig(BaseModel):
 
     id: str | None = None
     prompt: str
-    mcpServers: dict[str, Any]
+    mcpServers: dict[str, Any] | None = None
     setup_tool: MCPToolParams | None = None
     evaluate_tool: MCPToolParams | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
