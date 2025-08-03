@@ -145,7 +145,7 @@ class PlaywrightTool:
         """Ensure browser is launched and ready."""
         if self._browser is None or not self._browser.is_connected():
             if self._cdp_url:
-                logger.info(f"Connecting to remote browser via CDP: {self._cdp_url}")
+                logger.info("Connecting to remote browser via CDP: %s", self._cdp_url)
             else:
                 logger.info("Launching Playwright browser...")
 
@@ -167,10 +167,10 @@ class PlaywrightTool:
             if self._cdp_url:
                 # Connect to remote browser via CDP
                 self._browser = await self._playwright.chromium.connect_over_cdp(self._cdp_url)
-                
+
                 if self._browser is None:
                     raise RuntimeError("Failed to connect to remote browser")
-                
+
                 # Use existing context or create new one
                 contexts = self._browser.contexts
                 if contexts:

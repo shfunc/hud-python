@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
+from string import Template
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from inspect_ai.util._sandbox import SandboxEnvironmentSpec
-from pydantic import BaseModel, Field
+from mcp.types import CallToolRequestParams as MCPToolParams
+from pydantic import BaseModel, Field, field_validator
 
 from hud.types import CustomGym, Gym, MetadataKeys, SensitiveData
 from hud.utils.common import FunctionConfig, FunctionConfigs
@@ -14,6 +16,71 @@ if TYPE_CHECKING:
     from inspect_ai.dataset import Sample
 
     from hud.agent import Agent
+
+
+class TaskConfig(BaseModel):
+    """
+    A task configuration that can be used to create a task.
+
+    The mcpServers field supports environment variable substitution using
+    template placeholders in the format ${VAR_NAME} or ${VAR_NAME:default_value}.
+
+    Example:
+        mcpServers: {
+            "hud": {
+                "url": "${HUD_MCP_URL:https://mcp.hud.so/v3/mcp}",
+                "headers": {
+                    "Authorization": "Bearer ${HUD_API_KEY}",
+                    "Run-Id": "${RUN_ID}"
+                }
+            }
+        }
+    """
+
+    id: str | None = None
+    prompt: str
+    mcpServers: dict[str, Any]
+    setup_tool: MCPToolParams | None = None
+    evaluate_tool: MCPToolParams | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("mcpServers", mode="before")
+    @classmethod
+    def resolve_env_vars(cls, v: dict[str, Any]) -> dict[str, Any]:
+        """
+        Automatically resolve environment variables in mcpServers using Template.
+
+        Supports ${VAR_NAME} syntax with variable substitution from:
+        1. System environment variables (including HUD_API_KEY, etc.)
+        2. Runtime context variables (e.g., RUN_ID from telemetry context)
+
+        Missing variables resolve to empty strings.
+        """
+        import os
+
+        from hud.telemetry.context import get_current_task_run_id
+
+        # Start with current environment variables
+        mapping = dict(os.environ)
+
+        # Add runtime context variables if available
+        run_id = get_current_task_run_id()
+        if run_id:
+            mapping["RUN_ID"] = run_id
+
+        def substitute_in_value(obj: Any) -> Any:
+            """Recursively substitute variables in nested structures."""
+            if isinstance(obj, str):
+                # Use Template's safe_substitute - missing vars become empty strings
+                return Template(obj).safe_substitute(mapping)
+            elif isinstance(obj, dict):
+                return {k: substitute_in_value(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [substitute_in_value(item) for item in obj]
+            else:
+                return obj
+
+        return substitute_in_value(v)
 
 
 def convert_inspect_setup(setup: str) -> list[FunctionConfig]:

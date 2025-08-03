@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .base import ToolError, ToolResult, tool_result_to_content_blocks
 from .bash import BashTool
@@ -25,9 +25,10 @@ __all__ = [
 ]
 
 
-def __getattr__(name):
+def __getattr__(name: str) -> Any:
     """Lazy import computer tools to avoid importing pyautogui unless needed."""
     if name in ("AnthropicComputerTool", "HudComputerTool", "OpenAIComputerTool"):
         from . import computer
+
         return getattr(computer, name)
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
