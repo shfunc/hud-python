@@ -8,10 +8,12 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 import mcp.types as types
+from mcp.types import CallToolRequestParams as MCPToolCall
+from mcp.types import CallToolResult
 from mcp_use import MCPClient
 
 if TYPE_CHECKING:
-    from hud.task import Task
+    from hud.task import TaskConfig
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +36,7 @@ class BaseMCPAgent(ABC):
         max_screenshot_history: int = 3,
         append_tool_system_prompt: bool = True,
         custom_system_prompt: str | None = None,
-        lifecycle_tools: dict[str, str] | None = None,
+        lifecycle_tools: list[str] | None = None,
     ) -> None:
         """
         Initialize the base MCP agent.
@@ -47,11 +49,7 @@ class BaseMCPAgent(ABC):
             max_screenshot_history: Maximum number of screenshots to keep in context
             append_tool_system_prompt: Whether to append available tools to system prompt
             custom_system_prompt: Custom system prompt to use
-            lifecycle_tools: Dict mapping lifecycle phases to tool names. Default:
-                {
-                    "setup": "setup",      # Setup phase tool
-                    "evaluate": "evaluate"  # Evaluation phase tool
-                }
+            lifecycle_tools: List of tool names to use for lifecycle tools
         """
         self.client = client
         self.allowed_tools = allowed_tools
@@ -61,9 +59,7 @@ class BaseMCPAgent(ABC):
         self.append_tool_system_prompt = append_tool_system_prompt
         self.custom_system_prompt = custom_system_prompt
 
-        # Default lifecycle tool mapping
-        default_lifecycle = {"setup": "setup", "evaluate": "evaluate"}
-        self.lifecycle_tools = {**default_lifecycle, **(lifecycle_tools or {})}
+        self.lifecycle_tools = lifecycle_tools or []
 
         self._available_tools: list[types.Tool] = []
         self._tool_map: dict[str, tuple[str, types.Tool]] = {}
@@ -112,7 +108,7 @@ class BaseMCPAgent(ABC):
 
                 for tool in tools_result.tools:
                     # Always include lifecycle tools for framework use
-                    is_lifecycle_tool = tool.name in self.lifecycle_tools.values()
+                    is_lifecycle_tool = tool.name in self.lifecycle_tools
 
                     # Apply filtering (but always allow lifecycle tools)
                     if not is_lifecycle_tool:
@@ -129,7 +125,7 @@ class BaseMCPAgent(ABC):
                 logger.error("Failed to list tools from server %s: %s", server_name, e)
 
         # Separate lifecycle tools from regular tools for clearer logging
-        lifecycle_tool_names = list(self.lifecycle_tools.values())
+        lifecycle_tool_names = self.lifecycle_tools
         regular_tools = [
             t.name for t in self._available_tools if t.name not in lifecycle_tool_names
         ]
@@ -150,7 +146,7 @@ class BaseMCPAgent(ABC):
 
     def get_available_tools(self) -> list[types.Tool]:
         """Get list of available MCP tools for LLM use (excludes lifecycle tools)."""
-        lifecycle_tool_names = list(self.lifecycle_tools.values())
+        lifecycle_tool_names = self.lifecycle_tools
         return [tool for tool in self._available_tools if tool.name not in lifecycle_tool_names]
 
     def get_tool_map(self) -> dict[str, tuple[str, types.Tool]]:
@@ -201,7 +197,7 @@ class BaseMCPAgent(ABC):
 
         return base_prompt
 
-    async def call_tool(self, tool_call: dict[str, Any]) -> types.CallToolResult:
+    async def call_tool(self, tool_call: MCPToolCall) -> CallToolResult:
         """
         Call a tool through the MCP client.
 
@@ -211,11 +207,11 @@ class BaseMCPAgent(ABC):
         Returns:
             The raw MCP CallToolResult
         """
-        tool_name = tool_call.get("name")
+        tool_name = tool_call.name
         if not tool_name:
             raise ValueError("Tool call must have a 'name' field")
 
-        tool_args = tool_call.get("arguments", {})
+        tool_args = tool_call.arguments
 
         if tool_name not in self._tool_map:
             raise ValueError(f"Tool '{tool_name}' not found or not allowed")
@@ -255,7 +251,7 @@ class BaseMCPAgent(ABC):
         schemas = []
         for tool in self._available_tools:
             # Filter out lifecycle tools from LLM conversation
-            if tool.name in self.lifecycle_tools.values():
+            if tool.name in self.lifecycle_tools:
                 continue
 
             schema = {
@@ -285,9 +281,9 @@ class BaseMCPAgent(ABC):
                 try:
                     # Different tools have different APIs
                     if tool_name == "computer_openai":
-                        tool_call = {"name": tool_name, "arguments": {"type": "screenshot"}}
+                        tool_call = MCPToolCall(name=tool_name, arguments={"type": "screenshot"})
                     else:
-                        tool_call = {"name": tool_name, "arguments": {"action": "screenshot"}}
+                        tool_call = MCPToolCall(name=tool_name, arguments={"action": "screenshot"})
 
                     result = await self.call_tool(tool_call)
 
@@ -384,7 +380,7 @@ class BaseMCPAgent(ABC):
         }
 
     async def run(
-        self, prompt_or_task: str | Task, max_steps: int = 10, conversation_mode: bool = False
+        self, prompt_or_task: str | TaskConfig, max_steps: int = 10, conversation_mode: bool = False
     ) -> dict[str, Any]:
         """
         Run the agent with the given prompt or task.
@@ -399,13 +395,13 @@ class BaseMCPAgent(ABC):
             For Task objects: Evaluation result dict with 'reward', 'done', 'info' keys
         """
         # Import here to avoid circular imports
-        from hud.task import Task
+        from hud.task import TaskConfig
 
         if not self._available_tools:
             await self.initialize()
 
         # Handle Task objects with full lifecycle
-        if isinstance(prompt_or_task, Task):
+        if isinstance(prompt_or_task, TaskConfig):
             return await self._run_task(prompt_or_task, max_steps)
 
         # Handle simple string prompts (existing behavior)
@@ -413,9 +409,9 @@ class BaseMCPAgent(ABC):
             return await self._run_prompt(prompt_or_task, max_steps, conversation_mode)
 
         else:
-            raise TypeError(f"prompt_or_task must be str or Task, got {type(prompt_or_task)}")
+            raise TypeError(f"prompt_or_task must be str or TaskConfig, got {type(prompt_or_task)}")
 
-    async def _run_task(self, task: Task, max_steps: int = 10) -> dict[str, Any]:
+    async def _run_task(self, task: TaskConfig, max_steps: int = 10) -> dict[str, Any]:
         """
         Execute a task with setup and evaluate phases.
 
@@ -428,35 +424,22 @@ class BaseMCPAgent(ABC):
         """
         try:
             # Setup phase
-            if task.setup is not None:
-                setup_tool = self.lifecycle_tools.get("setup", "setup")
-                await self._call_tool_safe(setup_tool, task.setup)
+            if task.setup_tool is not None:
+                await self.call_tool(task.setup_tool)
 
             # Execute the task prompt
             await self._run_prompt(task.prompt, max_steps, conversation_mode=False)
 
             # Evaluate phase
-            if task.evaluate is not None:
-                evaluate_tool = self.lifecycle_tools.get("evaluate", "evaluate")
-                eval_result = await self._call_tool_safe(evaluate_tool, task.evaluate)
+            if task.evaluate_tool is not None:
+                eval_result = await self.call_tool(task.evaluate_tool)
 
                 # Return evaluation result if it's properly formatted
                 if (
-                    isinstance(eval_result, dict)
-                    and "reward" in eval_result
-                    and "done" in eval_result
+                    isinstance(eval_result, CallToolResult)
+                    and eval_result.structuredContent is not None
                 ):
-                    return eval_result
-                elif isinstance(eval_result, dict) and "grade" in eval_result:
-                    return {
-                        "reward": eval_result.get("grade", 0.0),
-                        "done": True,
-                        "info": {
-                            "error": eval_result.get("error"),
-                            "logs": eval_result.get("logs", ""),
-                            "original_result": eval_result,
-                        },
-                    }
+                    return eval_result.structuredContent
                 else:
                     # Fallback for invalid evaluation format
                     return {
@@ -475,54 +458,10 @@ class BaseMCPAgent(ABC):
         except Exception as e:
             return {"reward": 0.0, "done": True, "info": {"error": str(e)}}
 
-    async def _call_tool_safe(self, tool_name: str, arguments: Any) -> Any:
-        """
-        Safely call a tool and return its result.
-
-        Args:
-            tool_name: Name of the tool to call
-            arguments: Arguments to pass to the tool (config from task)
-
-        Returns:
-            Tool result or None if tool not available/failed
-        """
-        try:
-            if tool_name in self._tool_map:
-                tool_call = {"name": tool_name, "arguments": arguments}
-                result = await self.call_tool(tool_call)
-
-                if result.isError:
-                    logger.error("Tool %s returned error: %s", tool_name, result.content)
-                    return {"error": result.content}
-                else:
-                    # Extract content from MCP result
-                    if hasattr(result, "content") and result.content:
-                        if len(result.content) == 1:
-                            content_item = result.content[0]
-                            # Check if content_item is a text type
-                            if hasattr(content_item, "text") and hasattr(content_item, "type"):
-                                if getattr(content_item, "type", None) == "text":
-                                    # Try to parse as JSON if it looks like structured data
-                                    text = content_item.text  # type: ignore[reportAttributeAccessIssue]
-                                    if text.strip().startswith("{") and text.strip().endswith("}"):
-                                        try:
-                                            import json
-
-                                            return json.loads(text)
-                                        except json.JSONDecodeError:
-                                            return text
-                                    return text
-                            else:
-                                return content_item
-                        else:
-                            return result.content
-                    return result
-            else:
-                logger.warning("Tool %s not available", tool_name)
-                return None
-        except Exception as e:
-            logger.error("Failed to call tool %s: %s", tool_name, e)
-            return {"error": str(e)}
+    def _format_error_result(self, error_message: str) -> CallToolResult:
+        return CallToolResult(
+            content=[types.TextContent(text=error_message, type="text")], isError=True
+        )
 
     async def _run_prompt(
         self,
