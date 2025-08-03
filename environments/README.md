@@ -210,7 +210,7 @@ See `examples/agents_tools/simple_task_example.py` and `examples/environments/gm
 
 ## Phase 4 – Remote Deployment & HUD Runner
 
-**Goal →** the exact same image runs on *app.hud.so* and exposes `telemetry://live` so the platform can visualise resource usage.
+**Goal →** the exact same image runs in parallel on hundreds of instances, and exposes more telemetry so the app.hud.so can visualise the whole lifecycle.
 
 ### 1. Publish your image
 
@@ -272,7 +272,7 @@ Those messages are displayed live on app.hud.so alongside resource graphs – pe
 
 ### 4. Live telemetry (`telemetry://live`) (Optional)
 
-Expose a resource named `telemetry://live` exactly like in `environments/simple_browser/src/hud_controller/server.py`.  HUD polls it every few seconds and overlays the values on the run page.
+Expose a resource named `telemetry://live` exactly like in `environments/simple_browser/src/hud_controller/server.py` to return live url to be displayed on app.hud.so.
 
 Once all of the above works you can unleash *hundreds* of concurrent agents on your new environment.
 
@@ -280,7 +280,7 @@ Once all of the above works you can unleash *hundreds* of concurrent agents on y
 
 ## Phase 5 – Automated Iteration with *cursor-mcp*
 
-[`cursor-mcp`](https://github.com/hud-evals/cursor-mcp) turns the edit → build → restart → test loop into a single key-press and adds a *Cursor Agent* that can drive the whole workflow for you. The agent reads the MCP spec, your code, and the live server state, then proposes fixes or new tests – it’s like having an autonomous pair-programmer focused purely on environment quality.
+[`cursor-mcp`](https://github.com/hud-evals/cursor-mcp) turns the edit → build → restart → test loop into a single key-press and adds tools to Cursor Agent that can drive the whole workflow for you. The agent reads the MCP spec, your code, and the live server state, then proposes fixes or new tests on its own. It then has access to the MCP tools the environment provides, enabling it to test all functionality, which completes the iteration loop.
 
 1. Add an entry to `.cursor/mcp.json`:
 
@@ -299,8 +299,8 @@ Once all of the above works you can unleash *hundreds* of concurrent agents on y
 }
 ```
 
-2. Follow the **`@mcp_environment_iteration`** rule: rebuild, refresh, test, reflect, repeat.
-3. Keep the Inspector open – it updates instantly after each refresh.
+2. Follow the cursor rules below: rebuild, refresh, test, reflect, repeat.
+3. Keep the agent open for any messages or issues.
 
 ### Cursor rules – paste this once
 
@@ -311,8 +311,6 @@ Inside `.cursor/rules/mcp_environment_iteration.mdc` add (or verify) the followi
 description: When making an environment that launches and MCP server this is the iteration loop
 alwaysApply: false
 ---
-When making an environment that launches and MCP server this is the iteration loop:
-
 Setting up (also refer to environments/README.md):
 1. Follow each environment's README.md or any other steps to set it up for the MCP server to be able to directly launch it (such as building the dockerfile)
 2. Run local tests to make sure the initialize without immediate errors and stays alive until properly closed. If the server crashes within the first few seconds then the manager will not pick up on it. In this case please go back and either debug the docker run directly, or the mcp server by piping an initialization request.
@@ -333,7 +331,7 @@ In general:
 2. If at any point the docker build starts breaking on initialize, return to setting up properly 
 ```
 
-The result: sub-minute turnaround times even for complex GUI environments.
+The result: fast, autonomous turnaround times even for complex GUI environments.
 
 ---
 
