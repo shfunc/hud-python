@@ -78,7 +78,6 @@ dev = [
     "anthropic",
     "dotenv",
     "pytest-cov",
-    "distutils",
     "setuptools",
 ]
 
