@@ -454,9 +454,10 @@ def flush(timeout: float = 10.0) -> None:
             time.sleep(0.1)
             # _export_task_async is set to None by _process_export_queue_async upon its exit.
         if _export_task_async is not None:
-            logger.warning(
-                "Telemetry processing task did not clear itself after sentinel. May still be "
-                "running or stuck."
+            # This is often a false positive due to race conditions during shutdown
+            logger.debug(
+                "Telemetry processing task did not clear itself after sentinel. "
+                "This is normal during shutdown."
             )
         else:
             logger.debug("Telemetry processing task appears to have completed after sentinel.")
