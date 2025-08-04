@@ -62,8 +62,8 @@ async def run_eval():
         mcp_config=task.mcp_config
     )
     
-    try:
-        with hud.trace("test-claude"): # Trace the agent execution
+    with hud.trace("test-claude"): # Trace the agent execution
+        try:
             # Create agent
             agent = ClaudeMCPAgent(
                 client=client,
@@ -80,6 +80,7 @@ async def run_eval():
             # Create initial messages
             messages = await agent.create_initial_messages(task.prompt, None)
 
+            done = False
             # Run the agent
             max_steps = 45
             for step in range(max_steps):
@@ -96,18 +97,22 @@ async def run_eval():
                         print(f"Using tool: {tool_call.name} with args {tool_call.arguments}")
                         tool_result = await agent.call_tool(tool_call)
                         tool_results.append(tool_result)
+                else:
+                    print("No tool calls, done")
+                    done = True
 
                 # Format tool results for the model for the next step
                 tool_messages = await agent.format_tool_results(response.tool_calls, tool_results)
                 messages.extend(tool_messages)
-                
+                if done:
+                    break
 
             # Evaluate the task
             eval_result = await agent.call_tool(task.evaluate_tool)
             print(f"Evaluation result: {eval_result}")
-    finally:
-        # Always close the MCP client
-        await client.close()
+        finally:
+            # Always close the MCP client
+            await client.close()
 
 
 if __name__ == "__main__":
