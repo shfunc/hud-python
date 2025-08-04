@@ -54,7 +54,8 @@ _export_lock_async = asyncio.Lock()  # Async lock for the async queue
 _export_task_async: asyncio.Task | None = None  # Async task for processing the queue
 
 # --- Constants ---
-EXPORT_INTERVAL = 5.0  # seconds
+EXPORT_INTERVAL = 5.0  # seconds - delay between non-incremental exports
+MIN_EXPORT_INTERVAL = 0.1  # seconds - minimum delay between any exports to avoid overwhelming
 # MAX_BATCH_SIZE removed as we send one trace payload at a time
 
 
@@ -281,11 +282,18 @@ async def _process_export_queue_async() -> None:
 
             if isinstance(payload_to_process, dict):  # Ensure it's a dict before processing as such
                 await _export_trace_payload_async(payload_to_process)
+                
+                # Apply appropriate delay based on export type
+                is_incremental = payload_to_process.get("attributes", {}).get("incremental", False)
+                if is_incremental:
+                    # Small delay for incremental exports to avoid overwhelming the server
+                    await asyncio.sleep(MIN_EXPORT_INTERVAL)
+                else:
+                    # Longer delay for final exports
+                    await asyncio.sleep(EXPORT_INTERVAL)
             else:
                 # Should not happen if only dicts and sentinel are queued
                 logger.warning("Unexpected item in telemetry queue: %s", type(payload_to_process))
-
-            await asyncio.sleep(EXPORT_INTERVAL)
 
     except asyncio.CancelledError:
         logger.debug("Async telemetry export processing task cancelled.")
