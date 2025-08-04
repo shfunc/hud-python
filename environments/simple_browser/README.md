@@ -44,7 +44,7 @@ import hud
 from mcp_use import MCPClient
 from hud.mcp import ClaudeMCPAgent
 
-BASE_URL = "https://orchestrator-v3.up.railway.app"
+BASE_URL = "https://mcp.hud.so"
 HUD_API_KEY = os.getenv("HUD_API_KEY")
 
 async def main():
