@@ -238,7 +238,18 @@ def trace_open(
                 )
                 logger.debug("Updated task run %s status to COMPLETED with metadata", task_run_id)
             
-            submit_to_worker_loop(coro)
+            # Wait for the status update to complete
+            future = submit_to_worker_loop(coro)
+            if future:
+                try:
+                    # Wait up to 5 seconds for the status update
+                    import concurrent.futures
+                    future.result(timeout=5.0)
+                    logger.debug("Status update completed successfully")
+                except concurrent.futures.TimeoutError:
+                    logger.warning("Timeout waiting for status update to complete")
+                except Exception as e:
+                    logger.error("Error waiting for status update: %s", e)
 
         # Export any remaining records before flushing
         if is_root:

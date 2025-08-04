@@ -84,7 +84,7 @@ class MCPClient:
             logger.error(f"Failed to create sessions: {e}")
             if self.verbose:
                 logger.info("Attempting to check Docker container status...")
-                await self._check_docker_containers()
+                # await self._check_docker_containers()
             raise
         
         # Log session details in verbose mode
@@ -302,79 +302,6 @@ class MCPClient:
         """Get all active sessions (compatibility method)."""
         return self._sessions
     
-    async def _check_docker_containers(self) -> None:
-        """Check Docker container status for debugging."""
-        import subprocess
-        import sys
-        
-        try:
-            # List all containers
-            logger.info("Checking Docker containers...")
-            result = subprocess.run(
-                ["docker", "ps", "-a", "--format", "table {{.Names}}\t{{.Status}}\t{{.Image}}"],
-                capture_output=True,
-                text=True,
-                shell=True if sys.platform == "win32" else False
-            )
-            if result.stdout:
-                logger.info("Docker containers:\n" + result.stdout)
-            
-            # Try to get logs from recently exited containers
-            logger.info("Checking recent container logs...")
-            # Get container IDs that exited in the last hour and contain 'hud' in name
-            result = subprocess.run(
-                ["docker", "ps", "-a", "--filter", "status=exited", "--format", "{{.ID}} {{.Names}} {{.Status}}"],
-                capture_output=True,
-                text=True,
-                shell=True if sys.platform == "win32" else False
-            )
-            
-            if result.stdout:
-                import re
-                from datetime import datetime, timedelta
-                
-                containers_checked = 0
-                max_containers = 5  # Limit to avoid spam
-                one_hour_ago = datetime.now() - timedelta(hours=1)
-                
-                for line in result.stdout.strip().split('\n'):
-                    if line and containers_checked < max_containers:
-                        parts = line.split()
-                        if len(parts) >= 2:
-                            container_id = parts[0]
-                            container_name = parts[1]
-                            
-                            # Skip if not a hud-related container
-                            if 'hud' not in container_name.lower():
-                                continue
-                            
-                            # Try to parse exit time from status
-                            status = ' '.join(parts[2:])
-                            # Look for patterns like "Exited (0) 2 hours ago" or "Exited (1) 10 days ago"
-                            time_match = re.search(r'Exited.*?(\d+)\s+(second|minute|hour|day|week|month)s?\s+ago', status)
-                            if time_match:
-                                value = int(time_match.group(1))
-                                unit = time_match.group(2)
-                                
-                                # Skip if older than 1 hour
-                                if unit in ['day', 'week', 'month'] or (unit == 'hour' and value > 1):
-                                    continue
-                            
-                            containers_checked += 1
-                            logger.info(f"\nLogs from container {container_name} ({container_id}) - {status}:")
-                            logs_result = subprocess.run(
-                                ["docker", "logs", "--tail", "20", container_id],
-                                capture_output=True,
-                                text=True,
-                                shell=True if sys.platform == "win32" else False
-                            )
-                            if logs_result.stdout:
-                                logger.info(logs_result.stdout)
-                            if logs_result.stderr:
-                                logger.error(logs_result.stderr)
-                            
-        except Exception as e:
-            logger.error(f"Failed to check Docker containers: {e}")
 
     async def close(self) -> None:
         """Close all active sessions."""
