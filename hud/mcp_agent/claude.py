@@ -17,6 +17,8 @@ if TYPE_CHECKING:
         BetaToolResultBlockParam,
     )
 
+    from hud.task import TaskConfig
+
 from hud.settings import settings
 
 from .base import BaseMCPAgent
@@ -93,9 +95,9 @@ class ClaudeMCPAgent(BaseMCPAgent):
         # Track mapping from Claude tool names to MCP tool names
         self._claude_to_mcp_tool_map: dict[str, str] = {}
 
-    async def initialize(self) -> None:
+    async def initialize(self, task: str | TaskConfig | None = None) -> None:
         """Initialize the agent and build tool mappings."""
-        await super().initialize()
+        await super().initialize(task)
         # Build tool mappings after tools are discovered
         self._convert_tools_for_claude()
 
@@ -282,7 +284,7 @@ class ClaudeMCPAgent(BaseMCPAgent):
                 }
                 # Map Claude's "computer" back to the actual MCP tool name
                 self._claude_to_mcp_tool_map["computer"] = tool.name
-            else:
+            elif tool.name not in self.lifecycle_tools:
                 # Convert regular tools
                 claude_tool = {
                     "name": tool.name,
@@ -295,6 +297,8 @@ class ClaudeMCPAgent(BaseMCPAgent):
                 }
                 # Direct mapping for non-computer tools
                 self._claude_to_mcp_tool_map[tool.name] = tool.name
+            else:
+                continue
 
             claude_tools.append(claude_tool)
 

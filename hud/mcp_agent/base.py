@@ -68,7 +68,7 @@ class BaseMCPAgent(ABC):
         if client is None:
             self.client = MCPClient()
 
-    async def initialize(self) -> None:
+    async def initialize(self, task: str | TaskConfig | None = None) -> None:
         """Initialize the agent and discover available tools."""
         # Get existing sessions or create new ones
         if self.client is None:
@@ -85,6 +85,15 @@ class BaseMCPAgent(ABC):
         # Discover tools from all servers
         self._available_tools = []
         self._tool_map = {}
+
+        # If task is provided, use it to initialize the agent
+        from hud.task import TaskConfig
+
+        if isinstance(task, TaskConfig):
+            if task.setup_tool:
+                self.lifecycle_tools.append(task.setup_tool.name)
+            if task.evaluate_tool:
+                self.lifecycle_tools.append(task.evaluate_tool.name)
 
         for server_name, session in sessions.items():
             try:
@@ -213,12 +222,12 @@ class BaseMCPAgent(ABC):
 
         tool_args = tool_call.arguments
 
-        if tool_name not in self._tool_map:
+        if tool_name not in self._tool_map and tool_name not in self.lifecycle_tools:
             raise ValueError(f"Tool '{tool_name}' not found or not allowed")
 
         if self.client is None:
             raise ValueError("Client is not initialized")
-
+        
         server_name, tool = self._tool_map[tool_name]
         session = self.client.get_session(server_name)
 
@@ -398,7 +407,7 @@ class BaseMCPAgent(ABC):
         from hud.task import TaskConfig
 
         if not self._available_tools:
-            await self.initialize()
+            await self.initialize(prompt_or_task)
 
         # Handle Task objects with full lifecycle
         if isinstance(prompt_or_task, TaskConfig):
@@ -555,7 +564,12 @@ class BaseMCPAgent(ABC):
                         if not tool_call.get("name"):
                             continue
                         try:
-                            result = await self.call_tool(tool_call)
+                            # Convert dict to MCPToolCall object
+                            mcp_tool_call = MCPToolCall(
+                                name=tool_call["name"],
+                                arguments=tool_call.get("arguments", {})
+                            )
+                            result = await self.call_tool(mcp_tool_call)
                             tool_results.append(
                                 {
                                     "tool_name": tool_call["name"],

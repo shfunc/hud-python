@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures  # For run_coroutine_threadsafe return type
+import enum
 import json
 import logging
 import threading
@@ -13,6 +14,7 @@ if TYPE_CHECKING:
     from collections.abc import Coroutine
 
 import httpx
+from pydantic import BaseModel
 
 from hud.settings import settings
 
@@ -24,6 +26,20 @@ from hud.telemetry.mcp_models import (  # MCPResponseCall for isinstance check
 )
 
 logger = logging.getLogger("hud.telemetry")
+
+# --- Task Run Status Models ---
+class TaskRunStatus(enum.StrEnum):
+    INITIALIZING = "initializing"
+    RUNNING = "running"
+    EVALUATING = "evaluating"
+    COMPLETED = "completed"
+    ERROR = "error"
+
+class TaskRunStatusUpdateRequest(BaseModel):
+    """Request model for updating task run status."""
+    status: TaskRunStatus
+    error_message: str | None = None  # Optional error message if status is ERROR
+    metadata: dict[str, Any] | None = None  # Optional metadata for context
 
 # --- Worker Thread and Event Loop Management ---
 _worker_thread: threading.Thread | None = None
@@ -338,6 +354,62 @@ async def send_telemetry_to_server(task_run_id: str, data: dict[str, Any]) -> No
                 )
     except Exception as e:
         logger.exception("Error exporting telemetry for task run %s: %s", task_run_id, e)
+
+
+async def update_task_run_status(
+    task_run_id: str, 
+    status: TaskRunStatus, 
+    error_message: str | None = None,
+    metadata: dict[str, Any] | None = None
+) -> None:
+    """Update the status of a task run."""
+    if not settings.telemetry_enabled:
+        logger.debug("Status update skipped - telemetry not enabled")
+        return
+        
+    status_url = f"{settings.base_url}/v2/task_runs/{task_run_id}/status"
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {settings.api_key}",
+            }
+            
+            request_data = TaskRunStatusUpdateRequest(
+                status=status,
+                error_message=error_message,
+                metadata=metadata
+            )
+            
+            logger.debug(
+                "Updating status for task run %s to %s",
+                task_run_id,
+                status,
+            )
+            
+            response = await client.post(
+                status_url,
+                json=request_data.model_dump(exclude_none=True),
+                headers=headers,
+                timeout=10.0,
+            )
+            
+            if response.status_code >= 200 and response.status_code < 300:
+                logger.debug(
+                    "Successfully updated status for task run %s to %s",
+                    task_run_id,
+                    status,
+                )
+            else:
+                logger.warning(
+                    "Failed to update status for task run %s: HTTP %s - %s",
+                    task_run_id,
+                    response.status_code,
+                    response.text,
+                )
+    except Exception as e:
+        logger.exception("Error updating status for task run %s: %s", task_run_id, e)
 
 
 # --- Public Shutdown Function ---

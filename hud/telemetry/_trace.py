@@ -91,8 +91,26 @@ def trace_open(
     is_root = previous_task_id is None
     is_root_trace.set(is_root)
 
+    # Update status to initializing for root traces
+    if is_root:
+        from hud.telemetry.exporter import TaskRunStatus, submit_to_worker_loop, update_task_run_status
+        # Include metadata in the initial status update
+        initial_metadata = local_attributes.copy()
+        initial_metadata["is_root_trace"] = is_root
+        
+        coro = update_task_run_status(task_run_id, TaskRunStatus.INITIALIZING, metadata=initial_metadata)
+        submit_to_worker_loop(coro)
+        logger.debug("Updated task run %s status to INITIALIZING with metadata", task_run_id)
+
+    error_occurred = False
+    error_message = None
+    
     try:
         yield task_run_id
+    except Exception as e:
+        error_occurred = True
+        error_message = str(e)
+        raise
     finally:
         end_time = time.time()
         duration = end_time - start_time
@@ -101,18 +119,34 @@ def trace_open(
 
         logger.debug("Finishing trace %s after %.2f seconds", task_run_id, duration)
 
+        # Update status for root traces
+        if is_root:
+            from hud.telemetry.exporter import TaskRunStatus, submit_to_worker_loop, update_task_run_status
+            
+            # Include final metadata with duration
+            final_metadata = local_attributes.copy()
+            
+            if error_occurred:
+                coro = update_task_run_status(
+                    task_run_id, TaskRunStatus.ERROR, error_message, metadata=final_metadata
+                )
+                logger.debug("Updated task run %s status to ERROR: %s", task_run_id, error_message)
+            else:
+                coro = update_task_run_status(
+                    task_run_id, TaskRunStatus.COMPLETED, metadata=final_metadata
+                )
+                logger.debug("Updated task run %s status to COMPLETED with metadata", task_run_id)
+            
+            submit_to_worker_loop(coro)
+
+        # Export any remaining records before flushing
+        if is_root:
+            from hud.telemetry.context import export_incremental
+            export_incremental()
+        
         # Always flush the buffer for the current task
         mcp_calls = flush_buffer(export=True)
         logger.debug("Flushed %d MCP calls for trace %s", len(mcp_calls), task_run_id)
-
-        # Submit the telemetry payload to the worker queue
-        if is_root and mcp_calls:
-            coro = exporter.export_telemetry(
-                task_run_id=task_run_id,
-                trace_attributes=local_attributes,
-                mcp_calls=mcp_calls,
-            )
-            submit_to_worker_loop(coro)
 
         # Restore previous context
         set_current_task_run_id(previous_task_id)
