@@ -185,7 +185,7 @@ async def init():
 ```python
 import asyncio
 from hud import Task
-from hud.mcp_agent import ClaudeMCPAgent
+from hud.mcp import ClaudeMCPAgent
 from hud.telemetry import trace
 from mcp_use import MCPClient
 
@@ -193,7 +193,7 @@ async def main():
     # `trace` captures *everything* that happens and sends it to app.hud.so
     with trace("local_test"):
         cfg = {
-            "mcpServers": {
+            "mcp_config": {
                 "local": {"command": "docker", "args": ["run", "--rm", "-i", "my-environment:latest"]}
             }
         }
@@ -248,7 +248,7 @@ docker push yourdockerhubuser/my-environment:latest
 from hud import settings
 # Your image is in a registry, now tell HUD to pull & run it on demand
 config = {
-    "mcpServers": {
+    "mcp_config": {
         "hud": {
             "url": settings.mcp_url,  # Provided by HUD when you create an evaluation run
             "headers": {
@@ -303,7 +303,7 @@ Once all of the above works you can unleash *hundreds* of concurrent agents on y
 
 ```jsonc
 {
-  "mcpServers": {
+  "mcp_config": {
     "env": {
       "command": "docker",
       "args": ["run", "--rm", "-i", "my-environment:latest"]

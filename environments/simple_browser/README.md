@@ -42,7 +42,7 @@ docker push ghcr.io/your-org/hud-browser:latest
 import os
 import hud
 from mcp_use import MCPClient
-from hud.mcp_agent import ClaudeMCPAgent
+from hud.mcp import ClaudeMCPAgent
 
 BASE_URL = "https://orchestrator-v3.up.railway.app"
 HUD_API_KEY = os.getenv("HUD_API_KEY")
@@ -51,7 +51,7 @@ async def main():
     with hud.trace() as run_id:
         # Configure MCP client to connect to the cloud orchestrator
         config = {
-            "mcpServers": {
+            "mcp_config": {
                 "browser": {
                     "url": f"{BASE_URL}/v3/mcp",
                     "headers": {
@@ -81,7 +81,7 @@ For local testing and development:
 ```python
 # Local Docker with stdio transport
 config = {
-    "mcpServers": {
+    "mcp_config": {
         "browser": {
             "command": "docker",
             "args": ["run", "--rm", "-i", "-p", "8080:8080", "-e", "LAUNCH_APPS=todo", "hud-browser"]
