@@ -7,26 +7,51 @@ import os
 from io import BytesIO
 from typing import Literal
 
-if "DISPLAY" not in os.environ:
-    try:
-        from hud.settings import settings
-
-        os.environ["DISPLAY"] = settings.display
-    except (ImportError, AttributeError):
-        os.environ["DISPLAY"] = ":0"
-
-try:
-    import pyautogui
-
-    PYAUTOGUI_AVAILABLE = True
-except ImportError:
-    PYAUTOGUI_AVAILABLE = False
-
 from hud.tools.base import ToolResult
 
 from .base import BaseExecutor
 
 logger = logging.getLogger(__name__)
+
+# Lazy loading for pyautogui
+_pyautogui = None
+_pyautogui_available = None
+
+
+def _get_pyautogui():
+    """Lazily import and return pyautogui module."""
+    global _pyautogui, _pyautogui_available
+    
+    if _pyautogui_available is False:
+        return None
+        
+    if _pyautogui is None:
+        # Set display if not already set
+        if "DISPLAY" not in os.environ:
+            try:
+                from hud.settings import settings
+                os.environ["DISPLAY"] = settings.display
+            except (ImportError, AttributeError):
+                os.environ["DISPLAY"] = ":0"
+        
+        try:
+            import pyautogui
+            _pyautogui = pyautogui
+            _pyautogui_available = True
+            
+            # Configure PyAutoGUI settings
+            _pyautogui.FAILSAFE = False  # Disable fail-safe feature
+            _pyautogui.PAUSE = 0.1  # Small pause between actions
+        except ImportError:
+            _pyautogui_available = False
+            logger.warning("PyAutoGUI is not available")
+            return None
+        except Exception as e:
+            _pyautogui_available = False
+            logger.warning("Failed to initialize PyAutoGUI: %s", e)
+            return None
+    
+    return _pyautogui
 
 # Map CLA standard keys to PyAutoGUI keys (only where they differ)
 CLA_TO_PYAUTOGUI = {
@@ -58,12 +83,17 @@ class PyAutoGUIExecutor(BaseExecutor):
             display_num: X display number (used only on Linux, ignored on Windows/macOS)
         """
         super().__init__(display_num)
-
+        self._pyautogui = None
         logger.info("PyAutoGUIExecutor initialized")
 
-        # Configure PyAutoGUI settings
-        pyautogui.FAILSAFE = False  # Disable fail-safe feature
-        pyautogui.PAUSE = 0.1  # Small pause between actions
+    @property
+    def pyautogui(self):
+        """Get the pyautogui module, importing it lazily if needed."""
+        if self._pyautogui is None:
+            self._pyautogui = _get_pyautogui()
+            if self._pyautogui is None:
+                raise RuntimeError("PyAutoGUI is not available")
+        return self._pyautogui
 
     def _map_key(self, key: str) -> str:
         """Map CLA standard key to PyAutoGUI key."""
@@ -90,7 +120,8 @@ class PyAutoGUIExecutor(BaseExecutor):
         Returns:
             True if PyAutoGUI is available and functional, False otherwise
         """
-        if not PYAUTOGUI_AVAILABLE:
+        pyautogui = _get_pyautogui()
+        if not pyautogui:
             return False
 
         try:
@@ -109,7 +140,7 @@ class PyAutoGUIExecutor(BaseExecutor):
         """
         try:
             # Take screenshot using PyAutoGUI
-            screenshot = pyautogui.screenshot()
+            screenshot = self.pyautogui.screenshot()
 
             # Convert to base64
             buffer = BytesIO()
@@ -131,13 +162,13 @@ class PyAutoGUIExecutor(BaseExecutor):
         """
         if keys:
             for key in keys:
-                pyautogui.keyDown(key)
+                self.pyautogui.keyDown(key)
 
     def _release_keys(self, keys: list[str] | None) -> None:
         """Release held keys."""
         if keys:
             for key in reversed(keys):  # Release in reverse order
-                pyautogui.keyUp(key)
+                self.pyautogui.keyUp(key)
 
     # ===== CLA Action Implementations =====
 
@@ -172,17 +203,17 @@ class PyAutoGUIExecutor(BaseExecutor):
                     interval = pattern[0] / 1000.0 if pattern else 0.1  # Convert ms to seconds
 
                     if x is not None and y is not None:
-                        pyautogui.click(
+                        self.pyautogui.click(
                             x=x, y=y, clicks=clicks, interval=interval, button=button_name
                         )
                     else:
-                        pyautogui.click(clicks=clicks, interval=interval, button=button_name)
+                        self.pyautogui.click(clicks=clicks, interval=interval, button=button_name)
                 else:
                     # Single click
                     if x is not None and y is not None:
-                        pyautogui.click(x=x, y=y, button=button_name)
+                        self.pyautogui.click(x=x, y=y, button=button_name)
                     else:
-                        pyautogui.click(button=button_name)
+                        self.pyautogui.click(button=button_name)
             finally:
                 # Release held keys
                 self._release_keys(hold_keys)
@@ -210,10 +241,10 @@ class PyAutoGUIExecutor(BaseExecutor):
         try:
             # Convert delay from milliseconds to seconds for PyAutoGUI
             interval = delay / 1000.0
-            pyautogui.typewrite(text, interval=interval)
+            self.pyautogui.typewrite(text, interval=interval)
 
             if enter_after:
-                pyautogui.press("enter")
+                self.pyautogui.press("enter")
 
             result = ToolResult(
                 output=f"Typed: '{text}'" + (" and pressed Enter" if enter_after else "")
@@ -237,12 +268,12 @@ class PyAutoGUIExecutor(BaseExecutor):
             # Handle key combinations (e.g., "ctrl+c")
             if "+" in key_sequence:
                 keys = key_sequence.split("+")
-                pyautogui.hotkey(*keys)
+                self.pyautogui.hotkey(*keys)
                 result = ToolResult(output=f"Pressed hotkey: {key_sequence}")
             else:
                 # Map common key names from xdotool to PyAutoGUI
                 key = key_sequence.lower()
-                pyautogui.press(CLA_TO_PYAUTOGUI.get(key, key))
+                self.pyautogui.press(CLA_TO_PYAUTOGUI.get(key, key))
                 result = ToolResult(output=f"Pressed key: {key_sequence}")
 
             if take_screenshot:
@@ -265,7 +296,7 @@ class PyAutoGUIExecutor(BaseExecutor):
 
             # Handle single key or combination
             if len(mapped_keys) == 1 and "+" not in mapped_keys[0]:
-                pyautogui.press(mapped_keys[0])
+                self.pyautogui.press(mapped_keys[0])
                 result = ToolResult(output=f"Pressed key: {keys[0]}")
             else:
                 # For combinations, use hotkey
@@ -275,7 +306,7 @@ class PyAutoGUIExecutor(BaseExecutor):
                         hotkey_parts.extend(key.split("+"))
                     else:
                         hotkey_parts.append(key)
-                pyautogui.hotkey(*hotkey_parts)
+                self.pyautogui.hotkey(*hotkey_parts)
                 result = ToolResult(output=f"Pressed hotkey: {'+'.join(keys)}")
 
             if take_screenshot:
@@ -296,7 +327,7 @@ class PyAutoGUIExecutor(BaseExecutor):
             # Map CLA keys to PyAutoGUI keys
             mapped_keys = self._map_keys(keys)
             for key in mapped_keys:
-                pyautogui.keyDown(key)
+                self.pyautogui.keyDown(key)
 
             result = ToolResult(output=f"Keys down: {', '.join(keys)}")
 
@@ -318,7 +349,7 @@ class PyAutoGUIExecutor(BaseExecutor):
             # Map CLA keys to PyAutoGUI keys
             mapped_keys = self._map_keys(keys)
             for key in reversed(mapped_keys):  # Release in reverse order
-                pyautogui.keyUp(key)
+                self.pyautogui.keyUp(key)
 
             result = ToolResult(output=f"Keys up: {', '.join(keys)}")
 
@@ -347,7 +378,7 @@ class PyAutoGUIExecutor(BaseExecutor):
         try:
             # Move to position if specified
             if x is not None and y is not None:
-                pyautogui.moveTo(x, y)
+                self.pyautogui.moveTo(x, y)
 
             # Hold keys if specified
             self._hold_keys_context(hold_keys)
@@ -358,14 +389,14 @@ class PyAutoGUIExecutor(BaseExecutor):
                 # Perform vertical scroll
                 if scroll_y and scroll_y != 0:
                     # PyAutoGUI: positive = up, negative = down (opposite of our convention)
-                    pyautogui.scroll(-scroll_y)
+                    self.pyautogui.scroll(-scroll_y)
                     msg_parts.append(f"vertically by {scroll_y}")
 
                 # Perform horizontal scroll (if supported)
                 if scroll_x and scroll_x != 0:
                     # PyAutoGUI horizontal scroll might not work on all platforms
                     try:
-                        pyautogui.hscroll(scroll_x)
+                        self.pyautogui.hscroll(scroll_x)
                         msg_parts.append(f"horizontally by {scroll_x}")
                     except AttributeError:
                         # hscroll not available
@@ -409,13 +440,13 @@ class PyAutoGUIExecutor(BaseExecutor):
         try:
             if x is not None and y is not None:
                 # Absolute move
-                pyautogui.moveTo(x, y, duration=0.1)
+                self.pyautogui.moveTo(x, y, duration=0.1)
                 result = ToolResult(output=f"Moved mouse to ({x}, {y})")
             elif offset_x is not None or offset_y is not None:
                 # Relative move
                 offset_x = offset_x or 0
                 offset_y = offset_y or 0
-                pyautogui.moveRel(xOffset=offset_x, yOffset=offset_y, duration=0.1)
+                self.pyautogui.moveRel(xOffset=offset_x, yOffset=offset_y, duration=0.1)
                 result = ToolResult(output=f"Moved mouse by offset ({offset_x}, {offset_y})")
             else:
                 return ToolResult(output="No move coordinates specified")
@@ -450,25 +481,25 @@ class PyAutoGUIExecutor(BaseExecutor):
             try:
                 # Move to start
                 start_x, start_y = path[0]
-                pyautogui.moveTo(start_x, start_y)
+                self.pyautogui.moveTo(start_x, start_y)
 
                 # Handle multi-point drag
                 if len(path) == 2:
                     # Simple drag
                     end_x, end_y = path[1]
-                    pyautogui.dragTo(end_x, end_y, duration=0.5, button="left")
+                    self.pyautogui.dragTo(end_x, end_y, duration=0.5, button="left")
                     result = ToolResult(
                         output=f"Dragged from ({start_x}, {start_y}) to ({end_x}, {end_y})"
                     )
                 else:
                     # Multi-point drag
-                    pyautogui.mouseDown(button="left")
+                    self.pyautogui.mouseDown(button="left")
                     for i, (x, y) in enumerate(path[1:], 1):
                         duration = 0.1
                         if pattern and i - 1 < len(pattern):
                             duration = pattern[i - 1] / 1000.0  # Convert ms to seconds
-                        pyautogui.moveTo(x, y, duration=duration)
-                    pyautogui.mouseUp(button="left")
+                        self.pyautogui.moveTo(x, y, duration=duration)
+                    self.pyautogui.mouseUp(button="left")
 
                     result = ToolResult(output=f"Dragged along {len(path)} points")
 
@@ -507,7 +538,7 @@ class PyAutoGUIExecutor(BaseExecutor):
             }  # Fallback for unsupported
             button_name = button_map.get(button, "left")
 
-            pyautogui.mouseDown(button=button_name)
+            self.pyautogui.mouseDown(button=button_name)
             result = ToolResult(output=f"Mouse down: {button} button")
 
             if take_screenshot:
@@ -539,7 +570,7 @@ class PyAutoGUIExecutor(BaseExecutor):
             }  # Fallback for unsupported
             button_name = button_map.get(button, "left")
 
-            pyautogui.mouseUp(button=button_name)
+            self.pyautogui.mouseUp(button=button_name)
             result = ToolResult(output=f"Mouse up: {button} button")
 
             if take_screenshot:
@@ -559,9 +590,9 @@ class PyAutoGUIExecutor(BaseExecutor):
         try:
             # Map CLA key to PyAutoGUI key
             mapped_key = self._map_key(key)
-            pyautogui.keyDown(mapped_key)
+            self.pyautogui.keyDown(mapped_key)
             await asyncio.sleep(duration)
-            pyautogui.keyUp(mapped_key)
+            self.pyautogui.keyUp(mapped_key)
 
             result = ToolResult(output=f"Held key '{key}' for {duration} seconds")
 
@@ -579,7 +610,7 @@ class PyAutoGUIExecutor(BaseExecutor):
     async def position(self) -> ToolResult:
         """Get current cursor position."""
         try:
-            x, y = pyautogui.position()
+            x, y = self.pyautogui.position()
             return ToolResult(output=f"Mouse position: ({x}, {y})")
         except Exception as e:
             return ToolResult(error=str(e))
