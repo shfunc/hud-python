@@ -9,11 +9,14 @@ from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from mcp_use.adapters.langchain_adapter import LangChainAdapter
+from mcp.types import CallToolRequestParams as MCPToolCall
+from mcp.types import CallToolResult as MCPToolResult
+import mcp.types as types
 
 if TYPE_CHECKING:
     from langchain.schema.language_model import BaseLanguageModel
     from langchain_core.tools import BaseTool
-from .base import BaseMCPAgent
+from .base import BaseMCPAgent, ModelResponse
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +46,8 @@ class LangChainMCPAgent(BaseMCPAgent):
         self.llm = llm
         self.adapter = LangChainAdapter(disallowed_tools=self.disallowed_tools)
         self._langchain_tools: list[BaseTool] | None = None
+
+        self.model_name = "langchain-"+self.llm.model_name
 
     def _get_langchain_tools(self) -> list[BaseTool]:
         """Get or create LangChain tools from MCP tools."""
@@ -86,7 +91,7 @@ class LangChainMCPAgent(BaseMCPAgent):
 
         return messages
 
-    async def get_model_response(self, messages: list[BaseMessage], step: int) -> dict[str, Any]:
+    async def get_model_response(self, messages: list[BaseMessage], step: int) -> ModelResponse:
         """Get response from LangChain model including any tool calls."""
         # Get LangChain tools (created lazily)
         langchain_tools = self._get_langchain_tools()
@@ -133,11 +138,7 @@ class LangChainMCPAgent(BaseMCPAgent):
                 break
 
         if not last_user_msg:
-            return {
-                "content": "No user message found",
-                "tool_calls": [],
-                "done": True,
-            }
+            return ModelResponse(content="No user message found", tool_calls=[], done=True)
 
         # Extract text from message content
         input_text = ""
@@ -175,54 +176,65 @@ class LangChainMCPAgent(BaseMCPAgent):
                 for action, _ in result["intermediate_steps"]:
                     if hasattr(action, "tool") and hasattr(action, "tool_input"):
                         tool_calls.append(
-                            {
-                                "name": action.tool,
-                                "arguments": action.tool_input,
-                            }
+                            MCPToolCall(
+                                name=action.tool,
+                                arguments=action.tool_input,
+                            )
                         )
 
-                return {
-                    "content": output,
-                    "tool_calls": tool_calls,
-                    "done": False,  # Continue if tools were called
-                }
+                return ModelResponse(content=output, tool_calls=tool_calls, done=False)
             else:
                 # No tools called, just text response
-                return {
-                    "content": output,
-                    "tool_calls": [],
-                    "done": True,
-                }
+                return ModelResponse(content=output, tool_calls=[], done=True)
 
         except Exception as e:
             logger.error("Agent execution failed: %s", e)
-            return {
-                "content": f"Error: {e!s}",
-                "tool_calls": [],
-                "done": True,
-            }
+            return ModelResponse(content=f"Error: {e!s}", tool_calls=[], done=True)
 
     async def format_tool_results(
-        self, processed_results: dict[str, Any], tool_calls: list[dict]
+        self, tool_calls: list[MCPToolCall], tool_results: list[MCPToolResult]
     ) -> list[BaseMessage]:
         """Format tool results into LangChain messages."""
         # Create an AI message with the tool calls and results
         messages = []
 
         # First add an AI message indicating tools were called
-        tool_names = [tc["name"] for tc in tool_calls]
+        tool_names = [tc.name for tc in tool_calls]
         ai_content = f"I'll use the following tools: {', '.join(tool_names)}"
         messages.append(AIMessage(content=ai_content))
 
-        # Then add a human message with the tool results
-        result_text = processed_results["text"]
-        screenshot = processed_results.get("screenshot")
+        # Build result text from tool results
+        text_parts = []
+        latest_screenshot = None
+        
+        for tool_call, result in zip(tool_calls, tool_results):
+            if result.isError:
+                error_text = "Tool execution failed"
+                for content in result.content:
+                    if isinstance(content, types.TextContent):
+                        error_text = content.text
+                        break
+                text_parts.append(f"Error - {tool_call.name}: {error_text}")
+            else:
+                # Process success content
+                tool_output = []
+                for content in result.content:
+                    if isinstance(content, types.TextContent):
+                        tool_output.append(content.text)
+                    elif isinstance(content, types.ImageContent):
+                        latest_screenshot = content.data
+                
+                if tool_output:
+                    text_parts.append(f"{tool_call.name}: " + " ".join(tool_output))
 
-        if screenshot:
+        result_text = "\n".join(text_parts) if text_parts else "No output from tools"
+
+        # Then add a human message with the tool results
+        if latest_screenshot:
             # Include screenshot in multimodal format
             content = [
                 {"type": "text", "text": f"Tool results:\n{result_text}"},
-                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{screenshot}"}},
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{latest_screenshot}"}},
             ]
             messages.append(HumanMessage(content=content))
         else:

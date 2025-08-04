@@ -17,11 +17,14 @@ if TYPE_CHECKING:
         BetaToolResultBlockParam,
     )
 
-    from hud.task import TaskConfig
+    from hud.datasets import TaskConfig
 
 from hud.settings import settings
+from mcp.types import CallToolRequestParams as MCPToolCall
+from mcp.types import CallToolResult as MCPToolResult
+import mcp.types as types
 
-from .base import BaseMCPAgent
+from .base import BaseMCPAgent, ModelResponse
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +95,8 @@ class ClaudeMCPAgent(BaseMCPAgent):
         self.display_height_px = display_height_px
         self.use_computer_beta = use_computer_beta
 
+        self.model_name = self.model
+
         # Track mapping from Claude tool names to MCP tool names
         self._claude_to_mcp_tool_map: dict[str, str] = {}
 
@@ -127,7 +132,7 @@ class ClaudeMCPAgent(BaseMCPAgent):
 
     async def get_model_response(
         self, messages: list[BetaMessageParam], step: int
-    ) -> dict[str, Any]:
+    ) -> ModelResponse:
         """Get response from Claude including any tool calls."""
         # Get Claude tools
         claude_tools = self._convert_tools_for_claude()
@@ -180,12 +185,7 @@ class ClaudeMCPAgent(BaseMCPAgent):
         )
 
         # Process response
-        result = {
-            "content": "",
-            "tool_calls": [],
-            "done": True,
-            "raw_response": response.model_dump(),  # For debugging
-        }
+        result = ModelResponse(content="", tool_calls=[], done=True)
 
         # Extract text content and reasoning
         text_content = ""
@@ -196,16 +196,15 @@ class ClaudeMCPAgent(BaseMCPAgent):
                 # Map Claude tool name back to MCP tool name
                 mcp_tool_name = self._claude_to_mcp_tool_map.get(block.name, block.name)
 
-                # Include the tool_use_id in the tool call for later reference
-                result["tool_calls"].append(
-                    {
-                        "name": mcp_tool_name,  # Use MCP tool name for execution
-                        "arguments": block.input,
-                        "tool_use_id": block.id,  # Claude-specific metadata
-                        "claude_name": block.name,  # Keep original Claude name for reference
-                    }
+                # Create MCPToolCall object with Claude metadata as extra fields
+                tool_call = MCPToolCall(
+                    name=mcp_tool_name,
+                    arguments=block.input,
+                    tool_use_id=block.id,  # Extra field for format_tool_results
+                    claude_name=block.name,  # Keep original Claude name
                 )
-                result["done"] = False
+                result.tool_calls.append(tool_call)
+                result.done = False
             elif block.type == "text":
                 text_content += block.text
             elif hasattr(block, "type") and block.type == "thinking":
@@ -213,41 +212,44 @@ class ClaudeMCPAgent(BaseMCPAgent):
 
         # Combine text and thinking for final content
         if thinking_content:
-            result["content"] = thinking_content + text_content
+            result.content = thinking_content + text_content
         else:
-            result["content"] = text_content
+            result.content = text_content
 
         return result
 
     async def format_tool_results(
-        self, processed_results: dict[str, Any], tool_calls: list[dict]
+        self, tool_calls: list[MCPToolCall], tool_results: list[MCPToolResult]
     ) -> list[BetaMessageParam]:
         """Format tool results into Claude messages."""
-        # Build a mapping of tool_name to tool_use_id from the original calls
-        tool_id_map = {}
-        for tool_call in tool_calls:
-            if "tool_use_id" in tool_call:
-                tool_id_map[tool_call["name"]] = tool_call["tool_use_id"]
-
         # Process each tool result
         user_content = []
 
-        for tool_name, content_blocks in processed_results["results"]:
-            # Get the tool_use_id for this tool
-            tool_use_id = tool_id_map.get(tool_name)
+        for tool_call, result in zip(tool_calls, tool_results, strict=True):
+            # Extract Claude-specific metadata from extra fields
+            tool_use_id = getattr(tool_call, "tool_use_id", None)
             if not tool_use_id:
-                logger.warning("No tool_use_id found for %s", tool_name)
+                logger.warning("No tool_use_id found for %s", tool_call.name)
                 continue
 
-            # Convert content blocks to Claude format
+            # Convert MCP tool results to Claude format
             claude_blocks = []
-            for block in content_blocks:
-                if block["type"] == "text":
-                    claude_blocks.append(text_to_content_block(block["text"]))
-                elif block["type"] == "error":
-                    claude_blocks.append(text_to_content_block(f"Error: {block['text']}"))
-                elif block["type"] == "image":
-                    claude_blocks.append(base64_to_content_block(block["data"]))
+            
+            if result.isError:
+                # Extract error message from content
+                error_msg = "Tool execution failed"
+                for content in result.content:
+                    if isinstance(content, types.TextContent):
+                        error_msg = content.text
+                        break
+                claude_blocks.append(text_to_content_block(f"Error: {error_msg}"))
+            else:
+                # Process success content
+                for content in result.content:
+                    if isinstance(content, types.TextContent):
+                        claude_blocks.append(text_to_content_block(content.text))
+                    elif isinstance(content, types.ImageContent):
+                        claude_blocks.append(base64_to_content_block(content.data))
 
             # Add tool result
             user_content.append(tool_use_content_block(tool_use_id, claude_blocks))

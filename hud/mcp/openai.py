@@ -15,11 +15,14 @@ from openai.types.responses import (
 )
 
 from hud.settings import settings
+from mcp.types import CallToolRequestParams as MCPToolCall
+from mcp.types import CallToolResult as MCPToolResult
+import mcp.types as types
 
-from .base import BaseMCPAgent
+from .base import BaseMCPAgent, ModelResponse
 
 if TYPE_CHECKING:
-    from hud.task import TaskConfig
+    from hud.datasets import TaskConfig
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +75,8 @@ class OpenAIMCPAgent(BaseMCPAgent):
         self.pending_call_id: str | None = None
         self.pending_safety_checks: list[Any] = []
 
+        self.model_name = "openai-"+self.model
+
         # Base system prompt for autonomous operation
         self.base_system_prompt = """
         You are an autonomous computer-using agent. Follow these guidelines:
@@ -114,7 +119,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
         # Just return a list with the prompt and screenshot
         return [{"prompt": prompt, "screenshot": screenshot}]
 
-    async def get_model_response(self, messages: list[Any], step: int) -> dict[str, Any]:
+    async def get_model_response(self, messages: list[Any], step: int) -> ModelResponse:
         """Get response from OpenAI including any tool calls."""
         # OpenAI's API is stateful, so we handle messages differently
 
@@ -127,11 +132,11 @@ class OpenAIMCPAgent(BaseMCPAgent):
 
         if not computer_tool_name:
             # No computer tools available, just return a text response
-            return {
-                "content": "No computer use tools available",
-                "tool_calls": [],
-                "done": True,
-            }
+            return ModelResponse(
+                content="No computer use tools available",
+                tool_calls=[],
+                done=True,
+            )
 
         # Define the computer use tool
         computer_tool: ToolParam = {  # type: ignore[reportAssignmentType]
@@ -196,11 +201,11 @@ class OpenAIMCPAgent(BaseMCPAgent):
 
                 if not latest_screenshot:
                     logger.warning("No screenshot provided for response to action")
-                    return {
-                        "content": "No screenshot available for next action",
-                        "tool_calls": [],
-                        "done": True,
-                    }
+                    return ModelResponse(
+                        content="No screenshot available for next action",
+                        tool_calls=[],
+                        done=True,
+                    )
 
                 # Create response to previous action
                 input_param_followup: ResponseInputParam = [  # type: ignore[reportAssignmentType]
@@ -229,12 +234,11 @@ class OpenAIMCPAgent(BaseMCPAgent):
         self.last_response_id = response.id
 
         # Process response
-        result = {
-            "content": "",
-            "tool_calls": [],
-            "done": False,  # Will be set to True only if no tool calls
-            "raw_response": response.model_dump(),  # For debugging
-        }
+        result = ModelResponse(
+            content="",
+            tool_calls=[],
+            done=False,  # Will be set to True only if no tool calls
+        )
 
         self.pending_call_id = None
 
@@ -247,7 +251,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
 
         if computer_calls:
             # Process computer calls
-            result["done"] = False
+            result.done = False
             for computer_call in computer_calls:
                 self.pending_call_id = computer_call.call_id
                 self.pending_safety_checks = computer_call.pending_safety_checks
@@ -255,13 +259,14 @@ class OpenAIMCPAgent(BaseMCPAgent):
                 # Convert OpenAI action to MCP tool call
                 action = computer_call.action.model_dump()
 
-                # Map OpenAI action to MCP tool call format
-                tool_call = {
-                    "name": computer_tool_name,
-                    "arguments": action,
-                    "call_id": computer_call.call_id,  # Store for reference
-                }
-                result["tool_calls"].append(tool_call)
+                # Create MCPToolCall object with OpenAI metadata as extra fields
+                tool_call = MCPToolCall(
+                    name=computer_tool_name,
+                    arguments=action,
+                    call_id=computer_call.call_id,  # Extra field for format_tool_results
+                    pending_safety_checks=computer_call.pending_safety_checks,
+                )
+                result.tool_calls.append(tool_call)
         else:
             # No computer calls, check for text response
             for item in response.output:
@@ -273,7 +278,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
                         if isinstance(content, ResponseOutputText)
                     ]
                     if text_parts:
-                        result["content"] = "".join(text_parts)
+                        result.content = "".join(text_parts)
                         break
 
         # Extract reasoning if present
@@ -282,17 +287,17 @@ class OpenAIMCPAgent(BaseMCPAgent):
             if item.type == "reasoning" and hasattr(item, "summary") and item.summary:
                 reasoning_text += f"Thinking: {item.summary[0].text}\n"
 
-        if reasoning_text:
-            result["content"] = reasoning_text + result["content"]
+        if reasoning_text: 
+            result.content = reasoning_text + result.content if result.content else reasoning_text
 
         # Set done=True if no tool calls (task complete or waiting for user)
-        if not result["tool_calls"]:
-            result["done"] = True
+        if not result.tool_calls:
+            result.done = True
 
         return result
 
     async def format_tool_results(
-        self, processed_results: dict[str, Any], tool_calls: list[dict]
+        self, tool_calls: list[MCPToolCall], tool_results: list[MCPToolResult]
     ) -> list[Any]:
         """
         Format tool results for OpenAI's stateful API.
@@ -300,12 +305,19 @@ class OpenAIMCPAgent(BaseMCPAgent):
         OpenAI doesn't use a traditional message format - we just need to
         preserve the screenshot for the next step.
         """
-        # For OpenAI, we just need to track the latest screenshot
+        # Extract latest screenshot from results
+        latest_screenshot = None
+        for result in tool_results:
+            if not result.isError:
+                for content in result.content:
+                    if isinstance(content, types.ImageContent):
+                        latest_screenshot = content.data
+        
         # Return a simple dict that get_model_response can use
         return [
             {
                 "type": "tool_result",
-                "screenshot": processed_results.get("screenshot"),
+                "screenshot": latest_screenshot,
             }
         ]
 

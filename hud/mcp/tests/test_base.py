@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 from mcp import types
 
-from hud.mcp_agent.base import BaseMCPAgent
+from hud.mcp.base import BaseMCPAgent
 from hud.tools.executors.base import BaseExecutor
 
 if TYPE_CHECKING:

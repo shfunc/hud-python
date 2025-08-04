@@ -40,6 +40,23 @@ class TaskRunStatusUpdateRequest(BaseModel):
     status: TaskRunStatus
     error_message: str | None = None  # Optional error message if status is ERROR
     metadata: dict[str, Any] | None = None  # Optional metadata for context
+    job_id: str | None = None  # Optional parent job ID
+
+
+# --- Job Status Models ---
+class JobStatus(enum.StrEnum):
+    RUNNING = "running"
+    COMPLETED = "completed"
+    ERROR = "error"
+
+
+class JobStatusUpdateRequest(BaseModel):
+    """Request model for updating job status."""
+    status: JobStatus
+    error_message: str | None = None  # Optional error message if status is ERROR
+    metadata: dict[str, Any] | None = None  # Optional metadata for context
+    taskset_name: str | None = None  # Optional dataset/taskset name
+
 
 # --- Worker Thread and Event Loop Management ---
 _worker_thread: threading.Thread | None = None
@@ -368,7 +385,8 @@ async def update_task_run_status(
     task_run_id: str, 
     status: TaskRunStatus, 
     error_message: str | None = None,
-    metadata: dict[str, Any] | None = None
+    metadata: dict[str, Any] | None = None,
+    job_id: str | None = None
 ) -> None:
     """Update the status of a task run."""
     if not settings.telemetry_enabled:
@@ -387,7 +405,8 @@ async def update_task_run_status(
             request_data = TaskRunStatusUpdateRequest(
                 status=status,
                 error_message=error_message,
-                metadata=metadata
+                metadata=metadata,
+                job_id=job_id
             )
             
             logger.debug(
@@ -418,6 +437,64 @@ async def update_task_run_status(
                 )
     except Exception as e:
         logger.exception("Error updating status for task run %s: %s", task_run_id, e)
+
+
+async def update_job_status(
+    job_id: str, 
+    status: JobStatus, 
+    error_message: str | None = None,
+    metadata: dict[str, Any] | None = None,
+    taskset_name: str | None = None
+) -> None:
+    """Update the status of a job."""
+    if not settings.telemetry_enabled:
+        logger.debug("Job status update skipped - telemetry not enabled")
+        return
+        
+    status_url = f"{settings.base_url}/v2/jobs/{job_id}/status"
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {settings.api_key}",
+            }
+            
+            request_data = JobStatusUpdateRequest(
+                status=status,
+                error_message=error_message,
+                metadata=metadata,
+                taskset_name=taskset_name
+            )
+            
+            logger.debug(
+                "Updating status for job %s to %s",
+                job_id,
+                status,
+            )
+            
+            response = await client.post(
+                status_url,
+                json=request_data.model_dump(exclude_none=True),
+                headers=headers,
+                timeout=10.0,
+            )
+            
+            if response.status_code >= 200 and response.status_code < 300:
+                logger.debug(
+                    "Successfully updated status for job %s to %s",
+                    job_id,
+                    status,
+                )
+            else:
+                logger.warning(
+                    "Failed to update status for job %s: HTTP %s - %s",
+                    job_id,
+                    response.status_code,
+                    response.text,
+                )
+    except Exception as e:
+        logger.exception("Error updating status for job %s: %s", job_id, e)
 
 
 # --- Public Shutdown Function ---

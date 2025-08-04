@@ -4,13 +4,14 @@ HUD SDK for interacting with the HUD evaluation platform.
 
 from __future__ import annotations
 
-from . import agent, env, gym, settings, task, taskset, types, utils
+from . import agent, datasets, env, gym, settings, task, taskset, types, utils
 from .adapters import ResponseAction as Response
+from .datasets import run_dataset, to_taskconfigs
 from .job import create_job, load_job, run_job
-from .job import job as register_job
+from .job import job as register_job  # Old decorator-based job
 from .task import Task
 from .taskset import load_taskset
-from .telemetry import flush, trace, trace_open
+from .telemetry import flush, job, trace, trace_open  # New context-based job
 from .version import __version__
 
 
@@ -42,17 +43,21 @@ __all__ = [
     "__version__",
     "agent",
     "create_job",
+    "datasets",
     "env",
     "flush",
     "gym",
     "init_telemetry",
+    "job",
     "load_job",
     "load_taskset",
     "register_job",
+    "run_dataset",
     "run_job",
     "settings",
     "task",
     "taskset",
+    "to_taskconfigs",
     "trace",
     "trace_open",
     "types",
