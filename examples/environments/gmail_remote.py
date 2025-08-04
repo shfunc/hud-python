@@ -1,6 +1,6 @@
 import asyncio
 import hud
-from hud.mcp_agent import ClaudeMCPAgent, OpenAIMCPAgent
+from hud.mcp import ClaudeMCPAgent, OpenAIMCPAgent
 from hud.task import TaskConfig
 from mcp_use import MCPClient
 
@@ -10,7 +10,7 @@ async def main():
         # Define task configuration as dict with environment variable templates
         task_dict = {
             "prompt": "Open Sent mail, search for the Series B pitch deck, forward it to billgates@microsoft.com, and mark the original message as important.",
-            "mcpServers": {
+            "mcp_config": {
                 "hud": {
                     "url": "${HUD_MCP_URL}",
                     "headers": {
@@ -42,7 +42,7 @@ async def main():
         print("🔴 See the agent live at http://localhost:6080/vnc.html")
 
         # Create MCP client from resolved servers
-        client = MCPClient.from_dict({"mcpServers": task.mcpServers})
+        client = MCPClient.from_dict({"mcp_config": task.mcp_config})
 
         agent = ClaudeMCPAgent(  # or OpenAIMCPAgent
             client=client,

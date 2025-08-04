@@ -18,7 +18,7 @@ async def main():
     """Run MCP-Use agent with HUD tools."""
 
     # Configure MCP client to connect to the router
-    config = {"mcpServers": {"hud": {"url": BASE_URL}}}
+    config = {"mcp_config": {"hud": {"url": BASE_URL}}}
 
     # Create client and agent
     client = MCPClient.from_dict(config)

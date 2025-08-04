@@ -1,6 +1,6 @@
 import asyncio
 import hud
-from hud.mcp_agent import ClaudeMCPAgent, OpenAIMCPAgent
+from hud.mcp import ClaudeMCPAgent, OpenAIMCPAgent
 from hud.task import TaskConfig
 from mcp_use import MCPClient
 
@@ -9,7 +9,7 @@ async def main():
     with hud.trace("gmail_local"):
         task_dict = {
             "prompt": "Open Sent mail, search for the Series B pitch deck, forward it to billgates@microsoft.com, and mark the original message as important.",
-            "mcpServers": {
+            "mcp_config": {
                 "gmail": {
                     "command": "docker",
                     "args": [
@@ -42,7 +42,7 @@ async def main():
 
         print("📡 Defining the environment...")
         print("🔴 See the agent live at http://localhost:6080/vnc.html")
-        client = MCPClient.from_dict({"mcpServers": task.mcpServers})
+        client = MCPClient.from_dict({"mcp_config": task.mcp_config})
 
         agent = ClaudeMCPAgent(  # or OpenAIMCPAgent
             client=client,

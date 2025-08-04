@@ -21,7 +21,7 @@ import asyncio
 import sys
 import json
 import logging
-from hud.mcp_agent import ClaudeMCPAgent
+from hud.mcp import ClaudeMCPAgent
 from mcp_use import MCPClient
 
 # Simple logging
@@ -33,7 +33,7 @@ async def main(use_http=False):
     if not use_http:
         # Launch Docker container and connect via stdio
         config = {
-            "mcpServers": {
+            "mcp_config": {
                 "browser": {
                     "command": "docker",
                     "args": [
@@ -58,7 +58,7 @@ async def main(use_http=False):
         print("📱 Todo app at: http://localhost:3000")
     else:
         # For Docker/HTTP transport (requires docker-compose)
-        config = {"mcpServers": {"browser": {"url": "http://localhost:8041/mcp"}}}
+        config = {"mcp_config": {"browser": {"url": "http://localhost:8041/mcp"}}}
         print("🚀 Using HTTP transport mode")
 
     # Create MCP client and session

@@ -5,7 +5,7 @@ import asyncio
 from dotenv import load_dotenv
 import hud
 from mcp_use import MCPClient
-from hud.mcp_agent import ClaudeMCPAgent
+from hud.mcp import ClaudeMCPAgent
 from hud.settings import settings
 
 load_dotenv()
@@ -23,7 +23,7 @@ async def main():
 
         # Configure MCP client to connect to the router
         config = {
-            "mcpServers": {
+            "mcp_config": {
                 "hud": {
                     "url": settings.mcp_url,
                     "headers": {  # This is how the cloud server is configured to work

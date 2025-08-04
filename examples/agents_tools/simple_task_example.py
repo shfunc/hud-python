@@ -17,7 +17,7 @@ Usage:
 
 import asyncio
 import logging
-from hud.mcp_agent import ClaudeMCPAgent
+from hud.mcp import ClaudeMCPAgent
 from hud.task import TaskConfig
 from mcp.types import CallToolRequestParams as MCPToolCall
 from mcp_use import MCPClient
@@ -33,7 +33,7 @@ async def main():
 
     # Configure MCP client to connect to simple_browser environment
     config = {
-        "mcpServers": {
+        "mcp_config": {
             "browser": {
                 "command": "docker",
                 "args": [
