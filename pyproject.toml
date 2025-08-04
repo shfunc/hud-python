@@ -111,6 +111,10 @@ dev = [
     "anthropic",
     "dotenv",
     "pytest-cov",
+    "pillow>=11.1.0",
+    "aiodocker>=0.24.0",
+    "toml>=0.10.2",
+    "pyautogui>=0.9.54",
 ]
 
 [tool.ruff]
@@ -179,6 +183,7 @@ exclude = [
 ]
 pythonVersion = "3.11"
 typeCheckingMode = "basic"
+reportMissingImports = "warning"
 
 [tool.coverage.run]
 source = ["hud"]
