@@ -448,7 +448,7 @@ class BaseMCPAgent(ABC):
                             logger.error("Tool execution failed: %s", e)
                             # Create error MCPToolResult
                             error_result = MCPToolResult(
-                                content=[types.TextContent(text=str(e))], isError=True
+                                content=[types.TextContent(text=str(e), type="text")], isError=True
                             )
                             tool_results.append(error_result)
 
@@ -535,7 +535,7 @@ class BaseMCPAgent(ABC):
                             logger.error("Tool execution failed: %s", e)
                             # Create error MCPToolResult
                             error_result = MCPToolResult(
-                                content=[types.TextContent(text=str(e))], isError=True
+                                content=[types.TextContent(text=str(e), type="text")], isError=True
                             )
                             tool_results.append(error_result)
 

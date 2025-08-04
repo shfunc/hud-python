@@ -31,3 +31,5 @@ TODO.md
 *.log
 
 /ref/
+
+.cursor/

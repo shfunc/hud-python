@@ -143,7 +143,7 @@ async def run_dataset(
         ... )
     """
     # Import here to avoid circular imports
-    from mcp_use import MCPClient
+    from hud.mcp.client import MCPClient
 
     import hud
 

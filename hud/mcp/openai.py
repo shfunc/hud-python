@@ -93,7 +93,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
         """  # noqa: E501
 
     async def run(
-        self, prompt_or_task: str | TaskConfig, max_steps: int = 10, conversation_mode: bool = False
+        self, prompt_or_task: str | TaskConfig, max_steps: int = 10
     ) -> dict[str, Any]:
         """
         Run the agent with the given prompt or task.
@@ -106,7 +106,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
         self.pending_safety_checks = []
 
         # Use base implementation
-        return await super().run(prompt_or_task, max_steps, conversation_mode)
+        return await super().run(prompt_or_task, max_steps)
 
     async def create_initial_messages(self, prompt: str, screenshot: str | None) -> list[Any]:
         """

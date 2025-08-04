@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from typing import Self
 
     from mcp import types
-    from mcp_use.session import MCPUseSession
+    from mcp_use.session import MCPSession as MCPUseSession
 
 logger = logging.getLogger(__name__)
 
