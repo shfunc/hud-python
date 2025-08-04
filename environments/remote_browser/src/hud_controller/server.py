@@ -69,7 +69,7 @@ async def initialize_environment(session=None, progress_token=None):
             )
             logger.error(error_msg)
             raise ValueError(error_msg)
-        
+
         provider_name = provider_name.lower()
         await send_progress(20, f"Using browser provider: {provider_name}")
 
@@ -140,7 +140,7 @@ async def initialize_environment(session=None, progress_token=None):
         # Register tools with MCP
         register_instance_tool(mcp, "playwright", playwright_tool)
         await send_progress(80, "Playwright tool registered")
-        
+
         # Register browser computer tool
         browser_computer = BrowserComputerTool(playwright_tool)
         register_instance_tool(mcp, "computer", browser_computer)
@@ -191,13 +191,19 @@ mcp = FastMCP(
 # Setup tool
 @mcp.tool()
 async def setup(
-    function: str = Field(None, description="Setup function name. Available: navigate_to_url, set_cookies, clear_cookies, click_element, type_text, wait_for_element, sheets_from_xlsx, sheets_from_bytes, load_html_content"),
-    args: dict = Field(None, description="Arguments for the setup function. Each function has specific requirements - check the setup registry for details"),
+    function: str = Field(
+        None,
+        description="Setup function name. Available: navigate_to_url, set_cookies, clear_cookies, click_element, type_text, wait_for_element, sheets_from_xlsx, sheets_from_bytes, load_html_content",
+    ),
+    args: dict = Field(
+        None,
+        description="Arguments for the setup function. Each function has specific requirements - check the setup registry for details",
+    ),
     name: str = Field(None, description="Problem name to lookup setup from problem registry"),
     ctx: Context = None,
 ) -> dict:
     """Setup the remote browser environment.
-    
+
     Available setup functions:
     - navigate_to_url: Navigate to a URL (args: {url: str})
     - set_cookies: Set browser cookies (args: {cookies: list})
@@ -208,7 +214,7 @@ async def setup(
     - sheets_from_xlsx: Load Google Sheets from XLSX file (args: {path: str})
     - sheets_from_bytes: Load Google Sheets from bytes (args: {data: str, filename: str})
     - load_html_content: Load HTML content directly (args: {html: str})
-    
+
     Returns a dict with status, message, and any function-specific data.
     """
     return await setup_tool(function, args, name, ctx, browser_provider, playwright_tool)
@@ -217,13 +223,19 @@ async def setup(
 # Evaluate tool
 @mcp.tool()
 async def evaluate(
-    function: str = Field(None, description="Evaluator function name. Available: url_match, page_contains, cookie_exists, cookie_match, history_length, raw_last_action_is, selector_history, sheet_contains, sheets_cell_values, verify_type_action"),
-    args: dict = Field(None, description="Arguments for the evaluator function. Each evaluator has specific requirements - check the evaluator registry for details"),
+    function: str = Field(
+        None,
+        description="Evaluator function name. Available: url_match, page_contains, cookie_exists, cookie_match, history_length, raw_last_action_is, selector_history, sheet_contains, sheets_cell_values, verify_type_action",
+    ),
+    args: dict = Field(
+        None,
+        description="Arguments for the evaluator function. Each evaluator has specific requirements - check the evaluator registry for details",
+    ),
     name: str = Field(None, description="Problem name to lookup evaluation from problem registry"),
     ctx: Context = None,
 ) -> dict:
     """Evaluate the remote browser environment state.
-    
+
     Available evaluator functions:
     - url_match: Check if current URL matches pattern (args: {target_url: str})
     - page_contains: Check if page contains text (args: {search_terms: str|list, partial_rewarding?: bool})
@@ -235,7 +247,7 @@ async def evaluate(
     - sheet_contains: Check if sheet contains text (args: {text: str})
     - sheets_cell_values: Check cell values in sheets (args: {expected_values: dict})
     - verify_type_action: Verify text was typed (args: {expected_text: str})
-    
+
     Returns evaluation result with reward, done, and info fields.
     """
     return await evaluate_tool(function, args, name, ctx, browser_provider, playwright_tool)

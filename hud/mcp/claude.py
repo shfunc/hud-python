@@ -19,10 +19,11 @@ if TYPE_CHECKING:
 
     from hud.datasets import TaskConfig
 
-from hud.settings import settings
+import mcp.types as types
 from mcp.types import CallToolRequestParams as MCPToolCall
 from mcp.types import CallToolResult as MCPToolResult
-import mcp.types as types
+
+from hud.settings import settings
 
 from .base import BaseMCPAgent, ModelResponse
 
@@ -234,7 +235,7 @@ class ClaudeMCPAgent(BaseMCPAgent):
 
             # Convert MCP tool results to Claude format
             claude_blocks = []
-            
+
             if result.isError:
                 # Extract error message from content
                 error_msg = "Tool execution failed"

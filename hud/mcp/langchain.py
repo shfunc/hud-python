@@ -5,13 +5,13 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+import mcp.types as types
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
-from mcp_use.adapters.langchain_adapter import LangChainAdapter
 from mcp.types import CallToolRequestParams as MCPToolCall
 from mcp.types import CallToolResult as MCPToolResult
-import mcp.types as types
+from mcp_use.adapters.langchain_adapter import LangChainAdapter
 
 if TYPE_CHECKING:
     from langchain.schema.language_model import BaseLanguageModel
@@ -47,7 +47,7 @@ class LangChainMCPAgent(BaseMCPAgent):
         self.adapter = LangChainAdapter(disallowed_tools=self.disallowed_tools)
         self._langchain_tools: list[BaseTool] | None = None
 
-        self.model_name = "langchain-"+self.llm.model_name
+        self.model_name = "langchain-" + self.llm.model_name
 
     def _get_langchain_tools(self) -> list[BaseTool]:
         """Get or create LangChain tools from MCP tools."""
@@ -206,8 +206,8 @@ class LangChainMCPAgent(BaseMCPAgent):
         # Build result text from tool results
         text_parts = []
         latest_screenshot = None
-        
-        for tool_call, result in zip(tool_calls, tool_results):
+
+        for tool_call, result in zip(tool_calls, tool_results, strict=False):
             if result.isError:
                 error_text = "Tool execution failed"
                 for content in result.content:
@@ -223,7 +223,7 @@ class LangChainMCPAgent(BaseMCPAgent):
                         tool_output.append(content.text)
                     elif isinstance(content, types.ImageContent):
                         latest_screenshot = content.data
-                
+
                 if tool_output:
                     text_parts.append(f"{tool_call.name}: " + " ".join(tool_output))
 
@@ -234,7 +234,10 @@ class LangChainMCPAgent(BaseMCPAgent):
             # Include screenshot in multimodal format
             content = [
                 {"type": "text", "text": f"Tool results:\n{result_text}"},
-                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{latest_screenshot}"}},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{latest_screenshot}"},
+                },
             ]
             messages.append(HumanMessage(content=content))
         else:

@@ -7,7 +7,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from hud.tools.base import ToolResult
-from hud.tools.executors.pyautogui import PYAUTOGUI_AVAILABLE, PyAutoGUIExecutor
+from hud.tools.executors.pyautogui import PyAutoGUIExecutor
+
+# Check if pyautogui is available for test skipping
+PYAUTOGUI_AVAILABLE = PyAutoGUIExecutor.is_available()
 
 
 class TestPyAutoGUIExecutor:

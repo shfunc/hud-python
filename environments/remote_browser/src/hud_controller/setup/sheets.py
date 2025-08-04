@@ -69,25 +69,29 @@ class SheetsFromXlsxSetup:
     """Setup function to create a Google Sheet from an Excel file URL."""
 
     name = "sheets_from_xlsx"
-    
-    def __init__(self):
-        """Initialize the setup class."""
-        pass
 
-    async def setup(self, file_url: str | None = None, sheet_name: str = "Worksheet", context: RemoteBrowserContext | None = None, **kwargs) -> Dict[str, Any]:
+    def __init__(self, context):
+        """Initialize the setup class."""
+        self.context = context
+
+    async def __call__(
+        self,
+        file_url: str | None = None,
+        sheet_name: str = "Worksheet",
+        **kwargs,
+    ) -> Dict[str, Any]:
         """
         Create a Google Sheet from an Excel file URL.
 
         Args:
             file_url: URL of the Excel file to convert
             sheet_name: Name for the new Google Sheet (default: "Worksheet")
-            context: The remote browser context
 
         Returns:
             Status dictionary with sheet information
         """
         logger.info("Starting sheets_from_xlsx setup")
-        
+
         # Handle backward compatibility for list args
         if "args" in kwargs and isinstance(kwargs["args"], list):
             args_list = kwargs["args"]
@@ -186,25 +190,29 @@ class SheetsFromBytesSetup:
     """Setup function to create a Google Sheet from base64 encoded Excel bytes."""
 
     name = "sheets_from_bytes"
-    
-    def __init__(self):
-        """Initialize the setup class."""
-        pass
 
-    async def setup(self, base64_bytes: str | None = None, sheet_name: str = "Worksheet", context: RemoteBrowserContext | None = None, **kwargs) -> Dict[str, Any]:
+    def __init__(self, context):
+        """Initialize the setup class."""
+        self.context = context
+
+    async def __call__(
+        self,
+        base64_bytes: str | None = None,
+        sheet_name: str = "Worksheet",
+        **kwargs,
+    ) -> Dict[str, Any]:
         """
         Create a Google Sheet from base64 encoded Excel bytes.
 
         Args:
             base64_bytes: Base64 encoded Excel file bytes
             sheet_name: Name for the new Google Sheet (default: "Worksheet")
-            context: The remote browser context
 
         Returns:
             Status dictionary with sheet information
         """
         logger.info("Starting sheets_from_bytes setup")
-        
+
         # Handle backward compatibility for list args
         if "args" in kwargs and isinstance(kwargs["args"], list):
             args_list = kwargs["args"]

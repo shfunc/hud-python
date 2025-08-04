@@ -33,7 +33,7 @@ class Trajectory(BaseModel):
             from IPython.display import HTML, Markdown, display
         except ImportError:
             raise ImportError("IPython is required for trajectory display") from None
-        
+
         trajectory_start_timestamp_str = self.trajectory[0].start_timestamp
         t_start_dt = (
             datetime.datetime.fromisoformat(trajectory_start_timestamp_str.replace("Z", "+00:00"))

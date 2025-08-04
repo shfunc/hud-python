@@ -1,6 +1,6 @@
 import asyncio
 
-from datasets import Dataset 
+from datasets import Dataset
 import hud
 
 from hud.datasets import TaskConfig
@@ -58,22 +58,16 @@ async def run_eval():
     print(task)
 
     # Create MCP client outside trace to ensure cleanup
-    client = MCPClient(
-        mcp_config=task.mcp_config
+    client = MCPClient(mcp_config=task.mcp_config)
+    agent = ClaudeMCPAgent(
+        client=client, allowed_tools=["anthropic_computer"], initial_screenshot=True
     )
-    
-    with hud.trace("test-claude"): # Trace the agent execution
+
+    with hud.trace("test-claude"):  # Trace the agent execution
         try:
-            # Create agent
-            agent = ClaudeMCPAgent(
-                client=client,
-                allowed_tools=["anthropic_computer"],
-                initial_screenshot=True
-            )
-            
             # Initialize the agent with the task
             await agent.initialize(task)
-            
+
             # Setup the task
             await agent.call_tool(task.setup_tool)
 
@@ -88,7 +82,9 @@ async def run_eval():
 
                 # Get agent response
                 response = await agent.get_model_response(messages, step)
-                print(f"Agent response: {response.content[:200] if response.content else 'No content'}...")  # Truncated
+                print(
+                    f"Agent response: {response.content[:200] if response.content else 'No content'}..."
+                )  # Truncated
 
                 # Check if agent wants to use tools
                 tool_results = []
@@ -124,5 +120,3 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\nEvaluation failed with error: {e}")
         raise
-
-

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from string import Template
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from pydantic import BaseModel, Field

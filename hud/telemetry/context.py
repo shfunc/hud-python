@@ -4,7 +4,7 @@ import contextvars
 import logging
 from collections import defaultdict
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import Any, TypeVar
 
 from hud.telemetry.mcp_models import (
     BaseMCPCall,
@@ -13,9 +13,6 @@ from hud.telemetry.mcp_models import (
     MCPResponseCall,
     StatusType,
 )
-
-if TYPE_CHECKING:
-    from hud.telemetry.exporter import TaskRunStatus
 
 logger = logging.getLogger("hud.telemetry")
 
@@ -77,44 +74,42 @@ def buffer_mcp_call(record: BaseMCPCall | dict[str, Any]) -> None:
 def export_incremental() -> list[BaseMCPCall]:
     """
     Export only new MCP calls since last export without clearing the buffer.
-    
+
     Returns:
         The list of newly exported MCP calls
     """
     task_run_id = get_current_task_run_id()
     if not task_run_id or not is_root_trace.get():
         return []
-    
+
     buffer = _GLOBAL_MCP_CALL_BUFFERS.get(task_run_id, [])
     last_exported_idx = _GLOBAL_EXPORT_INDICES.get(task_run_id, 0)
-    
+
     # Get only the new records since last export
     new_records = buffer[last_exported_idx:]
-    
+
     if new_records:
         # Update the export index
         _GLOBAL_EXPORT_INDICES[task_run_id] = len(buffer)
-        
+
         # Trigger export
         from hud.telemetry import exporter
         from hud.telemetry.exporter import submit_to_worker_loop
-        
+
         # Get current trace attributes if available
         attributes = {"incremental": True}
-        
+
         coro = exporter.export_telemetry(
             task_run_id=task_run_id,
             trace_attributes=attributes,
             mcp_calls=new_records.copy(),  # Copy to avoid modification during export
         )
         submit_to_worker_loop(coro)
-        
+
         logger.debug(
-            "Incremental export: %d new MCP calls for trace %s",
-            len(new_records),
-            task_run_id
+            "Incremental export: %d new MCP calls for trace %s", len(new_records), task_run_id
         )
-    
+
     return new_records
 
 
@@ -155,25 +150,24 @@ def create_request_record(
         # Common initialization method patterns
         init_methods = {"initialize", "session/new", "init", "setup", "connect"}
         method_lower = method.lower()
-        
+
         # Check if this is NOT an initialization method
         if not any(init_pattern in method_lower for init_pattern in init_methods):
             _GLOBAL_HAS_NON_INIT_REQUEST[task_run_id] = True
-            
+
             # Update status to running
-            from hud.telemetry import exporter
             from hud.telemetry.exporter import (
                 TaskRunStatus,
                 submit_to_worker_loop,
                 update_task_run_status,
             )
-            
+
             coro = update_task_run_status(task_run_id, TaskRunStatus.RUNNING)
             submit_to_worker_loop(coro)
             logger.debug(
                 "Updated task run %s status to RUNNING on first non-init request: %s",
                 task_run_id,
-                method
+                method,
             )
 
     record = MCPRequestCall(
@@ -209,10 +203,10 @@ def create_response_record(
     )
 
     buffer_mcp_call(record)
-    
+
     # Trigger incremental export when we receive a response
     export_incremental()
-    
+
     return record
 
 

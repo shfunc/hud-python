@@ -19,10 +19,7 @@ class SheetsCellValuesEvaluator:
         """Initialize the evaluator with context."""
         self.context = context
 
-    async def __call__(
-        self,
-        **kwargs
-    ) -> dict:
+    async def __call__(self, **kwargs) -> dict:
         """
         Check if specific cells in a Google Sheet have expected values.
 
@@ -36,7 +33,7 @@ class SheetsCellValuesEvaluator:
         """
         evaluator_logger.info("Starting sheets_cell_values evaluation")
         evaluator_logger.info(f"Received kwargs: {kwargs}")
-        
+
         # Extract cell values from kwargs
         if "args" in kwargs:
             args_value = kwargs["args"]
@@ -51,20 +48,16 @@ class SheetsCellValuesEvaluator:
         else:
             # Direct kwargs: A1="value", B2="value"
             cell_values = {k: v for k, v in kwargs.items() if k != "partial_rewarding"}
-        
+
         partial_rewarding = kwargs.get("partial_rewarding", False)
-        
+
         evaluator_logger.info(f"Cell values to check: {cell_values}")
 
         # Get page from context
         page = self.context.page if self.context else None
         if not page:
             evaluator_logger.error("No page available in context")
-            return {
-                "reward": 0.0,
-                "done": True,
-                "info": {"error": "No page available in context"}
-            }
+            return {"reward": 0.0, "done": True, "info": {"error": "No page available in context"}}
 
         # Verify we're on a Google Sheets page
         current_url = page.url
@@ -75,7 +68,7 @@ class SheetsCellValuesEvaluator:
             return {
                 "reward": 0.0,
                 "done": True,
-                "info": {"error": f"Not on a Google Sheets page! URL: {current_url}"}
+                "info": {"error": f"Not on a Google Sheets page! URL: {current_url}"},
             }
 
         evaluator_logger.info("Confirmed on Google Sheets page")
@@ -88,16 +81,14 @@ class SheetsCellValuesEvaluator:
             return {
                 "reward": 0.0,
                 "done": True,
-                "info": {"error": f"Invalid cell values format. Expected dict, got {type(cell_values)}"}
+                "info": {
+                    "error": f"Invalid cell values format. Expected dict, got {type(cell_values)}"
+                },
             }
 
         if not cell_values:
             evaluator_logger.warning("No cell values to check")
-            return {
-                "reward": 1.0,
-                "done": True,
-                "info": {"message": "No cell values to check"}
-            }
+            return {"reward": 1.0, "done": True, "info": {"message": "No cell values to check"}}
 
         # Get all the cell values from the sheet
         try:
@@ -139,18 +130,24 @@ class SheetsCellValuesEvaluator:
 
             for cell_ref, expected_value in cell_values.items():
                 actual_value = sheet_cells.get(cell_ref, "")
-                evaluator_logger.info(f"Checking {cell_ref}: expected='{expected_value}', actual='{actual_value}'")
+                evaluator_logger.info(
+                    f"Checking {cell_ref}: expected='{expected_value}', actual='{actual_value}'"
+                )
 
                 if str(actual_value).strip() == str(expected_value).strip():
                     matching_cells += 1
                     evaluator_logger.info(f"✓ {cell_ref} matches")
                 else:
-                    mismatches.append({
-                        "cell": cell_ref,
-                        "expected": expected_value,
-                        "actual": actual_value,
-                    })
-                    evaluator_logger.warning(f"✗ {cell_ref} mismatch: expected '{expected_value}', got '{actual_value}'")
+                    mismatches.append(
+                        {
+                            "cell": cell_ref,
+                            "expected": expected_value,
+                            "actual": actual_value,
+                        }
+                    )
+                    evaluator_logger.warning(
+                        f"✗ {cell_ref} mismatch: expected '{expected_value}', got '{actual_value}'"
+                    )
 
             # Calculate reward
             if partial_rewarding:
@@ -159,7 +156,9 @@ class SheetsCellValuesEvaluator:
                 reward = 1.0 if matching_cells == total_cells else 0.0
 
             success = matching_cells == total_cells
-            evaluator_logger.info(f"Evaluation result: {matching_cells}/{total_cells} cells match, reward={reward}")
+            evaluator_logger.info(
+                f"Evaluation result: {matching_cells}/{total_cells} cells match, reward={reward}"
+            )
 
             return {
                 "reward": reward,
@@ -169,13 +168,9 @@ class SheetsCellValuesEvaluator:
                     "matching_cells": matching_cells,
                     "total_cells": total_cells,
                     "mismatches": mismatches,
-                }
+                },
             }
 
         except Exception as e:
             evaluator_logger.error(f"Error evaluating sheet cells: {str(e)}", exc_info=True)
-            return {
-                "reward": 0.0,
-                "done": True,
-                "info": {"error": f"Failed to evaluate: {str(e)}"}
-            }
+            return {"reward": 0.0, "done": True, "info": {"error": f"Failed to evaluate: {str(e)}"}}

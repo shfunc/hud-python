@@ -5,7 +5,7 @@ import base64
 import logging
 import os
 from io import BytesIO
-from typing import Literal
+from typing import Any, Literal
 
 from hud.tools.base import ToolResult
 
@@ -18,27 +18,29 @@ _pyautogui = None
 _pyautogui_available = None
 
 
-def _get_pyautogui():
+def _get_pyautogui() -> Any | None:
     """Lazily import and return pyautogui module."""
     global _pyautogui, _pyautogui_available
-    
+
     if _pyautogui_available is False:
         return None
-        
+
     if _pyautogui is None:
         # Set display if not already set
         if "DISPLAY" not in os.environ:
             try:
                 from hud.settings import settings
+
                 os.environ["DISPLAY"] = settings.display
             except (ImportError, AttributeError):
                 os.environ["DISPLAY"] = ":0"
-        
+
         try:
             import pyautogui
+
             _pyautogui = pyautogui
             _pyautogui_available = True
-            
+
             # Configure PyAutoGUI settings
             _pyautogui.FAILSAFE = False  # Disable fail-safe feature
             _pyautogui.PAUSE = 0.1  # Small pause between actions
@@ -50,8 +52,9 @@ def _get_pyautogui():
             _pyautogui_available = False
             logger.warning("Failed to initialize PyAutoGUI: %s", e)
             return None
-    
+
     return _pyautogui
+
 
 # Map CLA standard keys to PyAutoGUI keys (only where they differ)
 CLA_TO_PYAUTOGUI = {
@@ -87,7 +90,7 @@ class PyAutoGUIExecutor(BaseExecutor):
         logger.info("PyAutoGUIExecutor initialized")
 
     @property
-    def pyautogui(self):
+    def pyautogui(self) -> Any:
         """Get the pyautogui module, importing it lazily if needed."""
         if self._pyautogui is None:
             self._pyautogui = _get_pyautogui()

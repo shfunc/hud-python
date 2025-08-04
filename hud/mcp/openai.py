@@ -5,6 +5,9 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, Literal
 
+import mcp.types as types
+from mcp.types import CallToolRequestParams as MCPToolCall
+from mcp.types import CallToolResult as MCPToolResult
 from openai import AsyncOpenAI
 from openai.types.responses import (
     ResponseComputerToolCall,
@@ -15,9 +18,6 @@ from openai.types.responses import (
 )
 
 from hud.settings import settings
-from mcp.types import CallToolRequestParams as MCPToolCall
-from mcp.types import CallToolResult as MCPToolResult
-import mcp.types as types
 
 from .base import BaseMCPAgent, ModelResponse
 
@@ -75,7 +75,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
         self.pending_call_id: str | None = None
         self.pending_safety_checks: list[Any] = []
 
-        self.model_name = "openai-"+self.model
+        self.model_name = "openai-" + self.model
 
         # Base system prompt for autonomous operation
         self.base_system_prompt = """
@@ -287,7 +287,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
             if item.type == "reasoning" and hasattr(item, "summary") and item.summary:
                 reasoning_text += f"Thinking: {item.summary[0].text}\n"
 
-        if reasoning_text: 
+        if reasoning_text:
             result.content = reasoning_text + result.content if result.content else reasoning_text
 
         # Set done=True if no tool calls (task complete or waiting for user)
@@ -312,7 +312,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
                 for content in result.content:
                     if isinstance(content, types.ImageContent):
                         latest_screenshot = content.data
-        
+
         # Return a simple dict that get_model_response can use
         return [
             {

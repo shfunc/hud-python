@@ -6,19 +6,21 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
-from pydantic import BaseModel, Field
 
 import mcp.types as types
 from mcp.types import CallToolRequestParams as MCPToolCall
 from mcp.types import CallToolResult as MCPToolResult
-from .client import MCPClient
+from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from hud.datasets import TaskConfig
 
+    from .client import MCPClient
+
 
 class ModelResponse(BaseModel):
     """Response from get_model_response method."""
+
     content: str | None = Field(default=None)
     tool_calls: list[MCPToolCall] = Field(default_factory=list)
     done: bool = Field(default=False)
@@ -26,7 +28,7 @@ class ModelResponse(BaseModel):
 
 class AgentResult(BaseModel):
     """Unified result from agent execution (task or prompt).
-    
+
     Fields:
     - done: Whether execution is complete
     - reward: Numeric reward (mainly for task evaluation)
@@ -35,12 +37,14 @@ class AgentResult(BaseModel):
     - error: Error message if execution failed
     - messages: Full conversation history (populated in prompt mode)
     """
+
     done: bool = Field(default=True)
     reward: float = Field(default=0.0)
     info: dict[str, Any] = Field(default_factory=dict)
     content: str | None = Field(default=None)
     error: str | None = Field(default=None)
     messages: list[Any] = Field(default_factory=list)  # Full conversation history
+
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +83,9 @@ class BaseMCPAgent(ABC):
             lifecycle_tools: List of tool names to use for lifecycle tools
         """
         if not client:
-            raise ValueError("MCPClient is required. Please provide a configured MCPClient instance.")
+            raise ValueError(
+                "MCPClient is required. Please provide a configured MCPClient instance."
+            )
         self.client = client
         self.allowed_tools = allowed_tools
         self.disallowed_tools = disallowed_tools or []
@@ -96,21 +102,21 @@ class BaseMCPAgent(ABC):
         """Apply tool filtering based on allowed/disallowed lists."""
         # Get all tools from client
         tool_map = self.client.get_tool_map()
-        
+
         # Filter tools
         self._available_tools = []
         self._tool_map = {}
-        
+
         for tool_name, (server_name, tool) in tool_map.items():
             # Check if tool should be included
             if self.allowed_tools and tool_name not in self.allowed_tools:
                 continue
             if tool_name in self.disallowed_tools:
                 continue
-            
+
             self._available_tools.append(tool)
             self._tool_map[tool_name] = (server_name, tool)
-    
+
     async def initialize(self, task: str | TaskConfig | None = None) -> None:
         """Initialize the agent with task-specific configuration."""
         # If client wasn't initialized on construction, do it now
@@ -125,13 +131,13 @@ class BaseMCPAgent(ABC):
                 self.lifecycle_tools.append(task.setup_tool.name)
             if task.evaluate_tool:
                 self.lifecycle_tools.append(task.evaluate_tool.name)
-        
+
         # Re-apply filtering with updated lifecycle tools
         self._filter_tools()
-        
+
         logger.info(
             "Agent initialized with %d available tools (after filtering)",
-            len(self._available_tools)
+            len(self._available_tools),
         )
 
     def get_available_tools(self) -> list[types.Tool]:
@@ -209,7 +215,7 @@ class BaseMCPAgent(ABC):
 
         if self.client is None:
             raise ValueError("Client is not initialized")
-        
+
         # Use client's call_tool method which handles routing
         result = await self.client.call_tool(tool_name, tool_args)
 
@@ -288,9 +294,7 @@ class BaseMCPAgent(ABC):
                         latest_screenshot = content.data
         return latest_screenshot
 
-    async def run(
-        self, prompt_or_task: str | TaskConfig, max_steps: int = 10
-    ) -> AgentResult:
+    async def run(self, prompt_or_task: str | TaskConfig, max_steps: int = 10) -> AgentResult:
         """
         Run the agent with the given prompt or task.
 
@@ -350,7 +354,7 @@ class BaseMCPAgent(ABC):
                         reward=eval_result.structuredContent.reward,
                         done=True,
                         content=eval_result.structuredContent.content,
-                        messages=prompt_result.messages
+                        messages=prompt_result.messages,
                     )
                 else:
                     # Fallback for invalid evaluation format
@@ -359,7 +363,7 @@ class BaseMCPAgent(ABC):
                         done=True,
                         error="Invalid evaluation result",
                         info={"eval_result": eval_result},
-                        messages=prompt_result.messages
+                        messages=prompt_result.messages,
                     )
             else:
                 # No evaluation - assume success
@@ -367,7 +371,7 @@ class BaseMCPAgent(ABC):
                     reward=0.0,
                     done=True,
                     content=prompt_result.content,
-                    messages=prompt_result.messages
+                    messages=prompt_result.messages,
                 )
 
         except Exception as e:
@@ -381,11 +385,11 @@ class BaseMCPAgent(ABC):
     async def run_conversation(self, prompt: str, max_steps: int = 10) -> AgentResult:
         """
         Run the agent in interactive conversation mode.
-        
+
         Args:
             prompt: The initial prompt to start the conversation
             max_steps: Maximum number of steps per turn
-            
+
         Returns:
             AgentResult when conversation ends
         """
@@ -420,11 +424,7 @@ class BaseMCPAgent(ABC):
                             print(f"\n🤖 Agent: {model_response}")  # noqa: T201
                             user_input = input("\n👤 You: ").strip()
                             if user_input.lower() in ["exit", "quit", "bye"]:
-                                return AgentResult(
-                                    done=True,
-                                    reward=0.0,
-                                    messages=messages
-                                )
+                                return AgentResult(done=True, reward=0.0, messages=messages)
                             # Add user's response to the conversation
                             user_message = await self.create_user_message(user_input)
                             messages.append(user_message)
@@ -435,7 +435,7 @@ class BaseMCPAgent(ABC):
                                 done=False,
                                 reward=0.0,
                                 error="No response generated",
-                                messages=messages
+                                messages=messages,
                             )
 
                     # Execute tool calls
@@ -448,8 +448,7 @@ class BaseMCPAgent(ABC):
                             logger.error("Tool execution failed: %s", e)
                             # Create error MCPToolResult
                             error_result = MCPToolResult(
-                                content=[types.TextContent(text=str(e))],
-                                isError=True
+                                content=[types.TextContent(text=str(e))], isError=True
                             )
                             tool_results.append(error_result)
 
@@ -466,23 +465,15 @@ class BaseMCPAgent(ABC):
         except KeyboardInterrupt:
             logger.info("Conversation interrupted by user")
             return AgentResult(
-                done=False,
-                reward=0.0,
-                messages=messages if 'messages' in locals() else []
+                done=False, reward=0.0, messages=messages if "messages" in locals() else []
             )
         except asyncio.CancelledError:
             logger.info("Conversation cancelled")
             return AgentResult(
-                done=False,
-                reward=0.0,
-                messages=messages if 'messages' in locals() else []
+                done=False, reward=0.0, messages=messages if "messages" in locals() else []
             )
 
-    async def _run_prompt(
-        self,
-        prompt: str,
-        max_steps: int = 10
-    ) -> AgentResult:
+    async def _run_prompt(self, prompt: str, max_steps: int = 10) -> AgentResult:
         """
         Run the agent with the given prompt in task mode.
 
@@ -518,7 +509,9 @@ class BaseMCPAgent(ABC):
 
                     # Check if we should stop
                     if response.done:
-                        return AgentResult(content=response.content, done=response.done, messages=messages)
+                        return AgentResult(
+                            content=response.content, done=response.done, messages=messages
+                        )
 
                     tool_calls = response.tool_calls
                     if not tool_calls:
@@ -529,10 +522,7 @@ class BaseMCPAgent(ABC):
                             response.content,
                         )
                         return AgentResult(
-                            done=True,
-                            reward=0.0,
-                            content=response.content,
-                            messages=messages
+                            done=True, reward=0.0, content=response.content, messages=messages
                         )
 
                     # Execute tool calls
@@ -545,8 +535,7 @@ class BaseMCPAgent(ABC):
                             logger.error("Tool execution failed: %s", e)
                             # Create error MCPToolResult
                             error_result = MCPToolResult(
-                                content=[types.TextContent(text=str(e))],
-                                isError=True
+                                content=[types.TextContent(text=str(e))], isError=True
                             )
                             tool_results.append(error_result)
 
@@ -562,11 +551,7 @@ class BaseMCPAgent(ABC):
 
         except KeyboardInterrupt:
             logger.info("Agent execution interrupted by user")
-            return AgentResult(
-                done=False,
-                reward=0.0,
-                messages=messages
-            )
+            return AgentResult(done=False, reward=0.0, messages=messages)
         except asyncio.CancelledError:
             logger.info("Agent execution cancelled")
             return AgentResult(done=False, reward=0.0, messages=messages)

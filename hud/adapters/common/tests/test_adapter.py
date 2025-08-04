@@ -4,9 +4,16 @@ import base64
 import io
 from unittest.mock import MagicMock, patch
 
-import numpy as np
 import pytest
 from PIL import Image
+
+try:
+    import numpy as np
+
+    HAS_NUMPY = True
+except ImportError:
+    HAS_NUMPY = False
+    np = None
 
 from hud.adapters.common import Adapter
 from hud.adapters.common.types import ClickAction, Point, TypeAction
@@ -25,14 +32,18 @@ def test_image():
     img_bytes = io.BytesIO()
     img.save(img_bytes, format="PNG")
     img_base64 = base64.b64encode(img_bytes.getvalue()).decode("utf-8")
-    img_array = np.array(img)
 
-    return {
+    result = {
         "pil": img,
         "bytes": img_bytes.getvalue(),
         "base64": img_base64,
-        "array": img_array,
     }
+
+    if HAS_NUMPY:
+        img_array = np.array(img)
+        result["array"] = img_array
+
+    return result
 
 
 def test_init(adapter):
@@ -99,6 +110,7 @@ def test_rescale_pil_image(adapter, test_image):
     assert img.size == (adapter.agent_width, adapter.agent_height)
 
 
+@pytest.mark.skipif(not HAS_NUMPY, reason="numpy not available")
 def test_rescale_numpy_array(adapter, test_image):
     """Test rescaling numpy array."""
     result = adapter.rescale(test_image["array"])

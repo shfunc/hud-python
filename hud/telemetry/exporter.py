@@ -27,6 +27,7 @@ from hud.telemetry.mcp_models import (  # MCPResponseCall for isinstance check
 
 logger = logging.getLogger("hud.telemetry")
 
+
 # --- Task Run Status Models ---
 class TaskRunStatus(enum.StrEnum):
     INITIALIZING = "initializing"
@@ -35,8 +36,10 @@ class TaskRunStatus(enum.StrEnum):
     COMPLETED = "completed"
     ERROR = "error"
 
+
 class TaskRunStatusUpdateRequest(BaseModel):
     """Request model for updating task run status."""
+
     status: TaskRunStatus
     error_message: str | None = None  # Optional error message if status is ERROR
     metadata: dict[str, Any] | None = None  # Optional metadata for context
@@ -52,6 +55,7 @@ class JobStatus(enum.StrEnum):
 
 class JobStatusUpdateRequest(BaseModel):
     """Request model for updating job status."""
+
     status: JobStatus
     error_message: str | None = None  # Optional error message if status is ERROR
     metadata: dict[str, Any] | None = None  # Optional metadata for context
@@ -299,7 +303,7 @@ async def _process_export_queue_async() -> None:
 
             if isinstance(payload_to_process, dict):  # Ensure it's a dict before processing as such
                 await _export_trace_payload_async(payload_to_process)
-                
+
                 # Apply appropriate delay based on export type
                 is_incremental = payload_to_process.get("attributes", {}).get("incremental", False)
                 if is_incremental:
@@ -382,46 +386,43 @@ async def send_telemetry_to_server(task_run_id: str, data: dict[str, Any]) -> No
 
 
 async def update_task_run_status(
-    task_run_id: str, 
-    status: TaskRunStatus, 
+    task_run_id: str,
+    status: TaskRunStatus,
     error_message: str | None = None,
     metadata: dict[str, Any] | None = None,
-    job_id: str | None = None
+    job_id: str | None = None,
 ) -> None:
     """Update the status of a task run."""
     if not settings.telemetry_enabled:
         logger.debug("Status update skipped - telemetry not enabled")
         return
-        
+
     status_url = f"{settings.base_url}/v2/task_runs/{task_run_id}/status"
-    
+
     try:
         async with httpx.AsyncClient() as client:
             headers = {
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {settings.api_key}",
             }
-            
+
             request_data = TaskRunStatusUpdateRequest(
-                status=status,
-                error_message=error_message,
-                metadata=metadata,
-                job_id=job_id
+                status=status, error_message=error_message, metadata=metadata, job_id=job_id
             )
-            
+
             logger.debug(
                 "Updating status for task run %s to %s",
                 task_run_id,
                 status,
             )
-            
+
             response = await client.post(
                 status_url,
                 json=request_data.model_dump(exclude_none=True),
                 headers=headers,
                 timeout=10.0,
             )
-            
+
             if response.status_code >= 200 and response.status_code < 300:
                 logger.debug(
                     "Successfully updated status for task run %s to %s",
@@ -440,46 +441,46 @@ async def update_task_run_status(
 
 
 async def update_job_status(
-    job_id: str, 
-    status: JobStatus, 
+    job_id: str,
+    status: JobStatus,
     error_message: str | None = None,
     metadata: dict[str, Any] | None = None,
-    taskset_name: str | None = None
+    taskset_name: str | None = None,
 ) -> None:
     """Update the status of a job."""
     if not settings.telemetry_enabled:
         logger.debug("Job status update skipped - telemetry not enabled")
         return
-        
+
     status_url = f"{settings.base_url}/v2/jobs/{job_id}/status"
-    
+
     try:
         async with httpx.AsyncClient() as client:
             headers = {
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {settings.api_key}",
             }
-            
+
             request_data = JobStatusUpdateRequest(
                 status=status,
                 error_message=error_message,
                 metadata=metadata,
-                taskset_name=taskset_name
+                taskset_name=taskset_name,
             )
-            
+
             logger.debug(
                 "Updating status for job %s to %s",
                 job_id,
                 status,
             )
-            
+
             response = await client.post(
                 status_url,
                 json=request_data.model_dump(exclude_none=True),
                 headers=headers,
                 timeout=10.0,
             )
-            
+
             if response.status_code >= 200 and response.status_code < 300:
                 logger.debug(
                     "Successfully updated status for job %s to %s",

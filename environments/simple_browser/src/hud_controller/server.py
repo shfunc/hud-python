@@ -125,7 +125,7 @@ async def initialize_environment(session=None, progress_token=None):
                 try:
                     app_results = await asyncio.gather(*app_tasks, return_exceptions=True)
                     await send_progress(90, "Apps launched (some may have failed)")
-                    
+
                     # If no browser URL specified, use the first successfully launched app
                     if not browser_url:
                         for result in app_results:

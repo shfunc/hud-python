@@ -1,4 +1,5 @@
 """Dataset utilities for working with HuggingFace datasets and TaskConfigs."""
+
 from __future__ import annotations
 
 import asyncio
@@ -13,6 +14,7 @@ from hud.telemetry.job import job
 
 if TYPE_CHECKING:
     from datasets import Dataset
+
     from hud.mcp.base import BaseMCPAgent
 
 logger = logging.getLogger("hud.datasets")
@@ -86,21 +88,22 @@ class TaskConfig(BaseModel):
 def to_taskconfigs(dataset: Dataset) -> Dataset:
     """
     Convert a HuggingFace dataset to contain TaskConfig objects.
-    
+
     Args:
         dataset: HuggingFace dataset with task data
-    
+
     Returns:
         Dataset with 'task' column containing TaskConfig objects
-    
+
     Example:
         >>> dataset = load_dataset("hud/sheetbench-v1", split="test")
         >>> tasks = to_taskconfigs(dataset)
         >>> tasks[0]["task"]  # This is a TaskConfig object
     """
+
     def _convert(example: dict[str, Any]) -> dict[str, TaskConfig]:
         return {"task": TaskConfig(**example)}
-    
+
     # Map and keep only the task column
     return dataset.map(_convert, remove_columns=dataset.column_names)
 
@@ -115,7 +118,7 @@ async def run_dataset(
 ) -> list[Any]:
     """
     Run all tasks in a dataset with automatic job tracking.
-    
+
     Args:
         name: Name for the job
         dataset: HuggingFace Dataset (raw, not converted)
@@ -123,67 +126,64 @@ async def run_dataset(
         agent_config: Configuration for agent (model, etc.)
         max_concurrent: Maximum parallel task execution
         metadata: Optional metadata for the job
-    
+
     Returns:
         List of results from agent.run() in dataset order
-    
+
     Example:
         >>> from datasets import load_dataset
         >>> from hud.mcp import ClaudeMCPAgent
-        >>> 
         >>> dataset = load_dataset("hud/sheetbench-v1", split="test")
         >>> results = await run_dataset(
         ...     "sheetbench_eval",
         ...     dataset,
         ...     ClaudeMCPAgent,
         ...     {"model": "claude-3-5-sonnet-20241022"},
-        ...     max_concurrent=3
+        ...     max_concurrent=3,
         ... )
     """
     # Import here to avoid circular imports
     from mcp_use import MCPClient
+
     import hud
-    
+
     # Convert dataset to TaskConfigs internally
     tasks = to_taskconfigs(dataset)
-    
+
     # Create job context
     job_metadata = metadata or {}
     job_metadata["agent_class"] = agent_class.__name__
     if agent_config:
         job_metadata["agent_config"] = agent_config
-    
+
     with job(name, metadata=job_metadata):
         # Run tasks with semaphore for concurrency control
         sem = asyncio.Semaphore(max_concurrent)
         results = [None] * len(tasks)
-        
+
         async def _worker(index: int, row: dict[str, Any]) -> None:
             async with sem:
                 task = row["task"]
-                
+
                 # Create trace for this task
                 with hud.trace(f"task_{index}"):
                     # Create fresh MCP client per task
                     if task.mcp_config:
                         client = MCPClient.from_dict({"mcp_config": task.mcp_config})
-                        agent = agent_class(
-                            client=client,
-                            **(agent_config or {})
-                        )
-                        
+                        agent = agent_class(client=client, **(agent_config or {}))
+
                         try:
                             results[index] = await agent.run(task)
                         finally:
                             await client.close_all_sessions()
                     else:
-                        logger.warning(f"Task {index} has no mcp_config defined")
+                        logger.warning("Task %d has no mcp_config defined", index)
                         results[index] = None
-        
+
         # Execute all tasks
         await asyncio.gather(
             *[_worker(i, row) for i, row in enumerate(tasks)],
-            return_exceptions=True  # Don't fail entire batch on one error
+            return_exceptions=True,  # Don't fail entire batch on one error
         )
-    
+
     return results
