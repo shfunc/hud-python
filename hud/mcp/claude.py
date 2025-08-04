@@ -198,11 +198,12 @@ class ClaudeMCPAgent(BaseMCPAgent):
                 mcp_tool_name = self._claude_to_mcp_tool_map.get(block.name, block.name)
 
                 # Create MCPToolCall object with Claude metadata as extra fields
+                # Pyright will complain but the tool class accepts extra fields
                 tool_call = MCPToolCall(
                     name=mcp_tool_name,
                     arguments=block.input,
-                    tool_use_id=block.id,  # Extra field for format_tool_results
-                    claude_name=block.name,  # Keep original Claude name
+                    tool_use_id=block.id,  # type: ignore
+                    claude_name=block.name,  # type: ignore
                 )
                 result.tool_calls.append(tool_call)
                 result.done = False

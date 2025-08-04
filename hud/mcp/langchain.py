@@ -47,7 +47,11 @@ class LangChainMCPAgent(BaseMCPAgent):
         self.adapter = LangChainAdapter(disallowed_tools=self.disallowed_tools)
         self._langchain_tools: list[BaseTool] | None = None
 
-        self.model_name = "langchain-" + self.llm.model_name
+        self.model_name = (
+            "langchain-" + self.llm.model_name  # type: ignore
+            if hasattr(self.llm, "model_name")
+            else "unknown"
+        )
 
     def _get_langchain_tools(self) -> list[BaseTool]:
         """Get or create LangChain tools from MCP tools."""

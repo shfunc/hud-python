@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from mcp import types
+from mcp.types import CallToolRequestParams as MCPToolCall
 
 from hud.mcp.base import BaseMCPAgent
 from hud.tools.executors.base import BaseExecutor
@@ -102,7 +103,7 @@ class TestBaseMCPAgent:
     async def test_initialize_no_client(self):
         """Test initialize fails without client."""
         agent = MockMCPAgent()
-        agent.client = None
+        agent.client = None  # type: ignore
 
         with pytest.raises(ValueError, match="Client is not initialized"):
             await agent.initialize()
@@ -218,12 +219,12 @@ class TestBaseMCPAgent:
 
         assert agent.client is not None
         agent.client.get_all_active_sessions = MagicMock(return_value={"server1": mock_session})
-        agent.client.get_session = MagicMock(return_value=mock_session)
 
         await agent.initialize()
 
         # Call the tool
-        result = await agent.call_tool({"name": "test_tool", "arguments": {"param": "value"}})
+        tool_call = MCPToolCall(name="test_tool", arguments={"param": "value"})
+        result = await agent.call_tool(tool_call)
 
         assert result == mock_result
         assert not result.isError
@@ -247,15 +248,17 @@ class TestBaseMCPAgent:
 
         # Try to call unknown tool
         with pytest.raises(ValueError, match="Tool 'unknown_tool' not found"):
-            await agent.call_tool({"name": "unknown_tool", "arguments": {}})
+            tool_call = MCPToolCall(name="unknown_tool", arguments={})
+            await agent.call_tool(tool_call)
 
     @pytest.mark.asyncio
     async def test_call_tool_no_name(self):
         """Test calling tool without name."""
-        agent = MockMCPAgent()
+        from pydantic import ValidationError
 
-        with pytest.raises(ValueError, match="Tool call must have a 'name' field"):
-            await agent.call_tool({"arguments": {}})
+        # MCPToolCall requires name, so it will raise ValidationError
+        with pytest.raises(ValidationError):
+            MCPToolCall(name="", arguments={})  # Empty name should fail validation
 
     def test_get_system_prompt_default(self):
         """Test get_system_prompt with default settings."""
@@ -362,34 +365,14 @@ class TestBaseMCPAgent:
 
         assert agent.client is not None
         agent.client.get_all_active_sessions = MagicMock(return_value={"server1": mock_session})
-        agent.client.get_session = MagicMock(return_value=mock_session)
 
         await agent.initialize()
 
         screenshot = await agent.capture_screenshot()
         assert screenshot == "base64imagedata"
 
-    def test_process_tool_results_extracts_text(self):
-        """Test processing tool results extracts text content."""
-        agent = MockMCPAgent()
-
-        # Create a proper CallToolResult object
-        result = types.CallToolResult(
-            content=[
-                types.TextContent(type="text", text="Result text"),
-                types.ImageContent(type="image", data="imagedata", mimeType="image/png"),
-            ],
-            isError=False,
-        )
-
-        tool_results = [{"tool_name": "test_tool", "result": result}]
-
-        processed = agent.process_tool_results(tool_results)
-
-        assert "text" in processed
-        assert "Result text" in processed["text"]
-        assert "results" in processed
-        assert len(processed["results"]) == 1
+    # process_tool_results method was removed from base class
+    # This functionality is now handled internally
 
     def test_get_tools_by_server(self):
         """Test getting tools grouped by server."""

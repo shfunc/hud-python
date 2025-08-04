@@ -351,9 +351,9 @@ class BaseMCPAgent(ABC):
                     and eval_result.structuredContent is not None
                 ):
                     return AgentResult(
-                        reward=eval_result.structuredContent.reward,
+                        reward=self._find_reward(eval_result),
                         done=True,
-                        content=eval_result.structuredContent.content,
+                        content=eval_result.structuredContent["content"],
                         messages=prompt_result.messages,
                     )
                 else:
@@ -376,6 +376,19 @@ class BaseMCPAgent(ABC):
 
         except Exception as e:
             return AgentResult(reward=0.0, done=True, error=str(e))
+
+    def _find_reward(self, result: MCPToolResult) -> float:
+        """Find the reward in the result.
+
+        Agent accepts "reward", "grade", "score"
+
+        If not found, return 0.0
+        """
+        accept_keys = ["reward", "grade", "score"]
+        for key in accept_keys:
+            if isinstance(result.structuredContent, dict) and key in result.structuredContent:
+                return result.structuredContent[key]
+        return 0.0
 
     def _format_error_result(self, error_message: str) -> MCPToolResult:
         return MCPToolResult(

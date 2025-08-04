@@ -52,7 +52,7 @@ class LocalDockerClient(DockerClient):
                 "aiodocker is required for LocalDockerClient. "
                 "Please install it with 'pip install aiodocker'"
             )
-        docker_client = aiodocker.Docker()
+        docker_client = aiodocker.Docker()  # type: ignore
 
         # Create a tar file from the path
         tar_bytes = directory_to_tar_bytes(build_context)
@@ -99,7 +99,7 @@ class LocalDockerClient(DockerClient):
                 "aiodocker is required for LocalDockerClient. "
                 "Please install it with 'pip install aiodocker'"
             )
-        docker_client = aiodocker.Docker()
+        docker_client = aiodocker.Docker()  # type: ignore
 
         # Default host config
         if host_config is None:
@@ -173,7 +173,7 @@ class LocalDockerClient(DockerClient):
         client._log_task = log_task  # type: ignore[attr-defined]
         return client
 
-    def __init__(self, docker_conn: aiodocker.Docker, container_id: str) -> None:
+    def __init__(self, docker_conn: aiodocker.Docker, container_id: str) -> None:  # type: ignore
         """
         Initialize the DockerClient.
 
@@ -261,7 +261,7 @@ class LocalDockerClient(DockerClient):
         exec_result = await container.exec(
             cmd=command,
         )
-        output: Stream = exec_result.start(timeout=ClientTimeout(timeout), detach=False)
+        output: Stream = exec_result.start(timeout=ClientTimeout(timeout), detach=False)  # type: ignore
 
         stdout_data = bytearray()
         stderr_data = bytearray()

@@ -16,8 +16,6 @@ from hud.utils.config import REMOTE_EVALUATE, REMOTE_SETUP
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from inspect_ai.dataset import Dataset
-
     from hud.agent import Agent
 
 
@@ -222,22 +220,3 @@ async def load_taskset(
     taskset._apply({"metadata": metadata})
 
     return taskset
-
-
-def load_from_inspect(dataset: Dataset) -> TaskSet:
-    """
-    Creates a TaskSet from an inspect-ai dataset.
-
-    Args:
-        dataset: An inspect-ai dataset
-
-    Returns:
-        TaskSet: A new TaskSet instance
-    """
-    tasks = [Task.from_inspect_sample(sample) for sample in dataset]
-
-    return TaskSet(
-        id=None,
-        tasks=tasks,
-        description=dataset.name,
-    )

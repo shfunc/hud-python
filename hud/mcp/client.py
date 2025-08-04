@@ -8,6 +8,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from mcp_use.client import MCPClient as MCPUseClient
+from pydantic import AnyUrl
 
 if TYPE_CHECKING:
     from typing import Self
@@ -137,12 +138,11 @@ class MCPClient:
                 # Log detailed tool info in verbose mode
                 if self.verbose:
                     for tool in tools_result.tools:
+                        description = tool.description or ""
                         logger.debug(
                             "  Tool '%s': %s",
                             tool.name,
-                            tool.description[:100] + "..."
-                            if len(tool.description) > 100
-                            else tool.description,
+                            description[:100] + "..." if len(description) > 100 else description,
                         )
 
             except Exception as e:
@@ -170,10 +170,10 @@ class MCPClient:
                 # Try to read telemetry resource
                 try:
                     result = await session.connector.client_session.read_resource(
-                        "telemetry://live"
+                        AnyUrl("telemetry://live")
                     )
                     if result and result.contents and len(result.contents) > 0:
-                        telemetry_data = json.loads(result.contents[0].text)
+                        telemetry_data = json.loads(result.contents[0].text)  # type: ignore
                         self._telemetry_data[server_name] = telemetry_data
 
                         logger.info("📡 Telemetry data from server '%s':", server_name)
@@ -232,6 +232,9 @@ class MCPClient:
                 json.dumps(arguments, indent=2) if arguments else "None",
             )
 
+        if session.connector.client_session is None:
+            raise ValueError(f"Client session not initialized for {server_name}")
+
         result = await session.connector.client_session.call_tool(
             name=tool_name, arguments=arguments or {}
         )
@@ -241,7 +244,7 @@ class MCPClient:
 
         return result
 
-    async def read_resource(self, uri: str) -> types.ReadResourceResult | None:
+    async def read_resource(self, uri: AnyUrl) -> types.ReadResourceResult | None:
         """
         Read a resource by URI from any server that provides it.
 
@@ -301,12 +304,7 @@ class MCPClient:
 
     async def close(self) -> None:
         """Close all active sessions."""
-        for session in self._sessions.values():
-            try:
-                if hasattr(session, "close"):
-                    await session.close()
-            except Exception as e:
-                logger.error("Error closing session: %s", e)
+        await self._mcp_client.close_all_sessions()
 
         self._sessions = {}
         self._available_tools = []

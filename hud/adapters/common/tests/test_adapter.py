@@ -40,7 +40,7 @@ def test_image():
     }
 
     if HAS_NUMPY:
-        img_array = np.array(img)
+        img_array = np.array(img)  # type: ignore
         result["array"] = img_array
 
     return result

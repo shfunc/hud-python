@@ -15,7 +15,7 @@ from hud.telemetry.job import job
 if TYPE_CHECKING:
     from datasets import Dataset
 
-    from hud.mcp.base import BaseMCPAgent
+    from hud.mcp.base import AgentResult, BaseMCPAgent
 
 logger = logging.getLogger("hud.datasets")
 
@@ -143,9 +143,8 @@ async def run_dataset(
         ... )
     """
     # Import here to avoid circular imports
-    from hud.mcp.client import MCPClient
-
     import hud
+    from hud.mcp.client import MCPClient
 
     # Convert dataset to TaskConfigs internally
     tasks = to_taskconfigs(dataset)
@@ -159,9 +158,9 @@ async def run_dataset(
     with job(name, metadata=job_metadata):
         # Run tasks with semaphore for concurrency control
         sem = asyncio.Semaphore(max_concurrent)
-        results = [None] * len(tasks)
+        results: list[AgentResult | None] = [None] * len(tasks)
 
-        async def _worker(index: int, row: dict[str, Any]) -> None:
+        async def _worker(index: int, row: Any) -> None:
             async with sem:
                 task = row["task"]
 
@@ -169,13 +168,13 @@ async def run_dataset(
                 with hud.trace(f"task_{index}"):
                     # Create fresh MCP client per task
                     if task.mcp_config:
-                        client = MCPClient.from_dict({"mcp_config": task.mcp_config})
+                        client = MCPClient(mcp_config=task.mcp_config)
                         agent = agent_class(client=client, **(agent_config or {}))
 
                         try:
                             results[index] = await agent.run(task)
                         finally:
-                            await client.close_all_sessions()
+                            await client.close()
                     else:
                         logger.warning("Task %d has no mcp_config defined", index)
                         results[index] = None

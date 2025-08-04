@@ -19,7 +19,7 @@ from openai.types.responses import (
 
 from hud.settings import settings
 
-from .base import BaseMCPAgent, ModelResponse
+from .base import AgentResult, BaseMCPAgent, ModelResponse
 
 if TYPE_CHECKING:
     from hud.datasets import TaskConfig
@@ -92,9 +92,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
         Remember: You are expected to complete tasks autonomously. The user trusts you to do what they asked.
         """  # noqa: E501
 
-    async def run(
-        self, prompt_or_task: str | TaskConfig, max_steps: int = 10
-    ) -> dict[str, Any]:
+    async def run(self, prompt_or_task: str | TaskConfig, max_steps: int = 10) -> AgentResult:
         """
         Run the agent with the given prompt or task.
 
@@ -260,11 +258,12 @@ class OpenAIMCPAgent(BaseMCPAgent):
                 action = computer_call.action.model_dump()
 
                 # Create MCPToolCall object with OpenAI metadata as extra fields
+                # Pyright will complain but the tool class accepts extra fields
                 tool_call = MCPToolCall(
                     name=computer_tool_name,
                     arguments=action,
-                    call_id=computer_call.call_id,  # Extra field for format_tool_results
-                    pending_safety_checks=computer_call.pending_safety_checks,
+                    call_id=computer_call.call_id,  # type: ignore
+                    pending_safety_checks=computer_call.pending_safety_checks,  # type: ignore
                 )
                 result.tool_calls.append(tool_call)
         else:
