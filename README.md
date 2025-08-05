@@ -1,5 +1,5 @@
 <div align="left">
-  <img src="https://raw.githubusercontent.com/hud-evals/hud-sdk/main/docs/logo/hud_logo.svg" alt="HUD" width="150" style="margin-bottom: 20px;"/>
+  <img src="https://raw.githubusercontent.com/hud-evals/hud-python/main/docs/logo/hud_logo.svg" alt="HUD" width="150" style="margin-bottom: 20px;"/>
 </div>
 
 <h3>
@@ -13,7 +13,7 @@ Evaluate your Computer Use AI agents across web browsers, desktop environments, 
 We're here to help with eval strategies, custom environments, or improving your agent architecture!
 
 
-> **Early Release Notice**: We'd love to hear your feedback in [Issues](https://github.com/hud-evals/hud-sdk/issues), as the SDK is still evolving!
+> **Early Release Notice**: We'd love to hear your feedback in [Issues](https://github.com/hud-evals/hud-python/issues), as the SDK is still evolving!
 
 [![PyPI version](https://img.shields.io/pypi/v/hud-python)](https://pypi.org/project/hud-python/)
 
@@ -197,7 +197,7 @@ If you use this SDK in your research, please cite it as follows:
   author = {HUD and Jay Ram and Lorenss Martinsons and Parth Patel and Oskars Putans and Govind Pimpale and Mayank Singamreddy and Nguyen Nhat Minh},
   title = {{HUD: An Evaluation Platform for Agents}},
   date = {2025-04},
-  url = {https://github.com/hud-evals/hud-sdk},
+  url = {https://github.com/hud-evals/hud-python},
   langid = {en}
 }
 ```

@@ -1,6 +1,6 @@
 [project]
 name = "hud-python"
-version = "0.3.0"
+version = "0.3.1"
 description = "SDK for the HUD platform."
 readme = "README.md"
 requires-python = ">=3.11, <3.14"
@@ -37,8 +37,8 @@ classifiers = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/hud-evals/hud-sdk"
-"Bug Tracker" = "https://github.com/hud-evals/hud-sdk/issues"
+"Homepage" = "https://github.com/hud-evals/hud-python"
+"Bug Tracker" = "https://github.com/hud-evals/hud-python/issues"
 "Documentation" = "https://docs.hud.so"
 
 [build-system]
