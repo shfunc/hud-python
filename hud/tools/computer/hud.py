@@ -16,8 +16,6 @@ from hud.tools.executors.xdo import XDOExecutor
 
 logger = logging.getLogger(__name__)
 
-BASE_SCREEN_WIDTH = 1920
-BASE_SCREEN_HEIGHT = 1080
 
 
 class HudComputerTool:
@@ -29,6 +27,8 @@ class HudComputerTool:
         self,
         width: int | None = None,
         height: int | None = None,
+        environment_width: int = 1920,
+        environment_height: int = 1080,
         display_num: int | None = None,
         platform_type: Literal["auto", "xdo", "pyautogui"] = "auto",
         custom_executor: BaseExecutor | None = None,
@@ -38,8 +38,10 @@ class HudComputerTool:
         Initialize the HUD computer tool.
 
         Args:
-            width: Target width for rescaling (None = use actual screen width)
-            height: Target height for rescaling (None = use actual screen height)
+            width: Target width for rescaling (None = use environment width)
+            height: Target height for rescaling (None = use environment height)
+            environment_width: Base screen width
+            environment_height: Base screen height
             display_num: X display number
             platform_type: Which executor to use:
                 - "auto": Automatically detect based on platform
@@ -49,20 +51,25 @@ class HudComputerTool:
             rescale_images: If True, rescale screenshots. If False, only rescale action coordinates
         """
         # Use provided dimensions or defaults
-        self.width = width or BASE_SCREEN_WIDTH
-        self.height = height or BASE_SCREEN_HEIGHT
+        self.width = width or environment_width
+        self.environment_width = environment_width
+
+        self.height = height or environment_height
+        self.environment_height = environment_height
+
         self.rescale_images = rescale_images
 
         logger.info("Width: %s, Height: %s", self.width, self.height)
         logger.info(
-            "Base Screen Width: %s, Base Screen Height: %s",
-            BASE_SCREEN_WIDTH,
-            BASE_SCREEN_HEIGHT,
+            "Environment Screen Width: %s, Environment Screen Height: %s",
+            self.environment_width,
+            self.environment_height,
         )
 
         # Calculate scaling factors from base screen size to target size
-        self.scale_x = self.width / BASE_SCREEN_WIDTH
-        self.scale_y = self.height / BASE_SCREEN_HEIGHT
+        self.scale_x = self.width / self.environment_width
+    
+        self.scale_y = self.height / self.environment_height
 
         logger.info("Scale X: %s, Scale Y: %s", self.scale_x, self.scale_y)
         self.scale = min(self.scale_x, self.scale_y)
