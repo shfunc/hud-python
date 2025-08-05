@@ -1,7 +1,7 @@
 import asyncio
 import hud
 from hud.mcp import ClaudeMCPAgent, OpenAIMCPAgent
-from hud.task import TaskConfig
+from hud.datasets import TaskConfig
 from mcp_use import MCPClient
 
 

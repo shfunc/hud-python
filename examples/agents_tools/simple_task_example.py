@@ -18,7 +18,7 @@ Usage:
 import asyncio
 import logging
 from hud.mcp import ClaudeMCPAgent
-from hud.task import TaskConfig
+from hud.datasets import TaskConfig
 from mcp.types import CallToolRequestParams as MCPToolCall
 from mcp_use import MCPClient
 
