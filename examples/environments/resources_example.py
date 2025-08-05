@@ -33,7 +33,7 @@ class HudResourcesDemo:
 
         # Configure client for Docker stdio transport
         config = {
-            "mcpServers": {
+            "mcp_config": {
                 "browser": {
                     "command": "docker",
                     "args": [

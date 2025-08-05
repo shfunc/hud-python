@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pathlib import PosixPath
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, get_args
 from venv import logger
 
@@ -15,8 +15,6 @@ from hud.utils.config import REMOTE_EVALUATE, REMOTE_SETUP
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
-
-    from inspect_ai.dataset import Dataset
 
     from hud.agent import Agent
 
@@ -104,7 +102,7 @@ class TaskSet(BaseModel):
                 evaluate_config = None
 
             if isinstance(task.gym, CustomGym):
-                if isinstance(task.gym.image_or_build_context, PosixPath):
+                if isinstance(task.gym.image_or_build_context, Path):
                     raise ValueError(
                         "Local build contexts are not supported for "
                         "remote tasksets, attach an image or existing "
@@ -222,22 +220,3 @@ async def load_taskset(
     taskset._apply({"metadata": metadata})
 
     return taskset
-
-
-def load_from_inspect(dataset: Dataset) -> TaskSet:
-    """
-    Creates a TaskSet from an inspect-ai dataset.
-
-    Args:
-        dataset: An inspect-ai dataset
-
-    Returns:
-        TaskSet: A new TaskSet instance
-    """
-    tasks = [Task.from_inspect_sample(sample) for sample in dataset]
-
-    return TaskSet(
-        id=None,
-        tasks=tasks,
-        description=dataset.name,
-    )

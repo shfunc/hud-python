@@ -18,14 +18,14 @@ async def main():
     """Run MCP-Use agent with HUD tools."""
 
     # Configure MCP client to connect to the router
-    config = {"mcpServers": {"hud": {"url": BASE_URL}}}
+    config = {"mcp_config": {"hud": {"url": BASE_URL}}}
 
     # Create client and agent
     client = MCPClient.from_dict(config)
     llm = ChatOpenAI(model="gpt-4o")
     agent = MCPAgent(
         llm=llm,
-        client=client,
+        mcp_client=client,
         max_steps=30,
         verbose=True,
         disallowed_tools=["edit", "bash", "computer_anthropic", "computer_openai"],

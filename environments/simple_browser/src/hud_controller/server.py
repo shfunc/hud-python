@@ -123,8 +123,16 @@ async def initialize_environment(session=None, progress_token=None):
             # Wait for apps with error handling
             if app_tasks:
                 try:
-                    await asyncio.gather(*app_tasks, return_exceptions=True)
+                    app_results = await asyncio.gather(*app_tasks, return_exceptions=True)
                     await send_progress(90, "Apps launched (some may have failed)")
+
+                    # If no browser URL specified, use the first successfully launched app
+                    if not browser_url:
+                        for result in app_results:
+                            if isinstance(result, dict) and "url" in result:
+                                browser_url = result["url"]
+                                logger.info(f"Auto-navigating to first app: {browser_url}")
+                                break
                 except Exception as e:
                     logger.error(f"App launch failed: {e}")
                     await send_progress(90, f"Apps failed to launch: {e}")

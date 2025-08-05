@@ -20,6 +20,12 @@ class Settings(BaseSettings):
         validation_alias="base_url",
     )
 
+    mcp_url: str = Field(
+        default="https://mcp.hud.so/v3/mcp",
+        description="Base URL for the MCP Server",
+        validation_alias="HUD_MCP_URL",
+    )
+
     api_key: str | None = Field(
         default=None,
         description="API key for authentication with the HUD API",

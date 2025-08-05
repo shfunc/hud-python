@@ -9,8 +9,15 @@ import time
 import uuid
 from typing import TYPE_CHECKING, Any
 
-import aiodocker
-from aiohttp import ClientTimeout
+try:
+    import aiodocker
+    from aiohttp import ClientTimeout
+
+    AIODOCKER_AVAILABLE = True
+except ImportError:
+    AIODOCKER_AVAILABLE = False
+    aiodocker = None  # type: ignore
+    ClientTimeout = None  # type: ignore
 
 from hud.env.docker_client import DockerClient, EnvironmentStatus
 from hud.utils import ExecuteResult
@@ -40,7 +47,12 @@ class LocalDockerClient(DockerClient):
         image_tag = f"hud-env-{uuid.uuid4().hex[:8]}"
 
         # Initialize Docker client
-        docker_client = aiodocker.Docker()
+        if not AIODOCKER_AVAILABLE:
+            raise ImportError(
+                "aiodocker is required for LocalDockerClient. "
+                "Please install it with 'pip install aiodocker'"
+            )
+        docker_client = aiodocker.Docker()  # type: ignore
 
         # Create a tar file from the path
         tar_bytes = directory_to_tar_bytes(build_context)
@@ -82,7 +94,12 @@ class LocalDockerClient(DockerClient):
         """
 
         # Initialize Docker client
-        docker_client = aiodocker.Docker()
+        if not AIODOCKER_AVAILABLE:
+            raise ImportError(
+                "aiodocker is required for LocalDockerClient. "
+                "Please install it with 'pip install aiodocker'"
+            )
+        docker_client = aiodocker.Docker()  # type: ignore
 
         # Default host config
         if host_config is None:
@@ -156,7 +173,7 @@ class LocalDockerClient(DockerClient):
         client._log_task = log_task  # type: ignore[attr-defined]
         return client
 
-    def __init__(self, docker_conn: aiodocker.Docker, container_id: str) -> None:
+    def __init__(self, docker_conn: aiodocker.Docker, container_id: str) -> None:  # type: ignore
         """
         Initialize the DockerClient.
 
@@ -164,6 +181,11 @@ class LocalDockerClient(DockerClient):
             docker_conn: Docker client connection
             container_id: ID of the Docker container to control
         """
+        if not AIODOCKER_AVAILABLE:
+            raise ImportError(
+                "aiodocker is required for LocalDockerClient. "
+                "Please install it with 'pip install aiodocker'"
+            )
         super().__init__()
 
         # Store container ID instead of container object
@@ -239,7 +261,7 @@ class LocalDockerClient(DockerClient):
         exec_result = await container.exec(
             cmd=command,
         )
-        output: Stream = exec_result.start(timeout=ClientTimeout(timeout), detach=False)
+        output: Stream = exec_result.start(timeout=ClientTimeout(timeout), detach=False)  # type: ignore
 
         stdout_data = bytearray()
         stderr_data = bytearray()

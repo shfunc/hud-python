@@ -29,3 +29,7 @@ TODO.md
 .coverage
 
 *.log
+
+/ref/
+
+.cursor/

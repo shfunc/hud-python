@@ -5,7 +5,7 @@ import asyncio
 from dotenv import load_dotenv
 import hud
 from mcp_use import MCPClient
-from hud.mcp_agent import OpenAIMCPAgent
+from hud.mcp import OpenAIMCPAgent
 
 load_dotenv()
 
@@ -18,14 +18,14 @@ async def main():
     """Run OpenAI MCP agent with HUD tools."""
 
     # Configure MCP client to connect to the router
-    config = {"mcpServers": {"hud": {"url": BASE_URL}}}
+    config = {"mcp_config": {"hud": {"url": BASE_URL}}}
 
     # Create client
     client = MCPClient.from_dict(config)
 
     # Create OpenAI agent
     agent = OpenAIMCPAgent(
-        client=client,
+        mcp_client=client,
         model="computer-use-preview",  # OpenAI's computer use model
         environment="browser",  # Can be "windows", "mac", "linux", or "browser"
         # initial_screenshot=True,
@@ -46,7 +46,7 @@ async def main():
 
         # Use trace to see MCP calls in real-time
         with hud.trace():
-            result = await agent.run(query, max_steps=15, conversation_mode=True)
+            result = await agent.run(query, max_steps=15)
 
         print(f"\n✅ Result: {result}")
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import sys
 
 import pytest
 from mcp.types import ImageContent, TextContent
@@ -72,6 +73,7 @@ async def test_bash_tool_restart_and_no_command():
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(sys.platform == "win32", reason="EditTool uses Unix commands")
 async def test_edit_tool_flow(tmp_path):
     file_path = tmp_path / "demo.txt"
 
@@ -106,6 +108,7 @@ async def test_base_executor_simulation():
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(sys.platform == "win32", reason="EditTool uses Unix commands")
 async def test_edit_tool_view(tmp_path):
     # Create a temporary file
     p = tmp_path / "sample.txt"

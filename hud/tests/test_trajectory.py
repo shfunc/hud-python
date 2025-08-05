@@ -44,7 +44,7 @@ def sample_trajectory():
 
 
 def test_trajectory_display_with_observation_url(mocker, sample_trajectory):
-    mock_display = mocker.patch("hud.trajectory.display")
+    mock_display = mocker.patch("IPython.display.display")
     mock_print = mocker.patch("hud.trajectory.print")
 
     sample_trajectory.display()
@@ -67,9 +67,7 @@ def test_trajectory_display_with_observation_url(mocker, sample_trajectory):
 
 
 def test_trajectory_display_with_observation_text(mocker, sample_trajectory):
-    mocker.patch(
-        "hud.trajectory.display",
-    )
+    mocker.patch("IPython.display.display")
     mock_print = mocker.patch("hud.trajectory.print")
 
     sample_trajectory.display()
@@ -94,7 +92,7 @@ def test_trajectory_display_with_observation_text(mocker, sample_trajectory):
 
 
 def test_trajectory_display_no_observations(mocker, sample_trajectory):
-    mocker.patch("hud.trajectory.display")
+    mocker.patch("IPython.display.display")
     mock_print = mocker.patch("hud.trajectory.print")
 
     sample_trajectory.display()
@@ -109,7 +107,7 @@ def test_trajectory_display_no_observations(mocker, sample_trajectory):
 
 
 def test_trajectory_display_duration_calculation(mocker, sample_trajectory):
-    mocker.patch("hud.trajectory.display")
+    mocker.patch("IPython.display.display")
     mock_print = mocker.patch("hud.trajectory.print")
 
     sample_trajectory.display()
@@ -130,7 +128,7 @@ def test_trajectory_display_duration_calculation(mocker, sample_trajectory):
 
 
 def test_trajectory_display_invalid_timestamp(mocker):
-    mocker.patch("hud.trajectory.display")
+    mocker.patch("IPython.display.display")
     mock_print = mocker.patch("hud.trajectory.print")
 
     trajectory = Trajectory(
@@ -163,7 +161,7 @@ def test_trajectory_display_invalid_timestamp(mocker):
 
 
 def test_trajectory_empty(mocker):
-    mocker.patch("hud.trajectory.display")
+    mocker.patch("IPython.display.display")
     mocker.patch("hud.trajectory.print")
 
     trajectory = Trajectory(id="traj-empty", trajectory=[])

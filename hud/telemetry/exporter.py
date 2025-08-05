@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures  # For run_coroutine_threadsafe return type
+import enum
 import json
 import logging
 import threading
@@ -13,6 +14,7 @@ if TYPE_CHECKING:
     from collections.abc import Coroutine
 
 import httpx
+from pydantic import BaseModel
 
 from hud.settings import settings
 
@@ -24,6 +26,41 @@ from hud.telemetry.mcp_models import (  # MCPResponseCall for isinstance check
 )
 
 logger = logging.getLogger("hud.telemetry")
+
+
+# --- Task Run Status Models ---
+class TaskRunStatus(enum.StrEnum):
+    INITIALIZING = "initializing"
+    RUNNING = "running"
+    EVALUATING = "evaluating"
+    COMPLETED = "completed"
+    ERROR = "error"
+
+
+class TaskRunStatusUpdateRequest(BaseModel):
+    """Request model for updating task run status."""
+
+    status: TaskRunStatus
+    error_message: str | None = None  # Optional error message if status is ERROR
+    metadata: dict[str, Any] | None = None  # Optional metadata for context
+    job_id: str | None = None  # Optional parent job ID
+
+
+# --- Job Status Models ---
+class JobStatus(enum.StrEnum):
+    RUNNING = "running"
+    COMPLETED = "completed"
+    ERROR = "error"
+
+
+class JobStatusUpdateRequest(BaseModel):
+    """Request model for updating job status."""
+
+    status: JobStatus
+    error_message: str | None = None  # Optional error message if status is ERROR
+    metadata: dict[str, Any] | None = None  # Optional metadata for context
+    taskset_name: str | None = None  # Optional dataset/taskset name
+
 
 # --- Worker Thread and Event Loop Management ---
 _worker_thread: threading.Thread | None = None
@@ -38,7 +75,8 @@ _export_lock_async = asyncio.Lock()  # Async lock for the async queue
 _export_task_async: asyncio.Task | None = None  # Async task for processing the queue
 
 # --- Constants ---
-EXPORT_INTERVAL = 5.0  # seconds
+EXPORT_INTERVAL = 5.0  # seconds - delay between non-incremental exports
+MIN_EXPORT_INTERVAL = 0.1  # seconds - minimum delay between any exports to avoid overwhelming
 # MAX_BATCH_SIZE removed as we send one trace payload at a time
 
 
@@ -265,11 +303,18 @@ async def _process_export_queue_async() -> None:
 
             if isinstance(payload_to_process, dict):  # Ensure it's a dict before processing as such
                 await _export_trace_payload_async(payload_to_process)
+
+                # Apply appropriate delay based on export type
+                is_incremental = payload_to_process.get("attributes", {}).get("incremental", False)
+                if is_incremental:
+                    # Small delay for incremental exports to avoid overwhelming the server
+                    await asyncio.sleep(MIN_EXPORT_INTERVAL)
+                else:
+                    # Longer delay for final exports
+                    await asyncio.sleep(EXPORT_INTERVAL)
             else:
                 # Should not happen if only dicts and sentinel are queued
                 logger.warning("Unexpected item in telemetry queue: %s", type(payload_to_process))
-
-            await asyncio.sleep(EXPORT_INTERVAL)
 
     except asyncio.CancelledError:
         logger.debug("Async telemetry export processing task cancelled.")
@@ -340,6 +385,119 @@ async def send_telemetry_to_server(task_run_id: str, data: dict[str, Any]) -> No
         logger.exception("Error exporting telemetry for task run %s: %s", task_run_id, e)
 
 
+async def update_task_run_status(
+    task_run_id: str,
+    status: TaskRunStatus,
+    error_message: str | None = None,
+    metadata: dict[str, Any] | None = None,
+    job_id: str | None = None,
+) -> None:
+    """Update the status of a task run."""
+    if not settings.telemetry_enabled:
+        logger.debug("Status update skipped - telemetry not enabled")
+        return
+
+    status_url = f"{settings.base_url}/v2/task_runs/{task_run_id}/status"
+
+    try:
+        async with httpx.AsyncClient() as client:
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {settings.api_key}",
+            }
+
+            request_data = TaskRunStatusUpdateRequest(
+                status=status, error_message=error_message, metadata=metadata, job_id=job_id
+            )
+
+            logger.debug(
+                "Updating status for task run %s to %s",
+                task_run_id,
+                status,
+            )
+
+            response = await client.post(
+                status_url,
+                json=request_data.model_dump(exclude_none=True),
+                headers=headers,
+                timeout=10.0,
+            )
+
+            if response.status_code >= 200 and response.status_code < 300:
+                logger.debug(
+                    "Successfully updated status for task run %s to %s",
+                    task_run_id,
+                    status,
+                )
+            else:
+                logger.warning(
+                    "Failed to update status for task run %s: HTTP %s - %s",
+                    task_run_id,
+                    response.status_code,
+                    response.text,
+                )
+    except Exception as e:
+        logger.exception("Error updating status for task run %s: %s", task_run_id, e)
+
+
+async def update_job_status(
+    job_id: str,
+    status: JobStatus,
+    error_message: str | None = None,
+    metadata: dict[str, Any] | None = None,
+    taskset_name: str | None = None,
+) -> None:
+    """Update the status of a job."""
+    if not settings.telemetry_enabled:
+        logger.debug("Job status update skipped - telemetry not enabled")
+        return
+
+    status_url = f"{settings.base_url}/v2/jobs/{job_id}/status"
+
+    try:
+        async with httpx.AsyncClient() as client:
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {settings.api_key}",
+            }
+
+            request_data = JobStatusUpdateRequest(
+                status=status,
+                error_message=error_message,
+                metadata=metadata,
+                taskset_name=taskset_name,
+            )
+
+            logger.debug(
+                "Updating status for job %s to %s",
+                job_id,
+                status,
+            )
+
+            response = await client.post(
+                status_url,
+                json=request_data.model_dump(exclude_none=True),
+                headers=headers,
+                timeout=10.0,
+            )
+
+            if response.status_code >= 200 and response.status_code < 300:
+                logger.debug(
+                    "Successfully updated status for job %s to %s",
+                    job_id,
+                    status,
+                )
+            else:
+                logger.warning(
+                    "Failed to update status for job %s: HTTP %s - %s",
+                    job_id,
+                    response.status_code,
+                    response.text,
+                )
+    except Exception as e:
+        logger.exception("Error updating status for job %s: %s", job_id, e)
+
+
 # --- Public Shutdown Function ---
 def flush(timeout: float = 10.0) -> None:
     """Flushes pending telemetry data and stops the worker thread."""
@@ -382,9 +540,10 @@ def flush(timeout: float = 10.0) -> None:
             time.sleep(0.1)
             # _export_task_async is set to None by _process_export_queue_async upon its exit.
         if _export_task_async is not None:
-            logger.warning(
-                "Telemetry processing task did not clear itself after sentinel. May still be "
-                "running or stuck."
+            # This is often a false positive due to race conditions during shutdown
+            logger.debug(
+                "Telemetry processing task did not clear itself after sentinel. "
+                "This is normal during shutdown."
             )
         else:
             logger.debug("Telemetry processing task appears to have completed after sentinel.")

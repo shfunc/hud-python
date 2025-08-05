@@ -32,7 +32,8 @@ EXPOSE 8080 8040-8050 3000-3010 5000-5010
 
 # Copy and use start script
 COPY start.sh /app/start.sh
-RUN chmod +x /app/start.sh
+# Fix line endings in case they were converted by Git on Windows
+RUN sed -i 's/\r$//' /app/start.sh && chmod +x /app/start.sh
 
 # Run via start script to ensure X11 is ready
 CMD ["/app/start.sh"] 

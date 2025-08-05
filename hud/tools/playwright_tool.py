@@ -21,8 +21,9 @@ logger = logging.getLogger(__name__)
 class PlaywrightTool:
     """Playwright tool for web automation."""
 
-    def __init__(self) -> None:
+    def __init__(self, cdp_url: str | None = None) -> None:
         super().__init__()
+        self._cdp_url = cdp_url
         self._playwright = None
         self._browser: Browser | None = None
         self._context: BrowserContext | None = None
@@ -46,9 +47,6 @@ class PlaywrightTool:
             None, description="CSS selector for element (for click, type, wait_for_element actions)"
         ),
         text: str | None = Field(None, description="Text to type (for type action)"),
-        path: str | None = Field(
-            None, description="File path to save screenshot (for screenshot action)"
-        ),
         wait_for_load_state: Literal["commit", "domcontentloaded", "load", "networkidle"]
         | None = Field(
             None,
@@ -74,7 +72,7 @@ class PlaywrightTool:
                 result = await self.navigate(url, wait_for_load_state or "networkidle")
 
             elif action == "screenshot":
-                result = await self.screenshot(path)
+                result = await self.screenshot()
 
             elif action == "click":
                 if selector is None:
@@ -119,17 +117,13 @@ class PlaywrightTool:
             # Convert dict result to ToolResult
             if isinstance(result, dict):
                 if result.get("success"):
-                    if "screenshot" in result:
-                        # Return screenshot as image content
-                        tool_result = ToolResult(
-                            output=result.get("message", ""), base64_image=result["screenshot"]
-                        )
-                    else:
-                        tool_result = ToolResult(output=result.get("message", ""))
+                    tool_result = ToolResult(output=result.get("message", ""))
                 else:
                     tool_result = ToolResult(error=result.get("error", "Unknown error"))
-            else:
+            elif isinstance(result, ToolResult):
                 tool_result = result
+            else:
+                tool_result = ToolResult(output=str(result))
 
             # Convert result to content blocks
             return tool_result_to_content_blocks(tool_result)
@@ -143,10 +137,14 @@ class PlaywrightTool:
     async def _ensure_browser(self) -> None:
         """Ensure browser is launched and ready."""
         if self._browser is None or not self._browser.is_connected():
-            logger.info("Launching Playwright browser...")
+            if self._cdp_url:
+                logger.info("Connecting to remote browser via CDP: %s", self._cdp_url)
+            else:
+                logger.info("Launching Playwright browser...")
 
-            # Ensure DISPLAY is set
-            os.environ["DISPLAY"] = os.environ.get("DISPLAY", ":1")
+            # Ensure DISPLAY is set (only needed for local browser)
+            if not self._cdp_url:
+                os.environ["DISPLAY"] = os.environ.get("DISPLAY", ":1")
 
             if self._playwright is None:
                 try:
@@ -158,37 +156,56 @@ class PlaywrightTool:
                         "Playwright is not installed. Please install with: pip install playwright"
                     ) from None
 
-            self._browser = await self._playwright.chromium.launch(
-                headless=False,
-                args=[
-                    "--no-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-gpu",
-                    "--disable-web-security",
-                    "--disable-features=IsolateOrigins,site-per-process",
-                    "--disable-blink-features=AutomationControlled",
-                    "--window-size=1920,1080",
-                    "--window-position=0,0",
-                    "--start-maximized",
-                    "--disable-background-timer-throttling",
-                    "--disable-backgrounding-occluded-windows",
-                    "--disable-renderer-backgrounding",
-                    "--disable-features=TranslateUI",
-                    "--disable-ipc-flooding-protection",
-                    "--disable-default-apps",
-                    "--no-first-run",
-                    "--disable-sync",
-                    "--no-default-browser-check",
-                ],
-            )
+            # Connect via CDP URL or launch local browser
+            if self._cdp_url:
+                # Connect to remote browser via CDP
+                self._browser = await self._playwright.chromium.connect_over_cdp(self._cdp_url)
 
-            if self._browser is None:
-                raise RuntimeError("Browser failed to initialize")
+                if self._browser is None:
+                    raise RuntimeError("Failed to connect to remote browser")
 
-            self._context = await self._browser.new_context(
-                viewport={"width": 1920, "height": 1080},
-                ignore_https_errors=True,
-            )
+                # Use existing context or create new one
+                contexts = self._browser.contexts
+                if contexts:
+                    self._context = contexts[0]
+                else:
+                    self._context = await self._browser.new_context(
+                        viewport={"width": 1920, "height": 1080},
+                        ignore_https_errors=True,
+                    )
+            else:
+                # Launch local browser
+                self._browser = await self._playwright.chromium.launch(
+                    headless=False,
+                    args=[
+                        "--no-sandbox",
+                        "--disable-dev-shm-usage",
+                        "--disable-gpu",
+                        "--disable-web-security",
+                        "--disable-features=IsolateOrigins,site-per-process",
+                        "--disable-blink-features=AutomationControlled",
+                        "--window-size=1920,1080",
+                        "--window-position=0,0",
+                        "--start-maximized",
+                        "--disable-background-timer-throttling",
+                        "--disable-backgrounding-occluded-windows",
+                        "--disable-renderer-backgrounding",
+                        "--disable-features=TranslateUI",
+                        "--disable-ipc-flooding-protection",
+                        "--disable-default-apps",
+                        "--no-first-run",
+                        "--disable-sync",
+                        "--no-default-browser-check",
+                    ],
+                )
+
+                if self._browser is None:
+                    raise RuntimeError("Browser failed to initialize")
+
+                self._context = await self._browser.new_context(
+                    viewport={"width": 1920, "height": 1080},
+                    ignore_https_errors=True,
+                )
 
             if self._context is None:
                 raise RuntimeError("Browser context failed to initialize")
@@ -234,35 +251,24 @@ class PlaywrightTool:
                 "message": f"Failed to navigate to {url}: {e}",
             }
 
-    async def screenshot(self, path: str | None = None) -> dict[str, Any]:
+    async def screenshot(self) -> ToolResult:
         """Take a screenshot of the current page.
 
-        Args:
-            path: Optional path to save screenshot
-
         Returns:
-            Dict with screenshot result
+            ToolResult with base64_image
         """
         await self._ensure_browser()
 
         try:
-            if path:
-                await self.page.screenshot(path=path, full_page=True)
-                return {"success": True, "path": path, "message": f"Screenshot saved to {path}"}
-            else:
-                # Return base64 encoded screenshot
-                screenshot_bytes = await self.page.screenshot(full_page=True)
-                import base64
+            # Always return base64 encoded screenshot as ToolResult
+            screenshot_bytes = await self.page.screenshot(full_page=True)
+            import base64
 
-                screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
-                return {
-                    "success": True,
-                    "screenshot": screenshot_b64,
-                    "message": "Screenshot captured",
-                }
+            screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
+            return ToolResult(base64_image=screenshot_b64)
         except Exception as e:
             logger.error("Screenshot failed: %s", e)
-            return {"success": False, "error": str(e), "message": f"Failed to take screenshot: {e}"}
+            return ToolResult(error=f"Failed to take screenshot: {e}")
 
     async def click(self, selector: str) -> dict[str, Any]:
         """Click an element by selector.
