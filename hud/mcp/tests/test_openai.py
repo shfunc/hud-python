@@ -61,9 +61,9 @@ class TestOpenAIMCPAgent:
         assert messages[0]["screenshot"] == "base64data"
 
     @pytest.mark.asyncio
-    async def test_format_tool_results(self, mock_mcp_client):
+    async def test_format_tool_results(self, mock_mcp_client, mock_openai):
         """Test formatting tool results."""
-        agent = OpenAIMCPAgent(mcp_client=mock_mcp_client)
+        agent = OpenAIMCPAgent(mcp_client=mock_mcp_client, model_client=mock_openai)
 
         tool_calls = [
             MCPToolCall(name="test_tool", arguments={}, call_id="call_123"),  # type: ignore
@@ -90,9 +90,9 @@ class TestOpenAIMCPAgent:
         )  # Should extract screenshot from second result
 
     @pytest.mark.asyncio
-    async def test_format_tool_results_with_error(self, mock_mcp_client):
+    async def test_format_tool_results_with_error(self, mock_mcp_client, mock_openai):
         """Test formatting tool results with errors."""
-        agent = OpenAIMCPAgent(mcp_client=mock_mcp_client)
+        agent = OpenAIMCPAgent(mcp_client=mock_mcp_client, model_client=mock_openai)
 
         tool_calls = [
             MCPToolCall(name="failing_tool", arguments={}, call_id="call_error"),  # type: ignore
