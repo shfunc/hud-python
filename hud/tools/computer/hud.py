@@ -17,7 +17,6 @@ from hud.tools.executors.xdo import XDOExecutor
 logger = logging.getLogger(__name__)
 
 
-
 class HudComputerTool:
     """
     A tool that allows the agent to control the computer.
@@ -68,7 +67,7 @@ class HudComputerTool:
 
         # Calculate scaling factors from base screen size to target size
         self.scale_x = self.width / self.environment_width
-    
+
         self.scale_y = self.height / self.environment_height
 
         logger.info("Scale X: %s, Scale Y: %s", self.scale_x, self.scale_y)
