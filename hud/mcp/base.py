@@ -98,6 +98,11 @@ class BaseMCPAgent(ABC):
 
         self.model_name = "test-agent"
 
+        # Initialize these here so methods can be called before initialize()
+        self._available_tools: list[types.Tool] = []
+        self._tool_map: dict[str, tuple[str, types.Tool]] = {}
+        self.screenshot_history: list[str] = []
+
     def _filter_tools(self) -> None:
         """Apply tool filtering based on allowed/disallowed lists."""
         # Get all tools from client

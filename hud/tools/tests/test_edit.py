@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -37,8 +38,14 @@ class TestEditTool:
         """Test validate_path when file doesn't exist for non-create commands."""
         tool = EditTool()
 
+        # Use a platform-appropriate absolute path
+        if sys.platform == "win32":
+            nonexistent_path = Path("C:\\nonexistent\\file.txt")
+        else:
+            nonexistent_path = Path("/nonexistent/file.txt")
+
         with pytest.raises(ToolError) as exc_info:
-            tool.validate_path("view", Path("/nonexistent/file.txt"))
+            tool.validate_path("view", nonexistent_path)
 
         assert "does not exist" in str(exc_info.value)
 

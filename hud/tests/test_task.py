@@ -24,22 +24,7 @@ class FakeSample:
     setup: str | None = None
 
 
-def test_from_inspect_sample_qa():
-    samp = FakeSample(input="Hello", sandbox=None)
-    task = Task.from_inspect_sample(samp)  # type: ignore[arg-type]
-    assert task.gym == "qa"
-    assert task.setup is None
-
-
-def test_from_inspect_sample_docker():
-    samp = FakeSample(input="Run ls", sandbox="docker", setup="echo hi")
-    task = Task.from_inspect_sample(samp)  # type: ignore[arg-type]
-    from hud.types import CustomGym
-
-    assert isinstance(task.gym, CustomGym)
-    assert task.gym.location == "local"
-    # setup converted to FunctionConfig list
-    assert task.setup is not None and isinstance(task.setup, list)
+# from_inspect_sample tests removed - this functionality has been removed
 
 
 def test_serialization():

@@ -50,15 +50,6 @@ async def make(
         effective_job_id = job.id
     elif job_id is not None:
         effective_job_id = job_id
-    else:
-        try:
-            import hud.job
-
-            active_job = hud.job.get_active_job()
-            if active_job:
-                effective_job_id = active_job.id
-        except ImportError:
-            pass
 
     build_data = {}
     try:

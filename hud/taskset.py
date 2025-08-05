@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pathlib import PosixPath
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, get_args
 from venv import logger
 
@@ -102,7 +102,7 @@ class TaskSet(BaseModel):
                 evaluate_config = None
 
             if isinstance(task.gym, CustomGym):
-                if isinstance(task.gym.image_or_build_context, PosixPath):
+                if isinstance(task.gym.image_or_build_context, Path):
                     raise ValueError(
                         "Local build contexts are not supported for "
                         "remote tasksets, attach an image or existing "

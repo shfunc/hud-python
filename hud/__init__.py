@@ -8,7 +8,6 @@ from . import agent, datasets, env, gym, settings, task, taskset, types, utils
 from .adapters import ResponseAction as Response
 from .datasets import run_dataset, to_taskconfigs
 from .job import create_job, load_job, run_job
-from .job import job as register_job  # Old decorator-based job
 from .task import Task
 from .taskset import load_taskset
 from .telemetry import flush, job, trace, trace_open  # New context-based job

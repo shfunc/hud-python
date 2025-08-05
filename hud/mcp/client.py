@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from typing import TYPE_CHECKING, Any
@@ -29,7 +28,6 @@ class MCPClient:
         self,
         mcp_config: dict[str, dict[str, Any]],
         verbose: bool = False,
-        auto_initialize: bool = False,
     ) -> None:
         """
         Initialize the MCP client.
@@ -54,11 +52,6 @@ class MCPClient:
         # Set up verbose logging if requested
         if self.verbose:
             self._setup_verbose_logging()
-
-        # Auto-initialize if requested
-        if auto_initialize:
-            # Run async initialization in sync context
-            asyncio.run(self.initialize())
 
     def _setup_verbose_logging(self) -> None:
         """Configure verbose logging for debugging."""
