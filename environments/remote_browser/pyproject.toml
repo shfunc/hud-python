@@ -4,7 +4,8 @@ version = "0.1.0"
 description = "HUD Remote Browser Controller with MCP tools for cloud browser providers"
 requires-python = ">=3.11,<3.13"
 dependencies = [
-    "hud-python",
+    "hud-python>=0.3.2",
+    "pyautogui",
     "playwright",
     "httpx",
     "typer",

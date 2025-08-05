@@ -14,32 +14,27 @@ class LoadHtmlContentSetup:
 
     name = "load_html_content"
 
-    async def setup(self, args: Any, context: RemoteBrowserContext) -> Dict[str, Any]:
+    def __init__(self, context):
+        self.context = context
+
+    async def __call__(self, html: str) -> Dict[str, Any]:
         """
         Load custom HTML content into the browser.
 
         Args:
-            args: List containing [html_content] or string with HTML content
-            context: The remote browser context
+            html: HTML content to load
 
         Returns:
             Status dictionary
         """
         logger.info("Starting load_html_content setup")
 
-        # Extract HTML content from args
-        html_content = None
-        if isinstance(args, list) and len(args) > 0:
-            html_content = args[0]
-        elif isinstance(args, str):
-            html_content = args
-
-        if not html_content:
+        if not html:
             logger.error("No HTML content provided")
             return {"status": "error", "message": "No HTML content provided for load_html_content"}
 
         # Get page from context
-        page = context.page
+        page = self.context.page
         if not page:
             logger.error("No page available in context")
             return {"status": "error", "message": "No browser page available"}
@@ -48,7 +43,7 @@ class LoadHtmlContentSetup:
             logger.info("Setting custom HTML content")
 
             # Set the page content directly
-            await page.set_content(html_content, wait_until="domcontentloaded", timeout=10000)
+            await page.set_content(html, wait_until="domcontentloaded", timeout=10000)
 
             # Wait a short time for rendering and scripts to initialize
             await page.wait_for_timeout(1000)
@@ -58,7 +53,7 @@ class LoadHtmlContentSetup:
             return {
                 "status": "success",
                 "message": "HTML content loaded",
-                "content_length": len(html_content),
+                "content_length": len(html),
             }
 
         except Exception as e:

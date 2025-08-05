@@ -65,7 +65,11 @@ class SetupRegistry:
         # Return a callable that applies the args
         async def _setup():
             # Pass the args to the setup method
-            return await instance(**args)
+            if isinstance(args, dict):
+                return await instance(**args)
+            else:
+                # For backwards compatibility, pass non-dict args directly
+                return await instance(args=args)
 
         return _setup
 

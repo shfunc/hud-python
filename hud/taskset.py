@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, get_args
-from venv import logger
 
 from pydantic import BaseModel
 
@@ -12,6 +12,9 @@ from hud.settings import settings
 from hud.task import Task
 from hud.types import CustomGym, ServerGym
 from hud.utils.config import REMOTE_EVALUATE, REMOTE_SETUP
+from hud.utils.deprecation import deprecated
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -19,6 +22,12 @@ if TYPE_CHECKING:
     from hud.agent import Agent
 
 
+@deprecated(
+    reason="TaskSet class is being replaced by HuggingFace datasets on hud-evals",
+    replacement="Use TaskConfig-based collections or hud.datasets module",
+    version="0.3.0",
+    removal_version="0.4.0",
+)
 class TaskSet(BaseModel):
     """
     Collection of related tasks for benchmarking.
@@ -163,6 +172,12 @@ class TaskSet(BaseModel):
             task.gym = agent.transfer_gyms.get(task.gym, task.gym)
 
 
+@deprecated(
+    reason="load_taskset is being replaced by new dataset loading mechanisms for MCP-based tasks",
+    replacement="Use TaskConfig-based dataset loading from hud.datasets module",
+    version="0.3.0",
+    removal_version="0.4.0",
+)
 async def load_taskset(
     taskset_id: str,
     api_key: str | None = None,
@@ -192,7 +207,7 @@ async def load_taskset(
         api_key=api_key,
     )
 
-    logger.info(f"Taskset {taskset_id} loaded successfully")
+    logger.info("Taskset %s loaded successfully", taskset_id)
 
     tasks = data["evalset"]
     for task in tasks:

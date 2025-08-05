@@ -33,7 +33,8 @@ class TaskConfig(BaseModel):
                 "url": "${HUD_MCP_URL:https://mcp.hud.so/v3/mcp}",
                 "headers": {
                     "Authorization": "Bearer ${HUD_API_KEY}",
-                    "Run-Id": "${RUN_ID}"
+                    "Run-Id": "${RUN_ID}",
+                    "Mcp-Image": "your-mcp-image"
                 }
             }
         }
@@ -73,8 +74,11 @@ class TaskConfig(BaseModel):
         def substitute_in_value(obj: Any) -> Any:
             """Recursively substitute variables in nested structures."""
             if isinstance(obj, str):
-                # Use Template's safe_substitute - missing vars become empty strings
-                return Template(obj).safe_substitute(mapping)
+                # Use Template's substitute with defaultdict - missing vars become empty strings
+                from collections import defaultdict
+
+                safe_mapping = defaultdict(str, mapping)
+                return Template(obj).substitute(safe_mapping)
             elif isinstance(obj, dict):
                 return {k: substitute_in_value(v) for k, v in obj.items()}
             elif isinstance(obj, list):

@@ -98,3 +98,5 @@ logs/
 
 # Docker
 .dockerignore.local 
+
+gcp.json
