@@ -25,7 +25,7 @@ dependencies = [
     "langchain-anthropic",
     # Common utilities
     "dotenv>=0.9.9",
-    "datasets>=2.8.0",
+    "datasets>=2.14.0",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
