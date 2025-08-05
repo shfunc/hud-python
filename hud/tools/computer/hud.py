@@ -73,7 +73,7 @@ class HudComputerTool:
         self.needs_scaling = self.scale != 1.0
 
         if executor is None:
-            self.executor = self._choose_executor(platform_type, display_num)
+            self._choose_executor(platform_type, display_num)
         else:
             self.executor = executor
 
