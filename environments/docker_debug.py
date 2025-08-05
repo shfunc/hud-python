@@ -508,8 +508,10 @@ async def debug_mcp_docker(image: str) -> None:
                 setup_result = await client.call_tool("setup", {})
 
                 # Even if it errors, if we get a response it means the tool exists
-                if hasattr(setup_result, 'isError') and setup_result.isError:
-                    log_info(f"Setup tool exists but returned error (expected): {setup_result.content[0].text if setup_result.content else 'Unknown error'}")
+                if hasattr(setup_result, "isError") and setup_result.isError:
+                    log_info(
+                        f"Setup tool exists but returned error (expected): {setup_result.content[0].text if setup_result.content else 'Unknown error'}"
+                    )
                     setup_success = True  # Tool exists, that's what we're checking
                 elif isinstance(setup_result, dict) and "status" in setup_result:
                     log_success(f"Setup tool returned: {setup_result}")
@@ -528,8 +530,10 @@ async def debug_mcp_docker(image: str) -> None:
                 eval_result = await client.call_tool("evaluate", {})
 
                 # Even if it errors, if we get a response it means the tool exists
-                if hasattr(eval_result, 'isError') and eval_result.isError:
-                    log_info(f"Evaluate tool exists but returned error (expected): {eval_result.content[0].text if eval_result.content else 'Unknown error'}")
+                if hasattr(eval_result, "isError") and eval_result.isError:
+                    log_info(
+                        f"Evaluate tool exists but returned error (expected): {eval_result.content[0].text if eval_result.content else 'Unknown error'}"
+                    )
                     evaluate_success = True  # Tool exists, that's what we're checking
                 elif (
                     isinstance(eval_result, dict)
