@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 from mcp import ErrorData, McpError
 from mcp.types import INTERNAL_ERROR, INVALID_PARAMS, ImageContent, TextContent
@@ -54,6 +54,7 @@ class OpenAIComputerTool(HudComputerTool):
         display_num: int | None = None,
         platform_type: Literal["auto", "xdo", "pyautogui"] = "auto",
         rescale_images: bool = False,
+        **kwargs: Any,
     ) -> None:
         """
         Initialize with OpenAI's default dimensions.
@@ -67,6 +68,7 @@ class OpenAIComputerTool(HudComputerTool):
                 - "xdo": Use XDOExecutor (Linux/X11 only)
                 - "pyautogui": Use PyAutoGUIExecutor (cross-platform)
             rescale_images: If True, rescale screenshots. If False, only rescale action coordinates
+            **kwargs: Additional arguments passed to HudComputerTool (e.g., executor)
         """
         super().__init__(
             width=width,
@@ -74,6 +76,7 @@ class OpenAIComputerTool(HudComputerTool):
             display_num=display_num,
             platform_type=platform_type,
             rescale_images=rescale_images,
+            **kwargs,
         )
 
     def _map_openai_key_to_cla(self, key: str) -> str:

@@ -7,11 +7,18 @@ from pydantic import BaseModel, Field
 
 from hud.types import CustomGym, Gym, MetadataKeys, SensitiveData
 from hud.utils.common import FunctionConfigs
+from hud.utils.deprecation import deprecated
 
 if TYPE_CHECKING:
     from hud.agent import Agent
 
 
+@deprecated(
+    reason="Task class is being replaced by TaskConfig for better MCP integration",
+    replacement="hud.datasets.TaskConfig",
+    version="0.3.0",
+    removal_version="0.4.0",
+)
 class Task(BaseModel):
     """A task that can be executed and evaluated.
 

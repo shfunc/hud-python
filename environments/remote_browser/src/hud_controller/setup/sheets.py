@@ -160,7 +160,7 @@ class SheetsFromXlsxSetup:
             logger.info("Set sharing permissions")
 
             # Navigate to the sheet
-            page = context.page
+            page = self.context.page
             if page:
                 logger.info(f"Navigating to sheet: {sheet_url}")
                 await page.goto(sheet_url, wait_until="domcontentloaded", timeout=15000)
@@ -278,7 +278,7 @@ class SheetsFromBytesSetup:
             logger.info("Set sharing permissions")
 
             # Navigate to the sheet
-            page = context.page
+            page = self.context.page
             if page:
                 logger.info(f"Navigating to sheet: {sheet_url}")
                 await page.goto(sheet_url, wait_until="domcontentloaded", timeout=15000)

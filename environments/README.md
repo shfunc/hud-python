@@ -74,15 +74,38 @@ docker build -t my-environment .
 docker run --rm -it my-environment     # look for the log line on stderr
 ```
 
+### Recommended Environment Structure
+
+For Python-based MCP environments, use this standard structure:
+
+```
+my-environment/
+├── Dockerfile
+├── pyproject.toml
+├── README.md
+└── src/
+    └── my_module/           # Your Python package
+        ├── __init__.py
+        ├── server.py        # MCP server (Phase 2)
+        ├── setup/           # Setup functions (Phase 3)
+        ├── evaluators/      # Evaluation logic (Phase 3)
+        └── problems/        # Problem definitions (Phase 3)
+```
+
+This structure enables:
+- Clean separation of concerns
+- Easy volume mounting for development (Phase 5)
+- Standard Python packaging with `pip install -e .`
+
 • **One Dockerfile only** – no docker-compose.  
-• If you’re building a GUI environment, start from `hudpython/novnc-base:latest` instead and leave VNC configuration for later phases.
+• If you're building a GUI environment, start from `hudpython/novnc-base:latest` instead and leave VNC configuration for later phases.
 
 Checkpoint reached?  Congratulations – move on.
 
 👉 Quick sanity check: `python environments/docker_debug.py my-environment:latest` (verifies Phase 1 automatically)
 
 Need inspiration?  Skim the real Dockerfiles used in the example browser environments:
-• [`simple_browser/Dockerfile`](./simple_browser/Dockerfile)
+• [`browser/Dockerfile`](./browser/Dockerfile)
 • [`remote_browser/Dockerfile`](./remote_browser/Dockerfile)
 They follow the exact same pattern – a single file, logs to stderr, nothing fancy.
 
@@ -315,28 +338,74 @@ Those messages are displayed live on app.hud.so alongside resource graphs – pe
 
 ### 4. Live telemetry (`telemetry://live`) (Optional)
 
-Expose a resource named `telemetry://live` exactly like in `environments/simple_browser/src/hud_controller/server.py` to return live url to be displayed on app.hud.so.
+Expose a resource named `telemetry://live` exactly like in `environments/browser/src/hud_controller/server.py` to return live url to be displayed on app.hud.so.
 
 Once all of the above works you can unleash *hundreds* of concurrent agents on your new environment.
 
 ---
 
-## Phase 5 – Automated Iteration with *cursor-mcp*
+## Phase 5 – Takeoff: Automatic environment improvement with Cursor Agent
 
-[`cursor-mcp`](https://github.com/hud-evals/cursor-mcp) turns the edit → build → restart → test loop into a single key-press and adds tools to Cursor Agent that can drive the whole workflow for you. The agent reads the MCP spec, your code, and the live server state, then proposes fixes or new tests on its own. It then has access to the MCP tools the environment provides, enabling it to test all functionality, which completes the iteration loop.
+To enable rapid development without constant Docker rebuilds, use the unified Dockerfile's development mode. This allows you to edit code locally and see changes immediately in the running MCP server, and use Cursor Agent to automate iteration.
 
-1. Add an entry to `.cursor/mcp.json`:
+### Setting up Development Mode
+
+#### 1. Update Your Dockerfile
+
+First, modify your Dockerfile to support a `DEV_MODE` build argument to simplify transitioning between dev and build:
+
+```dockerfile
+# Add this at the top of your Dockerfile
+ARG DEV_MODE=false
+
+# ... your existing setup ...
+
+# Conditionally handle source for dev mode -- this should reflect your environment structure
+RUN if [ "$DEV_MODE" = "true" ]; then \
+        mkdir -p /app/src/your_module && \
+        echo "# Stub for editable install" > /app/src/your_module/__init__.py; \
+    fi
+
+# Copy source (will be overridden by volume mount in dev mode but necessary for the build in the Phase 1 recommended setup)
+COPY src/ ./src/
+
+# Install in editable mode still works!
+RUN pip install -e .
+
+# ... your existing setup ...
+```
+
+The key insight: In dev mode, we create stub files so the package can be installed, but the actual source will come from the volume mount.
+
+#### 2. Build the Development Image
+
+```bash
+docker build --build-arg DEV_MODE=true -t my-environment:dev .
+```
+
+#### 3. Configure Cursor Agent for development
+
+Add a development configuration to `.cursor/mcp.json` that includes the volume mount:
 
 ```jsonc
 {
   "mcp_config": {
-    "env": {
+    // If your production config looks like this,
+    "my-environment": {
       "command": "docker",
       "args": ["run", "--rm", "-i", "my-environment:latest"]
     },
-    "cursor-manager": {
-      "command": "uvx",
-      "args": ["cursor-mcp"]
+    // This is how you make the dev mode config:
+    "my-environment-dev": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-v", "%cd%/src:/app/src:rw",  // Windows
+        // "-v", "$(pwd)/src:/app/src:rw",  // Linux/Mac
+        "-e", "PYTHONPATH=/app/src",  // Required for module imports in the Phase 1 like setup
+        // Add your environment variables here
+        "my-environment:dev" // dev instead of latest!
+      ]
     }
   }
 }
@@ -345,36 +414,36 @@ Once all of the above works you can unleash *hundreds* of concurrent agents on y
 2. Follow the cursor rules below: rebuild, refresh, test, reflect, repeat.
 3. Keep the agent open for any messages or issues.
 
-### Cursor rules – paste this once
+### 4. Cursor rules – paste this once
 
-Inside `.cursor/rules/mcp_environment_iteration.mdc` add (or verify) the following so the agent always knows the expected loop:
+Inside `.cursor/rules/hud_environment_iteration.mdc` add (or verify) the following so the agent always knows the expected iteration loop:
 
 ```mdc
 ---
-description: When making an environment that launches and MCP server this is the iteration loop
+description: Improve an MCP environment
 alwaysApply: false
 ---
-Setting up (also refer to environments/README.md):
-1. Follow each environment's README.md or any other steps to set it up for the MCP server to be able to directly launch it (such as building the dockerfile)
-2. Run local tests to make sure the initialize without immediate errors and stays alive until properly closed. If the server crashes within the first few seconds then the manager will not pick up on it. In this case please go back and either debug the docker run directly, or the mcp server by piping an initialization request.
-3. When the server initialization is stable, use the cursor-manager tool to see the current list of tools and add it if necessary. Take note of the name.
-4. When working, tell the user to send another message to refresh your list of tools.
+Setup
+1. Make sure the user has set up the mcp config for the environment by seeing if you have access to the tools by the given name (i.e. my-environment-dev), and make sure the title is in dev mode. If not, ask the user to make a dev version!
+2. Make sure you can find the source folder for this environment. Explore its contents and README.
+3. Clarify the objectives and ask follow up questions on the initial query to determine precise implementation details.
 
-After setting up, when iterating (will not require a user message ever):
-1. Look at the environment project and refine/edit/fix files
-2. Follow its README to set it up for the MCP server (such as building the dockerfile)
-3. Use the cursor-manager tool to refresh this server (by name)
-4. See its status using cursor-manager, if it's running then follow with step 5. If it fails, then check the logs using cursor-manager and go back to step 1, but ask the user to reset.
-5. Use the tools from that server (by name) to test the functionality and edge cases, reflect on the success of your TODOs and think of new things to fix. If the tools are unavailable but the status is running, then ask the user to refresh the user message.
-6. Review your TODOs, update with new TODOs
-7. Repeat until reached user's high level goals, or generally extremely happy with the final result
-
-In general:
-1. Try to avoid running direct docker or mcp commands and use the tools. If you want to run a docker command or python mcp server command then ask permission and only use if otherwise completely impossible.
-2. If at any point the docker build starts breaking on initialize, return to setting up properly 
+Iteration
+1. Use the exposed tools by the environment to interact with it. This means navigating around with a computer, editing, launching commands, whatever means accessible to you. If there are any exposed resources, try to access them to determine the structure of the calls.
+2. Based on the objectives, test and verify the functionality of different tools and parts of the environment. If any tool call responds with an error, note it down. If any interaction with the environment is wrong, unexpected, incomplete, or parts of the environment are not developed fully, note it down. If any new problem sets up wrong or evaluation does not match the expected outcome, note it down. All of these inconsistencies you should note down in your TODOs.
+3. Then, based on the TODOs, view the source folder and find the places where those errors would occur. Think about the system and how to fix it. Then fix it.
+4. After you've fixed your TODO items, go back to step 2 and test them. Test through all of your available tools, and use feedback (such as screenshots) to determine your progress. If they now work as expected, mark them as complete. If not, continue the loop from step 2. Be extremely careful, scrupolous and attentive to all details. Never assume something is working unless you've tested it fully for all of its edge cases.
+5. The only time you can exit this iteration loop is if you're adding a *new* tool, a new import package to the environment, need additional environment variables, or if there is no feasible way to create input conditions to test something. In this case, ask the user for help and recap your progress. If you're simply changing tools, changing code, and still have more realistic TODOs, the environment will refresh automatically and you should continue working. In *all* other cases, you must continue this iteration loop until you can come up with no more TODOs. You must not halt.
 ```
 
-The result: fast, autonomous turnaround times even for complex GUI environments.
+### 5. Prompt the agent
+
+```txt
+Context: In the my-environment folder, I have a browser app environment. I've built a tool to interact with it called my-environment-dev.
+Interaction: There are multiple tools to setup and evaluate the environment. There are also interaction tools for you to be able to move around it, and a screenshot tool to see the state. Use all of the available tools.
+Objective: Please test if all setup, evaluation functions are working. This means you should come up with new problem definitions to test all functionality on. Be creative in how you pick edge cases to test on.
+Rules: @hud_environment_iteration.mdc
+```
 
 ---
 
@@ -411,7 +480,7 @@ class TodoBasic:
         return {"function": "todo_completed", "args": {"expected_count": 2}}
 ```
 
-Decorators keep registration *next to the implementation* and avoid manual bookkeeping.  The server simply exposes the combined metadata through an MCP **resource**.  Follow `environments/simple_browser/src/hud_controller/problems/registry.py` as a template and expose the JSON with `@mcp.resource("problems://registry")`.
+Decorators keep registration *next to the implementation* and avoid manual bookkeeping.  The server simply exposes the combined metadata through an MCP **resource**.  Follow `environments/browser/src/hud_controller/problems/registry.py` as a template and expose the JSON with `@mcp.resource("problems://registry")`.
 
 ### Other finishing touches
 

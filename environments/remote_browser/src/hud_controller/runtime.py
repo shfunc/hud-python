@@ -1,6 +1,7 @@
 """MCP tools for setup and evaluation in remote browser environment."""
 
 import logging
+from typing import Any
 from mcp.server.fastmcp import Context
 from hud_controller.providers import BrowserProvider
 from .playwright_with_memory import PlaywrightToolWithMemory
@@ -26,7 +27,7 @@ def get_environment_context(browser_provider, playwright_tool):
 
 async def setup_tool(
     function: str | None = None,
-    args: dict | None = None,
+    args: Any = None,
     name: str | None = None,
     ctx: Context | None = None,
     browser_provider: BrowserProvider | None = None,
@@ -47,6 +48,22 @@ async def setup_tool(
     """
     function_name = function
     problem_name = name
+    
+    # Debug: log the type and value of args
+    import json
+    if ctx:
+        await ctx.info(f"Debug - args type: {type(args)}, args value: {args}")
+    
+    # Handle case where args might be a JSON string
+    if isinstance(args, str):
+        try:
+            args = json.loads(args)
+            if ctx:
+                await ctx.info(f"Parsed args from string: {args}")
+        except json.JSONDecodeError:
+            if ctx:
+                await ctx.error(f"Failed to parse args as JSON: {args}")
+    
     args = args or {}
 
     if ctx:
@@ -105,7 +122,7 @@ async def setup_tool(
 
 async def evaluate_tool(
     function: str | None = None,
-    args: dict | None = None,
+    args: Any = None,
     name: str | None = None,
     ctx: Context | None = None,
     browser_provider: BrowserProvider | None = None,
