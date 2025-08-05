@@ -45,7 +45,7 @@ class HudComputerTool:
                 - "auto": Automatically detect based on platform
                 - "xdo": Use XDOExecutor (Linux/X11 only)
                 - "pyautogui": Use PyAutoGUIExecutor (cross-platform)
-            custom_executor: The executor to use. If None, will be auto-detected based on platform_type.
+            custom_executor: If None, executor class will be determined based on platform_type.
             rescale_images: If True, rescale screenshots. If False, only rescale action coordinates
         """
         # Use provided dimensions or defaults
