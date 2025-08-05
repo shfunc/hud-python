@@ -19,6 +19,26 @@ The official MCP lifecycle specification is an excellent companion reference –
 
 Take the phases one at a time; do **not** jump ahead.  Each stage’s checkpoint is the foundation for the next.
 
+### One-command sanity check (`docker_debug.py`)
+
+While you move through the phases it’s handy to run the **interactive checker** to make sure nothing broke:
+
+```bash
+python environments/docker_debug.py my-environment:latest
+```
+
+The script walks the *same* checklist and prints coloured, human-friendly hints whenever something fails.
+
+| What it validates | Phase |
+|-------------------|-------|
+| Container starts & logs to **stderr** | 1 |
+| MCP server responds to an `initialize` request | 2 |
+| Discovers `setup`, `evaluate`, and interaction tools | 3 |
+| Calls `setup` / `evaluate`, checks telemetry & startup time | 4 |
+| Spawns three concurrent clients to stress-test resources | 5 |
+
+💡 **Run it after finishing each phase.** If the checker exits with a red ❌, scroll up for the gold-coloured *hint* block – it usually points directly to the root cause.
+
 ---
 
 ## Phase 1 – Write a *Simple* Dockerfile
@@ -32,7 +52,8 @@ Why stderr?  In Phase 2 the MCP server will reserve **stdout** for JSON-RPC traf
 ```dockerfile
 FROM python:3.11-slim
 
-WORKDIR /app
+WORKDIR /apphello
+
 COPY . .
 
 # Optional: install requirements
@@ -57,6 +78,8 @@ docker run --rm -it my-environment     # look for the log line on stderr
 • If you’re building a GUI environment, start from `hudpython/novnc-base:latest` instead and leave VNC configuration for later phases.
 
 Checkpoint reached?  Congratulations – move on.
+
+👉 Quick sanity check: `python environments/docker_debug.py my-environment:latest` (verifies Phase 1 automatically)
 
 Need inspiration?  Skim the real Dockerfiles used in the example browser environments:
 • [`simple_browser/Dockerfile`](./simple_browser/Dockerfile)
@@ -129,6 +152,7 @@ CMD ["uv", "pip", "run", "python", "-m", "your_module_name"]  # Replace 'your_mo
 | 1 | **Direct stdio test** – pipe the JSON below into your script | Proves the Python code handles `initialize` without any client or Docker noise |
 | 2 | **MCP Inspector** – `npx @modelcontextprotocol/inspector python -m my_package.server` | Lets you click around: view capabilities, tools, resources |
 | 3 | **Inside Docker** – rebuild the image and run it | This is *exactly* how HUD will execute the server |
+| 4 | **Run `docker_debug.py`** – `python environments/docker_debug.py my-environment:latest` | Combines the above checks & points out common mistakes |
 
 #### JSON for step 1
 
@@ -153,6 +177,8 @@ If all three validations succeed, you have a real MCP server – time to make it
 ## Phase 3 – Add Setup / Evaluate / Interaction Tools
 
 **Goal →** tools are discoverable in the Inspector *and* callable from the HUD SDK.
+
+👉 After wiring in the tools, confirm with `python environments/docker_debug.py my-environment:latest` – it now checks for their presence and basic execution.
 
 1. Write **`setup`** and **`evaluate`** tools first – they are *lifecycle* tools and never shown to the LLM.
 2. Register at least one **interaction** tool (`computer`, `playwright`, or your own).

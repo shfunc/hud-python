@@ -31,6 +31,7 @@ class HudComputerTool:
         height: int | None = None,
         display_num: int | None = None,
         platform_type: Literal["auto", "xdo", "pyautogui"] = "auto",
+        executor: BaseExecutor | None = None,
         rescale_images: bool = False,
     ) -> None:
         """
@@ -44,6 +45,7 @@ class HudComputerTool:
                 - "auto": Automatically detect based on platform
                 - "xdo": Use XDOExecutor (Linux/X11 only)
                 - "pyautogui": Use PyAutoGUIExecutor (cross-platform)
+            executor: The executor to use. If None, will be auto-detected based on platform_type.
             rescale_images: If True, rescale screenshots. If False, only rescale action coordinates
         """
         # Use provided dimensions or defaults
@@ -70,6 +72,17 @@ class HudComputerTool:
         # Check if we need to scale
         self.needs_scaling = self.scale != 1.0
 
+        if executor is None:
+            self._choose_executor(platform_type, display_num)
+        else:
+            self.executor = executor
+
+    def _choose_executor(
+        self,
+        platform_type: Literal["auto", "xdo", "pyautogui"],
+        display_num: int | None,
+    ) -> None:
+        """Choose executor based on platform_type."""
         # Choose executor based on platform_type
         if platform_type == "auto":
             # Auto-detect based on platform
