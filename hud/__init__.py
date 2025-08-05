@@ -50,7 +50,6 @@ __all__ = [
     "job",
     "load_job",
     "load_taskset",
-    "register_job",
     "run_dataset",
     "run_job",
     "settings",

@@ -169,7 +169,7 @@ async def run_dataset(
                     # Create fresh MCP client per task
                     if task.mcp_config:
                         client = MCPClient(mcp_config=task.mcp_config)
-                        agent = agent_class(client=client, **(agent_config or {}))
+                        agent = agent_class(mcp_client=client, **(agent_config or {}))
 
                         try:
                             results[index] = await agent.run(task)

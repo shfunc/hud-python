@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -15,6 +16,9 @@ from hud.mcp.claude import (
     text_to_content_block,
     tool_use_content_block,
 )
+
+if TYPE_CHECKING:
+    from anthropic.types.beta import BetaImageBlockParam, BetaMessageParam, BetaTextBlockParam
 
 
 class TestClaudeHelperFunctions:
@@ -41,13 +45,15 @@ class TestClaudeHelperFunctions:
     def test_tool_use_content_block(self):
         """Test tool result content block creation."""
         tool_use_id = "tool_123"
-        content = [text_to_content_block("Result text")]
+        content: list[BetaTextBlockParam | BetaImageBlockParam] = [
+            text_to_content_block("Result text")
+        ]
 
         result = tool_use_content_block(tool_use_id, content)
 
         assert result["type"] == "tool_result"
         assert result["tool_use_id"] == tool_use_id
-        assert result["content"] == content
+        assert result["content"] == content  # type: ignore
 
 
 class TestClaudeMCPAgent:
@@ -107,18 +113,20 @@ class TestClaudeMCPAgent:
         messages = await agent.create_initial_messages("Hello, Claude!")
         assert len(messages) == 1
         assert messages[0]["role"] == "user"
-        assert messages[0]["content"][0]["type"] == "text"
-        assert messages[0]["content"][0]["text"] == "Hello, Claude!"
+        content = list(messages[0]["content"])
+        assert content[0]["type"] == "text"  # type: ignore
+        assert content[0]["text"] == "Hello, Claude!"  # type: ignore
 
         # Test with screenshot
         messages = await agent.create_initial_messages("Look at this", screenshot="base64data")
         assert len(messages) == 1
         assert messages[0]["role"] == "user"
-        assert len(messages[0]["content"]) == 2
+        content = list(messages[0]["content"])
+        assert len(content) == 2
         # Claude puts text first, then image
-        assert messages[0]["content"][0]["type"] == "text"
-        assert messages[0]["content"][0]["text"] == "Look at this"
-        assert messages[0]["content"][1]["type"] == "image"
+        assert content[0]["type"] == "text"  # type: ignore
+        assert content[0]["text"] == "Look at this"  # type: ignore
+        assert content[1]["type"] == "image"  # type: ignore
 
     @pytest.mark.asyncio
     async def test_format_tool_results_method(self, mock_mcp_client):
@@ -127,7 +135,7 @@ class TestClaudeMCPAgent:
         agent = ClaudeMCPAgent(mcp_client=mock_mcp_client, model_client=mock_model_client)
 
         tool_calls = [
-            MCPToolCall(name="test_tool", arguments={}, tool_use_id="id1"),
+            MCPToolCall(name="test_tool", arguments={}, tool_use_id="id1"),  # type: ignore
         ]
 
         tool_results = [
@@ -142,12 +150,14 @@ class TestClaudeMCPAgent:
         assert len(messages) == 1
         assert messages[0]["role"] == "user"
         # The content is wrapped in a tool result block
-        assert len(messages[0]["content"]) == 1
-        assert messages[0]["content"][0]["type"] == "tool_result"
-        assert messages[0]["content"][0]["tool_use_id"] == "id1"
+        content = list(messages[0]["content"])
+        assert len(content) == 1
+        assert content[0]["type"] == "tool_result"  # type: ignore
+        assert content[0]["tool_use_id"] == "id1"  # type: ignore
         # The actual content is nested inside
-        assert messages[0]["content"][0]["content"][0]["type"] == "text"
-        assert messages[0]["content"][0]["content"][0]["text"] == "Success"
+        inner_content = list(content[0]["content"])  # type: ignore
+        assert inner_content[0]["type"] == "text"  # type: ignore
+        assert inner_content[0]["text"] == "Success"  # type: ignore
 
     @pytest.mark.asyncio
     async def test_get_model_response(self, mock_mcp_client, mock_anthropic):
@@ -173,7 +183,9 @@ class TestClaudeMCPAgent:
         mock_response.usage = MagicMock(input_tokens=10, output_tokens=20)
         mock_anthropic.beta.messages.create = AsyncMock(return_value=mock_response)
 
-        messages = [{"role": "user", "content": [{"type": "text", "text": "Hi"}]}]
+        messages = [
+            cast("BetaMessageParam", {"role": "user", "content": [{"type": "text", "text": "Hi"}]})
+        ]
         response = await agent.get_model_response(messages)
 
         assert response.content == "Hello!"
@@ -200,7 +212,9 @@ class TestClaudeMCPAgent:
         mock_response.usage = MagicMock(input_tokens=5, output_tokens=10)
         mock_anthropic.beta.messages.create = AsyncMock(return_value=mock_response)
 
-        messages = [{"role": "user", "content": [{"type": "text", "text": "Hi"}]}]
+        messages = [
+            cast("BetaMessageParam", {"role": "user", "content": [{"type": "text", "text": "Hi"}]})
+        ]
         response = await agent.get_model_response(messages)
 
         assert response.content == "Just text"
@@ -223,7 +237,7 @@ class TestClaudeMCPAgent:
         messages = [{"role": "user", "content": [{"type": "text", "text": "Hi"}]}]
 
         with pytest.raises(BadRequestError):
-            await agent.get_model_response(messages)
+            await agent.get_model_response(messages)  # type: ignore
 
     @pytest.mark.asyncio
     async def test_run_with_tools(self, mock_mcp_client, mock_anthropic):
