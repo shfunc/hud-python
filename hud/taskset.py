@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 @deprecated(
-    reason="TaskSet class is being replaced by new dataset management approaches for MCP-based tasks",
+    reason="TaskSet class is being replaced by HuggingFace datasets on hud-evals",
     replacement="Use TaskConfig-based collections or hud.datasets module",
     version="0.3.0",
     removal_version="0.4.0",
@@ -207,7 +207,7 @@ async def load_taskset(
         api_key=api_key,
     )
 
-    logger.info(f"Taskset {taskset_id} loaded successfully")
+    logger.info("Taskset %s loaded successfully", taskset_id)
 
     tasks = data["evalset"]
     for task in tasks:

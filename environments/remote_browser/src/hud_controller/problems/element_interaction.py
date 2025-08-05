@@ -28,17 +28,11 @@ class ButtonClickTestProblem:
         </body>
         </html>
         """
-        return {
-            "function": "load_html_content",
-            "args": {"html": html_content}
-        }
+        return {"function": "load_html_content", "args": {"html": html_content}}
 
     def get_evaluation(self):
         """Verify the button is present."""
         return {
-            "function": "page_contains", 
-            "args": {
-                "search_terms": ["Button Click Test", "Click Me"],
-                "partial_rewarding": False
-            }
+            "function": "page_contains",
+            "args": {"search_terms": ["Button Click Test", "Click Me"], "partial_rewarding": False},
         }

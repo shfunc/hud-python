@@ -48,12 +48,13 @@ async def setup_tool(
     """
     function_name = function
     problem_name = name
-    
+
     # Debug: log the type and value of args
     import json
+
     if ctx:
         await ctx.info(f"Debug - args type: {type(args)}, args value: {args}")
-    
+
     # Handle case where args might be a JSON string
     if isinstance(args, str):
         try:
@@ -63,7 +64,7 @@ async def setup_tool(
         except json.JSONDecodeError:
             if ctx:
                 await ctx.error(f"Failed to parse args as JSON: {args}")
-    
+
     args = args or {}
 
     if ctx:

@@ -331,8 +331,6 @@ class BaseExecutor:
         return await self.move(x=x, y=y, take_screenshot=take_screenshot)
 
 
-
-
 CLAKey: TypeAlias = Literal[
     # Control keys
     "backspace",

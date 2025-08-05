@@ -233,12 +233,12 @@ async def debug_mcp_docker(image: str) -> None:
 
     logger.info(f"\n{Colors.BOLD}🔍 Docker MCP Server Debugger{Colors.ENDC}")
     logger.info(f"{Colors.GRAY}Image: {image}{Colors.ENDC}")
-    
+
     # Show extra docker args if provided
-    extra_args = getattr(__builtins__, '_docker_extra_args', [])
+    extra_args = getattr(__builtins__, "_docker_extra_args", [])
     if extra_args:
         logger.info(f"{Colors.GRAY}Extra args: {' '.join(extra_args)}{Colors.ENDC}")
-    
+
     logger.info(f"{Colors.GRAY}Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{Colors.ENDC}")
 
     # Explain color coding
@@ -260,7 +260,7 @@ async def debug_mcp_docker(image: str) -> None:
 
     try:
         # Get extra docker args if provided
-        extra_args = getattr(__builtins__, '_docker_extra_args', [])
+        extra_args = getattr(__builtins__, "_docker_extra_args", [])
         cmd = ["docker", "run", "--rm"] + extra_args + [image, "echo", "Container OK"]
         log_command(cmd)
 
@@ -302,7 +302,7 @@ async def debug_mcp_docker(image: str) -> None:
 
     try:
         # Get extra docker args if provided
-        extra_args = getattr(__builtins__, '_docker_extra_args', [])
+        extra_args = getattr(__builtins__, "_docker_extra_args", [])
         cmd = ["docker", "run", "--rm", "-i"] + extra_args + [image]
         log_command(cmd)
 
@@ -406,8 +406,10 @@ async def debug_mcp_docker(image: str) -> None:
         from hud.mcp import MCPClient
 
         # Get extra docker args if provided
-        extra_args = getattr(__builtins__, '_docker_extra_args', [])
-        mcp_config = {"test": {"command": "docker", "args": ["run", "--rm", "-i"] + extra_args + [image]}}
+        extra_args = getattr(__builtins__, "_docker_extra_args", [])
+        mcp_config = {
+            "test": {"command": "docker", "args": ["run", "--rm", "-i"] + extra_args + [image]}
+        }
 
         cmd = ["docker"] + mcp_config["test"]["args"]
         log_command(cmd)
@@ -631,14 +633,17 @@ async def debug_mcp_docker(image: str) -> None:
         log_info(f"Baseline: Memory={baseline_memory:.1f}MB, CPU={baseline_cpu:.1f}%")
 
         # Get extra docker args if provided
-        extra_args = getattr(__builtins__, '_docker_extra_args', [])
-        
+        extra_args = getattr(__builtins__, "_docker_extra_args", [])
+
         # Create multiple concurrent clients
         log_info("Creating 3 concurrent MCP clients...")
 
         for i in range(3):
             client_config = {
-                f"test_concurrent_{i}": {"command": "docker", "args": ["run", "--rm", "-i"] + extra_args + [image]}
+                f"test_concurrent_{i}": {
+                    "command": "docker",
+                    "args": ["run", "--rm", "-i"] + extra_args + [image],
+                }
             }
 
             concurrent_client = MCPClient(mcp_config=client_config, verbose=False)
@@ -705,8 +710,8 @@ async def debug_mcp_docker(image: str) -> None:
         # Still test basic concurrent connections
         try:
             # Get extra docker args if provided
-            extra_args = getattr(__builtins__, '_docker_extra_args', [])
-            
+            extra_args = getattr(__builtins__, "_docker_extra_args", [])
+
             for i in range(3):
                 client_config = {
                     f"test_concurrent_{i}": {
@@ -754,24 +759,27 @@ async def debug_mcp_docker(image: str) -> None:
 if __name__ == "__main__":
     import warnings
     import gc
-    
+
     if len(sys.argv) < 2:
         print("Usage: python docker_debug.py <docker-image> [docker-args...]")
         print("Example: python docker_debug.py hudpython/gmail-clone:latest")
-        print("Example: python docker_debug.py my-env:latest -e BROWSER_PROVIDER=browserbase -e API_KEY=xxx")
+        print(
+            "Example: python docker_debug.py my-env:latest -e BROWSER_PROVIDER=browserbase -e API_KEY=xxx"
+        )
         sys.exit(1)
 
     docker_image = sys.argv[1]
     docker_extra_args = sys.argv[2:] if len(sys.argv) > 2 else []
-    
+
     # Suppress cleanup warnings
     warnings.filterwarnings("ignore", category=ResourceWarning)
-    
+
     # Store extra args globally so they can be used in docker commands
     import builtins
-    setattr(builtins, '_docker_extra_args', docker_extra_args)
-    
+
+    setattr(builtins, "_docker_extra_args", docker_extra_args)
+
     asyncio.run(debug_mcp_docker(docker_image))
-    
+
     # Force cleanup to avoid warnings
     gc.collect()

@@ -76,6 +76,7 @@ class TaskConfig(BaseModel):
             if isinstance(obj, str):
                 # Use Template's substitute with defaultdict - missing vars become empty strings
                 from collections import defaultdict
+
                 safe_mapping = defaultdict(str, mapping)
                 return Template(obj).substitute(safe_mapping)
             elif isinstance(obj, dict):

@@ -9,17 +9,11 @@ class GoogleSearchProblem:
 
     def get_setup(self):
         """Navigate to Google."""
-        return {
-            "function": "navigate_to_url",
-            "args": {"url": "https://www.google.com"}
-        }
+        return {"function": "navigate_to_url", "args": {"url": "https://www.google.com"}}
 
     def get_evaluation(self):
         """Verify Google search page loaded."""
         return {
             "function": "page_contains",
-            "args": {
-                "search_terms": ["Google", "Search"],
-                "partial_rewarding": False
-            }
+            "args": {"search_terms": ["Google", "Search"], "partial_rewarding": False},
         }

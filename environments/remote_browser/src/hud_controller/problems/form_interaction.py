@@ -13,8 +13,8 @@ class FormFillAndSubmitProblem:
             "function": "navigate_to_url",
             "args": {
                 "url": "https://httpbin.org/forms/post",
-                "wait_for_load_state": "domcontentloaded"
-            }
+                "wait_for_load_state": "domcontentloaded",
+            },
         }
 
     def get_evaluation(self):
@@ -23,6 +23,6 @@ class FormFillAndSubmitProblem:
             "function": "page_contains",
             "args": {
                 "search_terms": ["Customer name:", "Pizza Size", "Submit order"],
-                "partial_rewarding": False
-            }
+                "partial_rewarding": False,
+            },
         }

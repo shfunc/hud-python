@@ -150,17 +150,17 @@ async def initialize_environment(session=None, progress_token=None):
         # Initialize browser executor
         browser_executor = BrowserExecutor(playwright_tool)
         await send_progress(85, "Browser executor initialized")
-        
+
         # Register all computer tool variants with the browser executor
         hud_computer = HudComputerTool(executor=browser_executor)
         register_instance_tool(mcp, "computer", hud_computer)
-        
+
         anthropic_computer = AnthropicComputerTool(executor=browser_executor)
         register_instance_tool(mcp, "anthropic_computer", anthropic_computer)
-        
+
         openai_computer = OpenAIComputerTool(executor=browser_executor)
         register_instance_tool(mcp, "openai_computer", openai_computer)
-        
+
         await send_progress(88, "Computer tools registered")
 
         # Ensure browser is connected
@@ -221,7 +221,7 @@ async def setup(
     - sheets_from_bytes: Load Google Sheets from bytes (args: {data: str, filename: str})
     - load_html_content: Load HTML content directly (args: {html: str})
 
-    Available problems: navigate_and_verify, form_fill_and_submit, 
+    Available problems: navigate_and_verify, form_fill_and_submit,
     google_search, button_click_test
 
     Returns a dict with status, message, and any function-specific data.
@@ -319,22 +319,22 @@ async def get_telemetry_live() -> str:
 async def cleanup():
     """Clean up resources on shutdown."""
     global browser_provider, playwright_tool, browser_executor, _cleanup_in_progress
-    
+
     if _cleanup_in_progress:
         return
-    
+
     _cleanup_in_progress = True
     logger.info("Cleaning up remote browser environment...")
 
     # Close resources with timeout
     cleanup_tasks = []
-    
-    if playwright_tool and hasattr(playwright_tool, '_browser') and playwright_tool._browser:
+
+    if playwright_tool and hasattr(playwright_tool, "_browser") and playwright_tool._browser:
         cleanup_tasks.append(("browser", playwright_tool._browser.close()))
-    
+
     if browser_provider:
         cleanup_tasks.append(("provider", browser_provider.close()))
-    
+
     # Run all cleanup tasks with timeout
     for name, task in cleanup_tasks:
         try:
@@ -344,12 +344,12 @@ async def cleanup():
             logger.error(f"Timeout closing {name}")
         except Exception as e:
             logger.error(f"Error closing {name}: {e}")
-    
+
     # Clear references
     browser_executor = None
-    playwright_tool = None  
+    playwright_tool = None
     browser_provider = None
-    
+
     logger.info("Cleanup completed")
     _cleanup_in_progress = False
 
@@ -359,7 +359,7 @@ def handle_shutdown(signum=None, frame=None):
         logger.info(f"Received signal {signum}, shutting down...")
     else:
         logger.info("Normal shutdown initiated...")
-    
+
     # Block until async cleanup completes (or timeout)
     try:
         asyncio.run(asyncio.wait_for(cleanup(), timeout=10.0))
@@ -367,7 +367,7 @@ def handle_shutdown(signum=None, frame=None):
         logger.error("Cleanup timed out after 10 seconds")
     except Exception as e:
         logger.error(f"Cleanup error: {e}")
-    
+
     if signum:
         sys.exit(0)
 
@@ -382,12 +382,12 @@ if __name__ == "__main__":
         """Run the MCP server."""
         # Register shutdown handlers
         signal.signal(signal.SIGTERM, handle_shutdown)  # Docker stop
-        signal.signal(signal.SIGINT, handle_shutdown)   # Ctrl+C
-        atexit.register(handle_shutdown)                # Normal exit
-        
+        signal.signal(signal.SIGINT, handle_shutdown)  # Ctrl+C
+        atexit.register(handle_shutdown)  # Normal exit
+
         logger.info("Remote browser MCP server starting...")
         logger.info("Graceful shutdown enabled (10s timeout)")
-        
+
         try:
             mcp.run(transport=transport)
         finally:

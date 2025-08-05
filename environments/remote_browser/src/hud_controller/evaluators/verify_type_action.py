@@ -76,22 +76,22 @@ class VerifyTypeActionEvaluator:
         # Look for the most recent type action
         for i in range(len(action_history) - 1, -1, -1):
             action = action_history[i]
-            
+
             if action.get("type") == "type":
                 action_details = action.get("details", {})
                 typed_text = action_details.get("text", "")
                 action_selector = action_details.get("selector", "")
-                
+
                 # Check if selector matches (if specified)
                 if selector and action_selector != selector:
                     continue
-                
+
                 # Check if typed text matches
                 if str(typed_text) == str(expected_value):
                     evaluator_logger.info(f"✓ Found matching type action at index {i}")
                     evaluator_logger.info(f"  Selector: {action_selector}")
                     evaluator_logger.info(f"  Text: '{typed_text}'")
-                    
+
                     return {
                         "reward": 1.0,
                         "done": True,
@@ -108,7 +108,7 @@ class VerifyTypeActionEvaluator:
                     evaluator_logger.info(f"✗ Found type action but text mismatch")
                     evaluator_logger.info(f"  Expected: '{expected_value}'")
                     evaluator_logger.info(f"  Got: '{typed_text}'")
-                    
+
                     if partial_rewarding:
                         return {
                             "reward": 0.5,

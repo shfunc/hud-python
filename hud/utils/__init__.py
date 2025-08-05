@@ -9,8 +9,8 @@ __all__ = [
     "ExecuteResult",
     "FunctionConfig",
     "FunctionConfigs",
-    "expand_config",
-    "stream",
     "deprecated",
     "emit_deprecation_warning",
+    "expand_config",
+    "stream",
 ]
