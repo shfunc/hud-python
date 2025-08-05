@@ -25,7 +25,7 @@ async def main():
 
     # Create OpenAI agent
     agent = OpenAIMCPAgent(
-        client=client,
+        mcp_client=client,
         model="computer-use-preview",  # OpenAI's computer use model
         environment="browser",  # Can be "windows", "mac", "linux", or "browser"
         # initial_screenshot=True,
@@ -46,7 +46,7 @@ async def main():
 
         # Use trace to see MCP calls in real-time
         with hud.trace():
-            result = await agent.run(query, max_steps=15, conversation_mode=True)
+            result = await agent.run(query, max_steps=15)
 
         print(f"\n✅ Result: {result}")
 

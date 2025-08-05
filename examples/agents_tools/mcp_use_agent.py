@@ -25,7 +25,7 @@ async def main():
     llm = ChatOpenAI(model="gpt-4o")
     agent = MCPAgent(
         llm=llm,
-        client=client,
+        mcp_client=client,
         max_steps=30,
         verbose=True,
         disallowed_tools=["edit", "bash", "computer_anthropic", "computer_openai"],

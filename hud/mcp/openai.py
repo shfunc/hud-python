@@ -106,7 +106,9 @@ class OpenAIMCPAgent(BaseMCPAgent):
         # Use base implementation
         return await super().run(prompt_or_task, max_steps)
 
-    async def create_initial_messages(self, prompt: str, screenshot: str | None) -> list[Any]:
+    async def create_initial_messages(
+        self, prompt: str, screenshot: str | None = None
+    ) -> list[Any]:
         """
         Create initial messages for OpenAI.
 
@@ -117,7 +119,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
         # Just return a list with the prompt and screenshot
         return [{"prompt": prompt, "screenshot": screenshot}]
 
-    async def get_model_response(self, messages: list[Any], step: int) -> ModelResponse:
+    async def get_model_response(self, messages: list[Any]) -> ModelResponse:
         """Get response from OpenAI including any tool calls."""
         # OpenAI's API is stateful, so we handle messages differently
 

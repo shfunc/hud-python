@@ -73,7 +73,7 @@ async def main(use_http=False):
 
     # Create agent with available tools
     agent = ClaudeMCPAgent(
-        client=client,
+        mcp_client=client,
         model="claude-sonnet-4-20250514",
         allowed_tools=["computer", "playwright", "launch_app", "api_request", "query_database"],
     )

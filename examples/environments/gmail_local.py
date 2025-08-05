@@ -45,7 +45,7 @@ async def main():
         client = MCPClient.from_dict({"mcp_config": task.mcp_config})
 
         agent = ClaudeMCPAgent(  # or OpenAIMCPAgent
-            client=client,
+            mcp_client=client,
             model="claude-3-7-sonnet-20250219",
             allowed_tools=["computer"],
             initial_screenshot=True,

@@ -57,7 +57,7 @@ async def main():
     client = MCPClient.from_dict(config)
 
     agent = ClaudeMCPAgent(
-        client=client,
+        mcp_client=client,
         model="claude-sonnet-4-20250514",
         allowed_tools=["anthropic_computer", "api_request"],
         initial_screenshot=True,

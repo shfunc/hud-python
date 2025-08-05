@@ -60,7 +60,9 @@ async def run_eval():
     # Create MCP client outside trace to ensure cleanup
     client = MCPClient(mcp_config=task.mcp_config)
     agent = ClaudeMCPAgent(
-        client=client, allowed_tools=["anthropic_computer"], initial_screenshot=True
+        mcp_client=client,
+        allowed_tools=["anthropic_computer"],
+        initial_screenshot=True,
     )
 
     with hud.trace("test-claude"):  # Trace the agent execution
@@ -81,7 +83,7 @@ async def run_eval():
                 print(f"Step {step}/{max_steps}")
 
                 # Get agent response
-                response = await agent.get_model_response(messages, step)
+                response = await agent.get_model_response(messages)
                 print(
                     f"Agent response: {response.content[:200] if response.content else 'No content'}..."
                 )  # Truncated

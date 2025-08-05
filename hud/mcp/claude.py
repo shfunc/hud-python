@@ -72,13 +72,13 @@ class ClaudeMCPAgent(BaseMCPAgent):
         Initialize Claude MCP agent.
 
         Args:
-            client: AsyncAnthropic client (created if not provided)
+            model_client: AsyncAnthropic client (created if not provided)
             model: Claude model to use
             max_tokens: Maximum tokens for response
             display_width_px: Display width for computer use tools
             display_height_px: Display height for computer use tools
             use_computer_beta: Whether to use computer-use beta features
-            **kwargs: Additional arguments passed to BaseMCPAgent
+            **kwargs: Additional arguments passed to BaseMCPAgent (including mcp_client)
         """
         super().__init__(**kwargs)
 
@@ -108,7 +108,7 @@ class ClaudeMCPAgent(BaseMCPAgent):
         self._convert_tools_for_claude()
 
     async def create_initial_messages(
-        self, prompt: str, screenshot: str | None
+        self, prompt: str, screenshot: str | None = None
     ) -> list[BetaMessageParam]:
         """Create initial messages for Claude."""
         user_content: list[BetaImageBlockParam | BetaTextBlockParam] = []
@@ -131,9 +131,7 @@ class ClaudeMCPAgent(BaseMCPAgent):
             )
         ]
 
-    async def get_model_response(
-        self, messages: list[BetaMessageParam], step: int
-    ) -> ModelResponse:
+    async def get_model_response(self, messages: list[BetaMessageParam]) -> ModelResponse:
         """Get response from Claude including any tool calls."""
         # Get Claude tools
         claude_tools = self._convert_tools_for_claude()
@@ -174,7 +172,6 @@ class ClaudeMCPAgent(BaseMCPAgent):
                 else:
                     raise
 
-        # Add assistant response to messages (for next step)
         messages.append(
             cast(
                 "BetaMessageParam",

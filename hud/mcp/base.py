@@ -60,7 +60,7 @@ class BaseMCPAgent(ABC):
 
     def __init__(
         self,
-        client: MCPClient | None = None,
+        mcp_client: MCPClient | None = None,
         allowed_tools: list[str] | None = None,
         disallowed_tools: list[str] | None = None,
         initial_screenshot: bool = False,
@@ -73,7 +73,7 @@ class BaseMCPAgent(ABC):
         Initialize the base MCP agent.
 
         Args:
-            client: MCPClient instance for server connections
+            mcp_client: MCPClient instance for server connections
             allowed_tools: List of tool names to allow (None = all tools)
             disallowed_tools: List of tool names to disallow
             initial_screenshot: Whether to capture screenshot before first prompt
@@ -82,11 +82,11 @@ class BaseMCPAgent(ABC):
             custom_system_prompt: Custom system prompt to use
             lifecycle_tools: List of tool names to use for lifecycle tools
         """
-        if not client:
+        if not mcp_client:
             raise ValueError(
                 "MCPClient is required. Please provide a configured MCPClient instance."
             )
-        self.client = client
+        self.mcp_client = mcp_client
         self.allowed_tools = allowed_tools
         self.disallowed_tools = disallowed_tools or []
         self.initial_screenshot = initial_screenshot
@@ -106,7 +106,7 @@ class BaseMCPAgent(ABC):
     def _filter_tools(self) -> None:
         """Apply tool filtering based on allowed/disallowed lists."""
         # Get all tools from client
-        tool_map = self.client.get_tool_map()
+        tool_map = self.mcp_client.get_tool_map()
 
         # Filter tools
         self._available_tools = []
@@ -125,8 +125,8 @@ class BaseMCPAgent(ABC):
     async def initialize(self, task: str | TaskConfig | None = None) -> None:
         """Initialize the agent with task-specific configuration."""
         # If client wasn't initialized on construction, do it now
-        if not self.client.get_sessions():
-            await self.client.initialize()
+        if not self.mcp_client.get_sessions():
+            await self.mcp_client.initialize()
 
         # If task is provided, add lifecycle tools
         from hud.datasets import TaskConfig
@@ -156,7 +156,7 @@ class BaseMCPAgent(ABC):
 
     def get_sessions(self) -> dict[str, Any]:
         """Get active MCP sessions."""
-        return self.client.get_sessions()
+        return self.mcp_client.get_sessions()
 
     def get_tools_by_server(self) -> dict[str, list[types.Tool]]:
         """Get tools grouped by server name."""
@@ -170,7 +170,7 @@ class BaseMCPAgent(ABC):
     def get_tools_by_connector(self) -> dict[Any, list[types.Tool]]:
         """Get tools grouped by connector instance."""
         tools_by_connector = {}
-        sessions = self.client.get_sessions()
+        sessions = self.mcp_client.get_sessions()
         for server_name, tool in self._tool_map.values():
             session = sessions[server_name]
             connector = session.connector
@@ -218,11 +218,11 @@ class BaseMCPAgent(ABC):
         if tool_name not in self._tool_map and tool_name not in self.lifecycle_tools:
             raise ValueError(f"Tool '{tool_name}' not found or not allowed")
 
-        if self.client is None:
+        if self.mcp_client is None:
             raise ValueError("Client is not initialized")
 
         # Use client's call_tool method which handles routing
-        result = await self.client.call_tool(tool_name, tool_args)
+        result = await self.mcp_client.call_tool(tool_name, tool_args)
 
         # Log result for debugging
         if result.isError:
@@ -424,7 +424,7 @@ class BaseMCPAgent(ABC):
                 logger.info("Conversation step %s/%s", step, max_steps)
 
                 try:
-                    response = await self.get_model_response(messages, step)
+                    response = await self.get_model_response(messages)
 
                     # Log the model's response
                     logger.info("Model response - Content: %s", response.content)
@@ -515,7 +515,7 @@ class BaseMCPAgent(ABC):
                 logger.info("step %s/%s", step, max_steps)
 
                 try:
-                    response = await self.get_model_response(messages, step)
+                    response = await self.get_model_response(messages)
 
                     # Log the model's response
                     logger.info("Model response - Content: %s", response.content)
@@ -588,13 +588,12 @@ class BaseMCPAgent(ABC):
         """
 
     @abstractmethod
-    async def get_model_response(self, messages: list[Any], step: int) -> ModelResponse:
+    async def get_model_response(self, messages: list[Any]) -> ModelResponse:
         """
         Get response from the model including any tool calls.
 
         Args:
             messages: List of messages in provider-specific format
-            step: Current step number
 
         Returns:
             ModelResponse with content, tool_calls, and done fields

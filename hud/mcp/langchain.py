@@ -95,7 +95,7 @@ class LangChainMCPAgent(BaseMCPAgent):
 
         return messages
 
-    async def get_model_response(self, messages: list[BaseMessage], step: int) -> ModelResponse:
+    async def get_model_response(self, messages: list[BaseMessage]) -> ModelResponse:
         """Get response from LangChain model including any tool calls."""
         # Get LangChain tools (created lazily)
         langchain_tools = self._get_langchain_tools()
