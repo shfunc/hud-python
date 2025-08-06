@@ -199,7 +199,7 @@ class BaseMCPAgent(ABC):
 
         return base_prompt
 
-    async def call_tool(self, tool_call: MCPToolCall) -> MCPToolResult:
+    async def call_tool(self, tool_call: MCPToolCall | None = None) -> MCPToolResult:
         """
         Call a tool through the MCP client.
 
@@ -209,6 +209,9 @@ class BaseMCPAgent(ABC):
         Returns:
             The raw MCPToolResult
         """
+        if tool_call is None:
+            raise ValueError("tool_call must be an MCPToolCall object")
+
         tool_name = tool_call.name
         if not tool_name:
             raise ValueError("Tool call must have a 'name' field")
@@ -356,9 +359,9 @@ class BaseMCPAgent(ABC):
                     and eval_result.structuredContent is not None
                 ):
                     return AgentResult(
-                        reward=self._find_reward(eval_result),
+                        reward=_find_reward(eval_result),
                         done=True,
-                        content=eval_result.structuredContent["content"],
+                        content=_find_content(eval_result),
                         messages=prompt_result.messages,
                     )
                 else:
@@ -382,18 +385,6 @@ class BaseMCPAgent(ABC):
         except Exception as e:
             return AgentResult(reward=0.0, done=True, error=str(e))
 
-    def _find_reward(self, result: MCPToolResult) -> float:
-        """Find the reward in the result.
-
-        Agent accepts "reward", "grade", "score"
-
-        If not found, return 0.0
-        """
-        accept_keys = ["reward", "grade", "score"]
-        for key in accept_keys:
-            if isinstance(result.structuredContent, dict) and key in result.structuredContent:
-                return result.structuredContent[key]
-        return 0.0
 
     def _format_error_result(self, error_message: str) -> MCPToolResult:
         return MCPToolResult(
@@ -460,6 +451,7 @@ class BaseMCPAgent(ABC):
                     tool_results = []
                     for tool_call in tool_calls:
                         try:
+                            logger.info("Calling tool: %s with args %s", tool_call.name, tool_call.arguments)
                             result = await self.call_tool(tool_call)
                             tool_results.append(result)
                         except Exception as e:
@@ -523,6 +515,9 @@ class BaseMCPAgent(ABC):
                         "Model response - Tool calls: %s",
                         [tc.name for tc in response.tool_calls],
                     )
+                    for tool_call in response.tool_calls:
+                        logger.info("Called tool: %s with args %s", tool_call.name, tool_call.arguments)
+
                     logger.info("Model response - Done: %s", response.done)
 
                     # Check if we should stop
@@ -629,3 +624,31 @@ class BaseMCPAgent(ABC):
             Formatted user message
         """
         return {"role": "user", "content": text}
+
+
+
+def _find_reward(result: MCPToolResult) -> float:
+    """Find the reward in the result.
+
+    Agent accepts "reward", "grade", "score"
+
+    If not found, return 0.0
+    """
+    accept_keys = ["reward", "grade", "score"]
+    for key in accept_keys:
+        if isinstance(result.structuredContent, dict) and key in result.structuredContent:
+            return result.structuredContent[key]
+    return 0.0
+
+def _find_content(result: MCPToolResult) -> str | None:
+    """Find the content in the result.
+
+    Agent accepts "content", "text", "message"
+
+    If not found, return 0.0
+    """
+    accept_keys = ["content", "logs"]
+    for key in accept_keys:
+        if isinstance(result.structuredContent, dict) and key in result.structuredContent:
+            return result.structuredContent[key]
+    return None
