@@ -305,7 +305,7 @@ class BaseMCPAgent(ABC):
 
         Args:
             prompt_or_task: Either a string prompt for simple execution or a Task object
-            max_steps: Maximum number of steps
+            max_steps: Maximum number of steps (-1 for infinite)
 
         Returns:
             AgentResult with appropriate fields populated based on execution type
@@ -333,7 +333,7 @@ class BaseMCPAgent(ABC):
 
         Args:
             task: Task object with prompt, setup, and evaluate configs
-            max_steps: Maximum steps for task execution
+            max_steps: Maximum steps for task execution (-1 for infinite)
 
         Returns:
             AgentResult with reward, done, and info fields
@@ -354,13 +354,13 @@ class BaseMCPAgent(ABC):
 
                 # Return evaluation result if it's properly formatted
                 if (
-                    isinstance(eval_result, MCPToolResult)
+                    hasattr(eval_result, "structuredContent")
                     and eval_result.structuredContent is not None
                 ):
                     return AgentResult(
-                        reward=self._find_reward(eval_result),
-                        done=True,
-                        content=eval_result.structuredContent["content"],
+                        reward=self._find_reward(eval_result.structuredContent),
+                        done=eval_result.structuredContent.get("done", True),
+                        info=eval_result.structuredContent.get("info", {}),
                         messages=prompt_result.messages,
                     )
                 else:
@@ -384,7 +384,7 @@ class BaseMCPAgent(ABC):
         except Exception as e:
             return AgentResult(reward=0.0, done=True, error=str(e))
 
-    def _find_reward(self, result: MCPToolResult) -> float:
+    def _find_reward(self, result: dict) -> float:
         """Find the reward in the result.
 
         Agent accepts "reward", "grade", "score"
@@ -393,8 +393,8 @@ class BaseMCPAgent(ABC):
         """
         accept_keys = ["reward", "grade", "score"]
         for key in accept_keys:
-            if isinstance(result.structuredContent, dict) and key in result.structuredContent:
-                return result.structuredContent[key]
+            if isinstance(result, dict) and key in result:
+                return result[key]
         return 0.0
 
     def _format_error_result(self, error_message: str) -> MCPToolResult:
@@ -408,7 +408,7 @@ class BaseMCPAgent(ABC):
 
         Args:
             prompt: The initial prompt to start the conversation
-            max_steps: Maximum number of steps per turn
+            max_steps: Maximum number of steps per turn (-1 for infinite)
 
         Returns:
             AgentResult when conversation ends
@@ -421,9 +421,12 @@ class BaseMCPAgent(ABC):
             messages = await self.create_initial_messages(prompt, latest_screenshot)
 
             step = 0
-            while step < max_steps:
+            while max_steps == -1 or step < max_steps:
                 step += 1
-                logger.info("Conversation step %s/%s", step, max_steps)
+                if max_steps == -1:
+                    logger.info("Conversation step %s (unlimited)", step)
+                else:
+                    logger.info("Conversation step %s/%s", step, max_steps)
 
                 try:
                     response = await self.get_model_response(messages)
@@ -499,7 +502,7 @@ class BaseMCPAgent(ABC):
 
         Args:
             prompt: The task to complete
-            max_steps: Maximum number of steps
+            max_steps: Maximum number of steps (-1 for infinite)
 
         Returns:
             AgentResult for task completion
@@ -512,9 +515,12 @@ class BaseMCPAgent(ABC):
             messages = await self.create_initial_messages(prompt, latest_screenshot)
 
             step = 0
-            while step < max_steps:
+            while max_steps == -1 or step < max_steps:
                 step += 1
-                logger.info("Step %s/%s", step, max_steps)
+                if max_steps == -1:
+                    logger.info("Step %s (unlimited)", step)
+                else:
+                    logger.info("Step %s/%s", step, max_steps)
 
                 try:
                     response = await self.get_model_response(messages)
