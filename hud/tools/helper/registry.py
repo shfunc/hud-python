@@ -78,29 +78,31 @@ class Registry:
         
         return decorator
     
-    def create_instance(self, spec: Dict[str, Any], context: Any = None) -> Callable:
-        """Create an instance from a specification.
+    def get(self, name: str) -> Optional[Type]:
+        """Get a registered class by name.
         
         Args:
-            spec: Configuration dict with 'function' and 'args' keys
-            context: Optional context to pass to the instance
+            name: The registered name
             
         Returns:
-            Callable that executes the registered function
+            The registered class or None
         """
-        function_name = spec.get("function")
-        args = spec.get("args", {})
+        return self._registry.get(name)
+    
+    def create_instance(self, name: str) -> Any:
+        """Create an instance of a registered class.
         
-        if function_name not in self._registry:
-            raise ValueError(f"Unknown {self.name}: {function_name}")
+        Args:
+            name: The registered name
+            
+        Returns:
+            An instance of the registered class
+        """
+        if name not in self._registry:
+            raise ValueError(f"Unknown {self.name}: {name}")
         
-        cls = self._registry[function_name]
-        instance = cls()
-        
-        async def executor():
-            return await instance(context, **args)
-        
-        return executor
+        cls = self._registry[name]
+        return cls()
     
     def to_json(self) -> str:
         """Export registry as JSON for MCP resources."""
