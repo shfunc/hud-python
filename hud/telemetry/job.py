@@ -43,7 +43,11 @@ class JobContext:
         current_job_name.set(self.name)
 
         coro = update_job_status(
-            self.id, self.name, JobStatus.RUNNING, metadata=self.metadata, taskset_name=self.taskset_name
+            self.id,
+            self.name,
+            JobStatus.RUNNING,
+            metadata=self.metadata,
+            taskset_name=self.taskset_name,
         )
         submit_to_worker_loop(coro)
 
@@ -58,11 +62,22 @@ class JobContext:
             # Job failed with exception
             error_msg = f"{exc_type.__name__}: {exc_val}"
             coro = update_job_status(
-                self.id, self.name, JobStatus.ERROR, error_message=error_msg, metadata=self.metadata, taskset_name=self.taskset_name
+                self.id,
+                self.name,
+                JobStatus.ERROR,
+                error_message=error_msg,
+                metadata=self.metadata,
+                taskset_name=self.taskset_name,
             )
         else:
             # Job completed successfully
-            coro = update_job_status(self.id, self.name, JobStatus.COMPLETED, metadata=self.metadata, taskset_name=self.taskset_name)
+            coro = update_job_status(
+                self.id,
+                self.name,
+                JobStatus.COMPLETED,
+                metadata=self.metadata,
+                taskset_name=self.taskset_name,
+            )
 
         submit_to_worker_loop(coro)
 
@@ -116,10 +131,11 @@ def job(
 
     Args:
         name: Name for the job
+        taskset_name: Optional taskset/dataset name for the job
         metadata: Optional metadata to include with the job
 
     Example:
-        with hud.job("evaluation_run") as job:
+        with hud.job("evaluation_run", taskset_name="hud-evals/web-agents") as job:
             for task in tasks:
                 with hud.trace(f"task_{task.id}"):
                     # Trace automatically includes job_id

@@ -175,13 +175,17 @@ def trace_open(
     agent_model: str | None = None,
     run_id: str | None = None,
     attributes: dict[str, Any] | None = None,
+    job_id: str | None = None,
 ) -> Generator[str, None, None]:
     """
     Context manager for tracing a block of code.
 
     Args:
         name: Optional name for this trace, will be added to attributes.
+        agent_model: Optional agent model name
+        run_id: Optional specific run ID to use instead of generating one
         attributes: Optional dictionary of attributes to associate with this trace
+        job_id: Optional job ID to explicitly link this trace to a job
 
     Returns:
         The generated task run ID (UUID string) used for this trace
@@ -226,8 +230,9 @@ def trace_open(
         if agent_model:
             initial_metadata["agent_model"] = agent_model
 
-        # Get job_id if we're in a job context
-        job_id = get_current_job_id()
+        # Use explicitly provided job_id or get from context
+        if job_id is None:
+            job_id = get_current_job_id()
 
         coro = update_task_run_status(
             task_run_id, TaskRunStatus.INITIALIZING, metadata=initial_metadata, job_id=job_id
@@ -262,19 +267,15 @@ def trace_open(
 
             # Include final metadata with duration
             final_metadata = local_attributes.copy()
-            
-            # Get job_id if we're in a job context
-            from hud.telemetry.job import get_current_job_id
-            job_id = get_current_job_id()
 
             if error_occurred:
                 coro = update_task_run_status(
-                    task_run_id, TaskRunStatus.ERROR, error_message, metadata=final_metadata, job_id=job_id
+                    task_run_id, TaskRunStatus.ERROR, error_message, metadata=final_metadata
                 )
                 logger.debug("Updated task run %s status to ERROR: %s", task_run_id, error_message)
             else:
                 coro = update_task_run_status(
-                    task_run_id, TaskRunStatus.COMPLETED, metadata=final_metadata, job_id=job_id
+                    task_run_id, TaskRunStatus.COMPLETED, metadata=final_metadata
                 )
                 logger.debug("Updated task run %s status to COMPLETED with metadata", task_run_id)
 
@@ -322,6 +323,7 @@ def trace_open(
 def trace(
     name: str | None = None,
     agent_model: str | None = None,
+    job_id: str | None = None,
     attributes: dict[str, Any] | None = None,
 ) -> Generator[str, None, None]:
     """
@@ -332,12 +334,16 @@ def trace(
 
     Args:
         name: Optional name for this trace
+        agent_model: Optional agent model name
+        job_id: Optional job ID to explicitly link this trace to a job
         attributes: Optional attributes for the trace
 
     Returns:
         The generated task run ID (UUID string) used for this trace
     """
-    with trace_open(name=name, agent_model=agent_model, attributes=attributes) as task_run_id:
+    with trace_open(
+        name=name, agent_model=agent_model, job_id=job_id, attributes=attributes
+    ) as task_run_id:
         yield task_run_id
 
     # Ensure telemetry is flushed synchronously
@@ -349,6 +355,7 @@ def trace(
 def trace_decorator(
     name: str | None = None,
     agent_model: str | None = None,
+    job_id: str | None = None,
     attributes: dict[str, Any] | None = None,
 ) -> Any:
     """
@@ -363,7 +370,9 @@ def trace_decorator(
             @wraps(func)
             async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
                 func_name = name or f"{func.__module__}.{func.__name__}"
-                with trace_open(name=func_name, agent_model=agent_model, attributes=attributes):
+                with trace_open(
+                    name=func_name, agent_model=agent_model, job_id=job_id, attributes=attributes
+                ):
                     return await func(*args, **kwargs)
 
             return async_wrapper
@@ -372,7 +381,9 @@ def trace_decorator(
             @wraps(func)
             def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
                 func_name = name or f"{func.__module__}.{func.__name__}"
-                with trace_open(name=func_name, agent_model=agent_model, attributes=attributes):
+                with trace_open(
+                    name=func_name, agent_model=agent_model, job_id=job_id, attributes=attributes
+                ):
                     return func(*args, **kwargs)
 
             return sync_wrapper
