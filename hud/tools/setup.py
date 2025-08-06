@@ -10,8 +10,12 @@ from pydantic import Field
 logger = logging.getLogger(__name__)
 
 
-class SetupResult(TypedDict):
-    """Standard setup result format."""
+class SetupResult(TypedDict, total=False):
+    """Standard setup result format.
+    
+    Required fields: status, message
+    Additional fields are allowed.
+    """
     status: Literal["success", "error"]
     message: str
 
