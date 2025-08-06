@@ -7,7 +7,9 @@ from typing import TYPE_CHECKING, Any
 from .base import ToolError, ToolResult, tool_result_to_content_blocks
 from .bash import BashTool
 from .edit import EditTool
+from .evaluate import BaseEvaluator, EvaluateTool, EvaluationResult
 from .playwright_tool import PlaywrightTool
+from .setup import BaseSetup, SetupResult, SetupTool
 
 if TYPE_CHECKING:
     from .computer import AnthropicComputerTool, HudComputerTool, OpenAIComputerTool
@@ -22,6 +24,14 @@ __all__ = [
     "ToolError",
     "ToolResult",
     "tool_result_to_content_blocks",
+    # Setup tools
+    "SetupTool",
+    "BaseSetup",
+    "SetupResult",
+    # Evaluate tools
+    "EvaluateTool",
+    "BaseEvaluator",
+    "EvaluationResult",
 ]
 
 
