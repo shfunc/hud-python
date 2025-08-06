@@ -1,4 +1,4 @@
-"""Environment context for browser automation tasks."""
+"""Global context for browser environment."""
 
 from typing import Dict, Optional, Any
 import httpx
@@ -168,7 +168,7 @@ class BrowserEnvironmentContext:
     # === Environment Operations ===
 
     async def execute_setup(self, setup_spec: dict) -> dict:
-        """Execute a setup operation using the setup registry.
+        """Execute a setup operation using the setup tool.
 
         Args:
             setup_spec: Setup specification with 'function' and 'args'
@@ -176,13 +176,16 @@ class BrowserEnvironmentContext:
         Returns:
             Setup result dictionary
         """
-        from ..setup import SetupRegistry
-
-        setup_func = SetupRegistry.create_setup(setup_spec, self)
-        return await setup_func()
+        from .setup import setup_tool
+        
+        function = setup_spec.get('function')
+        args = setup_spec.get('args', {})
+        
+        # Call the setup tool directly
+        return await setup_tool(function, args, None, None, self)
 
     async def execute_evaluation(self, eval_spec: dict) -> dict:
-        """Execute an evaluation operation using the evaluator registry.
+        """Execute an evaluation operation using the evaluate tool.
 
         Args:
             eval_spec: Evaluation specification with 'function' and 'args'
@@ -190,10 +193,13 @@ class BrowserEnvironmentContext:
         Returns:
             Evaluation result dictionary
         """
-        from .registry import EvaluatorRegistry
-
-        evaluator = EvaluatorRegistry.create_evaluator(eval_spec, self)
-        return await evaluator()
+        from .evaluators import evaluate_tool
+        
+        function = eval_spec.get('function')
+        args = eval_spec.get('args', {})
+        
+        # Call the evaluate tool directly
+        return await evaluate_tool(function, args, None, None, self)
 
     # === Utility Methods ===
 
@@ -208,3 +214,26 @@ class BrowserEnvironmentContext:
 
 # Keep backward compatibility alias
 BrowserEvaluationContext = BrowserEnvironmentContext
+
+
+# Global context instance that will be shared by setup and evaluate tools
+_global_context: Optional[BrowserEnvironmentContext] = None
+
+
+def get_global_context() -> Optional[BrowserEnvironmentContext]:
+    """Get the global browser environment context."""
+    return _global_context
+
+
+def set_global_context(context: BrowserEnvironmentContext) -> None:
+    """Set the global browser environment context."""
+    global _global_context
+    _global_context = context
+    logger.info("Global context initialized")
+
+
+def initialize_context(service_manager, playwright_tool=None) -> BrowserEnvironmentContext:
+    """Initialize and set the global context."""
+    context = BrowserEnvironmentContext(service_manager, playwright_tool)
+    set_global_context(context)
+    return context

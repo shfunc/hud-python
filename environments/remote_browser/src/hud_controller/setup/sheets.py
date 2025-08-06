@@ -19,21 +19,85 @@ logger = logging.getLogger(__name__)
 def get_gcp_credentials() -> Dict[str, str]:
     """Get GCP credentials from environment variable.
     
-    Expects either:
-    1. GCP_CREDENTIALS_JSON - A JSON string containing the full credentials
-    2. Individual environment variables for each field
+    Expects one of:
+    1. GCP_CREDENTIALS_JSON - A JSON string (supports various formats)
+    2. GCP_CREDENTIALS_BASE64 - Base64 encoded JSON
+    3. GCP_CREDENTIALS_FILE - Path to a JSON file
+    4. Individual environment variables for each field (GCP_PROJECT_ID, etc.)
     
     Returns:
         Dict containing GCP service account credentials
     """
+    import ast
+    
     # First try to get from JSON env var
     creds_json = os.getenv("GCP_CREDENTIALS_JSON")
     if creds_json:
+        # Try multiple parsing approaches to be more lenient
+        
+        # Approach 1: Standard JSON parsing
         try:
             return json.loads(creds_json)
         except json.JSONDecodeError:
-            logger.error("Invalid JSON in GCP_CREDENTIALS_JSON")
-            raise ValueError("Invalid GCP_CREDENTIALS_JSON format")
+            logger.debug("Standard JSON parsing failed, trying alternative approaches")
+        
+        # Approach 2: Handle single-quoted JSON (common mistake)
+        try:
+            # Replace single quotes with double quotes, but preserve quotes inside strings
+            # This is a simple heuristic that works for most cases
+            fixed_json = creds_json.replace("'", '"')
+            return json.loads(fixed_json)
+        except json.JSONDecodeError:
+            logger.debug("Single-quote replacement failed")
+        
+        # Approach 3: Try Python literal eval (handles Python dict format)
+        try:
+            # ast.literal_eval can parse Python dict literals safely
+            result = ast.literal_eval(creds_json)
+            if isinstance(result, dict):
+                return result
+        except (ValueError, SyntaxError):
+            logger.debug("Python literal eval failed")
+        
+        # Approach 4: Try to fix common escaping issues
+        try:
+            # Handle cases where newlines aren't properly escaped
+            fixed = creds_json.replace('\\n', '\\\\n').replace('\n', '\\n')
+            return json.loads(fixed)
+        except json.JSONDecodeError:
+            logger.debug("Newline fixing failed")
+        
+        # If all approaches fail, log the error with helpful info
+        logger.error("Could not parse GCP_CREDENTIALS_JSON. Tried multiple formats.")
+        logger.error("First 100 chars: %s", creds_json[:100])
+        raise ValueError(
+            "Invalid GCP_CREDENTIALS_JSON format. "
+            "Try: 1) Valid JSON with double quotes, "
+            "2) Base64 encoding (GCP_CREDENTIALS_BASE64), "
+            "3) File path (GCP_CREDENTIALS_FILE), or "
+            "4) Individual env vars (GCP_PROJECT_ID, GCP_PRIVATE_KEY, etc.)"
+        )
+    
+    # Try base64 encoded credentials
+    creds_base64 = os.getenv("GCP_CREDENTIALS_BASE64")
+    if creds_base64:
+        try:
+            import base64
+            decoded = base64.b64decode(creds_base64).decode('utf-8')
+            return json.loads(decoded)
+        except Exception as e:
+            logger.error("Failed to decode GCP_CREDENTIALS_BASE64: %s", e)
+            raise ValueError(f"Invalid GCP_CREDENTIALS_BASE64: {e}")
+    
+    # Try loading from file
+    creds_file = os.getenv("GCP_CREDENTIALS_FILE")
+    if creds_file:
+        try:
+            with open(creds_file, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error("Failed to load GCP_CREDENTIALS_FILE from %s: %s", creds_file, e)
+            raise ValueError(f"Could not load credentials from file {creds_file}: {e}")
     
     # Otherwise try to build from individual env vars
     required_fields = [

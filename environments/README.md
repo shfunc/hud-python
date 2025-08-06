@@ -96,22 +96,25 @@ my-environment/
     └── my_module/          # Your Python package
         ├── __init__.py
         ├── server.py       # MCP server entry point
-        ├── context.py      # Core stateful environment logic
+        ├── context.py      # Core stateful environment logic (optional)
         ├── tools/          # Interactive tools (move, click, type, etc.)
         │   ├── __init__.py
-        │   └── move.py     # Example: move tool
-        ├── setup/          # Setup registry and functions
-        │   ├── __init__.py # Creates SetupTool instance
-        │   └── registry.py # Registers setup functions
-        └── evaluate/       # Evaluation registry and functions
-            ├── __init__.py # Creates EvaluateTool instance
-            └── registry.py # Registers evaluator functions
+        │   └── move.py     # Example: custom tool inheriting from BaseTool
+        ├── setup/          # Setup functions (modular approach)
+        │   ├── __init__.py # Creates SetupTool instance & exports decorator
+        │   ├── basic.py    # Basic setup functions
+        │   └── advanced.py # Advanced setup functions
+        └── evaluate/       # Evaluator functions (modular approach)
+            ├── __init__.py # Creates EvaluateTool instance & exports decorator
+            ├── checks.py   # Basic evaluation checks
+            └── metrics.py  # Advanced metrics evaluators
 ```
 
 This structure enables:
-- Clean separation of concerns (game logic, tools, setup, evaluation)
+- Clean separation of concerns (environment logic, tools, setup, evaluation)
 - Easy volume mounting for development (Phase 5)
 - Standard Python packaging with `pip install -e .`
+- Modular organization - each setup/evaluator in its own file for clarity
 
 • **One Dockerfile only** – no docker-compose.  
 • If you're building a GUI environment, start from `hudpython/novnc-base:latest` instead and leave VNC configuration for later phases.
@@ -245,69 +248,100 @@ async def init():
 
 ### Approach 2: Registry Pattern (Recommended for Complex Environments)
 
-For environments with multiple setup/evaluate functions, use the registry pattern like in `text_2048`:
+For environments with multiple setup/evaluate functions, use the registry pattern with modular organization:
 
 ```python
 # In setup/__init__.py
 from hud.tools import SetupTool
 
+# Create global tool instance
 setup_tool = SetupTool(name="setup", title="Environment Setup")
-setup = setup_tool.register  # Create decorator
+setup = setup_tool.register  # Export decorator for convenience
 
-# In setup/registry.py
+# Import all setup modules to register their functions
+from . import basic, advanced  # This registers all @setup decorated classes
+
+# In setup/basic.py
 from . import setup
-from hud.tools import BaseSetup
+from hud.tools import BaseSetup, SetupResult
 
-@setup("reset_task", "Reset environment to initial state")
-class ResetTask(BaseSetup):
-    async def __call__(self, context, **kwargs):
-        # Reset logic
+@setup("reset", description="Reset environment to initial state")
+class ResetSetup(BaseSetup):
+    async def __call__(self, context, **kwargs) -> SetupResult:
+        # Context is passed as first argument
+        await context.reset_state()
         return {"status": "success", "message": "Reset complete"}
 
-# In evaluators/__init__.py
+@setup("seed_data", description="Seed with test data")
+class SeedDataSetup(BaseSetup):
+    async def __call__(self, context, num_items: int = 5) -> SetupResult:
+        # Type hints for parameters are preserved
+        items = await context.create_items(num_items)
+        return {"status": "success", "items_created": len(items)}
+
+# In evaluate/__init__.py
 from hud.tools import EvaluateTool
 
+# Create global tool instance
 evaluate_tool = EvaluateTool(name="evaluate", title="Task Evaluator")
-evaluator = evaluate_tool.register  # Create decorator
+evaluator = evaluate_tool.register  # Export decorator
 
-# In evaluators/registry.py
+# Import all evaluator modules
+from . import checks, metrics
+
+# In evaluate/checks.py
 from . import evaluator
-from hud.tools import BaseEvaluator
+from hud.tools import BaseEvaluator, EvaluationResult
 
-@evaluator("task_complete", "Check if task is done")
-class TaskComplete(BaseEvaluator):
-    async def __call__(self, context, **kwargs):
-        # Evaluation logic
-        return {"reward": 0.8, "done": True}
+@evaluator("task_complete", description="Check if task is done")
+class TaskCompleteEvaluator(BaseEvaluator):
+    async def __call__(self, context, expected_count: int) -> EvaluationResult:
+        # Must return dict with 'reward' (0-1) and 'done' (bool)
+        completed = await context.count_completed()
+        return {
+            "reward": min(completed / expected_count, 1.0),
+            "done": completed >= expected_count,
+            "info": {"completed": completed, "expected": expected_count}
+        }
 
 # In server.py
 from .setup import setup_tool
-from .evaluators import evaluate_tool
+from .evaluate import evaluate_tool
+from hud.tools.helper import register_instance_tool
 
 @mcp.resource("setup://registry")
 async def get_setup_registry() -> str:
-    return setup_tool.get_registry_json()
+    """Expose available setup functions"""
+    return setup_tool.to_json()
 
 @mcp.resource("evaluators://registry")
 async def get_evaluator_registry() -> str:
-    return evaluate_tool.get_registry_json()
+    """Expose available evaluators"""
+    return evaluate_tool.to_json()
 
-@mcp.initialize()
-async def init():
-    # Set context (your environment state)
-    setup_tool.context = environment_state
-    evaluate_tool.context = environment_state
+@mcp_intialize_wrapper()
+async def initialize_environment():
+    # Initialize your environment state/context
+    context = await create_environment_context()
     
-    # Register tools
+    # Set context for tools (shared state)
+    setup_tool.context = context
+    evaluate_tool.context = context
+    
+    # Register tools with MCP
     register_instance_tool(mcp, setup_tool)
     register_instance_tool(mcp, evaluate_tool)
-    register_instance_tool(mcp, "computer", HudComputerTool())
+    
+    # Register interaction tools
+    if hasattr(context, 'custom_tool'):
+        register_instance_tool(mcp, context.custom_tool)
 ```
 
 This registry pattern provides:
-- Multiple named setup/evaluate functions selectable via `config["function"]`
-- Discoverable functions via resource URIs (`setup://registry`, `evaluators://registry`)
-- Clean separation and organization of logic -- keeps the environment clean!
+- **Modular organization**: Each setup/evaluator in its own file or grouped logically
+- **Auto-discovery**: Import modules in `__init__.py` to auto-register functions
+- **Type safety**: Full type hints preserved for parameters and returns
+- **Shared context**: Single context object passed to all functions
 
 ### Test workflow
 
@@ -581,6 +615,70 @@ Decorators keep registration *next to the implementation* and avoid manual bookk
 * **Creative ideas** – API simulators, network test-beds, game worlds… if it fits in Docker it can be an MCP environment.
 
 ---
+
+## Contributing to Existing Environments
+
+When improving existing environments, follow these guidelines:
+
+### 1. Understanding the Environment
+
+Before making changes:
+- Read the environment's README and any documentation
+- Run `docker_debug.py` to understand current capabilities
+- Explore the folder structure and identify key components
+- Test existing setup/evaluate functions to understand behavior
+
+### 2. Making Improvements
+
+**Adding New Setup Functions**
+```python
+# In setup/my_new_setup.py
+from . import setup
+from hud.tools import BaseSetup, SetupResult
+
+@setup("my_new_setup", description="Clear description of what this does")
+class MyNewSetup(BaseSetup):
+    async def __call__(self, context, param1: str, param2: int = 10) -> SetupResult:
+        # Implementation
+        return {"status": "success", "details": "..."}
+```
+
+**Adding New Evaluators**
+```python
+# In evaluate/my_evaluator.py
+from . import evaluator
+from hud.tools import BaseEvaluator, EvaluationResult
+
+@evaluator("my_check", description="What this evaluates")
+class MyCheckEvaluator(BaseEvaluator):
+    async def __call__(self, context, threshold: float) -> EvaluationResult:
+        score = await context.calculate_score()
+        return {
+            "reward": min(score / 100, 1.0),
+            "done": score >= threshold,
+            "info": {"score": score, "threshold": threshold}
+        }
+```
+
+### 3. Testing Your Changes
+
+**Use the Development Configuration**
+```jsonc
+// In .cursor/mcp.json
+{
+  "mcpServers": {
+    "my-env-dev": {
+      "command": "npx",
+      "args": [
+        "reloaderoo", "--",
+        "docker", "run", "-i", "--rm",
+        "-v", "$(pwd)/src:/app/src:rw",
+        "my-environment:dev"
+      ]
+    }
+  }
+}
+```
 
 ## Summary
 

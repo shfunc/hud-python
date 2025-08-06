@@ -6,6 +6,8 @@ import logging
 import os
 import signal
 import atexit
+import json
+from datetime import datetime
 from typing import Optional
 
 # Configure logging
@@ -65,6 +67,38 @@ async def get_setup_registry() -> str:
 async def get_evaluator_registry() -> str:
     """Get the list of available evaluator functions."""
     return evaluate_tool.get_registry_json()
+
+
+@mcp.resource("telemetry://live")
+async def get_telemetry_resource() -> dict:
+    """MCP resource containing telemetry data including provider's live view URL."""
+    global browser_provider
+    
+    telemetry_data = {
+        "provider": os.getenv("BROWSER_PROVIDER", "unknown"),
+        "status": "unknown",
+        "live_url": None,
+        "timestamp": datetime.now().isoformat(),
+    }
+    
+    if browser_provider:
+        try:
+            # Get provider status
+            status = await browser_provider.get_status()
+            telemetry_data.update({
+                "status": "running" if browser_provider.is_running else "stopped",
+                "cdp_url": browser_provider.cdp_url,
+                "instance_id": status.get("instance_id"),
+                "live_url": browser_provider.get_live_view_url(),
+            })
+        except Exception as e:
+            logger.error(f"Error getting telemetry data: {e}")
+            telemetry_data["error"] = str(e)
+    else:
+        telemetry_data["status"] = "not_initialized"
+        telemetry_data["error"] = "Browser provider not initialized. Call initialize first."
+    
+    return telemetry_data
 
 
 @mcp_intialize_wrapper()

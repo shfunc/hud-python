@@ -85,12 +85,7 @@ dev = [
     "setuptools",
 ]
 rl = [
-    "verifiers[all] @ git+https://github.com/jdchawla29/verifiers.git@main ; sys_platform != 'win32'",
-    "triton-windows<3.5 ; sys_platform == 'win32'",
-    "transformers>=4.40.0",
-    "pillow>=10.0.0",
-    "torch>=2.0.0",
-    "rich"
+    "verifiers[all] @ git+https://github.com/jdchawla29/verifiers.git@main",
 ]
 
 [project.optional-dependencies]
