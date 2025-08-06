@@ -1,0 +1,4 @@
+[submodule "examples/rl/hud-vf-gym"]
+	path = examples/rl/hud-vf-gym
+	url = https://github.com/hud-evals/hud-vf-gym.git
+	branch = v1
