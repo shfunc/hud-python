@@ -2,7 +2,10 @@ from __future__ import annotations
 
 # ruff: noqa: T201
 import asyncio
+import atexit
 import logging
+
+import threading
 import time
 import uuid
 from contextlib import contextmanager
@@ -29,6 +32,19 @@ if TYPE_CHECKING:
 logger = logging.getLogger("hud.telemetry")
 T = TypeVar("T")
 P = ParamSpec("P")
+
+# Thread-local storage for deferred trace messages
+_deferred_trace_messages = threading.local()
+
+def _print_deferred_trace_messages() -> None:
+    """Print any deferred trace messages at exit."""
+    if hasattr(_deferred_trace_messages, "messages"):
+        for task_run_id in _deferred_trace_messages.messages:
+            _print_trace_complete_url(task_run_id, error_occurred=True)
+        _deferred_trace_messages.messages.clear()
+
+# Register the atexit handler
+atexit.register(_print_deferred_trace_messages)
 
 # Track whether telemetry has been initialized
 _telemetry_initialized = False
@@ -133,18 +149,22 @@ def _print_trace_url(task_run_id: str) -> None:
     print(f"{DIM}{bottom_border}{RESET}\n")
 
 
-def _print_trace_complete_url(task_run_id: str) -> None:
-    """Print the trace completion URL in a simple colorful format."""
+def _print_trace_complete_url(task_run_id: str, error_occurred: bool = False) -> None:
+    """Print the trace completion URL with appropriate messaging."""
     url = f"https://app.hud.so/trace/{task_run_id}"
 
     # ANSI color codes
     GREEN = "\033[92m"
+    RED = "\033[91m"
     GOLD = "\033[33m"
     RESET = "\033[0m"
     DIM = "\033[2m"
     BOLD = "\033[1m"
 
-    print(f"\n{GREEN}✓ Trace complete!{RESET} {DIM}View at:{RESET} {BOLD}{GOLD}{url}{RESET}\n")
+    if error_occurred:
+        print(f"\n{RED}✗ Trace errored!{RESET} {DIM}More error details available at:{RESET} {BOLD}{GOLD}{url}{RESET}\n")
+    else:
+        print(f"\n{GREEN}✓ Trace complete!{RESET} {DIM}View at:{RESET} {BOLD}{GOLD}{url}{RESET}\n")
 
 
 @contextmanager
@@ -282,7 +302,14 @@ def trace_open(
 
         # Log at the end
         if is_root:
-            _print_trace_complete_url(task_run_id)
+            if error_occurred:
+                # Defer error trace messages to print after the exception
+                if not hasattr(_deferred_trace_messages, "messages"):
+                    _deferred_trace_messages.messages = []
+                _deferred_trace_messages.messages.append(task_run_id)
+            else:
+                # For successful runs, print immediately
+                _print_trace_complete_url(task_run_id, False)
 
 
 @contextmanager

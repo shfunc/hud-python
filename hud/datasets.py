@@ -89,27 +89,30 @@ class TaskConfig(BaseModel):
         return substitute_in_value(v)
 
 
-def to_taskconfigs(dataset: Dataset) -> Dataset:
+def to_taskconfigs(dataset: Dataset) -> list[TaskConfig]:
     """
-    Convert a HuggingFace dataset to contain TaskConfig objects.
+    Convert a HuggingFace dataset to a list of TaskConfig objects.
 
     Args:
-        dataset: HuggingFace dataset with task data
+        dataset: HuggingFace dataset with task data (typically the "test" split)
 
     Returns:
-        Dataset with 'task' column containing TaskConfig objects
+        List of TaskConfig objects
 
     Example:
         >>> dataset = load_dataset("hud/sheetbench-v1", split="test")
         >>> tasks = to_taskconfigs(dataset)
-        >>> tasks[0]["task"]  # This is a TaskConfig object
+        >>> tasks[0]  # This is a TaskConfig object
     """
-
-    def _convert(example: dict[str, Any]) -> dict[str, TaskConfig]:
-        return {"task": TaskConfig(**example)}
-
-    # Map and keep only the task column
-    return dataset.map(_convert, remove_columns=dataset.column_names)
+    # Process each row, using column names as keys to create TaskConfig objects
+    task_configs = []
+    for row in dataset:
+        # Row is a dict with column names as keys
+        # Unpack the row dict into TaskConfig constructor
+        task_config = TaskConfig(**row)
+        task_configs.append(task_config)
+    
+    return task_configs
 
 
 async def run_dataset(
@@ -164,10 +167,8 @@ async def run_dataset(
         sem = asyncio.Semaphore(max_concurrent)
         results: list[AgentResult | None] = [None] * len(tasks)
 
-        async def _worker(index: int, row: Any) -> None:
+        async def _worker(index: int, task: TaskConfig) -> None:
             async with sem:
-                task = row["task"]
-
                 # Create trace for this task
                 with hud.trace(f"task_{index}"):
                     # Create fresh MCP client per task
@@ -185,7 +186,7 @@ async def run_dataset(
 
         # Execute all tasks
         await asyncio.gather(
-            *[_worker(i, row) for i, row in enumerate(tasks)],
+            *[_worker(i, task) for i, task in enumerate(tasks)],
             return_exceptions=True,  # Don't fail entire batch on one error
         )
 

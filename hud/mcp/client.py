@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 import logging
 from typing import TYPE_CHECKING, Any
+from datetime import datetime
 
 from mcp_use.client import MCPClient as MCPUseClient
 from pydantic import AnyUrl
+from mcp.shared.exceptions import McpError
 
 if TYPE_CHECKING:
     from typing import Self
@@ -28,6 +30,7 @@ class MCPClient:
         self,
         mcp_config: dict[str, dict[str, Any]],
         verbose: bool = False,
+        client_info: dict[str, Any] | None = None,
     ) -> None:
         """
         Initialize the MCP client.
@@ -35,19 +38,45 @@ class MCPClient:
         Args:
             mcp_config: MCP server configuration dict (required)
             verbose: Enable verbose logging of server communications
-            auto_initialize: Whether to automatically initialize on construction
+            client_info: Optional client info for MCP initialization
         """
         self.verbose = verbose
+        self.client_info = client_info or {
+            "name": "hud-python",
+            "version": "3.0.3"
+        }
 
-        # Initialize mcp_use client with proper config
-        # Use from_dict to properly initialize with config
+        # Create a logging callback that stores notifications
+        async def logging_callback(params: types.LoggingMessage) -> None:
+            """Handle logging notifications from MCP servers."""
+            # Note: We don't have server name here, but we can work around this
+            notification_data = {
+                "timestamp": datetime.now().isoformat(),
+                "method": "notifications/message",
+                "params": {
+                    "level": params.level,
+                    "logger": getattr(params, "logger", None),
+                    "data": params.data,
+                }
+            }
+            self._notifications.append(notification_data)
+            
+            if self.verbose:
+                logger.debug("Received notification: level=%s, logger=%s, data=%s",
+                           params.level, getattr(params, "logger", None), params.data)
+        
+        # Initialize mcp_use client with proper config and logging callback
         config = {"mcpServers": mcp_config}
-        self._mcp_client = MCPUseClient.from_dict(config)
+        self._mcp_client = MCPUseClient.from_dict(
+            config,
+            logging_callback=logging_callback
+        )
 
         self._sessions: dict[str, MCPUseSession] = {}
         self._available_tools: list[types.Tool] = []
         self._tool_map: dict[str, tuple[str, types.Tool]] = {}
         self._telemetry_data: dict[str, Any] = {}
+        self._notifications: list[dict[str, Any]] = []  # Store received notifications
 
         # Set up verbose logging if requested
         if self.verbose:
@@ -79,18 +108,32 @@ class MCPClient:
         # Create all sessions at once
         try:
             self._sessions = await self._mcp_client.create_all_sessions()
+        except McpError as e:
+            # Protocol error - the server is reachable but rejecting our request
+            logger.error("MCP protocol error: %s", e)
+            logger.error("This typically means:")
+            logger.error("- Invalid or missing initialization parameters")
+            logger.error("- Incompatible protocol version") 
+            logger.error("- Server-side configuration issues")
+            raise
         except Exception as e:
-            # If session creation fails, try to get Docker logs
+            # Transport or other errors
             logger.error("Failed to create sessions: %s", e)
             if self.verbose:
-                logger.info("Attempting to check Docker container status...")
-                # await self._check_docker_containers()
+                logger.info("Check that the MCP server is running and accessible")
             raise
 
         # Log session details in verbose mode
         if self.verbose and self._sessions:
             for name, session in self._sessions.items():
                 logger.debug("  - %s: %s", name, type(session).__name__)
+
+        # Automatically set log level to info for all servers
+        try:
+            await self.set_log_level("info")
+        except Exception as e:
+            if self.verbose:
+                logger.debug("Could not set default log level: %s", e)
 
         return self._sessions
 
@@ -294,6 +337,80 @@ class MCPClient:
     def get_all_active_sessions(self) -> dict[str, MCPUseSession]:
         """Get all active sessions (compatibility method)."""
         return self._sessions
+
+    async def set_log_level(self, level: str, server_name: str | None = None) -> None:
+        """
+        Set the minimum log level for server notifications.
+        
+        Args:
+            level: Log level (debug, info, notice, warning, error, critical, alert, emergency)
+            server_name: Optional server name. If None, sets for all servers.
+        """
+        if server_name:
+            if server_name not in self._sessions:
+                raise ValueError(f"Server '{server_name}' not found")
+            sessions = {server_name: self._sessions[server_name]}
+        else:
+            sessions = self._sessions
+            
+        for name, session in sessions.items():
+            try:
+                if session.connector.client_session:
+                    await session.connector.client_session.send_request(
+                        method="logging/setLevel",
+                        params={"level": level}
+                    )
+                    logger.info("Set log level to '%s' for server '%s'", level, name)
+            except Exception as e:
+                logger.error("Failed to set log level for '%s': %s", name, e)
+
+    def get_notifications(self) -> list[dict[str, Any]]:
+        """Get all received notifications."""
+        return self._notifications.copy()
+
+    def get_logs(self) -> str:
+        """
+        Get all notifications formatted as a log string.
+        
+        Returns:
+            Formatted log string with timestamps, server names, and messages
+        """
+        logs = []
+        for notif in self._notifications:
+            timestamp = notif.get("timestamp", "")
+            method = notif.get("method", "")
+            params = notif.get("params", {})
+            
+            # Handle logging/message notifications
+            if method == "notifications/message" and isinstance(params, dict):
+                level = params.get("level", "info").upper()
+                logger_name = params.get("logger", "")
+                data = params.get("data", {})
+                
+                # Format the message
+                message = f"[{timestamp}] [{level}]"
+                if logger_name:
+                    message += f" {logger_name}:"
+                
+                # Add data content
+                if isinstance(data, dict):
+                    # Try to get a message or error field first
+                    if "message" in data:
+                        message += f" {data['message']}"
+                    elif "error" in data:
+                        message += f" {data['error']}"
+                    else:
+                        # Format the entire data dict
+                        message += f" {json.dumps(data)}"
+                else:
+                    message += f" {data}"
+                
+                logs.append(message)
+            else:
+                # Generic notification format
+                logs.append(f"[{timestamp}] {method}: {json.dumps(params)}")
+        
+        return "\n".join(logs)
 
     async def close(self) -> None:
         """Close all active sessions."""
