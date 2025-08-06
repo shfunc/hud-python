@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, fields, replace
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from mcp.types import ContentBlock, ImageContent, TextContent
+
+if TYPE_CHECKING:
+    from hud.tools.evaluate import EvaluationResult
+    from hud.tools.setup import SetupResult
 
 
 class BaseTool(ABC):
@@ -39,7 +43,7 @@ class BaseTool(ABC):
         self.description = description
 
     @abstractmethod
-    async def __call__(self, **kwargs: Any) -> list[ContentBlock]:
+    async def __call__(self, **kwargs: Any) -> list[ContentBlock] | EvaluationResult | SetupResult:
         """Execute the tool. Often uses the context to perform an action.
 
         Args:

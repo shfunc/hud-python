@@ -7,8 +7,6 @@ import logging
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, TypedDict
 
-from mcp.types import ContentBlock, TextContent
-
 from .base import BaseTool
 
 if TYPE_CHECKING:
@@ -102,7 +100,7 @@ class EvaluateTool(BaseTool):
 
         return decorator
 
-    async def __call__(self, function: str, args: dict | None = None) -> list[ContentBlock]:
+    async def __call__(self, function: str, args: dict | None = None) -> EvaluationResult:
         """Execute an evaluator function from the registry.
 
         This method is designed to be called as an MCP tool.
@@ -119,17 +117,21 @@ class EvaluateTool(BaseTool):
         # Default to first registered function if not specified
         if not function:
             if not self._registry:
-                return [TextContent(text="❌ No evaluator functions registered", type="text")]
+                return EvaluationResult(
+                    reward=0.0,
+                    done=True,
+                    info={"message": "❌ No evaluator functions registered"},
+                )
             function = next(iter(self._registry.keys()))
 
         # Check if function exists
         if function not in self._registry:
             available = ", ".join(self._registry.keys())
-            return [
-                TextContent(
-                    text=f"❌ Unknown evaluator: {function}\nAvailable: {available}", type="text"
-                )
-            ]
+            return EvaluationResult(
+                reward=0.0,
+                done=True,
+                info={"message": f"❌ Unknown evaluator: {function}\nAvailable: {available}"},
+            )
 
         try:
             # Create instance and execute
@@ -155,11 +157,19 @@ class EvaluateTool(BaseTool):
                     if key not in ["message", "success"]:
                         text += f"\n{key}: {value}"
 
-            return [TextContent(text=text, type="text")]
+            return EvaluationResult(
+                reward=reward,
+                done=done,
+                info=info,
+            )
 
         except Exception as e:
             logger.exception("Evaluation execution error: %s", e)
-            return [TextContent(text=f"❌ Evaluation error: {e!s}", type="text")]
+            return EvaluationResult(
+                reward=0.0,
+                done=True,
+                info={"message": f"❌ Evaluation error: {e!s}"},
+            )
 
     def get_registry_json(self) -> str:
         """Get the registry as JSON for MCP resources."""

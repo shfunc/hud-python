@@ -8,7 +8,6 @@ import logging
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
-from mcp.types import ContentBlock, TextContent
 from pydantic import Field
 
 from .base import BaseTool
@@ -112,7 +111,7 @@ class SetupTool(BaseTool):
         args: dict | None = Field(
             default=None, description="Arguments to pass to the setup function"
         ),
-    ) -> list[ContentBlock]:
+    ) -> SetupResult:
         """Execute a setup function from the registry.
 
         This method is designed to be called as an MCP tool.
@@ -129,17 +128,19 @@ class SetupTool(BaseTool):
         # Default to first registered function if not specified
         if not function:
             if not self._registry:
-                return [TextContent(text="❌ No setup functions registered", type="text")]
+                return SetupResult(
+                    status="error",
+                    message="❌ No setup functions registered",
+                )
             function = next(iter(self._registry.keys()))
 
         # Check if function exists
         if function not in self._registry:
             available = ", ".join(self._registry.keys())
-            return [
-                TextContent(
-                    text=f"❌ Unknown setup: {function}\nAvailable: {available}", type="text"
-                )
-            ]
+            return SetupResult(
+                status="error",
+                message=f"❌ Unknown setup: {function}\nAvailable: {available}",
+            )
 
         try:
             # Create instance and execute
@@ -162,11 +163,17 @@ class SetupTool(BaseTool):
                 if "error" in result:
                     text += f"\nError: {result['error']}"
 
-            return [TextContent(text=text, type="text")]
+            return SetupResult(
+                status=status,
+                message=text,
+            )
 
         except Exception as e:
             logger.exception("Setup execution error: %s", e)
-            return [TextContent(text=f"❌ Setup error: {e!s}", type="text")]
+            return SetupResult(
+                status="error",
+                message=f"❌ Setup error: {e!s}",
+            )
 
     def get_registry_json(self) -> str:
         """Get the registry as JSON for MCP resources."""

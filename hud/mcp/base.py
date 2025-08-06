@@ -521,7 +521,7 @@ class BaseMCPAgent(ABC):
                     logger.info("Model response - Content: %s", response.content)
                     logger.info(
                         "Model response - Tool calls: %s",
-                        [tc.name for tc in response.tool_calls],
+                        [f"{tc.name}: {tc.arguments}" for tc in response.tool_calls],
                     )
                     logger.info("Model response - Done: %s", response.done)
 
