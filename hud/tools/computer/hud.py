@@ -6,10 +6,10 @@ import platform
 from typing import Literal
 
 from mcp import ErrorData, McpError
-from mcp.types import INVALID_PARAMS, ImageContent, TextContent
+from mcp.types import INVALID_PARAMS, ContentBlock, ImageContent, TextContent
 from pydantic import Field
 
-from hud.tools.base import ToolError, ToolResult, tool_result_to_content_blocks
+from hud.tools.base import BaseTool, ToolError, ToolResult
 from hud.tools.executors.base import BaseExecutor
 from hud.tools.executors.pyautogui import PyAutoGUIExecutor
 from hud.tools.executors.xdo import XDOExecutor
@@ -20,34 +20,41 @@ BASE_SCREEN_WIDTH = 1920
 BASE_SCREEN_HEIGHT = 1080
 
 
-class HudComputerTool:
+class HudComputerTool(BaseTool):
     """
     A tool that allows the agent to control the computer.
     """
 
     def __init__(
         self,
+        executor: BaseExecutor | None = None,
         width: int | None = None,
         height: int | None = None,
         display_num: int | None = None,
         platform_type: Literal["auto", "xdo", "pyautogui"] = "auto",
-        custom_executor: BaseExecutor | None = None,
         rescale_images: bool = False,
     ) -> None:
         """
         Initialize the HUD computer tool.
 
         Args:
+            executor: Optional pre-configured executor. If None, will create one based on platform_type
             width: Target width for rescaling (None = use actual screen width)
             height: Target height for rescaling (None = use actual screen height)
             display_num: X display number
-            platform_type: Which executor to use:
+            platform_type: Which executor to use if executor not provided:
                 - "auto": Automatically detect based on platform
                 - "xdo": Use XDOExecutor (Linux/X11 only)
                 - "pyautogui": Use PyAutoGUIExecutor (cross-platform)
-            custom_executor: If None, executor class will be determined based on platform_type.
             rescale_images: If True, rescale screenshots. If False, only rescale action coordinates
         """
+        # Initialize base tool with executor as context
+        super().__init__(
+            context=executor,
+            name="computer",
+            description="Control computer with mouse, keyboard, and screenshots"
+        )
+        
         # Use provided dimensions or defaults
         self.width = width or BASE_SCREEN_WIDTH
         self.height = height or BASE_SCREEN_HEIGHT
@@ -72,10 +79,19 @@ class HudComputerTool:
         # Check if we need to scale
         self.needs_scaling = self.scale != 1.0
 
-        if custom_executor is None:
+        # If no executor provided, create one based on platform
+        if self.context is None:
             self._choose_executor(platform_type, display_num)
-        else:
-            self.executor = custom_executor
+    
+    @property
+    def executor(self) -> BaseExecutor:
+        """Get the executor (alias for context)."""
+        return self.context
+    
+    @executor.setter
+    def executor(self, value: BaseExecutor) -> None:
+        """Set the executor (alias for context)."""
+        self.context = value
 
     def _choose_executor(
         self,
@@ -206,7 +222,7 @@ class HudComputerTool:
         hold_keys: list[str] | None = Field(None, description="Keys to hold during action"),
         # hold_key specific
         duration: float | None = Field(None, description="Duration in seconds for hold_key action"),
-    ) -> list[ImageContent | TextContent]:
+    ) -> list[ContentBlock]:
         """
         Execute a computer control action by name.
 
@@ -320,7 +336,7 @@ class HudComputerTool:
                 result = result.replace(base64_image=rescaled_image)
 
             # Convert result to content blocks
-            return tool_result_to_content_blocks(result)
+            return self._to_content_blocks(result)
 
         except TypeError as e:
             raise McpError(

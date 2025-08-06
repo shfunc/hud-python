@@ -4,8 +4,10 @@ import json
 import logging
 from typing import Dict, Type, Any, Optional, TypedDict, Literal
 from abc import ABC, abstractmethod
-from mcp.types import TextContent
+from mcp.types import ContentBlock, TextContent
 from pydantic import Field
+
+from .base import BaseTool
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +41,7 @@ class BaseSetup(ABC):
         pass
 
 
-class SetupTool:
+class SetupTool(BaseTool):
     """Tool that manages and executes setup functions with built-in registry."""
     
     def __init__(self, context: Any = None, name: str = "setup", description: str | None = None):
@@ -50,9 +52,11 @@ class SetupTool:
             name: Tool name for MCP registration
             description: Tool description
         """
-        self.context = context
-        self.name = name
-        self.description = description or "Setup/configure the environment"
+        super().__init__(
+            context=context,
+            name=name or "setup",
+            description=description or "Setup/configure the environment"
+        )
         self._registry: Dict[str, Type[BaseSetup]] = {}
         
     def register(self, name: str, description: str = "", app: str = "default"):
@@ -83,7 +87,7 @@ class SetupTool:
         self,
         function: str = Field(default=None, description="Name of the setup function to execute"),
         args: dict | None = Field(default=None, description="Arguments to pass to the setup function")
-    ) -> list[TextContent]:
+    ) -> list[ContentBlock]:
         """Execute a setup function from the registry.
         
         This method is designed to be called as an MCP tool.

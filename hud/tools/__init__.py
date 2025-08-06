@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .base import ToolError, ToolResult, tool_result_to_content_blocks
+from .base import BaseTool, ToolError, ToolResult
 from .bash import BashTool
 from .edit import EditTool
 from .evaluate import BaseEvaluator, EvaluateTool, EvaluationResult
@@ -23,7 +23,7 @@ __all__ = [
     "PlaywrightTool",
     "ToolError",
     "ToolResult",
-    "tool_result_to_content_blocks",
+    "BaseTool",
     # Setup tools
     "SetupTool",
     "BaseSetup",

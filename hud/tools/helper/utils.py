@@ -11,25 +11,36 @@ if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
 
 
-def register_instance_tool(mcp: FastMCP, name: str, instance: Any) -> Callable[..., Any]:
+def register_instance_tool(mcp: FastMCP, instance: Any, name: str | None = None) -> Callable[..., Any]:
     """Register ``instance.__call__`` as a FastMCP tool.
 
     Parameters
     ----------
     mcp:
         A :class:`mcp.server.fastmcp.FastMCP` instance.
-    name:
-        Public tool name.
     instance:
         Object with an ``async def __call__`` (or sync) implementing the tool.
+        If the instance has a 'name' attribute, it will be used as the tool name.
+    name:
+        Optional public tool name. If not provided, uses instance.name if available.
     """
+    
+    # If no name provided, try to get it from the instance
+    if name is None:
+        if hasattr(instance, 'name'):
+            name = instance.name
+        else:
+            raise ValueError(
+                "No tool name provided and instance has no 'name' attribute. "
+                "Either provide a name parameter or ensure the instance has a 'name' attribute."
+            )
 
     if inspect.isclass(instance):
         class_name = instance.__name__
         raise TypeError(
             f"register_instance_tool() expects an instance, but got class '{class_name}'. "
-            f"Use: register_instance_tool(mcp, '{name}', {class_name}()) "
-            f"Not: register_instance_tool(mcp, '{name}', {class_name})"
+            f"Use: register_instance_tool(mcp, {class_name}()) "
+            f"Not: register_instance_tool(mcp, {class_name})"
         )
 
     call_fn = instance.__call__

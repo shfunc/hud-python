@@ -4,11 +4,10 @@ from __future__ import annotations
 import logging
 from typing import Any, Literal, cast
 
-from mcp import ErrorData, McpError
-from mcp.types import INTERNAL_ERROR, INVALID_PARAMS, ImageContent, TextContent
+from mcp.types import ErrorData, McpError, INTERNAL_ERROR, INVALID_PARAMS, ContentBlock, TextContent
 from pydantic import Field
 
-from hud.tools.base import ToolResult, tool_result_to_content_blocks
+from hud.tools.base import ToolResult
 
 from .hud import HudComputerTool
 
@@ -110,7 +109,7 @@ class OpenAIComputerTool(HudComputerTool):
         ),
         # Custom action parameter
         action: str | None = Field(None, description="Custom action name"),
-    ) -> list[ImageContent | TextContent]:
+    ) -> list[ContentBlock]:
         """
         Handle OpenAI Computer Use API calls.
 
@@ -283,4 +282,4 @@ class OpenAIComputerTool(HudComputerTool):
                 )
 
         # Convert to content blocks
-        return tool_result_to_content_blocks(result)
+        return self._to_content_blocks(result)

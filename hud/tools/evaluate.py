@@ -4,7 +4,9 @@ import json
 import logging
 from typing import Dict, Type, Any, Optional, TypedDict
 from abc import ABC, abstractmethod
-from mcp.types import TextContent
+from mcp.types import ContentBlock, TextContent
+
+from .base import BaseTool
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +38,7 @@ class BaseEvaluator(ABC):
         pass
 
 
-class EvaluateTool:
+class EvaluateTool(BaseTool):
     """Tool that manages and executes evaluator functions with built-in registry."""
     
     def __init__(self, context: Any = None, name: str = "evaluate", description: str = None):
@@ -47,9 +49,11 @@ class EvaluateTool:
             name: Tool name for MCP registration
             description: Tool description
         """
-        self.context = context
-        self.name = name
-        self.description = description or "Evaluate the current environment state"
+        super().__init__(
+            context=context,
+            name=name or "evaluate",
+            description=description or "Evaluate the current environment state"
+        )
         self._registry: Dict[str, Type[BaseEvaluator]] = {}
         
     def register(self, name: str, description: str = "", app: str = "default"):
@@ -80,7 +84,7 @@ class EvaluateTool:
         self,
         function: str = None,
         args: Optional[dict] = None
-    ) -> list[TextContent]:
+    ) -> list[ContentBlock]:
         """Execute an evaluator function from the registry.
         
         This method is designed to be called as an MCP tool.
