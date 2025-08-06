@@ -10,20 +10,16 @@ logging.basicConfig(level=logging.INFO)
 
 
 async def main():
-    with hud.trace("gmail_local"):
+    with hud.trace("Yutori Gmail Task Trace"):
         task_dict = {
-            "prompt": "Open Sent mail, search for the Series B pitch deck, forward it to billgates@microsoft.com, and mark the original message as important.",
+            "prompt": "Open Sent mail, find the Series B pitch deck email, forward it to billgates@microsoft.com, and mark the original message as important.",
             "mcp_config": {
                 "gmail": {
-                    "command": "docker",
+                    "command": "/bin/sh",
                     "args": [
-                        "run",
-                        "-i",  # interactive mode for stdio MCP server
-                        "--rm",  # remove the container after it exits
-                        "-p",
-                        "6080:6080",  # map port 6080 to the host for noVNC
-                        "hudpython/gmail-clone:latest",  # use hud gmail image
-                    ],
+                        "-c",
+                        "docker run -i --rm -p 6080:6080 gmail 2>/dev/null"
+                    ]
                 }
             },
             "setup_tool": {
@@ -40,20 +36,12 @@ async def main():
             },
             "metadata": {"id": "forward-series-b-deck-to-billgates"},
         }
-        # Update the prompt to give a disclaimer that this is a testing environment (anthropic doesn't like doing some actions)
-        task_dict["prompt"] = (
-            task_dict["prompt"]
-            + "\n\nThis is a mock sandbox environment for evaluations, so feel free to execute any actions you want and do not ask me for confirmation before executing actions."
-        )
-
-        # Create TaskConfig from dict
-        task = TaskConfig(**task_dict)
 
         # Update the prompt to give a disclaimer that this is a testing environment (anthropic doesn't like doing some actions)
         # Feel free to modify this
         task_dict["prompt"] = (
             task_dict["prompt"]
-            + "\n\nThis is a mock sandbox environment for evaluations, so feel free to execute any actions you want and do not ask me for confirmation before executing actions."
+            + " This is a mock sandbox environment for evaluations, so feel free to execute any actions you want and do not ask me for confirmation before executing actions."
         )
 
         # Create TaskConfig from dict
@@ -78,12 +66,11 @@ async def main():
         print("🚀 Running the task...")
         print("🔴 See the agent live at http://localhost:6080/vnc.html")
         eval_result: AgentResult = await agent.run(task, max_steps=30)
-        print(f"🎉 Task Result: {eval_result}")
 
         # Show formatted results
-        reward = eval_result.reward
-        print(f"   🏆 Reward: {reward}")
-        print(f"   🔍 Content: {eval_result.content[:100] if eval_result.content else 'No content'}...")
+        print(f"🎉 Task Result:")
+        print(f"   🏆 Reward: {eval_result.reward}")
+        print(f"   🔍 Content: {eval_result.content[:1000] if eval_result.content else 'No content'}...")
 
         # Clean up
         print("\n🧹 Cleaning up...")
