@@ -16,7 +16,7 @@ class BrowserExecutor(BaseExecutor):
 
     This allows HudComputerTool (and its subclasses like AnthropicComputerTool
     and OpenAIComputerTool) to work with remote browser environments.
-    
+
     The executor translates computer control actions into browser page actions,
     making it possible to control web applications as if they were desktop apps.
     """
@@ -64,15 +64,15 @@ class BrowserExecutor(BaseExecutor):
         """Click at coordinates in the browser viewport."""
         try:
             page = await self._ensure_page()
-            
+
             if x is None or y is None:
                 return ToolResult(error="Coordinates required for click")
-            
+
             # Handle modifier keys
             if hold_keys:
                 for key in hold_keys:
                     await page.keyboard.down(key)
-            
+
             # Map button names
             button_map = {
                 "left": "left",
@@ -81,7 +81,7 @@ class BrowserExecutor(BaseExecutor):
                 "back": "left",  # Browser doesn't have back button
                 "forward": "left",  # Browser doesn't have forward button
             }
-            
+
             # Perform click(s)
             if pattern:
                 # Multi-click pattern
@@ -92,20 +92,20 @@ class BrowserExecutor(BaseExecutor):
             else:
                 # Single click
                 await page.mouse.click(x, y, button=button_map[button])
-            
+
             # Release modifier keys
             if hold_keys:
                 for key in hold_keys:
                     await page.keyboard.up(key)
-            
+
             logger.info(f"Clicked at ({x}, {y}) with button {button}")
-            
+
             result = ToolResult(output=f"Clicked at ({x}, {y})")
             if take_screenshot:
                 result = result + ToolResult(base64_image=await self.screenshot())
-            
+
             return result
-            
+
         except Exception as e:
             logger.error(f"Click failed: {e}")
             return ToolResult(error=str(e))
@@ -119,28 +119,28 @@ class BrowserExecutor(BaseExecutor):
         """Type text in the browser."""
         try:
             page = await self._ensure_page()
-            
+
             # Handle modifier keys
             if hold_keys:
                 for key in hold_keys:
                     await page.keyboard.down(key)
-            
+
             # Type the text
             await page.keyboard.type(text)
-            
+
             # Release modifier keys
             if hold_keys:
                 for key in hold_keys:
                     await page.keyboard.up(key)
-            
+
             logger.info(f"Typed text: {text[:50]}...")
-            
+
             result = ToolResult(output=f"Typed: {text}")
             if take_screenshot:
                 result = result + ToolResult(base64_image=await self.screenshot())
-            
+
             return result
-            
+
         except Exception as e:
             logger.error(f"Type failed: {e}")
             return ToolResult(error=str(e))
@@ -154,29 +154,29 @@ class BrowserExecutor(BaseExecutor):
         """Press keyboard keys in the browser."""
         try:
             page = await self._ensure_page()
-            
+
             # Handle modifier keys
             if hold_keys:
                 for key in hold_keys:
                     await page.keyboard.down(key)
-            
+
             # Press the keys
             for key in keys:
                 await page.keyboard.press(key)
-            
+
             # Release modifier keys
             if hold_keys:
                 for key in hold_keys:
                     await page.keyboard.up(key)
-            
+
             logger.info(f"Pressed keys: {keys}")
-            
+
             result = ToolResult(output=f"Pressed: {', '.join(keys)}")
             if take_screenshot:
                 result = result + ToolResult(base64_image=await self.screenshot())
-            
+
             return result
-            
+
         except Exception as e:
             logger.error(f"Key press failed: {e}")
             return ToolResult(error=str(e))
@@ -192,29 +192,29 @@ class BrowserExecutor(BaseExecutor):
         """Scroll in the browser viewport."""
         try:
             page = await self._ensure_page()
-            
+
             # Default to center of viewport if coordinates not provided
             if x is None or y is None:
                 viewport = page.viewport_size
                 x = viewport["width"] // 2 if viewport else 400
                 y = viewport["height"] // 2 if viewport else 300
-            
+
             # Move to position
             await page.mouse.move(x, y)
-            
+
             # Perform scroll
             delta_x = scroll_x or 0
             delta_y = scroll_y or 0
             await page.mouse.wheel(delta_x, delta_y)
-            
+
             logger.info(f"Scrolled at ({x}, {y}) by ({delta_x}, {delta_y})")
-            
+
             result = ToolResult(output=f"Scrolled by ({delta_x}, {delta_y})")
             if take_screenshot:
                 result = result + ToolResult(base64_image=await self.screenshot())
-            
+
             return result
-            
+
         except Exception as e:
             logger.error(f"Scroll failed: {e}")
             return ToolResult(error=str(e))
@@ -228,20 +228,20 @@ class BrowserExecutor(BaseExecutor):
         """Move mouse to coordinates in the browser."""
         try:
             page = await self._ensure_page()
-            
+
             if x is None or y is None:
                 return ToolResult(error="Coordinates required for move")
-            
+
             await page.mouse.move(x, y)
-            
+
             logger.info(f"Moved mouse to ({x}, {y})")
-            
+
             result = ToolResult(output=f"Moved to ({x}, {y})")
             if take_screenshot:
                 result = result + ToolResult(base64_image=await self.screenshot())
-            
+
             return result
-            
+
         except Exception as e:
             logger.error(f"Move failed: {e}")
             return ToolResult(error=str(e))
@@ -256,40 +256,40 @@ class BrowserExecutor(BaseExecutor):
         """Drag along a path in the browser."""
         try:
             page = await self._ensure_page()
-            
+
             if not path or len(path) < 2:
                 return ToolResult(error="Path must have at least 2 points")
-            
+
             # Handle modifier keys
             if hold_keys:
                 for key in hold_keys:
                     await page.keyboard.down(key)
-            
+
             # Start drag
             start_x, start_y = path[0]
             await page.mouse.move(start_x, start_y)
             await page.mouse.down(button=button)
-            
+
             # Move through path
             for x, y in path[1:]:
                 await page.mouse.move(x, y)
-            
+
             # End drag
             await page.mouse.up(button=button)
-            
+
             # Release modifier keys
             if hold_keys:
                 for key in hold_keys:
                     await page.keyboard.up(key)
-            
+
             logger.info(f"Dragged from {path[0]} through {len(path)} points")
-            
+
             result = ToolResult(output=f"Dragged through {len(path)} points")
             if take_screenshot:
                 result = result + ToolResult(base64_image=await self.screenshot())
-            
+
             return result
-            
+
         except Exception as e:
             logger.error(f"Drag failed: {e}")
             return ToolResult(error=str(e))

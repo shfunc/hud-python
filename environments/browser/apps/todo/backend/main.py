@@ -260,20 +260,17 @@ def bulk_update_items(request: BulkUpdateRequest):
     """Update multiple items at once for evaluation purposes."""
     conn = sqlite3.connect("app.db")
     c = conn.cursor()
-    
+
     updated_count = 0
     if request.completed is not None:
         for item_id in request.item_ids:
-            c.execute(
-                "UPDATE items SET completed = ? WHERE id = ?",
-                (request.completed, item_id)
-            )
+            c.execute("UPDATE items SET completed = ? WHERE id = ?", (request.completed, item_id))
             if c.rowcount > 0:
                 updated_count += 1
-    
+
     conn.commit()
     conn.close()
-    
+
     return {
         "message": f"Updated {updated_count} items",
         "updated_count": updated_count,
@@ -360,7 +357,7 @@ def seed_custom_data(items: List[ItemCreate]):
     """Seed the database with custom test data for evaluation purposes."""
     conn = sqlite3.connect("app.db")
     c = conn.cursor()
-    
+
     items_added = 0
     for item in items:
         c.execute(
@@ -368,13 +365,13 @@ def seed_custom_data(items: List[ItemCreate]):
             INSERT INTO items (title, description, completed) 
             VALUES (?, ?, ?)
         """,
-            (item.title, item.description if hasattr(item, 'description') else "", item.completed),
+            (item.title, item.description if hasattr(item, "description") else "", item.completed),
         )
         items_added += 1
-    
+
     conn.commit()
     conn.close()
-    
+
     return {
         "message": "Custom test data seeded successfully",
         "items_added": items_added,

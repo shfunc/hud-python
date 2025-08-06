@@ -286,7 +286,13 @@ class PlaywrightTool(BaseTool):
             logger.error("Screenshot failed: %s", e)
             return ToolResult(error=f"Failed to take screenshot: {e}")
 
-    async def click(self, selector: str, button: Literal["left", "right", "middle"] = "left", count: int = 1, wait_for_navigation: bool = True) -> dict[str, Any]:
+    async def click(
+        self,
+        selector: str,
+        button: Literal["left", "right", "middle"] = "left",
+        count: int = 1,
+        wait_for_navigation: bool = True,
+    ) -> dict[str, Any]:
         """Click an element by selector.
 
         Args:
@@ -298,7 +304,9 @@ class PlaywrightTool(BaseTool):
         await self._ensure_browser()
 
         try:
-            await self.page.click(selector, button=button, count=count, wait_for_navigation=wait_for_navigation)
+            await self.page.click(
+                selector, button=button, count=count, wait_for_navigation=wait_for_navigation
+            )
             return {"success": True, "message": f"Clicked element: {selector}"}
         except Exception as e:
             logger.error("Click failed: %s", e)

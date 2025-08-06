@@ -13,25 +13,22 @@ class CookieMatchEvaluator(BaseEvaluator):
     """Evaluator that checks if cookies match expected values."""
 
     async def __call__(
-        self,
-        context: Any,
-        expected_cookies: Dict[str, str],
-        **kwargs
+        self, context: Any, expected_cookies: Dict[str, str], **kwargs
     ) -> EvaluationResult:
         """Check if cookies match expected values.
-        
+
         Args:
             context: Browser context with playwright_tool
             expected_cookies: Dictionary of cookie name to expected value
             **kwargs: Additional arguments
-            
+
         Returns:
             Standard evaluation result
         """
         logger.info(f"Evaluating cookie_match for: {list(expected_cookies.keys())}")
-        
+
         # Context IS the playwright tool
-        if not context or not hasattr(context, 'page') or not context.page:
+        if not context or not hasattr(context, "page") or not context.page:
             logger.error("No browser page available")
             return {
                 "reward": 0.0,
@@ -41,7 +38,7 @@ class CookieMatchEvaluator(BaseEvaluator):
                     "message": "No browser page available",
                 },
             }
-        
+
         # Get all cookies
         try:
             cookies = await context.page.context.cookies()
@@ -57,12 +54,12 @@ class CookieMatchEvaluator(BaseEvaluator):
                     "message": f"Failed to get cookies: {str(e)}",
                 },
             }
-        
+
         # Check cookie values
         matches = []
         mismatches = []
         missing = []
-        
+
         for name, expected_value in expected_cookies.items():
             if name not in cookie_dict:
                 missing.append(name)
@@ -71,20 +68,20 @@ class CookieMatchEvaluator(BaseEvaluator):
                 matches.append(name)
                 logger.info(f"✅ Cookie matches: '{name}'")
             else:
-                mismatches.append({
-                    "name": name,
-                    "expected": expected_value,
-                    "actual": cookie_dict[name]
-                })
-                logger.info(f"❌ Cookie mismatch: '{name}' - expected '{expected_value}', got '{cookie_dict[name]}'")
-        
+                mismatches.append(
+                    {"name": name, "expected": expected_value, "actual": cookie_dict[name]}
+                )
+                logger.info(
+                    f"❌ Cookie mismatch: '{name}' - expected '{expected_value}', got '{cookie_dict[name]}'"
+                )
+
         # Calculate reward
         total = len(expected_cookies)
         if total > 0:
             reward = len(matches) / total
         else:
             reward = 1.0
-        
+
         # Build info
         info = {
             "success": reward == 1.0,
@@ -93,16 +90,16 @@ class CookieMatchEvaluator(BaseEvaluator):
             "missing": missing,
             "total_expected": total,
         }
-        
+
         if reward == 1.0:
             info["message"] = "All cookies match expected values"
         elif reward > 0:
             info["message"] = f"{len(matches)} of {total} cookies match"
         else:
             info["message"] = "No cookies match expected values"
-        
+
         logger.info(f"Cookie match evaluation complete. Reward: {reward}")
-        
+
         return {
             "reward": float(reward),
             "done": reward == 1.0,

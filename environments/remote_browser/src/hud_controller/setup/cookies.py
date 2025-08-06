@@ -14,29 +14,29 @@ class SetCookiesSetup(BaseSetup):
 
     async def __call__(self, context: Any, cookies: List[Dict[str, Any]], **kwargs) -> SetupResult:
         """Set cookies in the browser context.
-        
+
         Args:
             context: Browser context with playwright_tool
             cookies: List of cookie dictionaries with name, value, and optional properties
             **kwargs: Additional arguments
-            
+
         Returns:
             Setup result dictionary
         """
         logger.info(f"Setting {len(cookies)} cookies")
-        
+
         # Get the playwright tool from context
-        if not context or not hasattr(context, 'page') or not context.page:
+        if not context or not hasattr(context, "page") or not context.page:
             logger.error("No browser page available")
             return {
                 "status": "error",
                 "message": "No browser page available",
             }
-        
+
         try:
             # Add cookies to the context
             await context.page.context.add_cookies(cookies)
-            
+
             logger.info(f"Successfully set {len(cookies)} cookies")
             return {
                 "status": "success",
@@ -57,28 +57,28 @@ class ClearCookiesSetup(BaseSetup):
 
     async def __call__(self, context: Any, **kwargs) -> SetupResult:
         """Clear all cookies from the browser context.
-        
+
         Args:
             context: Browser context with playwright_tool
             **kwargs: Additional arguments
-            
+
         Returns:
             Setup result dictionary
         """
         logger.info("Clearing all cookies")
-        
+
         # Get the playwright tool from context
-        if not context or not hasattr(context, 'page') or not context.page:
+        if not context or not hasattr(context, "page") or not context.page:
             logger.error("No browser page available")
             return {
                 "status": "error",
                 "message": "No browser page available",
             }
-        
+
         try:
             # Clear all cookies
             await context.page.context.clear_cookies()
-            
+
             logger.info("Successfully cleared all cookies")
             return {
                 "status": "success",

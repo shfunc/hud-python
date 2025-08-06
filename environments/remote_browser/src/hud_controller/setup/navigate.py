@@ -12,31 +12,33 @@ logger = logging.getLogger(__name__)
 class NavigateSetup(BaseSetup):
     """Setup function to navigate to a URL."""
 
-    async def __call__(self, context: Any, url: str, wait_for_load_state: str = "networkidle", **kwargs) -> SetupResult:
+    async def __call__(
+        self, context: Any, url: str, wait_for_load_state: str = "networkidle", **kwargs
+    ) -> SetupResult:
         """Navigate to the specified URL.
-        
+
         Args:
             context: Browser context with playwright_tool
             url: The URL to navigate to
             wait_for_load_state: State to wait for after navigation
             **kwargs: Additional arguments
-            
+
         Returns:
             Setup result dictionary
         """
         logger.info(f"Navigating to URL: {url}")
-        
+
         # Get the playwright tool from context
-        if not context or not hasattr(context, 'page') or not context.page:
+        if not context or not hasattr(context, "page") or not context.page:
             logger.error("No playwright tool available in context")
             return {
                 "status": "error",
                 "message": "No browser available for navigation",
             }
-        
+
         # Navigate using the playwright tool (tracking is handled by PlaywrightToolWithMemory)
         result = await context.navigate(url, wait_for_load_state)
-        
+
         if result.get("success"):
             logger.info(f"Successfully navigated to {url}")
             return {

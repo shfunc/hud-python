@@ -177,10 +177,10 @@ class BrowserEnvironmentContext:
             Setup result dictionary
         """
         from .setup import setup_tool
-        
-        function = setup_spec.get('function')
-        args = setup_spec.get('args', {})
-        
+
+        function = setup_spec.get("function")
+        args = setup_spec.get("args", {})
+
         # Call the setup tool directly
         return await setup_tool(function, args, None, None, self)
 
@@ -194,10 +194,10 @@ class BrowserEnvironmentContext:
             Evaluation result dictionary
         """
         from .evaluators import evaluate_tool
-        
-        function = eval_spec.get('function')
-        args = eval_spec.get('args', {})
-        
+
+        function = eval_spec.get("function")
+        args = eval_spec.get("args", {})
+
         # Call the evaluate tool directly
         return await evaluate_tool(function, args, None, None, self)
 

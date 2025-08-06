@@ -58,10 +58,10 @@ class TodoExistsEvaluator(BaseEvaluator):
         try:
             # Call the app's API to get all todos
             todos = await context.call_app_api("todo", "/api/eval/todos")
-            
+
             # Check if any todo has the expected title
             exists = any(todo.get("title") == title for todo in todos)
-            
+
             return EvaluationResult(
                 reward=1.0 if exists else 0.0,
                 done=True,
@@ -96,16 +96,16 @@ class TodoCompletionRateEvaluator(BaseEvaluator):
             stats = await context.call_app_api("todo", "/api/eval/stats")
             total_count = stats.get("total_items", 0)
             completed_count = stats.get("completed_items", 0)
-            
+
             if total_count == 0:
                 # No todos, consider this as 0% completion
                 actual_rate = 0.0
             else:
                 actual_rate = completed_count / total_count
-            
+
             success = actual_rate >= target_rate
             reward = min(1.0, actual_rate / target_rate) if target_rate > 0 else 1.0
-            
+
             return EvaluationResult(
                 reward=reward,
                 done=True,
@@ -141,14 +141,10 @@ class TodoTotalCountEvaluator(BaseEvaluator):
             # Get stats from the app
             stats = await context.call_app_api("todo", "/api/eval/stats")
             total_count = stats.get("total_items", 0)
-            
+
             success = total_count >= min_count
-            reward = (
-                1.0
-                if success
-                else (total_count / min_count if min_count > 0 else 0.0)
-            )
-            
+            reward = 1.0 if success else (total_count / min_count if min_count > 0 else 0.0)
+
             return EvaluationResult(
                 reward=reward,
                 done=True,
@@ -183,7 +179,7 @@ class TodoAllCompletedEvaluator(BaseEvaluator):
             stats = await context.call_app_api("todo", "/api/eval/stats")
             total_count = stats.get("total_items", 0)
             completed_count = stats.get("completed_items", 0)
-            
+
             if total_count == 0:
                 # No todos, consider this as success
                 success = True
@@ -191,9 +187,11 @@ class TodoAllCompletedEvaluator(BaseEvaluator):
             else:
                 success = completed_count == total_count
                 message = f"{completed_count}/{total_count} todos completed"
-            
+
             return EvaluationResult(
-                reward=1.0 if success else (completed_count / total_count if total_count > 0 else 0.0),
+                reward=1.0
+                if success
+                else (completed_count / total_count if total_count > 0 else 0.0),
                 done=True,
                 info={
                     "success": success,

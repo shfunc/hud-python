@@ -101,14 +101,14 @@ async def initialize_environment(session=None, progress_token=None):
         # Store playwright tool instance for browser launch
         playwright_tool = PlaywrightTool()
         register_instance_tool(mcp, playwright_tool)
-        
+
         # Initialize global context with service manager and playwright tool
         global_context = initialize_context(service_manager, playwright_tool)
-        
+
         # Set context on setup and evaluate tools
         setup_tool.context = global_context
         evaluate_tool.context = global_context
-        
+
         # Register setup and evaluate tools with MCP
         # They will handle their own __call__ methods
         register_instance_tool(mcp, setup_tool)
@@ -222,8 +222,7 @@ async def get_env_evaluators_resource(env: str) -> str:
     # Get all evaluators and filter by app prefix
     all_evaluators = json.loads(evaluate_tool.get_registry_json())
     env_evaluators = [
-        e for e in all_evaluators.get("functions", [])
-        if e.get("name", "").startswith(f"{env}_")
+        e for e in all_evaluators.get("functions", []) if e.get("name", "").startswith(f"{env}_")
     ]
     return json.dumps(
         {"env": env, "evaluators": env_evaluators, "count": len(env_evaluators)}, indent=2
@@ -242,8 +241,7 @@ async def get_env_setup_resource(env: str) -> str:
     # Get all setup tools and filter by app prefix
     all_setup = json.loads(setup_tool.get_registry_json())
     env_setup = [
-        s for s in all_setup.get("functions", [])
-        if s.get("name", "").startswith(f"{env}_")
+        s for s in all_setup.get("functions", []) if s.get("name", "").startswith(f"{env}_")
     ]
     return json.dumps({"env": env, "setup_tools": env_setup, "count": len(env_setup)}, indent=2)
 

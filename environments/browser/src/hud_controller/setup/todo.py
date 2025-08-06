@@ -83,11 +83,13 @@ class TodoCustomSeedSetup(BaseSetup):
             for item in items:
                 formatted_item = {
                     "title": item.get("title", ""),
-                    "description": item.get("description", ""),  # Add empty description if not provided
-                    "completed": item.get("completed", False)
+                    "description": item.get(
+                        "description", ""
+                    ),  # Add empty description if not provided
+                    "completed": item.get("completed", False),
                 }
                 formatted_items.append(formatted_item)
-            
+
             # Call the app's custom seed API (send list directly, not wrapped in dict)
             result = await context.call_app_api(
                 "todo", "/api/eval/seed_custom", method="POST", json=formatted_items
@@ -127,7 +129,7 @@ class TodoNavigateSetup(BaseSetup):
             # Use Playwright to navigate
             if context.playwright:
                 nav_result = await context.playwright.navigate(url)
-                
+
                 return SetupResult(
                     status="success",
                     message=f"Navigated to Todo app at {url}",

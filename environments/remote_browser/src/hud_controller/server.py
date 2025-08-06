@@ -73,31 +73,33 @@ async def get_evaluator_registry() -> str:
 async def get_telemetry_resource() -> dict:
     """MCP resource containing telemetry data including provider's live view URL."""
     global browser_provider
-    
+
     telemetry_data = {
         "provider": os.getenv("BROWSER_PROVIDER", "unknown"),
         "status": "unknown",
         "live_url": None,
         "timestamp": datetime.now().isoformat(),
     }
-    
+
     if browser_provider:
         try:
             # Get provider status
             status = await browser_provider.get_status()
-            telemetry_data.update({
-                "status": "running" if browser_provider.is_running else "stopped",
-                "cdp_url": browser_provider.cdp_url,
-                "instance_id": status.get("instance_id"),
-                "live_url": browser_provider.get_live_view_url(),
-            })
+            telemetry_data.update(
+                {
+                    "status": "running" if browser_provider.is_running else "stopped",
+                    "cdp_url": browser_provider.cdp_url,
+                    "instance_id": status.get("instance_id"),
+                    "live_url": browser_provider.get_live_view_url(),
+                }
+            )
         except Exception as e:
             logger.error(f"Error getting telemetry data: {e}")
             telemetry_data["error"] = str(e)
     else:
         telemetry_data["status"] = "not_initialized"
         telemetry_data["error"] = "Browser provider not initialized. Call initialize first."
-    
+
     return telemetry_data
 
 
@@ -105,7 +107,7 @@ async def get_telemetry_resource() -> dict:
 async def initialize_environment(session=None, progress_token=None):
     """Initialize the remote browser environment with progress reporting."""
     global browser_provider, playwright_tool, browser_executor
-    
+
     async def send_progress(progress: int, message: str):
         if progress_token and session:
             await session.send_progress_notification(
@@ -115,10 +117,10 @@ async def initialize_environment(session=None, progress_token=None):
                 message=message,
             )
         logger.info(f"[{progress}%] {message}")
-    
+
     try:
         await send_progress(10, "Starting remote browser environment initialization...")
-        
+
         # Get provider configuration from environment
         provider_name = os.getenv("BROWSER_PROVIDER")
         if not provider_name:
@@ -128,14 +130,14 @@ async def initialize_environment(session=None, progress_token=None):
             )
             logger.error(error_msg)
             raise ValueError(error_msg)
-        
+
         provider_name = provider_name.lower()
         await send_progress(20, f"Using browser provider: {provider_name}")
-        
+
         # Initialize the browser provider
         provider_class = get_provider(provider_name)
         provider_config = {}
-        
+
         # Add provider-specific configuration
         if provider_name == "anchorbrowser":
             provider_config["api_key"] = os.getenv("ANCHOR_API_KEY")
@@ -144,9 +146,7 @@ async def initialize_environment(session=None, progress_token=None):
             )
         elif provider_name == "steel":
             provider_config["api_key"] = os.getenv("STEEL_API_KEY")
-            provider_config["base_url"] = os.getenv(
-                "STEEL_BASE_URL", "https://api.steel.dev"
-            )
+            provider_config["base_url"] = os.getenv("STEEL_BASE_URL", "https://api.steel.dev")
         elif provider_name == "browserbase":
             provider_config["api_key"] = os.getenv("BROWSERBASE_API_KEY")
             provider_config["project_id"] = os.getenv("BROWSERBASE_PROJECT_ID")
@@ -154,16 +154,16 @@ async def initialize_environment(session=None, progress_token=None):
             provider_config["api_key"] = os.getenv("HYPERBROWSER_API_KEY")
         elif provider_name == "kernel":
             provider_config["api_key"] = os.getenv("KERNEL_API_KEY")
-        
+
         browser_provider = provider_class(provider_config)
         await send_progress(30, "Browser provider initialized")
-        
+
         # Launch the browser and get CDP URL
         await send_progress(40, "Launching remote browser...")
-        
+
         # Build launch options
         launch_options = {}
-        
+
         # Add proxy configuration if environment variables are set
         proxy_type = os.getenv("BROWSER_PROXY_TYPE")
         if proxy_type:
@@ -199,47 +199,47 @@ async def initialize_environment(session=None, progress_token=None):
         # Create browser session
         cdp_url = await browser_provider.launch(**launch_options)
         await send_progress(60, f"Browser launched, CDP URL: {cdp_url}")
-        
+
         # Initialize PlaywrightToolWithMemory with context as itself
         # The tool itself is the context - it has the page, history, etc.
         playwright_tool = PlaywrightToolWithMemory(context=None, cdp_url=cdp_url)
-        
+
         # Ensure browser is connected before registering tools
         await playwright_tool._ensure_browser()
         await send_progress(65, "Browser connection established")
-        
+
         # Register playwright tool with MCP
         register_instance_tool(mcp, playwright_tool)
         await send_progress(70, "Playwright tool registered")
-        
+
         # Initialize browser executor
         browser_executor = BrowserExecutor(playwright_tool)
         await send_progress(75, "Browser executor initialized")
-        
+
         # Create and register computer tools
         computer_tools = create_computer_tools(browser_executor)
         for tool_name, tool_instance in computer_tools.items():
             register_instance_tool(mcp, tool_instance, tool_name)
         await send_progress(80, f"Registered {len(computer_tools)} computer tools")
-        
+
         # Set the playwright_tool as context for setup and evaluate tools
         # This is simpler - the tool itself IS the context with all needed properties
         setup_tool.context = playwright_tool
         evaluate_tool.context = playwright_tool
-        
+
         # Register setup and evaluate tools
         register_instance_tool(mcp, setup_tool)
         register_instance_tool(mcp, evaluate_tool)
         await send_progress(90, "Setup and evaluate tools registered")
-        
+
         # Navigate to initial URL if specified
         initial_url = os.getenv("BROWSER_URL")
         if initial_url:
             await send_progress(95, f"Navigating to {initial_url}")
             await playwright_tool.navigate(initial_url)
-        
+
         await send_progress(100, "Remote browser environment ready!")
-        
+
     except Exception as e:
         if progress_token and session:
             await session.send_progress_notification(
@@ -254,14 +254,14 @@ async def initialize_environment(session=None, progress_token=None):
 async def cleanup_browser():
     """Clean up browser resources."""
     global browser_provider, playwright_tool, browser_executor, _cleanup_in_progress
-    
+
     if _cleanup_in_progress:
         logger.info("Cleanup already in progress, skipping")
         return
-    
+
     _cleanup_in_progress = True
     logger.info("Starting browser cleanup...")
-    
+
     try:
         # Close playwright connection
         if playwright_tool:
@@ -270,7 +270,7 @@ async def cleanup_browser():
                 logger.info("Playwright tool closed")
             except Exception as e:
                 logger.error(f"Error closing playwright tool: {e}")
-        
+
         # Close browser through provider
         if browser_provider:
             try:
@@ -278,7 +278,7 @@ async def cleanup_browser():
                 logger.info("Browser provider closed")
             except Exception as e:
                 logger.error(f"Error closing browser provider: {e}")
-        
+
         logger.info("Browser cleanup completed")
     except Exception as e:
         logger.error(f"Error during cleanup: {e}")

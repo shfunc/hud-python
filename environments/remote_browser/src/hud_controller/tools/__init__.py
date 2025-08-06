@@ -5,7 +5,7 @@ from .computer import create_computer_tools
 from .executor import BrowserExecutor
 
 __all__ = [
-    'PlaywrightToolWithMemory',
-    'create_computer_tools',
-    'BrowserExecutor',
+    "PlaywrightToolWithMemory",
+    "create_computer_tools",
+    "BrowserExecutor",
 ]

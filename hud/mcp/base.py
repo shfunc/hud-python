@@ -484,7 +484,9 @@ class BaseMCPAgent(ABC):
                     tool_results = []
                     for tool_call in tool_calls:
                         try:
-                            logger.info("Calling tool: %s with args %s", tool_call.name, tool_call.arguments)
+                            logger.info(
+                                "Calling tool: %s with args %s", tool_call.name, tool_call.arguments
+                            )
                             result = await self.call_tool(tool_call)
                             tool_results.append(result)
                         except Exception as e:
@@ -658,7 +660,6 @@ class BaseMCPAgent(ABC):
         return {"role": "user", "content": text}
 
 
-
 def _find_reward(result: MCPToolResult) -> float:
     """Find the reward in the result.
 
@@ -671,6 +672,7 @@ def _find_reward(result: MCPToolResult) -> float:
         if isinstance(result.structuredContent, dict) and key in result.structuredContent:
             return result.structuredContent[key]
     return 0.0
+
 
 def _find_content(result: MCPToolResult) -> str | None:
     """Find the content in the result.

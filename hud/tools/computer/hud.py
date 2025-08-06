@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 DISPLAY_WIDTH = int(os.getenv("DISPLAY_WIDTH", 1920))
 DISPLAY_HEIGHT = int(os.getenv("DISPLAY_HEIGHT", 1080))
 
+
 class HudComputerTool(BaseTool):
     """
     A tool that allows the agent to control the computer.

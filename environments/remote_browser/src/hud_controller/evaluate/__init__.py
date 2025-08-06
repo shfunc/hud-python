@@ -3,10 +3,7 @@
 from hud.tools import EvaluateTool
 
 # Create the evaluate tool instance
-evaluate_tool = EvaluateTool(
-    name="evaluate",
-    description="Evaluate the browser state"
-)
+evaluate_tool = EvaluateTool(name="evaluate", description="Evaluate the browser state")
 
 # Create decorator for registering to this tool
 evaluator = evaluate_tool.register
@@ -26,4 +23,4 @@ from . import (
     sheets_cell_values,
 )
 
-__all__ = ['evaluate_tool', 'evaluator']
+__all__ = ["evaluate_tool", "evaluator"]
