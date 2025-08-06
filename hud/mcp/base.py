@@ -133,9 +133,17 @@ class BaseMCPAgent(ABC):
 
         if isinstance(task, TaskConfig):
             if task.setup_tool:
-                self.lifecycle_tools.append(task.setup_tool.name)
+                if isinstance(task.setup_tool, list):
+                    for tool in task.setup_tool:
+                        self.lifecycle_tools.append(tool.name)
+                else:
+                    self.lifecycle_tools.append(task.setup_tool.name)
             if task.evaluate_tool:
-                self.lifecycle_tools.append(task.evaluate_tool.name)
+                if isinstance(task.evaluate_tool, list):
+                    for tool in task.evaluate_tool:
+                        self.lifecycle_tools.append(tool.name)
+                else:
+                    self.lifecycle_tools.append(task.evaluate_tool.name)
 
         # Re-apply filtering with updated lifecycle tools
         self._filter_tools()
@@ -345,7 +353,11 @@ class BaseMCPAgent(ABC):
             # Setup phase
             if task.setup_tool is not None:
                 logger.info("Setting up tool phase: %s", task.setup_tool)
-                await self.call_tool(task.setup_tool)
+                if isinstance(task.setup_tool, list):
+                    for tool in task.setup_tool:
+                        await self.call_tool(tool)
+                else:
+                    await self.call_tool(task.setup_tool)
 
             # Execute the task prompt
             prompt_result = await self._run_prompt(task.prompt, max_steps)
@@ -353,7 +365,11 @@ class BaseMCPAgent(ABC):
             # Evaluate phase
             if task.evaluate_tool is not None:
                 logger.info("Evaluating tool phase: %s", task.evaluate_tool)
-                eval_result = await self.call_tool(task.evaluate_tool)
+                if isinstance(task.evaluate_tool, list):
+                    for tool in task.evaluate_tool:
+                        eval_result = await self.call_tool(tool)
+                else:
+                    eval_result = await self.call_tool(task.evaluate_tool)
 
                 # Return evaluation result if it's properly formatted
                 if (

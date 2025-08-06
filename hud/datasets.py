@@ -46,8 +46,8 @@ class TaskConfig(BaseModel):
     id: str | None = None
     prompt: str
     mcp_config: dict[str, Any]
-    setup_tool: MCPToolParams | None = None
-    evaluate_tool: MCPToolParams | None = None
+    setup_tool: MCPToolParams | list[MCPToolParams] | None = None
+    evaluate_tool: MCPToolParams | list[MCPToolParams] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("mcp_config", mode="before")
