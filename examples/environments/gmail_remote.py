@@ -9,7 +9,7 @@ async def main():
     with hud.trace("gmail_remote"):
         # Define task configuration as dict with environment variable templates
         task_dict = {
-            "prompt": "Open Sent mail, search for the Series B pitch deck, forward it to billgates@microsoft.com, and mark the original message as important.",
+            "prompt": "Open Sent mail, find the Series B pitch deck email, forward it to billgates@microsoft.com, and mark the original message as important.",
             "mcp_config": {
                 "hud": {
                     "url": "${HUD_MCP_URL}",
