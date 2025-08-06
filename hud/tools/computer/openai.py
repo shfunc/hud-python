@@ -51,6 +51,8 @@ class OpenAIComputerTool(HudComputerTool):
         self,
         width: int = 1024,
         height: int = 768,
+        environment_width: int = 1920,
+        environment_height: int = 1080,
         display_num: int | None = None,
         platform_type: Literal["auto", "xdo", "pyautogui"] = "auto",
         rescale_images: bool = False,
@@ -62,6 +64,8 @@ class OpenAIComputerTool(HudComputerTool):
         Args:
             width: Target width for rescaling (default: 1024 for OpenAI)
             height: Target height for rescaling (default: 768 for OpenAI)
+            environment_width: Environment screen width (default: 1920)
+            environment_height: Environment screen height (default: 1080)
             display_num: X display number
             platform_type: Which executor to use:
                 - "auto": Automatically detect based on platform
@@ -73,6 +77,8 @@ class OpenAIComputerTool(HudComputerTool):
         super().__init__(
             width=width,
             height=height,
+            environment_width=environment_width,
+            environment_height=environment_height,
             display_num=display_num,
             platform_type=platform_type,
             rescale_images=rescale_images,
