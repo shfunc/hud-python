@@ -1,15 +1,17 @@
-"""Setup functions for remote browser environment."""
+"""Setup module for remote browser environment."""
 
-from .registry import SetupRegistry, setup
+from hud.tools import SetupTool
 
-# Import setup functions to trigger registration
-from .navigate import NavigateSetup
-from .cookies import SetCookiesSetup, ClearCookiesSetup
-from .interact import ClickElementSetup, TypeTextSetup, WaitForElementSetup
-from .sheets import SheetsFromXlsxSetup, SheetsFromBytesSetup
-from .load_html import LoadHtmlContentSetup
+# Create the setup tool instance
+setup_tool = SetupTool(
+    name="setup",
+    description="Setup the remote browser environment"
+)
 
-__all__ = [
-    "SetupRegistry",
-    "setup",
-]
+# Create decorator for registering to this tool
+setup = setup_tool.register
+
+# Import all setup modules to trigger registration
+from . import navigate, cookies, load_html, interact, sheets
+
+__all__ = ['setup_tool', 'setup']

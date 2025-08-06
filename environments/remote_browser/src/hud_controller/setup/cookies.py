@@ -1,44 +1,42 @@
 """Cookie setup functions for remote browser environment."""
 
 import logging
-from typing import List, Dict, Any
-from ..setup import setup
+from typing import Any, List, Dict
+from hud.tools import BaseSetup, SetupResult
+from . import setup
 
 logger = logging.getLogger(__name__)
 
 
-@setup("set_cookies", description="Set cookies in the browser")
-class SetCookiesSetup:
+@setup("set_cookies", "Set cookies in the browser")
+class SetCookiesSetup(BaseSetup):
     """Setup function to set cookies."""
 
-    def __init__(self, context):
-        self.context = context
-
-    async def __call__(self, cookies: List[Dict[str, Any]]) -> dict:
-        """
-        Set cookies in the browser context.
-
+    async def __call__(self, context: Any, cookies: List[Dict[str, Any]], **kwargs) -> SetupResult:
+        """Set cookies in the browser context.
+        
         Args:
+            context: Browser context with playwright_tool
             cookies: List of cookie dictionaries with name, value, and optional properties
-
+            **kwargs: Additional arguments
+            
         Returns:
             Setup result dictionary
         """
         logger.info(f"Setting {len(cookies)} cookies")
-
-        # Get the browser context
-        browser_context = self.context.context
-        if not browser_context:
-            logger.error("No browser context available")
+        
+        # Get the playwright tool from context
+        if not context or not hasattr(context, 'page') or not context.page:
+            logger.error("No browser page available")
             return {
                 "status": "error",
-                "message": "No browser context available",
+                "message": "No browser page available",
             }
-
+        
         try:
             # Add cookies to the context
-            await browser_context.add_cookies(cookies)
-
+            await context.page.context.add_cookies(cookies)
+            
             logger.info(f"Successfully set {len(cookies)} cookies")
             return {
                 "status": "success",
@@ -53,35 +51,34 @@ class SetCookiesSetup:
             }
 
 
-@setup("clear_cookies", description="Clear all cookies from the browser")
-class ClearCookiesSetup:
+@setup("clear_cookies", "Clear all cookies from the browser")
+class ClearCookiesSetup(BaseSetup):
     """Setup function to clear all cookies."""
 
-    def __init__(self, context):
-        self.context = context
-
-    async def __call__(self) -> dict:
-        """
-        Clear all cookies from the browser context.
-
+    async def __call__(self, context: Any, **kwargs) -> SetupResult:
+        """Clear all cookies from the browser context.
+        
+        Args:
+            context: Browser context with playwright_tool
+            **kwargs: Additional arguments
+            
         Returns:
             Setup result dictionary
         """
         logger.info("Clearing all cookies")
-
-        # Get the browser context
-        browser_context = self.context.context
-        if not browser_context:
-            logger.error("No browser context available")
+        
+        # Get the playwright tool from context
+        if not context or not hasattr(context, 'page') or not context.page:
+            logger.error("No browser page available")
             return {
                 "status": "error",
-                "message": "No browser context available",
+                "message": "No browser page available",
             }
-
+        
         try:
             # Clear all cookies
-            await browser_context.clear_cookies()
-
+            await context.page.context.clear_cookies()
+            
             logger.info("Successfully cleared all cookies")
             return {
                 "status": "success",

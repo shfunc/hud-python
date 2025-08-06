@@ -14,8 +14,7 @@ The official MCP lifecycle specification is an excellent companion reference –
 | 2 | A minimal MCP server that responds to `initialize` over **stdio** |
 | 3 | Working `setup`, `evaluate`, and **interaction** tools |
 | 4 | Image launches remotely on the HUD platform & exposes live telemetry |
-| 5 | Fast local iteration with **cursor-mcp** and a tiny `mcp.json` |
-| 6 | Optional polish – registries, optimisation, security, creative ideas |
+| 5 | Fast local iteration with Cursor Agent and a tiny `mcp.json` |
 
 Take the phases one at a time; do **not** jump ahead.  Each stage's checkpoint is the foundation for the next.
 

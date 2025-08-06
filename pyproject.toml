@@ -14,7 +14,7 @@ dependencies = [
     "pydantic>=2,<3",
     "pydantic-settings>=2,<3",
     "mcp>=1.12.2",
-    "mcp-use>=1.3.7",
+    "mcp-use @ git+https://github.com/hud-evals/mcp-use.git",
     "pathspec>=0.12.1",
     "wrapt>=1.14.0",
     # MCP agent dependencies
@@ -44,6 +44,9 @@ classifiers = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.sdist]
 exclude = ["*/tests/"]
@@ -82,7 +85,12 @@ dev = [
     "setuptools",
 ]
 rl = [
-    "verifiers[all] @ git+https://github.com/jdchawla29/verifiers.git@main",
+    "verifiers[all] @ git+https://github.com/jdchawla29/verifiers.git@main ; sys_platform != 'win32'",
+    "triton-windows<3.5 ; sys_platform == 'win32'",
+    "transformers>=4.40.0",
+    "pillow>=10.0.0",
+    "torch>=2.0.0",
+    "rich"
 ]
 
 [project.optional-dependencies]
