@@ -95,25 +95,10 @@ The `-v` flag mounts your local `src/` directory into the container, allowing in
 
 ### Google Cloud Platform (GCP) Credentials
 
-For Google Sheets functionality, you can provide GCP credentials in two formats:
-
-**Option A: Single JSON String**
+For Google Sheets functionality, you can provide GCP credentials:
 ```bash
 -e GCP_CREDENTIALS_JSON='{"type":"service_account","project_id":"...","private_key":"..."}'
 ```
-
-**Option B: Individual Fields**
-```bash
--e GCP_TYPE="service_account" \
--e GCP_PROJECT_ID="your-project-id" \
--e GCP_PRIVATE_KEY_ID="your-key-id" \
--e GCP_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n..." \
--e GCP_CLIENT_EMAIL="your-service-account@project.iam.gserviceaccount.com" \
--e GCP_CLIENT_ID="your-client-id" \
--e GCP_AUTH_URI="https://accounts.google.com/o/oauth2/auth" \
--e GCP_TOKEN_URI="https://oauth2.googleapis.com/token" \
--e GCP_AUTH_PROVIDER_X509_CERT_URL="https://www.googleapis.com/oauth2/v1/certs" \
--e GCP_CLIENT_X509_CERT_URL="https://www.googleapis.com/robot/v1/metadata/x509/..."
 ```
 
 ## MCP Protocol

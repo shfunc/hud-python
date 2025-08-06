@@ -152,13 +152,13 @@ async def initialize_environment(session=None, progress_token=None):
         await send_progress(85, "Browser executor initialized")
 
         # Register all computer tool variants with the browser executor
-        hud_computer = HudComputerTool(executor=browser_executor)
+        hud_computer = HudComputerTool(custom_executor=browser_executor)
         register_instance_tool(mcp, "computer", hud_computer)
-
-        anthropic_computer = AnthropicComputerTool(executor=browser_executor)
+        
+        anthropic_computer = AnthropicComputerTool(custom_executor=browser_executor)
         register_instance_tool(mcp, "anthropic_computer", anthropic_computer)
-
-        openai_computer = OpenAIComputerTool(executor=browser_executor)
+        
+        openai_computer = OpenAIComputerTool(custom_executor=browser_executor)
         register_instance_tool(mcp, "openai_computer", openai_computer)
 
         await send_progress(88, "Computer tools registered")

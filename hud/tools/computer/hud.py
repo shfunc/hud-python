@@ -127,9 +127,9 @@ class HudComputerTool:
 
     def _scale_coordinates(self, x: int | None, y: int | None) -> tuple[int | None, int | None]:
         """Scale coordinates from target space to screen space."""
-        if x is not None:
+        if x is not None and self.scale_x != 1.0:
             x = int(x / self.scale_x)
-        if y is not None:
+        if y is not None and self.scale_y != 1.0:
             y = int(y / self.scale_y)
 
         return x, y
