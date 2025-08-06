@@ -1,8 +1,8 @@
 import asyncio
 import hud
-from hud.mcp import ClaudeMCPAgent, OpenAIMCPAgent
+from hud.mcp import ClaudeMCPAgent, OpenAIMCPAgent, MCPClient
 from hud.datasets import TaskConfig
-from mcp_use import MCPClient
+from hud.mcp.base import AgentResult
 
 
 async def main():
@@ -35,38 +35,37 @@ async def main():
             "metadata": {"id": "forward-series-b-deck-to-billgates"},
         }
 
-        # Create TaskConfig from dict - env vars are automatically substituted
+        # Create TaskConfig from dict
         task = TaskConfig(**task_dict)
 
         print("📡 Defining the environment...")
-        print("🔴 See the agent live at http://localhost:6080/vnc.html")
+        client = MCPClient(mcp_config=task.mcp_config)
 
-        # Create MCP client from resolved servers
-        client = MCPClient.from_dict({"mcp_config": task.mcp_config})
 
         agent = ClaudeMCPAgent(  # or OpenAIMCPAgent
             mcp_client=client,
-            model="claude-3-7-sonnet-20250219",
-            allowed_tools=["computer"],
+            model="claude-sonnet-4-20250514",
+            # Allowing anthropic_computer tool to be used because we're using ClaudeMCPAgent
+            allowed_tools=["anthropic_computer"], # Check our hud/tools/computer/anthropic.py
             initial_screenshot=True,
         )
 
         print(f"📋 Task: {task.prompt}")
         print(f"⚙️  Setup: {task.setup_tool}")
-        print(f"📊 Evaluate: {task.evaluate_tool}")
-
-        # Run the task
+        print(f"📊 Evaluate: {task.evaluate_tool}")        # Run the task
         print("🚀 Running the task...")
-        eval_result = await agent.run(task, max_steps=10)
+        eval_result: AgentResult = await agent.run(task, max_steps=10)
         print(f"🎉 Task Result: {eval_result}")
 
         # Show formatted results
-        reward = eval_result.get("reward", 0.0)
+        reward = eval_result.reward
         print(f"   🏆 Reward: {reward}")
+        print(f"   🔍 Content: {eval_result.content[:1000] if eval_result.content else 'No content'}...")
+        print(f"   🔍 Messages: {eval_result.messages}")
 
         # Clean up
         print("\n🧹 Cleaning up...")
-        await client.close_all_sessions()
+        await client.close()
         print("✅ Done!")
 
 
