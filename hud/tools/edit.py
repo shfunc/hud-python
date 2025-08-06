@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Literal, get_args
-
-from mcp.types import ContentBlock
+from typing import TYPE_CHECKING, Any, Literal, get_args
 
 from .base import BaseTool, ToolError, ToolResult
 from .utils import maybe_truncate, run
+
+if TYPE_CHECKING:
+    from mcp.types import ContentBlock
 
 Command = Literal[
     "view",

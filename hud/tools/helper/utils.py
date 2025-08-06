@@ -35,7 +35,7 @@ def register_instance_tool(
         Optional description of what the tool does. If not provided, uses instance.description
         if available, or falls back to the docstring of instance.__call__.
     title:
-        Optional human-readable title for the tool. If not provided, uses instance.title if available.
+        Optional human-readable title for the tool. If not provided, uses instance.title.
     """
 
     # If no name provided, try to get it from the instance

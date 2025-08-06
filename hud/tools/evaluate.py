@@ -1,14 +1,18 @@
 """Evaluate tool with built-in registry for MCP environments."""
+
 from __future__ import annotations
 
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from mcp.types import ContentBlock, TextContent
 
 from .base import BaseTool
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +57,7 @@ class EvaluateTool(BaseTool):
         name: str = "evaluate",
         title: str | None = None,
         description: str | None = None,
-    ):
+    ) -> None:
         """Initialize the evaluate tool.
 
         Args:
@@ -70,7 +74,9 @@ class EvaluateTool(BaseTool):
         )
         self._registry: dict[str, type[BaseEvaluator]] = {}
 
-    def register(self, name: str, description: str = "", app: str = "default"):
+    def register(
+        self, name: str, description: str = "", app: str = "default"
+    ) -> Callable[[type[BaseEvaluator]], type[BaseEvaluator]]:
         """Decorator to register an evaluator class.
 
         Args:
@@ -91,14 +97,12 @@ class EvaluateTool(BaseTool):
             cls._name = name
             cls._description = description
             cls._app = app
-            logger.info(f"Registered evaluator: {name} -> {cls.__name__}")
+            logger.info("Registered evaluator: %s -> %s", name, cls.__name__)
             return cls
 
         return decorator
 
-    async def __call__(
-        self, function: str, args: dict | None = None
-    ) -> list[ContentBlock]:
+    async def __call__(self, function: str, args: dict | None = None) -> list[ContentBlock]:
         """Execute an evaluator function from the registry.
 
         This method is designed to be called as an MCP tool.
@@ -154,7 +158,7 @@ class EvaluateTool(BaseTool):
             return [TextContent(text=text, type="text")]
 
         except Exception as e:
-            logger.error(f"Evaluation execution error: {e}", exc_info=True)
+            logger.exception("Evaluation execution error: %s", e)
             return [TextContent(text=f"❌ Evaluation error: {e!s}", type="text")]
 
     def get_registry_json(self) -> str:

@@ -6,12 +6,15 @@ from __future__ import annotations
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Literal, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 from mcp.types import ContentBlock, TextContent
 from pydantic import Field
 
 from .base import BaseTool
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +38,7 @@ class BaseSetup(ABC):
     _app: str
 
     @abstractmethod
-    async def __call__(self, context: Any, **kwargs) -> SetupResult:
+    async def __call__(self, context: Any, **kwargs: Any) -> SetupResult:
         """Execute the setup.
 
         Args:
@@ -58,7 +61,7 @@ class SetupTool(BaseTool):
         name: str = "setup",
         title: str | None = None,
         description: str | None = None,
-    ):
+    ) -> None:
         """Initialize the setup tool.
 
         Args:
@@ -75,7 +78,9 @@ class SetupTool(BaseTool):
         )
         self._registry: dict[str, type[BaseSetup]] = {}
 
-    def register(self, name: str, description: str = "", app: str = "default"):
+    def register(
+        self, name: str, description: str = "", app: str = "default"
+    ) -> Callable[[type[BaseSetup]], type[BaseSetup]]:
         """Decorator to register a setup class.
 
         Args:
@@ -96,7 +101,7 @@ class SetupTool(BaseTool):
             cls._name = name
             cls._description = description
             cls._app = app
-            logger.info(f"Registered setup: {name} -> {cls.__name__}")
+            logger.info("Registered setup: %s -> %s", name, cls.__name__)
             return cls
 
         return decorator

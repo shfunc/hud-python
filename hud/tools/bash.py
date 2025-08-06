@@ -3,11 +3,12 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
-from typing import Any
-
-from mcp.types import ContentBlock
+from typing import TYPE_CHECKING, Any
 
 from .base import BaseTool, ToolError, ToolResult
+
+if TYPE_CHECKING:
+    from mcp.types import ContentBlock
 
 
 class _BashSession:

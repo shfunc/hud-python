@@ -164,7 +164,7 @@ def _print_trace_complete_url(task_run_id: str, error_occurred: bool = False) ->
 
     if error_occurred:
         print(
-            f"\n{RED}✗ Trace errored!{RESET} {DIM}More error details available at:{RESET} {BOLD}{GOLD}{url}{RESET}\n"
+            f"\n{RED}✗ Trace errored!{RESET} {DIM}More error details available at:{RESET} {BOLD}{GOLD}{url}{RESET}\n"  # noqa: E501
         )
     else:
         print(f"\n{GREEN}✓ Trace complete!{RESET} {DIM}View at:{RESET} {BOLD}{GOLD}{url}{RESET}\n")

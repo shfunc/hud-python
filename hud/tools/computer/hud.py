@@ -41,7 +41,7 @@ class HudComputerTool(BaseTool):
         Initialize the HUD computer tool.
 
         Args:
-            executor: Optional pre-configured executor. If None, will create one based on platform_type
+            executor: Optional pre-configured executor. If None, creates one based on platform_type
             width: Target width for rescaling (None = use actual screen width)
             height: Target height for rescaling (None = use actual screen height)
             display_num: X display number
@@ -51,7 +51,7 @@ class HudComputerTool(BaseTool):
                 - "pyautogui": Use PyAutoGUIExecutor (cross-platform)
             rescale_images: If True, rescale screenshots. If False, only rescale action coordinates
             name: Tool name for MCP registration (auto-generated from class name if not provided)
-            title: Human-readable display name for the tool (auto-generated from class name if not provided)
+            title: Human-readable display name for the tool (auto-generated from class name)
             description: Tool description (auto-generated from docstring if not provided)
         """
         # Initialize base tool with executor as context

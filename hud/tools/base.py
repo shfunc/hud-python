@@ -24,13 +24,13 @@ class BaseTool(ABC):
         """Initialize the tool.
 
         Args:
-            context: Optional, often stateful, context object that the tool operates on. This could be:
+            context: Optional, often stateful, context object that the tool operates on. Could be:
                 - A game instance (e.g., Chess Board)
                 - An executor (e.g., PyAutoGUIExecutor for computer control)
                 - A browser/page instance (e.g., Playwright Page)
                 - Any stateful resource the tool needs to interact with
             name: Tool name for MCP registration (auto-generated from class name if not provided)
-            title: Human-readable display name for the tool (auto-generated from class name if not provided)
+            title: Human-readable display name for the tool (auto-generated from class name)
             description: Tool description (auto-generated from docstring if not provided)
         """
         self.context = context
