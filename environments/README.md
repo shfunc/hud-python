@@ -43,37 +43,45 @@ The script walks the *same* checklist and prints coloured, human-friendly hints 
 
 ---
 
-## Phase 1 – Write a *Simple* Dockerfile
+## Phase 1 – Write a Dockerfile
 
-**Goal →** the container starts, prints a message to **stderr**, and exits cleanly.  Nothing else.
+**Goal →** Create a container that can run your MCP server with proper Python packaging.
 
-Why stderr?  In Phase 2 the MCP server will reserve **stdout** for JSON-RPC traffic, so *all* human-readable logs should already go to the other stream.
+Key principles:
+- **stdout** is reserved for MCP protocol (JSON-RPC)
+- **stderr** is for all logs and debug output
+- Use proper Python packaging with `pyproject.toml`
+- Run as a module for clean imports
 
-### Minimal example
+### Dockerfile Template
 
 ```dockerfile
 FROM python:3.11-slim
 
-WORKDIR /apphello
+# Prevent Python from buffering output (important for logs)
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
-COPY . .
+WORKDIR /app
 
-# Optional: install requirements
-# RUN pip install --no-cache-dir -r requirements.txt
+# Copy package files
+COPY pyproject.toml ./
+COPY src/ ./src/
 
-# ‼️  Send logs to stderr (stdout remains untouched for MCP)
-CMD [
-  "python",
-  "-c",
-  "import sys, time; print('hello from the container', file=sys.stderr); time.sleep(1)"
-]
+# Install in editable mode for development flexibility
+RUN pip install --no-cache-dir -e .
+
+# Run as a module to ensure proper package imports
+CMD ["python", "-m", "my_module.server"]
 ```
 
-Build & run:
+### Build & Test
 
 ```bash
 docker build -t my-environment .
-docker run --rm -it my-environment     # look for the log line on stderr
+
+# Test Phase 1: Container should start without errors
+docker run --rm -i my-environment
 ```
 
 ### Recommended Environment Structure
@@ -83,19 +91,26 @@ For Python-based MCP environments, use this standard structure:
 ```
 my-environment/
 ├── Dockerfile
-├── pyproject.toml
-├── README.md
+├── pyproject.toml          # Package definition with dependencies
+├── README.md               # Environment documentation
 └── src/
-    └── my_module/           # Your Python package
+    └── my_module/          # Your Python package
         ├── __init__.py
-        ├── server.py        # MCP server (Phase 2)
-        ├── setup/           # Setup functions (Phase 3)
-        ├── evaluators/      # Evaluation logic (Phase 3)
-        └── problems/        # Problem definitions (Phase 3)
+        ├── server.py       # MCP server entry point
+        ├── context.py      # Core stateful environment logic
+        ├── tools/          # Interactive tools (move, click, type, etc.)
+        │   ├── __init__.py
+        │   └── move.py     # Example: move tool
+        ├── setup/          # Setup registry and functions
+        │   ├── __init__.py # Creates SetupTool instance
+        │   └── registry.py # Registers setup functions
+        └── evaluate/       # Evaluation registry and functions
+            ├── __init__.py # Creates EvaluateTool instance
+            └── registry.py # Registers evaluator functions
 ```
 
 This structure enables:
-- Clean separation of concerns
+- Clean separation of concerns (game logic, tools, setup, evaluation)
 - Easy volume mounting for development (Phase 5)
 - Standard Python packaging with `pip install -e .`
 
@@ -107,8 +122,8 @@ Checkpoint reached?  Congratulations – move on.
 👉 Quick sanity check: `python environments/docker_debug.py my-environment:latest` (verifies Phase 1 automatically)
 
 Need inspiration?  Skim the real Dockerfiles used in the example browser environments:
+• [`text_2048/Dockerfile`](./text_2048/Dockerfile)
 • [`browser/Dockerfile`](./browser/Dockerfile)
-• [`remote_browser/Dockerfile`](./remote_browser/Dockerfile)
 They follow the exact same pattern – a single file, logs to stderr, nothing fancy.
 
 ---
