@@ -111,7 +111,7 @@ def to_taskconfigs(dataset: Dataset) -> list[TaskConfig]:
         # Unpack the row dict into TaskConfig constructor
         task_config = TaskConfig(**row)
         task_configs.append(task_config)
-    
+
     return task_configs
 
 

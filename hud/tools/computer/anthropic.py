@@ -4,7 +4,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-from mcp.types import ErrorData, McpError, INTERNAL_ERROR, INVALID_PARAMS, ContentBlock
+from mcp import ErrorData, McpError
+from mcp.types import INTERNAL_ERROR, INVALID_PARAMS, ContentBlock
 from pydantic import Field
 
 from hud.tools.base import ToolResult

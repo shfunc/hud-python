@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING, Any
 from datetime import datetime
+from typing import TYPE_CHECKING, Any
 
+from mcp.shared.exceptions import McpError
 from mcp_use.client import MCPClient as MCPUseClient
 from pydantic import AnyUrl
-from mcp.shared.exceptions import McpError
 
 if TYPE_CHECKING:
     from typing import Self
@@ -41,10 +41,7 @@ class MCPClient:
             client_info: Optional client info for MCP initialization
         """
         self.verbose = verbose
-        self.client_info = client_info or {
-            "name": "hud-python",
-            "version": "3.0.3"
-        }
+        self.client_info = client_info or {"name": "hud-python", "version": "3.0.3"}
 
         # Create a logging callback that stores notifications
         async def logging_callback(params: types.LoggingMessage) -> None:
@@ -57,20 +54,21 @@ class MCPClient:
                     "level": params.level,
                     "logger": getattr(params, "logger", None),
                     "data": params.data,
-                }
+                },
             }
             self._notifications.append(notification_data)
-            
+
             if self.verbose:
-                logger.debug("Received notification: level=%s, logger=%s, data=%s",
-                           params.level, getattr(params, "logger", None), params.data)
-        
+                logger.debug(
+                    "Received notification: level=%s, logger=%s, data=%s",
+                    params.level,
+                    getattr(params, "logger", None),
+                    params.data,
+                )
+
         # Initialize mcp_use client with proper config and logging callback
         config = {"mcpServers": mcp_config}
-        self._mcp_client = MCPUseClient.from_dict(
-            config,
-            logging_callback=logging_callback
-        )
+        self._mcp_client = MCPUseClient.from_dict(config, logging_callback=logging_callback)
 
         self._sessions: dict[str, MCPUseSession] = {}
         self._available_tools: list[types.Tool] = []
@@ -113,7 +111,7 @@ class MCPClient:
             logger.error("MCP protocol error: %s", e)
             logger.error("This typically means:")
             logger.error("- Invalid or missing initialization parameters")
-            logger.error("- Incompatible protocol version") 
+            logger.error("- Incompatible protocol version")
             logger.error("- Server-side configuration issues")
             raise
         except Exception as e:
@@ -341,7 +339,7 @@ class MCPClient:
     async def set_log_level(self, level: str, server_name: str | None = None) -> None:
         """
         Set the minimum log level for server notifications.
-        
+
         Args:
             level: Log level (debug, info, notice, warning, error, critical, alert, emergency)
             server_name: Optional server name. If None, sets for all servers.
@@ -352,13 +350,12 @@ class MCPClient:
             sessions = {server_name: self._sessions[server_name]}
         else:
             sessions = self._sessions
-            
+
         for name, session in sessions.items():
             try:
                 if session.connector.client_session:
                     await session.connector.client_session.send_request(
-                        method="logging/setLevel",
-                        params={"level": level}
+                        method="logging/setLevel", params={"level": level}
                     )
                     logger.info("Set log level to '%s' for server '%s'", level, name)
             except Exception as e:
@@ -371,7 +368,7 @@ class MCPClient:
     def get_logs(self) -> str:
         """
         Get all notifications formatted as a log string.
-        
+
         Returns:
             Formatted log string with timestamps, server names, and messages
         """
@@ -380,18 +377,18 @@ class MCPClient:
             timestamp = notif.get("timestamp", "")
             method = notif.get("method", "")
             params = notif.get("params", {})
-            
+
             # Handle logging/message notifications
             if method == "notifications/message" and isinstance(params, dict):
                 level = params.get("level", "info").upper()
                 logger_name = params.get("logger", "")
                 data = params.get("data", {})
-                
+
                 # Format the message
                 message = f"[{timestamp}] [{level}]"
                 if logger_name:
                     message += f" {logger_name}:"
-                
+
                 # Add data content
                 if isinstance(data, dict):
                     # Try to get a message or error field first
@@ -404,12 +401,12 @@ class MCPClient:
                         message += f" {json.dumps(data)}"
                 else:
                     message += f" {data}"
-                
+
                 logs.append(message)
             else:
                 # Generic notification format
                 logs.append(f"[{timestamp}] {method}: {json.dumps(params)}")
-        
+
         return "\n".join(logs)
 
     async def close(self) -> None:

@@ -11,7 +11,13 @@ if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
 
 
-def register_instance_tool(mcp: FastMCP, instance: Any, name: str | None = None) -> Callable[..., Any]:
+def register_instance_tool(
+    mcp: FastMCP,
+    instance: Any,
+    name: str | None = None,
+    description: str | None = None,
+    title: str | None = None,
+) -> Callable[..., Any]:
     """Register ``instance.__call__`` as a FastMCP tool.
 
     Parameters
@@ -21,19 +27,33 @@ def register_instance_tool(mcp: FastMCP, instance: Any, name: str | None = None)
     instance:
         Object with an ``async def __call__`` (or sync) implementing the tool.
         If the instance has a 'name' attribute, it will be used as the tool name.
+        If the instance has a 'description' attribute, it will be used as the tool description.
+        If the instance has a 'title' attribute, it will be used as the tool title.
     name:
         Optional public tool name. If not provided, uses instance.name if available.
+    description:
+        Optional description of what the tool does. If not provided, uses instance.description
+        if available, or falls back to the docstring of instance.__call__.
+    title:
+        Optional human-readable title for the tool. If not provided, uses instance.title if available.
     """
-    
+
     # If no name provided, try to get it from the instance
-    if name is None:
-        if hasattr(instance, 'name'):
-            name = instance.name
-        else:
-            raise ValueError(
-                "No tool name provided and instance has no 'name' attribute. "
-                "Either provide a name parameter or ensure the instance has a 'name' attribute."
-            )
+    if name is None and hasattr(instance, "name"):
+        name = instance.name
+    elif name is None:
+        raise ValueError(
+            "No tool name provided and instance has no 'name' attribute. "
+            "Either provide a name parameter or ensure the instance has a 'name' attribute."
+        )
+
+    # If no description provided, try to get it from the instance
+    if description is None and hasattr(instance, "description"):
+        description = instance.description
+
+    # If no title provided, try to get it from the instance
+    if title is None and hasattr(instance, "title"):
+        title = instance.title
 
     if inspect.isclass(instance):
         class_name = instance.__name__
@@ -66,4 +86,4 @@ def register_instance_tool(mcp: FastMCP, instance: Any, name: str | None = None)
 
     _wrapper.__signature__ = public_sig  # type: ignore[attr-defined]
 
-    return mcp.tool(name=name)(_wrapper)
+    return mcp.tool(name=name, description=description, title=title)(_wrapper)

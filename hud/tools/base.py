@@ -9,20 +9,20 @@ from mcp.types import ContentBlock, ImageContent, TextContent
 
 class BaseTool(ABC):
     """Base class for all MCP tools.
-    
+
     All tools should inherit from this class and implement the __call__ method.
     Tools are registered with FastMCP using register_instance_tool.
     """
-    
+
     def __init__(
         self,
         context: Any = None,
         name: str | None = None,
         title: str | None = None,
-        description: str | None = None
+        description: str | None = None,
     ) -> None:
         """Initialize the tool.
-        
+
         Args:
             context: Optional, often stateful, context object that the tool operates on. This could be:
                 - A game instance (e.g., Chess Board)
@@ -37,45 +37,47 @@ class BaseTool(ABC):
         self.name = name or self.__class__.__name__.lower().replace("tool", "")
         self.title = title
         self.description = description
-    
+
     @abstractmethod
     async def __call__(self, **kwargs: Any) -> list[ContentBlock]:
         """Execute the tool. Often uses the context to perform an action.
-        
+
         Args:
             **kwargs: Tool-specific arguments
-            
+
         Returns:
             List of ContentBlock (TextContent, ImageContent, etc.) with the tool's output
         """
         raise NotImplementedError("Subclasses must implement __call__")
-    
+
     def _to_content_blocks(self, result: ToolResult) -> list[ContentBlock]:
         """Helper method to convert ToolResult to content blocks.
-        
+
         Subclasses can use this when they work with ToolResult internally.
-        
+
         Args:
             result: ToolResult to convert
-            
+
         Returns:
             List of ContentBlock
         """
         blocks: list[ContentBlock] = []
-        
+
         if result.output:
             blocks.append(TextContent(text=result.output, type="text"))
         if result.error:
             blocks.append(TextContent(text=result.error, type="text"))
         if result.base64_image:
-            blocks.append(ImageContent(data=result.base64_image, mimeType="image/png", type="image"))
+            blocks.append(
+                ImageContent(data=result.base64_image, mimeType="image/png", type="image")
+            )
         return blocks
 
 
 @dataclass(kw_only=True, frozen=True)
 class ToolResult:
     """Represents the intermediate result of a tool execution.
-    
+
     Often useful for tools that need to return multiple types of content.
     """
 
@@ -111,4 +113,3 @@ class ToolResult:
 
 class ToolError(Exception):
     """An error raised by a tool."""
-

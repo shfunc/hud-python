@@ -6,7 +6,7 @@ import platform
 from typing import Literal
 
 from mcp import ErrorData, McpError
-from mcp.types import INVALID_PARAMS, ContentBlock, ImageContent, TextContent
+from mcp.types import INVALID_PARAMS, ContentBlock, TextContent
 from pydantic import Field
 
 from hud.tools.base import BaseTool, ToolError, ToolResult
@@ -33,6 +33,9 @@ class HudComputerTool(BaseTool):
         display_num: int | None = None,
         platform_type: Literal["auto", "xdo", "pyautogui"] = "auto",
         rescale_images: bool = False,
+        name: str | None = None,
+        title: str | None = None,
+        description: str | None = None,
     ) -> None:
         """
         Initialize the HUD computer tool.
@@ -47,14 +50,18 @@ class HudComputerTool(BaseTool):
                 - "xdo": Use XDOExecutor (Linux/X11 only)
                 - "pyautogui": Use PyAutoGUIExecutor (cross-platform)
             rescale_images: If True, rescale screenshots. If False, only rescale action coordinates
+            name: Tool name for MCP registration (auto-generated from class name if not provided)
+            title: Human-readable display name for the tool (auto-generated from class name if not provided)
+            description: Tool description (auto-generated from docstring if not provided)
         """
         # Initialize base tool with executor as context
         super().__init__(
             context=executor,
-            name="computer",
-            description="Control computer with mouse, keyboard, and screenshots"
+            name=name or "computer",
+            title=title or "Computer Control",
+            description=description or "Control computer with mouse, keyboard, and screenshots",
         )
-        
+
         # Use provided dimensions or defaults
         self.width = width or BASE_SCREEN_WIDTH
         self.height = height or BASE_SCREEN_HEIGHT
@@ -82,12 +89,12 @@ class HudComputerTool(BaseTool):
         # If no executor provided, create one based on platform
         if self.context is None:
             self._choose_executor(platform_type, display_num)
-    
+
     @property
     def executor(self) -> BaseExecutor:
         """Get the executor (alias for context)."""
         return self.context
-    
+
     @executor.setter
     def executor(self, value: BaseExecutor) -> None:
         """Set the executor (alias for context)."""

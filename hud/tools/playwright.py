@@ -6,7 +6,8 @@ import logging
 import os
 from typing import TYPE_CHECKING, Any, Literal
 
-from mcp.types import ErrorData, McpError, INVALID_PARAMS, ContentBlock
+from mcp import ErrorData, McpError
+from mcp.types import INVALID_PARAMS, ContentBlock
 from pydantic import Field
 
 from hud.tools.base import BaseTool, ToolResult
@@ -22,7 +23,7 @@ class PlaywrightTool(BaseTool):
 
     def __init__(self, page: Page | None = None, cdp_url: str | None = None) -> None:
         """Initialize PlaywrightTool.
-        
+
         Args:
             page: Optional existing Playwright Page to use as context
             cdp_url: Optional Chrome DevTools Protocol URL for connecting to existing browser
@@ -31,7 +32,7 @@ class PlaywrightTool(BaseTool):
             context=page,
             name="playwright",
             title="Playwright Browser",
-            description="Web automation tool using Playwright"
+            description="Web automation tool using Playwright",
         )
         self._cdp_url = cdp_url
         self._playwright = None
@@ -45,7 +46,7 @@ class PlaywrightTool(BaseTool):
         if self.context is None:
             raise RuntimeError("Browser page is not initialized. Call ensure_browser_launched().")
         return self.context
-    
+
     @page.setter
     def page(self, value: Page | None) -> None:
         """Set the page (alias for context)."""

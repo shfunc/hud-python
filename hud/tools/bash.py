@@ -5,7 +5,7 @@ import os
 import sys
 from typing import Any
 
-from mcp.types import ContentBlock, TextContent
+from mcp.types import ContentBlock
 
 from .base import BaseTool, ToolError, ToolResult
 
@@ -115,16 +115,16 @@ class BashTool(BaseTool):
 
     def __init__(self, session: _BashSession | None = None) -> None:
         """Initialize BashTool with an optional session.
-        
+
         Args:
-            session: Optional pre-configured bash session. If not provided, 
+            session: Optional pre-configured bash session. If not provided,
                      a new session will be created on first use.
         """
         super().__init__(
             context=session,
             name="bash",
             title="Bash Shell",
-            description="Execute bash commands in a persistent shell session"
+            description="Execute bash commands in a persistent shell session",
         )
 
     @property

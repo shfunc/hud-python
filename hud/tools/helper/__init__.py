@@ -11,7 +11,6 @@ __all__ = [
     "EvaluateTool",
     "BaseSetup",
     "BaseEvaluator",
-
     # Context classes
     "EnvironmentContext",
     "SimpleContext",

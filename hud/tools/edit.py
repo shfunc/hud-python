@@ -27,7 +27,7 @@ class EditTool(BaseTool):
 
     def __init__(self, file_history: dict[Path, list[str]] | None = None) -> None:
         """Initialize EditTool with optional file history.
-        
+
         Args:
             file_history: Optional dictionary tracking edit history per file.
                          If not provided, a new history will be created.
@@ -36,7 +36,7 @@ class EditTool(BaseTool):
             context=file_history or defaultdict(list),
             name="edit",
             title="File Editor",
-            description="View, create, and edit files with undo support"
+            description="View, create, and edit files with undo support",
         )
 
     @property
@@ -66,7 +66,9 @@ class EditTool(BaseTool):
                 raise ToolError("Parameter `file_text` is required for command: create")
             await self.write_file(_path, file_text)
             self.file_history[_path].append(file_text)
-            return self._to_content_blocks(ToolResult(output=f"File created successfully at: {_path}"))
+            return self._to_content_blocks(
+                ToolResult(output=f"File created successfully at: {_path}")
+            )
         elif command == "str_replace":
             if old_str is None:
                 raise ToolError("Parameter `old_str` is required for command: str_replace")

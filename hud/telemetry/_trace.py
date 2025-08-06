@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 import atexit
 import logging
-
 import threading
 import time
 import uuid
@@ -36,12 +35,14 @@ P = ParamSpec("P")
 # Thread-local storage for deferred trace messages
 _deferred_trace_messages = threading.local()
 
+
 def _print_deferred_trace_messages() -> None:
     """Print any deferred trace messages at exit."""
     if hasattr(_deferred_trace_messages, "messages"):
         for task_run_id in _deferred_trace_messages.messages:
             _print_trace_complete_url(task_run_id, error_occurred=True)
         _deferred_trace_messages.messages.clear()
+
 
 # Register the atexit handler
 atexit.register(_print_deferred_trace_messages)
@@ -162,7 +163,9 @@ def _print_trace_complete_url(task_run_id: str, error_occurred: bool = False) ->
     BOLD = "\033[1m"
 
     if error_occurred:
-        print(f"\n{RED}✗ Trace errored!{RESET} {DIM}More error details available at:{RESET} {BOLD}{GOLD}{url}{RESET}\n")
+        print(
+            f"\n{RED}✗ Trace errored!{RESET} {DIM}More error details available at:{RESET} {BOLD}{GOLD}{url}{RESET}\n"
+        )
     else:
         print(f"\n{GREEN}✓ Trace complete!{RESET} {DIM}View at:{RESET} {BOLD}{GOLD}{url}{RESET}\n")
 
