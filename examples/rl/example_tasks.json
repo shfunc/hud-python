@@ -1,0 +1,290 @@
+[
+  {
+    "prompt": "Open Promotions, star the AAFP conference email, mark it important, and apply the CME label.",
+    "mcp_config": {
+      "gmail": {
+        "command": "/bin/sh",
+        "args": ["-c", "docker run -i --rm gmail 2>/dev/null"]
+      }
+    },
+    "setup_tool": {
+      "name": "setup",
+      "arguments": {
+        "problem_id": "promote-conference-email"
+      }
+    },
+    "evaluate_tool": {
+      "name": "evaluate",
+      "arguments": {
+        "problem_id": "promote-conference-email"
+      }
+    },
+    "metadata": {
+      "id": "promote-conference-email"
+    }
+  },
+  {
+    "prompt": "Star the SOX compliance certification email, then snooze it, then open the Snoozed view.",
+    "mcp_config": {
+      "gmail": {
+        "command": "/bin/sh",
+        "args": ["-c", "docker run -i --rm gmail 2>/dev/null"]
+      }
+    },
+    "setup_tool": {
+      "name": "setup",
+      "arguments": {
+        "problem_id": "defer-sox-certification"
+      }
+    },
+    "evaluate_tool": {
+      "name": "evaluate",
+      "arguments": {
+        "problem_id": "defer-sox-certification"
+      }
+    },
+    "metadata": {
+      "id": "defer-sox-certification"
+    }
+  },
+  {
+    "prompt": "Create a new label 'Webinars', search for 'Summit', apply the label to the ContentTECH Summit email, and mark that email important.",
+    "mcp_config": {
+      "gmail": {
+        "command": "/bin/sh",
+        "args": ["-c", "docker run -i --rm gmail 2>/dev/null"]
+      }
+    },
+    "setup_tool": {
+      "name": "setup",
+      "arguments": {
+        "problem_id": "create-webinars-label-flag-summit"
+      }
+    },
+    "evaluate_tool": {
+      "name": "evaluate",
+      "arguments": {
+        "problem_id": "create-webinars-label-flag-summit"
+      }
+    },
+    "metadata": {
+      "id": "create-webinars-label-flag-summit"
+    }
+  },
+  {
+    "prompt": "Search for 'TechCrunch', star the TechCrunch interview request email, mark it important, and ensure it keeps its Media label",
+    "mcp_config": {
+      "gmail": {
+        "command": "/bin/sh",
+        "args": ["-c", "docker run -i --rm gmail 2>/dev/null"]
+      }
+    },
+    "setup_tool": {
+      "name": "setup",
+      "arguments": {
+        "problem_id": "flag-techcrunch-interview"
+      }
+    },
+    "evaluate_tool": {
+      "name": "evaluate",
+      "arguments": {
+        "problem_id": "flag-techcrunch-interview"
+      }
+    },
+    "metadata": {
+      "id": "flag-techcrunch-interview"
+    }
+  },
+  {
+    "prompt": "Search for \"AI Leadership\", forward the HBR invitation to board@acme.com, then open the Sent page.",
+    "mcp_config": {
+      "gmail": {
+        "command": "/bin/sh",
+        "args": ["-c", "docker run -i --rm gmail 2>/dev/null"]
+      }
+    },
+    "setup_tool": {
+      "name": "setup",
+      "arguments": {
+        "problem_id": "forward-hbr-invitation"
+      }
+    },
+    "evaluate_tool": {
+      "name": "evaluate",
+      "arguments": {
+        "problem_id": "forward-hbr-invitation"
+      }
+    },
+    "metadata": {
+      "id": "forward-hbr-invitation"
+    }
+  },
+  {
+    "prompt": "Search \"Nomination\", then mark the award-nomination email important, archive it, and tag it Strategy",
+    "mcp_config": {
+      "gmail": {
+        "command": "/bin/sh",
+        "args": ["-c", "docker run -i --rm gmail 2>/dev/null"]
+      }
+    },
+    "setup_tool": {
+      "name": "setup",
+      "arguments": {
+        "problem_id": "handle-award-nomination"
+      }
+    },
+    "evaluate_tool": {
+      "name": "evaluate",
+      "arguments": {
+        "problem_id": "handle-award-nomination"
+      }
+    },
+    "metadata": {
+      "id": "handle-award-nomination"
+    }
+  },
+  {
+    "prompt": "Tag the SOX compliance certification email with the Strategy Label, mark it unread, snooze it",
+    "mcp_config": {
+      "gmail": {
+        "command": "/bin/sh",
+        "args": ["-c", "docker run -i --rm gmail 2>/dev/null"]
+      }
+    },
+    "setup_tool": {
+      "name": "setup",
+      "arguments": {
+        "problem_id": "snooze-sox-compliance"
+      }
+    },
+    "evaluate_tool": {
+      "name": "evaluate",
+      "arguments": {
+        "problem_id": "snooze-sox-compliance"
+      }
+    },
+    "metadata": {
+      "id": "snooze-sox-compliance"
+    }
+  },
+  {
+    "prompt": "Open Sent mail, find my Series B pitch deck email, forward it to billgates@microsoft.com, and mark the original message as important.",
+    "mcp_config": {
+      "gmail": {
+        "command": "/bin/sh",
+        "args": ["-c", "docker run -i --rm gmail 2>/dev/null"]
+      }
+    },
+    "setup_tool": {
+      "name": "setup",
+      "arguments": {
+        "problem_id": "forward-series-b-deck-to-billgates"
+      }
+    },
+    "evaluate_tool": {
+      "name": "evaluate",
+      "arguments": {
+        "problem_id": "forward-series-b-deck-to-billgates"
+      }
+    },
+    "metadata": {
+      "id": "forward-series-b-deck-to-billgates"
+    }
+  },
+  {
+    "prompt": "Open Promotions, star the CME Diabetes email, mark it unread, label it 'CME', then search for 'CME'.",
+    "mcp_config": {
+      "gmail": {
+        "command": "/bin/sh",
+        "args": ["-c", "docker run -i --rm gmail 2>/dev/null"]
+      }
+    },
+    "setup_tool": {
+      "name": "setup",
+      "arguments": {
+        "problem_id": "star-cme-diabetes-email"
+      }
+    },
+    "evaluate_tool": {
+      "name": "evaluate",
+      "arguments": {
+        "problem_id": "star-cme-diabetes-email"
+      }
+    },
+    "metadata": {
+      "id": "star-cme-diabetes-email"
+    }
+  },
+  {
+    "prompt": "Go to Promotions, star the \"JavaScript Weekly\" newsletter, label it \"Code Reviews\", and leave it unread.",
+    "mcp_config": {
+      "gmail": {
+        "command": "/bin/sh",
+        "args": ["-c", "docker run -i --rm gmail 2>/dev/null"]
+      }
+    },
+    "setup_tool": {
+      "name": "setup",
+      "arguments": {
+        "problem_id": "organize-javascript-weekly"
+      }
+    },
+    "evaluate_tool": {
+      "name": "evaluate",
+      "arguments": {
+        "problem_id": "organize-javascript-weekly"
+      }
+    },
+    "metadata": {
+      "id": "organize-javascript-weekly"
+    }
+  },
+  {
+    "prompt": "Search for 'weekly schedule', then star the weekly briefing email from my EA, mark it unread, and tag it with Strategy",
+    "mcp_config": {
+      "gmail": {
+        "command": "/bin/sh",
+        "args": ["-c", "docker run -i --rm gmail 2>/dev/null"]
+      }
+    },
+    "setup_tool": {
+      "name": "setup",
+      "arguments": {
+        "problem_id": "prioritize-weekly-briefing"
+      }
+    },
+    "evaluate_tool": {
+      "name": "evaluate",
+      "arguments": {
+        "problem_id": "prioritize-weekly-briefing"
+      }
+    },
+    "metadata": {
+      "id": "prioritize-weekly-briefing"
+    }
+  },
+  {
+    "prompt": "Search for \"Quality Metrics\", forward the December metrics email to admin@stmaryhospital.org.",
+    "mcp_config": {
+      "gmail": {
+        "command": "/bin/sh",
+        "args": ["-c", "docker run -i --rm gmail 2>/dev/null"]
+      }
+    },
+    "setup_tool": {
+      "name": "setup",
+      "arguments": {
+        "problem_id": "forward-quality-metrics-report"
+      }
+    },
+    "evaluate_tool": {
+      "name": "evaluate",
+      "arguments": {
+        "problem_id": "forward-quality-metrics-report"
+      }
+    },
+    "metadata": {
+      "id": "forward-quality-metrics-report"
+    }
+  }
+]
