@@ -262,15 +262,19 @@ def trace_open(
 
             # Include final metadata with duration
             final_metadata = local_attributes.copy()
+            
+            # Get job_id if we're in a job context
+            from hud.telemetry.job import get_current_job_id
+            job_id = get_current_job_id()
 
             if error_occurred:
                 coro = update_task_run_status(
-                    task_run_id, TaskRunStatus.ERROR, error_message, metadata=final_metadata
+                    task_run_id, TaskRunStatus.ERROR, error_message, metadata=final_metadata, job_id=job_id
                 )
                 logger.debug("Updated task run %s status to ERROR: %s", task_run_id, error_message)
             else:
                 coro = update_task_run_status(
-                    task_run_id, TaskRunStatus.COMPLETED, metadata=final_metadata
+                    task_run_id, TaskRunStatus.COMPLETED, metadata=final_metadata, job_id=job_id
                 )
                 logger.debug("Updated task run %s status to COMPLETED with metadata", task_run_id)
 

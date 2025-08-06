@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 from functools import wraps
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, get_type_hints
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -75,8 +75,22 @@ def register_instance_tool(
         if p.kind not in (p.VAR_POSITIONAL, p.VAR_KEYWORD)
     ]
 
-    # Preserve the original return annotation for structured content
-    public_sig = inspect.Signature(parameters=filtered, return_annotation=sig.return_annotation)
+    # Try to resolve the return annotation
+    try:
+        # Get the module where the instance's class is defined
+        module = inspect.getmodule(instance.__class__)
+        if module and sig.return_annotation != inspect.Signature.empty:
+            # Try to get type hints which resolves forward references
+            type_hints = get_type_hints(call_fn, globalns=module.__dict__)
+            return_type = type_hints.get("return", sig.return_annotation)
+        else:
+            return_type = sig.return_annotation
+    except Exception:
+        # If we can't resolve it, just use the original annotation
+        return_type = sig.return_annotation
+
+    # Preserve the resolved return annotation for structured content
+    public_sig = inspect.Signature(parameters=filtered, return_annotation=return_type)
 
     @wraps(call_fn)
     async def _wrapper(*args: Any, **kwargs: Any) -> Any:  # type: ignore[override]

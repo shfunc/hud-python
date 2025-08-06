@@ -42,10 +42,8 @@ class JobContext:
         current_job_id.set(self.id)
         current_job_name.set(self.name)
 
-        # Send initial status
-        job_metadata = {**self.metadata}
         coro = update_job_status(
-            self.id, JobStatus.RUNNING, metadata=job_metadata, taskset_name=self.taskset_name
+            self.id, self.name, JobStatus.RUNNING, metadata=self.metadata, taskset_name=self.taskset_name
         )
         submit_to_worker_loop(coro)
 
@@ -60,11 +58,11 @@ class JobContext:
             # Job failed with exception
             error_msg = f"{exc_type.__name__}: {exc_val}"
             coro = update_job_status(
-                self.id, JobStatus.ERROR, error_message=error_msg, taskset_name=self.taskset_name
+                self.id, self.name, JobStatus.ERROR, error_message=error_msg, metadata=self.metadata, taskset_name=self.taskset_name
             )
         else:
             # Job completed successfully
-            coro = update_job_status(self.id, JobStatus.COMPLETED, taskset_name=self.taskset_name)
+            coro = update_job_status(self.id, self.name, JobStatus.COMPLETED, metadata=self.metadata, taskset_name=self.taskset_name)
 
         submit_to_worker_loop(coro)
 

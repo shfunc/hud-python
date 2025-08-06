@@ -57,6 +57,7 @@ class JobStatusUpdateRequest(BaseModel):
     """Request model for updating job status."""
 
     status: JobStatus
+    name: str
     error_message: str | None = None  # Optional error message if status is ERROR
     metadata: dict[str, Any] | None = None  # Optional metadata for context
     taskset_name: str | None = None  # Optional dataset/taskset name
@@ -442,6 +443,7 @@ async def update_task_run_status(
 
 async def update_job_status(
     job_id: str,
+    name: str,
     status: JobStatus,
     error_message: str | None = None,
     metadata: dict[str, Any] | None = None,
@@ -463,14 +465,16 @@ async def update_job_status(
 
             request_data = JobStatusUpdateRequest(
                 status=status,
+                name=name,
                 error_message=error_message,
                 metadata=metadata,
                 taskset_name=taskset_name,
             )
 
             logger.debug(
-                "Updating status for job %s to %s",
+                "Updating status for job %s (%s) to %s",
                 job_id,
+                name,
                 status,
             )
 

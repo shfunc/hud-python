@@ -161,8 +161,10 @@ def create_request_record(
                 submit_to_worker_loop,
                 update_task_run_status,
             )
-
-            coro = update_task_run_status(task_run_id, TaskRunStatus.RUNNING)
+            from hud.telemetry.job import get_current_job_id
+            
+            job_id = get_current_job_id()
+            coro = update_task_run_status(task_run_id, TaskRunStatus.RUNNING, job_id=job_id)
             submit_to_worker_loop(coro)
             logger.debug(
                 "Updated task run %s status to RUNNING on first non-init request: %s",
