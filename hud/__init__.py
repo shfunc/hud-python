@@ -9,7 +9,7 @@ from typing import Any
 
 from . import agent, datasets, env, gym, settings, task, taskset, types, utils
 from .adapters import ResponseAction as Response
-from .datasets import run_dataset, to_taskconfigs
+from .datasets import run_dataset, save_taskconfigs, to_taskconfigs
 from .job import create_job, load_job, run_job
 
 # Import deprecated items with deferred warning
@@ -78,6 +78,7 @@ __all__ = [
     "load_job",
     "run_dataset",
     "run_job",
+    "save_taskconfigs",
     "settings",
     "task",
     "taskset",
