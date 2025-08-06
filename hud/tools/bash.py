@@ -123,6 +123,7 @@ class BashTool(BaseTool):
         super().__init__(
             context=session,
             name="bash",
+            title="Bash Shell",
             description="Execute bash commands in a persistent shell session"
         )
 

@@ -41,17 +41,19 @@ class BaseEvaluator(ABC):
 class EvaluateTool(BaseTool):
     """Tool that manages and executes evaluator functions with built-in registry."""
     
-    def __init__(self, context: Any = None, name: str = "evaluate", description: str = None):
+    def __init__(self, context: Any = None, name: str = "evaluate", title: str | None = None, description: str | None = None):
         """Initialize the evaluate tool.
         
         Args:
             context: Environment context to pass to evaluator functions
             name: Tool name for MCP registration
+            title: Human-readable title for the tool
             description: Tool description
         """
         super().__init__(
             context=context,
             name=name or "evaluate",
+            title=title or "State Evaluator",
             description=description or "Evaluate the current environment state"
         )
         self._registry: Dict[str, Type[BaseEvaluator]] = {}

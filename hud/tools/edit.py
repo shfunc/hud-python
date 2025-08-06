@@ -35,6 +35,7 @@ class EditTool(BaseTool):
         super().__init__(
             context=file_history or defaultdict(list),
             name="edit",
+            title="File Editor",
             description="View, create, and edit files with undo support"
         )
 

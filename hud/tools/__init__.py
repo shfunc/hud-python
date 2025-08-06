@@ -8,7 +8,7 @@ from .base import BaseTool, ToolError, ToolResult
 from .bash import BashTool
 from .edit import EditTool
 from .evaluate import BaseEvaluator, EvaluateTool, EvaluationResult
-from .playwright_tool import PlaywrightTool
+from .playwright import PlaywrightTool
 from .setup import BaseSetup, SetupResult, SetupTool
 
 if TYPE_CHECKING:

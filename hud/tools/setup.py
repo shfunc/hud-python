@@ -44,17 +44,19 @@ class BaseSetup(ABC):
 class SetupTool(BaseTool):
     """Tool that manages and executes setup functions with built-in registry."""
     
-    def __init__(self, context: Any = None, name: str = "setup", description: str | None = None):
+    def __init__(self, context: Any = None, name: str = "setup", title: str | None = None, description: str | None = None):
         """Initialize the setup tool.
         
         Args:
             context: Environment context to pass to setup functions
             name: Tool name for MCP registration
+            title: Human-readable title for the tool
             description: Tool description
         """
         super().__init__(
             context=context,
             name=name or "setup",
+            title=title or "Environment Setup",
             description=description or "Setup/configure the environment"
         )
         self._registry: Dict[str, Type[BaseSetup]] = {}

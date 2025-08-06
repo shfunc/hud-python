@@ -14,7 +14,13 @@ class BaseTool(ABC):
     Tools are registered with FastMCP using register_instance_tool.
     """
     
-    def __init__(self, context: Any = None, name: str | None = None, description: str | None = None) -> None:
+    def __init__(
+        self,
+        context: Any = None,
+        name: str | None = None,
+        title: str | None = None,
+        description: str | None = None
+    ) -> None:
         """Initialize the tool.
         
         Args:
@@ -24,11 +30,13 @@ class BaseTool(ABC):
                 - A browser/page instance (e.g., Playwright Page)
                 - Any stateful resource the tool needs to interact with
             name: Tool name for MCP registration (auto-generated from class name if not provided)
+            title: Human-readable display name for the tool (auto-generated from class name if not provided)
             description: Tool description (auto-generated from docstring if not provided)
         """
         self.context = context
         self.name = name or self.__class__.__name__.lower().replace("tool", "")
-        self.description = description or f"{self.__class__.__name__} tool"
+        self.title = title
+        self.description = description
     
     @abstractmethod
     async def __call__(self, **kwargs: Any) -> list[ContentBlock]:

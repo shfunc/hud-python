@@ -30,6 +30,7 @@ class PlaywrightTool(BaseTool):
         super().__init__(
             context=page,
             name="playwright",
+            title="Playwright Browser",
             description="Web automation tool using Playwright"
         )
         self._cdp_url = cdp_url
