@@ -58,7 +58,6 @@ def init_telemetry() -> None:
         return
 
     registry.install_all()
-    logger.info("Telemetry initialized.")
     _telemetry_initialized = True
 
 

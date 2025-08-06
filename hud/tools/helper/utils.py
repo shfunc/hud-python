@@ -75,7 +75,8 @@ def register_instance_tool(
         if p.kind not in (p.VAR_POSITIONAL, p.VAR_KEYWORD)
     ]
 
-    public_sig = inspect.Signature(parameters=filtered, return_annotation=_Any)
+    # Preserve the original return annotation for structured content
+    public_sig = inspect.Signature(parameters=filtered, return_annotation=sig.return_annotation)
 
     @wraps(call_fn)
     async def _wrapper(*args: Any, **kwargs: Any) -> Any:  # type: ignore[override]

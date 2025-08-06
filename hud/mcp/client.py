@@ -354,12 +354,10 @@ class MCPClient:
         for name, session in sessions.items():
             try:
                 if session.connector.client_session:
-                    await session.connector.client_session.send_request(
-                        method="logging/setLevel", params={"level": level}
-                    )
+                    await session.connector.client_session.set_logging_level(level)
                     logger.info("Set log level to '%s' for server '%s'", level, name)
             except Exception as e:
-                logger.error("Failed to set log level for '%s': %s", name, e)
+                logger.debug("Failed to set log level for '%s': %s", name, e)
 
     def get_notifications(self) -> list[dict[str, Any]]:
         """Get all received notifications."""

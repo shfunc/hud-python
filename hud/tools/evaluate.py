@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class EvaluationResult(TypedDict):
     """Standard evaluation result format."""
 
-    reward: float  # Value between 0.0 and 1.0
+    reward: float  # Usually a value between 0.0 and 1.0
     done: bool  # Whether the task/episode is complete
     info: dict[str, Any]  # Additional information
 

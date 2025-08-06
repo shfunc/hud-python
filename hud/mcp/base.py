@@ -313,7 +313,7 @@ class BaseMCPAgent(ABC):
         # Import here to avoid circular imports
         from hud.datasets import TaskConfig
 
-        if not self._available_tools:
+        if len(self._available_tools) == 0:
             await self.initialize(prompt_or_task)
 
         # Handle Task objects with full lifecycle
@@ -341,6 +341,7 @@ class BaseMCPAgent(ABC):
         try:
             # Setup phase
             if task.setup_tool is not None:
+                logger.info("Setting up tool phase: %s", task.setup_tool)
                 await self.call_tool(task.setup_tool)
 
             # Execute the task prompt
@@ -348,6 +349,7 @@ class BaseMCPAgent(ABC):
 
             # Evaluate phase
             if task.evaluate_tool is not None:
+                logger.info("Evaluating tool phase: %s", task.evaluate_tool)
                 eval_result = await self.call_tool(task.evaluate_tool)
 
                 # Return evaluation result if it's properly formatted
@@ -512,7 +514,7 @@ class BaseMCPAgent(ABC):
             step = 0
             while step < max_steps:
                 step += 1
-                logger.info("step %s/%s", step, max_steps)
+                logger.info("Step %s/%s", step, max_steps)
 
                 try:
                     response = await self.get_model_response(messages)
@@ -523,7 +525,6 @@ class BaseMCPAgent(ABC):
                         "Model response - Tool calls: %s",
                         [f"{tc.name}: {tc.arguments}" for tc in response.tool_calls],
                     )
-                    logger.info("Model response - Done: %s", response.done)
 
                     # Check if we should stop
                     if response.done:
