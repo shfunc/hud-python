@@ -68,11 +68,10 @@ class AnthropicComputerTool(HudComputerTool):
         self,
         width: int = 1400,
         height: int = 850,
-        environment_width: int = 1920,
-        environment_height: int = 1080,
         display_num: int | None = None,
         platform_type: Literal["auto", "xdo", "pyautogui"] = "auto",
         rescale_images: bool = False,
+        name: str | None = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -81,8 +80,6 @@ class AnthropicComputerTool(HudComputerTool):
         Args:
             width: Target width for rescaling (default: 1400 for Anthropic)
             height: Target height for rescaling (default: 850 for Anthropic)
-            environment_width: Environment screen width (default: 1920)
-            environment_height: Environment screen height (default: 1080)
             display_num: X display number
             platform_type: Which executor to use:
                 - "auto": Automatically detect based on platform
@@ -95,10 +92,9 @@ class AnthropicComputerTool(HudComputerTool):
             width=width,
             height=height,
             display_num=display_num,
-            environment_width=environment_width,
-            environment_height=environment_height,
             platform_type=platform_type,
             rescale_images=rescale_images,
+            name=name or "anthropic_computer",
             **kwargs,
         )
 

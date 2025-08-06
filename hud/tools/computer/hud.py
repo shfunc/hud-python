@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import platform
 from typing import Literal
 
@@ -17,6 +18,9 @@ from hud.tools.executors.xdo import XDOExecutor
 logger = logging.getLogger(__name__)
 
 
+DISPLAY_WIDTH = int(os.getenv("DISPLAY_WIDTH", 1920))
+DISPLAY_HEIGHT = int(os.getenv("DISPLAY_HEIGHT", 1080))
+
 class HudComputerTool(BaseTool):
     """
     A tool that allows the agent to control the computer.
@@ -27,8 +31,6 @@ class HudComputerTool(BaseTool):
         executor: BaseExecutor | None = None,
         width: int | None = None,
         height: int | None = None,
-        environment_width: int = 1920,
-        environment_height: int = 1080,
         display_num: int | None = None,
         platform_type: Literal["auto", "xdo", "pyautogui"] = "auto",
         rescale_images: bool = False,
@@ -63,11 +65,11 @@ class HudComputerTool(BaseTool):
         )
 
         # Use provided dimensions or defaults
-        self.width = width or environment_width
-        self.environment_width = environment_width
+        self.width = width or DISPLAY_WIDTH
+        self.environment_width = DISPLAY_WIDTH
 
-        self.height = height or environment_height
-        self.environment_height = environment_height
+        self.height = height or DISPLAY_HEIGHT
+        self.environment_height = DISPLAY_HEIGHT
 
         self.rescale_images = rescale_images
 

@@ -113,31 +113,36 @@ def to_taskconfigs(dataset: "Dataset") -> list[TaskConfig]:
         >>> tasks = to_taskconfigs(dataset)
         >>> tasks[0].mcp_config  # Env vars like ${HUD_API_KEY} are resolved
     """
-    tasks = []
-    for row in dataset:
-        # Build TaskConfig dict, parsing JSON string fields
-        tc_dict = {
-            "prompt": row["prompt"],
-            "mcp_config": json.loads(row["mcp_config"]),
-        }
-        
-        # Optional fields
-        if row.get("id"):
-            tc_dict["id"] = row["id"]
-        
-        if row.get("metadata"):
-            tc_dict["metadata"] = json.loads(row["metadata"])
-        
-        if row.get("setup_tool"):
-            tc_dict["setup_tool"] = json.loads(row["setup_tool"])
+    try:
+        tasks = []
+        for row in dataset:
+            # Build TaskConfig dict, parsing JSON string fields
+            tc_dict = {
+                "prompt": row["prompt"],
+                "mcp_config": json.loads(row["mcp_config"]),
+            }
             
-        if row.get("evaluate_tool"):
-            tc_dict["evaluate_tool"] = json.loads(row["evaluate_tool"])
-        
-        # Create TaskConfig (triggers env var resolution)
-        tasks.append(TaskConfig(**tc_dict))
+            # Optional fields
+            if row.get("id"):
+                tc_dict["id"] = row["id"]
+            
+            if row.get("metadata"):
+                tc_dict["metadata"] = json.loads(row["metadata"])
+            
+            if row.get("setup_tool"):
+                tc_dict["setup_tool"] = json.loads(row["setup_tool"])
+                
+            if row.get("evaluate_tool"):
+                tc_dict["evaluate_tool"] = json.loads(row["evaluate_tool"])
+            
+            # Create TaskConfig (triggers env var resolution)
+            tasks.append(TaskConfig(**tc_dict))
 
-    return tasks
+        return tasks
+    except TypeError as e:
+        raise ValueError("Dataset must be a train or test HF split") from e
+    except Exception as e:
+        raise e
 
 
 async def run_dataset(
