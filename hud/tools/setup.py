@@ -159,6 +159,7 @@ class SetupTool(BaseTool):
                     if key not in ["status", "message"]:
                         text += f"\n{key}: {value}"
             else:
+                status = "error"
                 text = f"❌ Setup failed: {message}"
                 if "error" in result:
                     text += f"\nError: {result['error']}"
