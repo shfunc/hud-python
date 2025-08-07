@@ -415,7 +415,7 @@ from hud import settings
 # Your image is in a registry, now tell HUD to pull & run it on demand
 config = {
     "hud": {
-        "url": settings.mcp_url,  # Provided by HUD when you create an evaluation run
+        "url": settings.hud_mcp_url,
         "headers": {
             "Authorization": f"Bearer {settings.api_key}",
             "Mcp-Image": "yourdockerhubuser/my-environment:latest",  # which image to launch

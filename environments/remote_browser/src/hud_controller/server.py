@@ -8,7 +8,7 @@ import signal
 import atexit
 import json
 from datetime import datetime
-from typing import Optional
+from typing import Optional, TypedDict
 
 # Configure logging
 logging.basicConfig(
@@ -69,16 +69,30 @@ async def get_evaluator_registry() -> str:
     return evaluate_tool.get_registry_json()
 
 
+
+
+class Telemetry(TypedDict):
+    """Standard evaluation result format."""
+
+    provider: str
+    status: str
+    live_url: str | None
+    timestamp: str
+    cdp_url: str | None
+    instance_id: str | None
+
 @mcp.resource("telemetry://live")
-async def get_telemetry_resource() -> dict:
+async def get_telemetry_resource() -> Telemetry:
     """MCP resource containing telemetry data including provider's live view URL."""
     global browser_provider
 
-    telemetry_data = {
+    telemetry_data: Telemetry = {
         "provider": os.getenv("BROWSER_PROVIDER", "unknown"),
         "status": "unknown",
         "live_url": None,
         "timestamp": datetime.now().isoformat(),
+        "cdp_url": None,
+        "instance_id": None,
     }
 
     if browser_provider:
@@ -95,10 +109,8 @@ async def get_telemetry_resource() -> dict:
             )
         except Exception as e:
             logger.error(f"Error getting telemetry data: {e}")
-            telemetry_data["error"] = str(e)
     else:
         telemetry_data["status"] = "not_initialized"
-        telemetry_data["error"] = "Browser provider not initialized. Call initialize first."
 
     return telemetry_data
 

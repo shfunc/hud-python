@@ -126,14 +126,6 @@ class SheetsFromXlsxSetup(BaseSetup):
         """
         logger.info("Starting sheets_from_xlsx setup")
 
-        # Handle backward compatibility for list args
-        if "args" in kwargs and isinstance(kwargs["args"], list):
-            args_list = kwargs["args"]
-            if len(args_list) > 0:
-                file_url = args_list[0]
-            if len(args_list) > 1:
-                sheet_name = args_list[1]
-
         # Validate parameters
         if not file_url:
             logger.error("Missing required file_url parameter")
@@ -209,8 +201,7 @@ class SheetsFromXlsxSetup(BaseSetup):
 
             return {
                 "status": "success",
-                "message": f"Created and navigated to Google Sheet: {sheet_name}",
-                "sheet_info": sheet_info,
+                "message": f"Created and navigated to Google Sheet: {sheet_url}",
             }
 
         except httpx.HTTPError as e:
@@ -238,20 +229,11 @@ class SheetsFromBytesSetup(BaseSetup):
             context: Browser context with playwright_tool
             base64_bytes: Base64 encoded Excel file bytes
             sheet_name: Name for the new Google Sheet (default: "Worksheet")
-            **kwargs: Additional arguments
 
         Returns:
             Status dictionary with sheet information
         """
         logger.info("Starting sheets_from_bytes setup")
-
-        # Handle backward compatibility for list args
-        if "args" in kwargs and isinstance(kwargs["args"], list):
-            args_list = kwargs["args"]
-            if len(args_list) > 0:
-                base64_bytes = args_list[0]
-            if len(args_list) > 1:
-                sheet_name = args_list[1]
 
         # Validate parameters
         if not base64_bytes:
@@ -326,8 +308,7 @@ class SheetsFromBytesSetup(BaseSetup):
 
             return {
                 "status": "success",
-                "message": f"Created and navigated to Google Sheet: {sheet_name}",
-                "sheet_info": sheet_info,
+                "message": f"Created and navigated to Google Sheet: {sheet_url}",
             }
 
         except Exception as e:

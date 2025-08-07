@@ -23,9 +23,7 @@ from hud.mcp import ClaudeMCPAgent, MCPClient
 async def main():
     task = TaskConfig(
         prompt="Play 2048 and try to get as high as possible. Do not stop even after 2048 is reached.",
-        mcp_config={
-            "local": {"command": "docker", "args": ["run", "--rm", "-i", "hud-text-2048"]}
-        },
+        mcp_config={"local": {"command": "docker", "args": ["run", "--rm", "-i", "hud-text-2048"]}},
         setup_tool={
             "name": "setup",
             "arguments": {"function": "board", "args": {"board_size": 4}},

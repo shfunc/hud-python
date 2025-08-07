@@ -18,6 +18,7 @@ from hud.mcp.client import MCPClient
 from datasets import load_dataset
 from hud.datasets import to_taskconfigs
 
+
 async def main():
     # Load the dataset
     dataset = load_dataset("hud-evals/sheetbench-taskconfigs")
@@ -34,6 +35,7 @@ async def main():
         )
 
         try:
+            print(task.prompt)
             result = await agent.run(task, max_steps=15)
             print(result.reward)
 
