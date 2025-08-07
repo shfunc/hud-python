@@ -377,9 +377,9 @@ class BaseMCPAgent(ABC):
                     and eval_result.structuredContent is not None
                 ):
                     return AgentResult(
-                        reward=self._find_reward(eval_result.structuredContent),
-                        done=eval_result.structuredContent.get("done", True),
-                        info=eval_result.structuredContent.get("info", {}),
+                        reward=_find_reward(eval_result),
+                        done=True,
+                        content=_find_content(eval_result),
                         messages=prompt_result.messages,
                     )
                 else:
@@ -403,18 +403,6 @@ class BaseMCPAgent(ABC):
         except Exception as e:
             return AgentResult(reward=0.0, done=True, error=str(e))
 
-    def _find_reward(self, result: dict) -> float:
-        """Find the reward in the result.
-
-        Agent accepts "reward", "grade", "score"
-
-        If not found, return 0.0
-        """
-        accept_keys = ["reward", "grade", "score"]
-        for key in accept_keys:
-            if isinstance(result, dict) and key in result:
-                return result[key]
-        return 0.0
 
     def _format_error_result(self, error_message: str) -> MCPToolResult:
         return MCPToolResult(
@@ -553,6 +541,10 @@ class BaseMCPAgent(ABC):
                         "Model response - Tool calls: %s",
                         [f"{tc.name}: {tc.arguments}" for tc in response.tool_calls],
                     )
+                    for tool_call in response.tool_calls:
+                        logger.info("Called tool: %s with args %s", tool_call.name, tool_call.arguments)
+
+                    logger.info("Model response - Done: %s", response.done)
 
                     # Check if we should stop
                     if response.done:
@@ -672,7 +664,6 @@ def _find_reward(result: MCPToolResult) -> float:
         if isinstance(result.structuredContent, dict) and key in result.structuredContent:
             return result.structuredContent[key]
     return 0.0
-
 
 def _find_content(result: MCPToolResult) -> str | None:
     """Find the content in the result.
