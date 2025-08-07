@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import platform
 from typing import Literal
 
@@ -11,15 +10,12 @@ from mcp.types import INVALID_PARAMS, ContentBlock, TextContent
 from pydantic import Field
 
 from hud.tools.base import BaseTool, ToolError, ToolResult
+from hud.tools.computer.settings import computer_settings
 from hud.tools.executors.base import BaseExecutor
 from hud.tools.executors.pyautogui import PyAutoGUIExecutor
 from hud.tools.executors.xdo import XDOExecutor
 
 logger = logging.getLogger(__name__)
-
-
-DISPLAY_WIDTH = int(os.getenv("DISPLAY_WIDTH", 1920))
-DISPLAY_HEIGHT = int(os.getenv("DISPLAY_HEIGHT", 1080))
 
 
 class HudComputerTool(BaseTool):
@@ -29,12 +25,16 @@ class HudComputerTool(BaseTool):
 
     def __init__(
         self,
+        # Define within environment based on platform
         executor: BaseExecutor | None = None,
-        width: int | None = None,
-        height: int | None = None,
-        display_num: int | None = None,
         platform_type: Literal["auto", "xdo", "pyautogui"] = "auto",
-        rescale_images: bool = False,
+        display_num: int | None = None,
+        # Overrides for what dimensions the agent thinks it operates in
+        # Define per subclass (e.g., Anthropic, OpenAI)
+        width: int = computer_settings.HUD_COMPUTER_WIDTH,
+        height: int = computer_settings.HUD_COMPUTER_HEIGHT,
+        rescale_images: bool = computer_settings.HUD_RESCALE_IMAGES,
+        # What the agent sees as the tool's name, title, and description
         name: str | None = None,
         title: str | None = None,
         description: str | None = None,
@@ -43,15 +43,14 @@ class HudComputerTool(BaseTool):
         Initialize the HUD computer tool.
 
         Args:
-            width: Target width for rescaling (None = use environment width)
-            height: Target height for rescaling (None = use environment height)
-            environment_width: Base screen width
-            environment_height: Base screen height
-            display_num: X display number
+            executor: Executor to use for the tool
             platform_type: Which executor to use if executor not provided:
                 - "auto": Automatically detect based on platform
                 - "xdo": Use XDOExecutor (Linux/X11 only)
                 - "pyautogui": Use PyAutoGUIExecutor (cross-platform)
+            display_num: X display number
+            width: Target width for rescaling (None = use environment width)
+            height: Target height for rescaling (None = use environment height)
             rescale_images: If True, rescale screenshots. If False, only rescale action coordinates
             name: Tool name for MCP registration (auto-generated from class name if not provided)
             title: Human-readable display name for the tool (auto-generated from class name)
@@ -65,17 +64,26 @@ class HudComputerTool(BaseTool):
             description=description or "Control computer with mouse, keyboard, and screenshots",
         )
 
-        # Use provided dimensions or defaults
-        self.width = width or DISPLAY_WIDTH
-        self.environment_width = DISPLAY_WIDTH
+        # This is the width and height the agent thinks it operates in
+        # By default, use subclass's width and height
+        # If specifically set to None, use environment width and height
+        self.width = width or computer_settings.DISPLAY_WIDTH
+        self.height = height or computer_settings.DISPLAY_HEIGHT
 
-        self.height = height or DISPLAY_HEIGHT
-        self.environment_height = DISPLAY_HEIGHT
+        # This is the static width and height of the environment screen
+        # And the width and height of the screenshots taken by the tool
+        self.environment_width = computer_settings.DISPLAY_WIDTH
+        self.environment_height = computer_settings.DISPLAY_HEIGHT
 
+        # Some APIs rescale screenshots automatically to the agent's width and height, some don't
+        # Defined per subclass (e.g., Anthropic, OpenAI)
+        # In case you need your agent to receive pre-formatted screenshots, set env variable True
         self.rescale_images = rescale_images
 
-        logger.info("Width: %s, Height: %s", self.width, self.height)
-        logger.info(
+        logger.debug(
+            "Agent Screen Width: %s, Agent Screen Height: %s",
+            self.width,
+            self.height,
             "Environment Screen Width: %s, Environment Screen Height: %s",
             self.environment_width,
             self.environment_height,
@@ -83,20 +91,19 @@ class HudComputerTool(BaseTool):
 
         # Calculate scaling factors from base screen size to target size
         self.scale_x = self.width / self.environment_width
-
         self.scale_y = self.height / self.environment_height
 
-        logger.info("Scale X: %s, Scale Y: %s", self.scale_x, self.scale_y)
-        self.scale = min(self.scale_x, self.scale_y)
-
-        logger.info("Scaling factor: %s", self.scale)
-
         # Check if we need to scale
-        self.needs_scaling = self.scale != 1.0
+        self.needs_scaling = min(self.scale_x, self.scale_y) != 1.0
+
+        # Use environment settings for display number
+        self.display_num = display_num or computer_settings.DISPLAY_NUM
+
+        logger.debug("Display number: %s", self.display_num)
 
         # If no executor provided, create one based on platform
         if self.context is None:
-            self._choose_executor(platform_type, display_num)
+            self._choose_executor(platform_type, self.display_num)
 
     @property
     def executor(self) -> BaseExecutor:
