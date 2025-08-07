@@ -84,9 +84,6 @@ dev = [
     "pytest-cov",
     "setuptools",
 ]
-rl = [
-    "verifiers[all] @ git+https://github.com/jdchawla29/verifiers.git@main",
-]
 
 [project.optional-dependencies]
 # Legacy v2 dependencies for backward compatibility
