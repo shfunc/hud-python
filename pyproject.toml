@@ -68,7 +68,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "ruff ==0.11.8",
+    "ruff >=0.11.8",
     "pytest >=8.1.1,<9",
     "pytest-asyncio",
     "pytest-mock",
@@ -100,7 +100,7 @@ v2 = [
 
 # Development dependencies
 dev = [
-    "ruff ==0.11.8",
+    "ruff >=0.11.8",
     "pytest >=8.1.1,<9",
     "pytest-asyncio",
     "pytest-mock",
