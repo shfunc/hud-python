@@ -26,6 +26,7 @@ from mcp.types import CallToolResult as MCPToolResult
 from hud.settings import settings
 
 from .base import BaseMCPAgent, ModelResponse
+from ..tools.computer.settings import computer_settings
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +64,8 @@ class ClaudeMCPAgent(BaseMCPAgent):
         model_client: AsyncAnthropic | None = None,
         model: str = "claude-3-7-sonnet-20250219",
         max_tokens: int = 4096,
-        display_width_px: int = 1400,
-        display_height_px: int = 850,
+        display_width_px: int = computer_settings.ANTHROPIC_COMPUTER_WIDTH,
+        display_height_px: int = computer_settings.ANTHROPIC_COMPUTER_HEIGHT,
         use_computer_beta: bool = True,
         **kwargs: Any,
     ) -> None:
