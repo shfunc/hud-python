@@ -5,19 +5,27 @@
 ## Installation
 
 ```bash
-# 2. Install hud-vf-gym
+# 1. Clone hud-vf-gym
+cd rl
 git clone -b v1 https://github.com/hud-evals/hud_vf_gym.git
 
-# 3. Install hud-vf-gym in the your environment, provide the directory in which you cloned the above
+# 2. Install hud-vf-gym in the environment
 uv add --editable ./hud_vf_gym
 ```
-this will also install verifiers and hud-python
 
-if you already have verifiers installed in your environment, you can alternatively use
+Note: we use this [fork](https://github.com/jdchawla29/verifiers.git) for multimodal support. Make sure your verifiers installation points to that.
+```bash
+uv add "verifiers @ git+https://github.com/jdchawla29/verifiers"
+uv sync
+```
+
+then you can simply use Verifiers CLI
+
 ```bash
 vf-install hud-vf-gym -p .
 ```
-make sure to run this where you have cloned the above.
+
+to install the environment from the cloned repo.
 
 ## Running Evaluations
 
