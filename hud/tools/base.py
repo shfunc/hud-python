@@ -189,7 +189,7 @@ class BaseHub(FastMCP):
             name = None
             
         new_name = self._prefix_fn(name) if name is not None else None
-        tags = {_INTERNAL_TAG} | kwargs.pop("tags", set())
+        tags = {_INTERNAL_TAG} | (kwargs.pop("tags", None) or set())
         
         # Pass through correctly to parent
         if new_name is not None:
