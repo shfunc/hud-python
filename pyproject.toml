@@ -68,7 +68,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "ruff ==0.11.8",
+    "ruff >=0.11.8",
     "pytest >=8.1.1,<9",
     "pytest-asyncio",
     "pytest-mock",
@@ -83,9 +83,8 @@ dev = [
     "dotenv",
     "pytest-cov",
     "setuptools",
-]
-rl = [
-    "verifiers[all] @ git+https://github.com/jdchawla29/verifiers.git@main",
+    "fastmcp>=2.11.2",
+    "opentelemetry-instrumentation-mcp>=0.44.1",
 ]
 
 [project.optional-dependencies]
@@ -103,7 +102,7 @@ v2 = [
 
 # Development dependencies
 dev = [
-    "ruff ==0.11.8",
+    "ruff >=0.11.8",
     "pytest >=8.1.1,<9",
     "pytest-asyncio",
     "pytest-mock",
