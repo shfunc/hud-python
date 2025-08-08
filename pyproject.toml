@@ -26,6 +26,8 @@ dependencies = [
     # Common utilities
     "dotenv>=0.9.9",
     "datasets>=2.14.0",
+    "fastmcp>=2.11.2",
+    "opentelemetry-instrumentation-mcp>=0.44.1",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
