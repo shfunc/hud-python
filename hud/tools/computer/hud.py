@@ -13,7 +13,7 @@ from hud.tools.executors.base import BaseExecutor
 from hud.tools.executors.pyautogui import PyAutoGUIExecutor
 from hud.tools.executors.xdo import XDOExecutor
 
-from .base import BaseTool
+from hud.tools.base import BaseTool
 from .settings import computer_settings
 from .types import ContentResult, ToolError
 
