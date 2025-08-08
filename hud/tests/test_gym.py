@@ -10,7 +10,7 @@ from pydantic import ConfigDict
 
 from hud.env.client import Client
 from hud.env.environment import Environment
-from hud.exceptions import GymMakeException
+from hud.server.exceptions import GymMakeException
 from hud.gym import make
 from hud.job import Job
 from hud.task import Task

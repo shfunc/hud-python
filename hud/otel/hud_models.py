@@ -46,16 +46,16 @@ def extract_span_attributes(attrs: Dict[str, Any], method_name: Optional[str] = 
     - Renaming verbose OpenTelemetry semantic conventions
     - Parsing JSON strings to MCP types
     """
-    # Start with core attributes
+    # Start with core attributes - map to TraceStep field names
     result_attrs = {
-        "hud.task_run_id": attrs.get("hud.task_run_id"),
-        "hud.job_id": attrs.get("hud.job_id"),
-        "span.kind": attrs.get("span.kind", "CLIENT"),
+        "task_run_id": attrs.get("hud.task_run_id"),  # TraceStep expects task_run_id, not hud.task_run_id
+        "job_id": attrs.get("hud.job_id"),            # TraceStep expects job_id, not hud.job_id
+        "type": attrs.get("span.kind", "CLIENT"),     # TraceStep expects type, not span.kind
     }
     
     # Determine span type based on presence of agent or MCP attributes
     if "agent_request" in attrs or "agent_response" in attrs or (span_name and span_name.startswith("agent.")):
-        result_attrs["hud.span_type"] = "agent"
+        result_attrs["category"] = "agent"  # TraceStep expects category field
         # Check for agent span attributes
         if "agent_request" in attrs:
             agent_req = attrs["agent_request"]
@@ -74,7 +74,7 @@ def extract_span_attributes(attrs: Dict[str, Any], method_name: Optional[str] = 
                     pass
             result_attrs["agent_response"] = agent_resp
     else:
-        result_attrs["hud.span_type"] = "mcp"
+        result_attrs["category"] = "mcp"  # TraceStep expects category field
         # Add method_name and request_id only if present (MCP spans)
         if method_name:
             result_attrs["method_name"] = method_name
@@ -86,12 +86,12 @@ def extract_span_attributes(attrs: Dict[str, Any], method_name: Optional[str] = 
     output_str = attrs.get("semconv_ai.traceloop.entity.output")
     
     # Try to parse as MCP types (only for MCP spans)
-    if result_attrs["hud.span_type"] == "mcp":
+    if result_attrs["category"] == "mcp":
         if input_str:
             try:
                 input_data = json.loads(input_str) if isinstance(input_str, str) else input_str
                 if isinstance(input_data, dict):
-                    result_attrs["request"] = ClientRequest.model_validate(input_data)
+                    result_attrs["mcp_request"] = ClientRequest.model_validate(input_data)  # TraceStep expects mcp_request
             except Exception as e:
                 logger.debug(f"Failed to parse request as MCP type: {e}")
         
@@ -103,9 +103,9 @@ def extract_span_attributes(attrs: Dict[str, Any], method_name: Optional[str] = 
                     if "error" in output_data:
                         result_attrs["mcp_error"] = True
                     else:
-                        result_attrs["result"] = ServerResult.model_validate(output_data)
+                        result_attrs["mcp_result"] = ServerResult.model_validate(output_data)  # TraceStep expects mcp_result
                         # Check for isError in the result
-                        if hasattr(result_attrs["result"].root, "isError") and result_attrs["result"].root.isError:
+                        if hasattr(result_attrs["mcp_result"].root, "isError") and result_attrs["mcp_result"].root.isError:
                             result_attrs["mcp_error"] = True
             except Exception as e:
                 logger.debug(f"Failed to parse result as MCP type: {e}")
