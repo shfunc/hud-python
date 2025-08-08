@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from fastmcp import Context, FastMCP
 
@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable
 
     from fastmcp.tools import FunctionTool
-    from fastmcp.tools.tool import ToolResult
+    from fastmcp.tools.tool import Tool, ToolResult
 
 # Basic result types for tools
 BaseResult = list[ContentBlock] | EvaluationResult | SetupResult
@@ -97,8 +97,8 @@ class BaseTool(ABC):
         return self._mcp_tool
 
 
-# Tag used to hide internal components
-_INTERNAL_TAG = "internal"
+# Prefix for internal tool names
+_INTERNAL_PREFIX = "int_"
 
 
 class BaseHub(FastMCP):
@@ -127,25 +127,20 @@ class BaseHub(FastMCP):
         """
 
         # Naming scheme for hidden objects
-        self._prefix_fn: Callable[[str], str] = lambda n: f"int_{n}"
+        self._prefix_fn: Callable[[str], str] = lambda n: f"{_INTERNAL_PREFIX}{n}"
 
-        async def _lifespan(server: FastMCP) -> AsyncGenerator[None, Any]:
-            if env is not None:
-                server.env = env  # type: ignore[attr-defined]
-            yield
-
-        super().__init__(
-            name=name,
-            exclude_tags={_INTERNAL_TAG},
-            lifespan=_lifespan,  # type: ignore[arg-type]
-        )
+        # CHANGE 1: Don't use exclude_tags - prevents accessing our own internal tools
+        # CHANGE 2: Set env directly instead of using lifespan (avoids async_generator error)
+        super().__init__(name=name)
+        
+        if env is not None:
+            self.env = env
 
         # Human-friendly metadata for dispatcher
         dispatcher_title = title or f"{name.title()} Dispatcher"
         dispatcher_desc = description or f"Call internal '{name}' functions"
 
-        # Register dispatcher without internal tag so it's visible to clients
-        @super().tool(name=name, title=dispatcher_title, description=dispatcher_desc)
+        # CHANGE 3: Register dispatcher manually with FunctionTool
         async def _dispatch(
             function: str,
             ctx: Context,
@@ -163,22 +158,50 @@ class BaseHub(FastMCP):
                 Injected by FastMCP; can be the custom subclass.
             """
 
-            # Use server private _call_tool to run the hidden function
-            return await ctx.fastmcp._call_tool(self._prefix_fn(function), args or {})
+            # Use our own _call_tool since we're mounted
+            return await self._call_tool(self._prefix_fn(function), args or {})
+        
+        from fastmcp.tools.tool import FunctionTool
+        dispatcher_tool = FunctionTool.from_function(
+            _dispatch,
+            name=name,
+            title=dispatcher_title,
+            description=dispatcher_desc,
+            tags=set(),  # No tags so it's visible
+        )
+        self._tool_manager.add_tool(dispatcher_tool)
 
         # ------------- catalogue resource for debugging ----------
         # Expose list of internal functions via read-only resource
-        @self.resource(f"{name}://functions")
+        # CHANGE 7: Register resource manually - @self.resource doesn't work in __init__
         async def _functions_catalogue() -> list[str]:
-            tools = await self._tool_manager.list_tools()
+            # List all internal function names without prefix
             return [
-                t.name.removeprefix(self._prefix_fn("") or "")
-                for t in tools
-                if _INTERNAL_TAG in t.tags
+                key.removeprefix(_INTERNAL_PREFIX)
+                for key in self._tool_manager._tools.keys()
+                if key.startswith(_INTERNAL_PREFIX)
             ]
+        
+        from fastmcp.resources import Resource
+        catalogue_resource = Resource.from_function(
+            _functions_catalogue,
+            uri=f"{name}://functions",
+            name=f"{name} Functions Catalogue",
+            description=f"List of internal functions available in {name}",
+            mime_type="application/json",
+            tags=set(),
+        )
+        self._resource_manager.add_resource(catalogue_resource)
 
     def tool(self, name_or_fn: Any = None, /, **kwargs: Any) -> Callable[..., Any]:
         """Register an *internal* tool (hidden from clients)."""
+        # CHANGE 6: Handle when decorator's partial calls us back with the function
+        if callable(name_or_fn):
+            # This only happens in phase 2 of decorator application
+            # The name was already prefixed in phase 1, just pass through
+            result = super().tool(name_or_fn, **kwargs)
+            return cast(Callable[..., Any], result)
+        
         # Handle the name from either positional or keyword argument
         if isinstance(name_or_fn, str):
             # Called as @hub.tool("name")
@@ -191,13 +214,22 @@ class BaseHub(FastMCP):
             name = None
 
         new_name = self._prefix_fn(name) if name is not None else None
-        tags = {_INTERNAL_TAG} | (kwargs.pop("tags", None) or set())
+        # CHANGE 4: Don't add _INTERNAL_TAG - we need tools accessible internally
+        tags = kwargs.pop("tags", None) or set()
 
         # Pass through correctly to parent
         if new_name is not None:
             return super().tool(new_name, **kwargs, tags=tags)
         else:
             return super().tool(**kwargs, tags=tags)
+
+    # CHANGE 5: Override _list_tools to hide internal tools when mounted
+    async def _list_tools(self) -> list[Tool]:
+        """Override _list_tools to hide internal tools when mounted."""
+        return [
+            tool for key, tool in self._tool_manager._tools.items()
+            if not key.startswith(_INTERNAL_PREFIX)
+        ]
 
     resource = FastMCP.resource  # type: ignore[assignment]
     prompt = FastMCP.prompt  # type: ignore[assignment]
