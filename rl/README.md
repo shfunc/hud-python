@@ -5,15 +5,19 @@
 ## Installation
 
 ```bash
-# 1. Initialize and update the submodule (if not already)
-git submodule update --init --recursive examples/rl/hud_vf_gym
+# 2. Install hud-vf-gym
+git clone -b v1 https://github.com/hud-evals/hud_vf_gym.git
 
-# 2. Install RL dependencies
-uv sync --group rl
-
-# 3. Install hud_vf_gym in the your environment
-vf-install examples/rl/hud_vf_gym
+# 3. Install hud-vf-gym in the your environment, provide the directory in which you cloned the above
+uv add --editable ./hud_vf_gym
 ```
+this will also install verifiers and hud-python
+
+if you already have verifiers installed in your environment, you can alternatively use
+```bash
+vf-install hud-vf-gym -p .
+```
+make sure to run this where you have cloned the above.
 
 ## Running Evaluations
 
