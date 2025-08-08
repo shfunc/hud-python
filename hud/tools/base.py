@@ -142,7 +142,8 @@ class BaseHub(FastMCP):
         dispatcher_title = title or f"{name.title()} Dispatcher"
         dispatcher_desc = description or f"Call internal '{name}' functions"
 
-        @self.tool(name=name, title=dispatcher_title, description=dispatcher_desc)
+        # Register dispatcher without internal tag so it's visible to clients
+        @super().tool(name=name, title=dispatcher_title, description=dispatcher_desc)
         async def _dispatch(
             function: str,
             ctx: Context,
