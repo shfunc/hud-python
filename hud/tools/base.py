@@ -1,26 +1,39 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, fields, replace
 from typing import TYPE_CHECKING, Any
 
-from mcp.types import ContentBlock, ImageContent, TextContent
+from fastmcp import Context, FastMCP
+
+from hud.tools.types import ContentBlock, EvaluationResult, SetupResult
 
 if TYPE_CHECKING:
-    from hud.tools.evaluate import EvaluationResult
-    from hud.tools.setup import SetupResult
+    from collections.abc import AsyncGenerator, Callable
 
+    from fastmcp.tools import FunctionTool
+    from fastmcp.tools.tool import ToolResult
+
+# Basic result types for tools
+BaseResult = list[ContentBlock] | EvaluationResult | SetupResult
 
 class BaseTool(ABC):
-    """Base class for all MCP tools.
+    """
+    Base helper class for all MCP tools to constrain their output.
 
+    USAGE:
     All tools should inherit from this class and implement the __call__ method.
-    Tools are registered with FastMCP using register_instance_tool.
+    Tools are registered with FastMCP using add_tool.
+
+    FORMAT:
+    Tools that return messages should return a list[ContentBlock].
+    Tools that return miscallaneous content should return a pydantic model such as EvaluationResult.
+    Both of these types of tools are processed via structuredContent.
+    Any other type of tool will not be processed well by the client.
     """
 
     def __init__(
         self,
-        context: Any = None,
+        env: Any = None,
         name: str | None = None,
         title: str | None = None,
         description: str | None = None,
@@ -28,7 +41,7 @@ class BaseTool(ABC):
         """Initialize the tool.
 
         Args:
-            context: Optional, often stateful, context object that the tool operates on. Could be:
+            env: Optional, often stateful, context object that the tool operates on. Could be:
                 - A game instance (e.g., Chess Board)
                 - An executor (e.g., PyAutoGUIExecutor for computer control)
                 - A browser/page instance (e.g., Playwright Page)
@@ -37,13 +50,18 @@ class BaseTool(ABC):
             title: Human-readable display name for the tool (auto-generated from class name)
             description: Tool description (auto-generated from docstring if not provided)
         """
-        self.context = context
+        self.env = env
         self.name = name or self.__class__.__name__.lower().replace("tool", "")
-        self.title = title
-        self.description = description
+        self.title = title or self.__class__.__name__.replace("Tool", "").replace("_", " ").title()
+        self.description = description or (self.__doc__.strip() if self.__doc__ else None)
+
+        # Expose attributes FastMCP expects when registering an instance directly
+        self.__name__ = self.name  # FastMCP uses fn.__name__ if name param omitted
+        if self.description:
+            self.__doc__ = self.description
 
     @abstractmethod
-    async def __call__(self, **kwargs: Any) -> list[ContentBlock] | EvaluationResult | SetupResult:
+    async def __call__(self, **kwargs: Any) -> ToolResult:
         """Execute the tool. Often uses the context to perform an action.
 
         Args:
@@ -54,66 +72,130 @@ class BaseTool(ABC):
         """
         raise NotImplementedError("Subclasses must implement __call__")
 
-    def _to_content_blocks(self, result: ToolResult) -> list[ContentBlock]:
-        """Helper method to convert ToolResult to content blocks.
+    def register(self, server: FastMCP, **meta: Any) -> BaseTool:
+        """Register this tool on a FastMCP server and return self for chaining."""
+        server.add_tool(self.mcp, **meta)
+        return self
 
-        Subclasses can use this when they work with ToolResult internally.
-
-        Args:
-            result: ToolResult to convert
-
-        Returns:
-            List of ContentBlock
+    @property
+    def mcp(self) -> FunctionTool:
+        """Get this tool as a FastMCP FunctionTool (cached).
+        
+        This allows even cleaner registration:
+            server.add_tool(my_tool.mcp)
         """
-        blocks: list[ContentBlock] = []
-
-        if result.output:
-            blocks.append(TextContent(text=result.output, type="text"))
-        if result.error:
-            blocks.append(TextContent(text=result.error, type="text"))
-        if result.base64_image:
-            blocks.append(
-                ImageContent(data=result.base64_image, mimeType="image/png", type="image")
+        if not hasattr(self, "_mcp_tool"):
+            from fastmcp.tools import FunctionTool
+            
+            self._mcp_tool = FunctionTool.from_function(
+                self,
+                name=self.name,
+                title=self.title,
+                description=self.description,
             )
-        return blocks
+        return self._mcp_tool
 
 
-@dataclass(kw_only=True, frozen=True)
-class ToolResult:
-    """Represents the intermediate result of a tool execution.
+# Tag used to hide internal components
+_INTERNAL_TAG = "internal"
 
-    Often useful for tools that need to return multiple types of content.
-    """
+class BaseHub(FastMCP):
+    """A composition-friendly FastMCP server that hides its internals."""
 
-    output: str | None = None
-    error: str | None = None
-    base64_image: str | None = None
-    system: str | None = None
+    env: Any
 
-    def __bool__(self) -> bool:
-        return any(getattr(self, field.name) for field in fields(self))
+    def __init__(
+        self,
+        name: str,
+        *,
+        env: Any | None = None,
+        title: str | None = None,
+        description: str | None = None,
+    ) -> None:
+        """Create a new BaseHub.
 
-    def __add__(self, other: ToolResult) -> ToolResult:
-        def combine_fields(
-            field: str | None, other_field: str | None, concatenate: bool = True
-        ) -> str | None:
-            if field and other_field:
-                if concatenate:
-                    return field + other_field
-                raise ValueError("Cannot combine tool results")
-            return field or other_field
+        Parameters
+        ----------
+        name:
+            Public name. Also becomes the *dispatcher tool* name.
+        env:
+            Optional long-lived environment object. Stored on the server
+            instance (``layer.env``) and therefore available to every request
+            via ``ctx.fastmcp.env``.
+        """
 
-        return ToolResult(
-            output=combine_fields(self.output, other.output),
-            error=combine_fields(self.error, other.error),
-            base64_image=combine_fields(self.base64_image, other.base64_image, False),
-            system=combine_fields(self.system, other.system),
+        # Naming scheme for hidden objects
+        self._prefix_fn: Callable[[str], str] = lambda n: f"int_{n}"
+
+        async def _lifespan(server: FastMCP) -> AsyncGenerator[None, Any]:
+            if env is not None:
+                server.env = env  # type: ignore[attr-defined]
+            yield
+
+        super().__init__(
+            name=name,
+            exclude_tags={_INTERNAL_TAG},
+            lifespan=_lifespan,  # type: ignore[arg-type]
         )
 
-    def replace(self, **kwargs: Any) -> ToolResult:
-        """Returns a new ToolResult with the given fields replaced."""
-        return replace(self, **kwargs)
+        # Human-friendly metadata for dispatcher
+        dispatcher_title = title or f"{name.title()} Dispatcher"
+        dispatcher_desc = description or f"Call internal '{name}' functions"
 
+        @self.tool(name=name, title=dispatcher_title, description=dispatcher_desc)
+        async def _dispatch(
+            function: str,
+            ctx: Context,
+            args: dict | None = None,
+        ) -> ToolResult:
+            """Gateway to hidden tools.
 
-class ToolError(Exception):
-    """An error raised by a tool."""
+            Parameters
+            ----------
+            function : str
+                Internal function name *without* prefix.
+            args : dict | None
+                Arguments forwarded to the internal tool.
+            ctx : Context
+                Injected by FastMCP; can be the custom subclass.
+            """
+
+            # Use server private _call_tool to run the hidden function
+            return await ctx.fastmcp._call_tool(self._prefix_fn(function), args or {})
+
+        # ------------- catalogue resource for debugging ----------
+        # Expose list of internal functions via read-only resource
+        @self.resource(f"{name}://functions")
+        async def _functions_catalogue() -> list[str]:
+            tools = await self._tool_manager.list_tools()
+            return [
+                t.name.removeprefix(self._prefix_fn("") or "")
+                for t in tools
+                if _INTERNAL_TAG in t.tags
+            ]
+
+    def tool(self, name_or_fn: Any = None, /, **kwargs: Any) -> Callable[..., Any]:
+        """Register an *internal* tool (hidden from clients)."""
+        # Handle the name from either positional or keyword argument
+        if isinstance(name_or_fn, str):
+            # Called as @hub.tool("name")
+            name = name_or_fn
+        elif name_or_fn is None and "name" in kwargs:
+            # Called as @hub.tool(name="name")
+            name = kwargs.pop("name")
+        else:
+            # Called as @hub.tool or @hub.tool()
+            name = None
+            
+        new_name = self._prefix_fn(name) if name is not None else None
+        tags = {_INTERNAL_TAG} | kwargs.pop("tags", set())
+        
+        # Pass through correctly to parent
+        if new_name is not None:
+            return super().tool(new_name, **kwargs, tags=tags)
+        else:
+            return super().tool(**kwargs, tags=tags)
+
+    resource = FastMCP.resource  # type: ignore[assignment]
+    prompt = FastMCP.prompt      # type: ignore[assignment]
+

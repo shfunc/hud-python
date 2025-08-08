@@ -4,7 +4,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, get_args
 
-from .base import BaseTool, ToolError, ToolResult
+from .base import BaseTool
+from .types import ContentResult, ToolError
 from .utils import maybe_truncate, run
 
 if TYPE_CHECKING:
@@ -34,7 +35,7 @@ class EditTool(BaseTool):
                          If not provided, a new history will be created.
         """
         super().__init__(
-            context=file_history or defaultdict(list),
+            env=file_history or defaultdict(list),
             name="edit",
             title="File Editor",
             description="View, create, and edit files with undo support",
@@ -43,7 +44,7 @@ class EditTool(BaseTool):
     @property
     def file_history(self) -> dict[Path, list[str]]:
         """Get the file edit history (alias for context)."""
-        return self.context
+        return self.env
 
     async def __call__(
         self,
@@ -61,30 +62,28 @@ class EditTool(BaseTool):
         self.validate_path(command, _path)
         if command == "view":
             result = await self.view(_path, view_range)
-            return self._to_content_blocks(result)
+            return result.to_content_blocks()
         elif command == "create":
             if file_text is None:
                 raise ToolError("Parameter `file_text` is required for command: create")
             await self.write_file(_path, file_text)
             self.file_history[_path].append(file_text)
-            return self._to_content_blocks(
-                ToolResult(output=f"File created successfully at: {_path}")
-            )
+            return ContentResult(output=f"File created successfully at: {_path}").to_content_blocks()
         elif command == "str_replace":
             if old_str is None:
                 raise ToolError("Parameter `old_str` is required for command: str_replace")
             result = await self.str_replace(_path, old_str, new_str)
-            return self._to_content_blocks(result)
+            return result.to_content_blocks()
         elif command == "insert":
             if insert_line is None:
                 raise ToolError("Parameter `insert_line` is required for command: insert")
             if new_str is None:
                 raise ToolError("Parameter `new_str` is required for command: insert")
             result = await self.insert(_path, insert_line, new_str)
-            return self._to_content_blocks(result)
+            return result.to_content_blocks()
         elif command == "undo_edit":
             result = await self.undo_edit(_path)
-            return self._to_content_blocks(result)
+            return result.to_content_blocks()
         raise ToolError(
             f"Unrecognized command {command}. The allowed commands for the {self.name} tool are: "
             f"{', '.join(get_args(Command))}"
@@ -114,7 +113,7 @@ class EditTool(BaseTool):
                 f"The path {path} is a dir and only the `view` command can be used on dirs."
             )
 
-    async def view(self, path: Path, view_range: list[int] | None = None) -> ToolResult:
+    async def view(self, path: Path, view_range: list[int] | None = None) -> ContentResult:
         """Implement the view command"""
         if path.is_dir():
             if view_range:
@@ -131,7 +130,7 @@ class EditTool(BaseTool):
                     f"Here's the files and directories up to 2 levels deep in {path}, "
                     f"excluding hidden items:\n{stdout}\n"
                 )
-            return ToolResult(output=stdout, error=stderr)
+            return ContentResult(output=stdout, error=stderr)
 
         file_content = await self.read_file(path)
         init_line = 1
@@ -162,9 +161,9 @@ class EditTool(BaseTool):
             else:
                 file_content = "\n".join(file_lines[init_line - 1 : final_line])
 
-        return ToolResult(output=self._make_output(file_content, str(path), init_line=init_line))
+        return ContentResult(output=self._make_output(file_content, str(path), init_line=init_line))
 
-    async def str_replace(self, path: Path, old_str: str, new_str: str | None) -> ToolResult:
+    async def str_replace(self, path: Path, old_str: str, new_str: str | None) -> ContentResult:
         """
         Implement the str_replace command, which replaces old_str with new_str in the file content.
         """
@@ -211,9 +210,9 @@ class EditTool(BaseTool):
             "Edit the file again if necessary."
         )
 
-        return ToolResult(output=success_msg)
+        return ContentResult(output=success_msg)
 
-    async def insert(self, path: Path, insert_line: int, new_str: str) -> ToolResult:
+    async def insert(self, path: Path, insert_line: int, new_str: str) -> ContentResult:
         """
         Implement the insert command, which inserts new_str at the specified line in the file.
         """
@@ -254,9 +253,9 @@ class EditTool(BaseTool):
             "Review the changes and make sure they are as expected (correct indentation, "
             "no duplicate lines, etc). Edit the file again if necessary."
         )
-        return ToolResult(output=success_msg)
+        return ContentResult(output=success_msg)
 
-    async def undo_edit(self, path: Path) -> ToolResult:
+    async def undo_edit(self, path: Path) -> ContentResult:
         """Implement the undo_edit command."""
         if not self.file_history[path]:
             raise ToolError(f"No edit history found for {path}.")
@@ -264,7 +263,7 @@ class EditTool(BaseTool):
         old_text = self.file_history[path].pop()
         await self.write_file(path, old_text)
 
-        return ToolResult(
+        return ContentResult(
             output=f"Last edit to {path} undone successfully. "
             f"{self._make_output(old_text, str(path))}"
         )

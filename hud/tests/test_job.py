@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from hud.job import Job, create_job, load_job, run_job
-from hud.telemetry import job
+from hud import job
 
 
 @pytest.fixture

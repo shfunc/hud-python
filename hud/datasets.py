@@ -9,15 +9,17 @@ from string import Template
 from typing import TYPE_CHECKING, Any
 
 from datasets import Dataset
-from mcp.types import CallToolRequestParams as MCPToolParams
 from pydantic import BaseModel, Field, field_validator
 
-from hud.telemetry.job import job
+from hud.job import job
+
+from .types import MCPToolCall
 
 if TYPE_CHECKING:
     from datasets import Dataset
 
-    from hud.mcp.base import AgentResult, BaseMCPAgent
+    from hud.agent import MCPAgent
+    from hud.types import Trajectory
 
 logger = logging.getLogger("hud.datasets")
 
@@ -45,8 +47,8 @@ class TaskConfig(BaseModel):
     id: str | None = None
     prompt: str
     mcp_config: dict[str, Any]
-    setup_tool: MCPToolParams | list[MCPToolParams] | None = None
-    evaluate_tool: MCPToolParams | list[MCPToolParams] | None = None
+    setup_tool: MCPToolCall | list[MCPToolCall] | None = None
+    evaluate_tool: MCPToolCall | list[MCPToolCall] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("mcp_config", mode="before")
@@ -63,7 +65,7 @@ class TaskConfig(BaseModel):
         """
         import os
 
-        from hud.telemetry.context import get_current_task_run_id
+        from hud.otel.context import get_current_task_run_id
 
         # Start with current environment variables
         mapping = dict(os.environ)
@@ -186,7 +188,7 @@ async def run_dataset(
     """
     # Import here to avoid circular imports
     import hud
-    from hud.mcp.client import MCPClient
+    from hud.client import MCPClient
 
     # Convert dataset to TaskConfigs if needed
     tasks = dataset if isinstance(dataset, list) else to_taskconfigs(dataset)
@@ -200,7 +202,7 @@ async def run_dataset(
     with job(name, metadata=job_metadata):
         # Run tasks with semaphore for concurrency control
         sem = asyncio.Semaphore(max_concurrent)
-        results: list[AgentResult | None] = [None] * len(tasks)
+        results: list[Trajectory | None] = [None] * len(tasks)
 
         async def _worker(index: int, task: TaskConfig) -> None:
             async with sem:

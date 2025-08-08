@@ -14,7 +14,7 @@ from hud.exceptions import GymMakeException
 from hud.gym import make
 from hud.job import Job
 from hud.task import Task
-from hud.telemetry.context import set_current_task_run_id
+from hud.otel.context import set_task_run_id as set_current_task_run_id
 from hud.types import CustomGym, EnvironmentStatus
 from hud.utils.config import FunctionConfig
 

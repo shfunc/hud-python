@@ -8,7 +8,7 @@ from mcp import ErrorData, McpError
 from mcp.types import INTERNAL_ERROR, INVALID_PARAMS, ContentBlock, TextContent
 from pydantic import Field
 
-from hud.tools.base import ToolResult
+from hud.tools.types import ContentResult
 from hud.tools.computer.settings import computer_settings
 
 from .hud import HudComputerTool
@@ -133,9 +133,9 @@ class OpenAIComputerTool(HudComputerTool):
             if screenshot_base64:
                 # Rescale screenshot if requested
                 screenshot_base64 = await self._rescale_screenshot(screenshot_base64)
-                result = ToolResult(base64_image=screenshot_base64)
+                result = ContentResult(base64_image=screenshot_base64)
             else:
-                result = ToolResult(error="Failed to take screenshot")
+                result = ContentResult(error="Failed to take screenshot")
 
         elif type == "click":
             if x is not None and y is not None:
@@ -252,9 +252,9 @@ class OpenAIComputerTool(HudComputerTool):
             raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Invalid action type: {type}"))
 
         # Rescale screenshot in result if present
-        if isinstance(result, ToolResult) and result.base64_image and self.rescale_images:
+        if isinstance(result, ContentResult) and result.base64_image and self.rescale_images:
             rescaled_image = await self._rescale_screenshot(result.base64_image)
-            result = result.replace(base64_image=rescaled_image)
+            result.base64_image=rescaled_image
 
         # Handle screenshot for actions that need it
         screenshot_actions = {
@@ -272,16 +272,16 @@ class OpenAIComputerTool(HudComputerTool):
         if (
             type in screenshot_actions
             and type != "screenshot"
-            and isinstance(result, ToolResult)
+            and isinstance(result, ContentResult)
             and not result.base64_image
         ):
             screenshot_base64 = await self.executor.screenshot()
             if screenshot_base64:
                 # Rescale screenshot if requested
                 screenshot_base64 = await self._rescale_screenshot(screenshot_base64)
-                result = ToolResult(
+                result = ContentResult(
                     output=result.output, error=result.error, base64_image=screenshot_base64
                 )
 
         # Convert to content blocks
-        return self._to_content_blocks(result)
+        return result.to_content_blocks()
