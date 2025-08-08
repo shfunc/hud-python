@@ -1,25 +1,24 @@
 from __future__ import annotations
 
-import datetime
-from typing import Any, Dict, Literal, Union
+from typing import Any, Literal
 
-from mcp.types import CallToolRequestParams, ClientRequest, ServerResult
-from mcp.types import CallToolResult
+from mcp.types import CallToolRequestParams, CallToolResult, ClientRequest, ServerResult
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class MCPToolCall(CallToolRequestParams):
     """A tool call."""
-    
+
     def __str__(self) -> str:
         response = f"Tool: {self.name}"
         if self.arguments:
             response += f"\nArguments: {self.arguments}"
         return response
 
+
 class MCPToolResult(CallToolResult):
     """A tool result."""
-    
+
     def __str__(self) -> str:
         response = f"Content: {self.content}"
         if self.structuredContent:
@@ -28,8 +27,10 @@ class MCPToolResult(CallToolResult):
             response += f"\nError: {self.isError}"
         return response
 
+
 class AgentResponse(BaseModel):
     """A model response in the conversation."""
+
     # --- FUNCTIONAL ---
     tool_calls: list[MCPToolCall] = Field(default_factory=list)
     done: bool = Field(default=False)
@@ -52,10 +53,9 @@ class AgentResponse(BaseModel):
         if self.content:
             response += f"Content: {self.content}\n"
         if self.tool_calls:
-            response += (
-                f"Tool Calls: {', '.join([f'{tc.name}: {tc.arguments}' for tc in self.tool_calls])}\n"
-            )
+            response += f"Tool Calls: {', '.join([f'{tc.name}: {tc.arguments}' for tc in self.tool_calls])}\n"
         return response
+
 
 class TraceStep(BaseModel):
     """Canonical data for a single agent/MCP span (shared with telemetry)."""
@@ -77,11 +77,11 @@ class TraceStep(BaseModel):
 
     # Generic span info
     type: str = Field(default="CLIENT")
-    
+
     # Timestamps (optional, for local tracking)
     start_timestamp: str | None = None
     end_timestamp: str | None = None
-    
+
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
 
@@ -92,7 +92,9 @@ class Trace(BaseModel):
     - done: Whether the run is complete
     - reward: The reward for the run
     - info: Additional metadata for the run
-    - steps: The steps taken in the run
+    - content: The final content/response from the agent
+    - isError: Whether the execution resulted in an error
+    - trace: The steps taken in the run (empty if not tracing)
     """
 
     done: bool = Field(default=True)
@@ -104,19 +106,25 @@ class Trace(BaseModel):
 
     def append(self, step: TraceStep) -> None:
         self.trace.append(step)
-
-
-class AgentResult(BaseModel):
-    """Minimal result from agent execution."""
-    reward: float = Field(default=0.0)
-    done: bool = Field(default=True)
-    content: str | None = Field(default=None)
-    error: str | None = Field(default=None)
+    
+    def populate_from_context(self) -> None:
+        """Populate trace steps from the current trace context if available.
+        
+        This checks if we're executing within a hud.trace() context and
+        automatically populates the trace field with collected steps.
+        """
+        from hud.otel.context import get_current_task_run_id
+        from hud.telemetry.replay import get_trace
+        
+        task_run_id = get_current_task_run_id()
+        if task_run_id:
+            collected_trace = get_trace(task_run_id)
+            if collected_trace:
+                self.trace = collected_trace.trace
 
 
 __all__ = [
     "AgentResponse",
-    "AgentResult",
     "MCPToolCall",
     "MCPToolResult",
     "Trace",

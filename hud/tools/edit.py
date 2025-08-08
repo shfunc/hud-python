@@ -68,7 +68,9 @@ class EditTool(BaseTool):
                 raise ToolError("Parameter `file_text` is required for command: create")
             await self.write_file(_path, file_text)
             self.file_history[_path].append(file_text)
-            return ContentResult(output=f"File created successfully at: {_path}").to_content_blocks()
+            return ContentResult(
+                output=f"File created successfully at: {_path}"
+            ).to_content_blocks()
         elif command == "str_replace":
             if old_str is None:
                 raise ToolError("Parameter `old_str` is required for command: str_replace")

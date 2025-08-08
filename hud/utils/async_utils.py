@@ -9,23 +9,26 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
-from typing import Coroutine, Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Coroutine
 
 logger = logging.getLogger(__name__)
 
 
 def fire_and_forget(coro: Coroutine[Any, Any, Any], description: str = "task") -> None:
     """Execute a coroutine in a fire-and-forget manner.
-    
+
     This function handles running async code in various contexts:
     - When an event loop is already running (normal async context)
     - When no event loop exists (sync context, some Jupyter setups)
     - Gracefully handles interpreter shutdown
-    
+
     Args:
         coro: The coroutine to execute
         description: Description of the task for logging (e.g., "update job status")
-    
+
     Example:
         fire_and_forget(
             some_async_function(),
@@ -43,7 +46,7 @@ def fire_and_forget(coro: Coroutine[Any, Any, Any], description: str = "task") -
         # No running event loop (e.g., Jupyter without %autoawait, sync context)
         try:
             # Try to run in a thread as a fallback
-            def run_in_thread():
+            def run_in_thread() -> None:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 try:
@@ -52,7 +55,7 @@ def fire_and_forget(coro: Coroutine[Any, Any, Any], description: str = "task") -
                     # Suppress warnings about interpreter shutdown
                     if "interpreter shutdown" not in str(e):
                         logger.debug(f"Error in threaded {description}: {e}")
-                        
+
             thread = threading.Thread(target=run_in_thread, daemon=True)
             thread.start()
         except Exception as e:
@@ -60,4 +63,3 @@ def fire_and_forget(coro: Coroutine[Any, Any, Any], description: str = "task") -
             # Special case: suppress "cannot schedule new futures after interpreter shutdown"
             if "interpreter shutdown" not in str(e):
                 logger.debug(f"Could not {description} - no event loop available: {e}")
-

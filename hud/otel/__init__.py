@@ -12,19 +12,21 @@ Internal Components:
 - instrumentation: Auto-instrumentation for agents and MCP
 """
 
-from .config import configure_telemetry, shutdown_telemetry
-from .context import trace, span_context, get_current_task_run_id, is_root_trace
+from __future__ import annotations
+
 from .collector import enable_trace_collection
+from .config import configure_telemetry, shutdown_telemetry
+from .context import get_current_task_run_id, is_root_trace, span_context, trace
 
 __all__ = [
     # Configuration
     "configure_telemetry",
-    "shutdown_telemetry",
-    # Context management
-    "trace",
-    "span_context", 
-    "get_current_task_run_id",
-    "is_root_trace",
     # Collection
     "enable_trace_collection",
+    "get_current_task_run_id",
+    "is_root_trace",
+    "shutdown_telemetry",
+    "span_context",
+    # Context management
+    "trace",
 ]

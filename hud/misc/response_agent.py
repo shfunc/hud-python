@@ -1,6 +1,7 @@
-import json
+from __future__ import annotations
+
 import os
-from typing import Literal, Optional
+from typing import Literal
 
 from openai import AsyncOpenAI
 
@@ -13,7 +14,7 @@ class ResponseAgent:
     based on the agent's final response message.
     """
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None) -> None:
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
         if not self.api_key:
             raise ValueError(
@@ -75,6 +76,5 @@ class ResponseAgent:
             else:
                 return "CONTINUE"
 
-        except Exception as e:
-            print(f"Error determining response: {e}")
+        except Exception:
             return "CONTINUE"  # Default to continue on error

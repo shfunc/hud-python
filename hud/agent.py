@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 import mcp.types as types
 
-from .types import AgentResponse, AgentResult, MCPToolCall, MCPToolResult
+from .types import AgentResponse, MCPToolCall, MCPToolResult, Trace
 
 if TYPE_CHECKING:
     from hud.datasets import TaskConfig
@@ -75,7 +75,8 @@ class MCPAgent(ABC):
 
         # Initialize these here so methods can be called before initialize()
         self._available_tools: list[types.Tool] = []
-        self._tool_map: dict[str, types.Tool] = {}  # Simplified: just name to tool
+        # Map tool name -> Tool (simple), but some helpers expect server mapping
+        self._tool_map: dict[str, types.Tool] = {}
         self.screenshot_history: list[str] = []
 
     async def _filter_tools(self) -> None:
@@ -133,6 +134,26 @@ class MCPAgent(ABC):
         lifecycle_tool_names = self.lifecycle_tools
         return [tool for tool in self._available_tools if tool.name not in lifecycle_tool_names]
 
+    # --- Compatibility helpers used by tests and adapters ---
+    def get_tool_map(self) -> dict[str, tuple[str, types.Tool]]:
+        """Return mapping of tool name to (server_name, Tool).
+
+        Since the base agent doesn't track server names, we return a placeholder
+        server name "default" for all tools. Tests that rely on server grouping
+        will still function with this simplified mapping.
+        """
+        return {name: ("default", tool) for name, tool in self._tool_map.items()}
+
+    def get_tools_by_server(self) -> dict[str, list[types.Tool]]:
+        """Group available tools by their server name.
+
+        Uses the simplified get_tool_map() that assigns all tools to "default"
+        unless an implementation overrides this behavior.
+        """
+        tools_by_server: dict[str, list[types.Tool]] = {}
+        for name, (server, tool) in self.get_tool_map().items():
+            tools_by_server.setdefault(server, []).append(tool)
+        return tools_by_server
 
     def get_system_prompt(self) -> str:
         """Generate system prompt with optional tool information."""
@@ -256,7 +277,7 @@ class MCPAgent(ABC):
                         latest_screenshot = content.data
         return latest_screenshot
 
-    async def run(self, prompt_or_task: str | TaskConfig, max_steps: int = 10) -> AgentResult:
+    async def run(self, prompt_or_task: str | TaskConfig, max_steps: int = 10) -> Trace:
         """
         Run the agent with the given prompt or task.
 
@@ -265,7 +286,7 @@ class MCPAgent(ABC):
             max_steps: Maximum number of steps (-1 for infinite)
 
         Returns:
-            AgentResult with reward, done, content, and error fields
+            Trace with reward, done, content, isError fields and trace steps
         """
         # Import here to avoid circular imports
         from hud.datasets import TaskConfig
@@ -284,7 +305,7 @@ class MCPAgent(ABC):
         else:
             raise TypeError(f"prompt_or_task must be str or TaskConfig, got {type(prompt_or_task)}")
 
-    async def _run_task(self, task: TaskConfig, max_steps: int = 10) -> AgentResult:
+    async def _run_task(self, task: TaskConfig, max_steps: int = 10) -> Trace:
         """
         Execute a task with setup and evaluate phases.
 
@@ -293,29 +314,35 @@ class MCPAgent(ABC):
             max_steps: Maximum steps for task execution (-1 for infinite)
 
         Returns:
-            AgentResult with reward from evaluation
+            Trace with reward from evaluation
         """
         try:
             # Setup phase
             if task.setup_tool is not None:
                 logger.info("Setting up tool phase: %s", task.setup_tool)
-                setup_tools = task.setup_tool if isinstance(task.setup_tool, list) else [task.setup_tool]
-                
+                setup_tools = (
+                    task.setup_tool if isinstance(task.setup_tool, list) else [task.setup_tool]
+                )
+
                 for tool in setup_tools:
                     await self.call_tool(tool)
 
             # Execute the task prompt
             prompt_result = await self.run_prompt(task.prompt, max_steps=max_steps)
-            
+
             # If prompt failed, return early
-            if prompt_result.error:
+            if prompt_result.isError:
                 return prompt_result
 
             # Evaluate phase
             if task.evaluate_tool is not None:
                 logger.info("Evaluating tool phase: %s", task.evaluate_tool)
-                eval_tools = task.evaluate_tool if isinstance(task.evaluate_tool, list) else [task.evaluate_tool]
-                
+                eval_tools = (
+                    task.evaluate_tool
+                    if isinstance(task.evaluate_tool, list)
+                    else [task.evaluate_tool]
+                )
+
                 last_result = None
                 for tool in eval_tools:
                     last_result = await self.call_tool(tool)
@@ -324,32 +351,34 @@ class MCPAgent(ABC):
                 if last_result:
                     reward = _find_reward(last_result)
                     eval_content = _find_content(last_result)
-                    
-                    return AgentResult(
+
+                    result = Trace(
                         reward=reward,
                         done=True,
                         content=eval_content or prompt_result.content,
-                        error=None
+                        isError=False,
                     )
-            
+                    # Copy trace steps from prompt_result if available
+                    result.trace = prompt_result.trace
+                    return result
+
             # No evaluation, return prompt result
             return prompt_result
-            
+
         except Exception as e:
             logger.error("Task execution failed: %s", e)
-            return AgentResult(
-                reward=0.0,
-                done=True,
-                content=None,
-                error=str(e)
-            )
+            error_trace = Trace(reward=0.0, done=True, content=str(e), isError=True)
+            error_trace.populate_from_context()
+            return error_trace
 
     def _format_error_result(self, error_message: str) -> MCPToolResult:
         return MCPToolResult(
             content=[types.TextContent(text=error_message, type="text")], isError=True
         )
 
-    async def run_prompt(self, prompt: str, *, max_steps: int = 10, initial_screenshot: bool = False) -> AgentResult:
+    async def run_prompt(
+        self, prompt: str, *, max_steps: int = 10, initial_screenshot: bool = False
+    ) -> Trace:
         """
         Run the agent with the given prompt. This is the core agent loop.
 
@@ -359,11 +388,11 @@ class MCPAgent(ABC):
             initial_screenshot: Whether to capture initial screenshot (defaults to self.initial_screenshot)
 
         Returns:
-            AgentResult with reward, done, and content fields
+            Trace with reward, done, content fields and trace steps
         """
         final_response = None
         error = None
-            
+
         try:
             # Initialize conversation with the prompt
             messages = await self.create_initial_messages(prompt, initial_screenshot)
@@ -379,30 +408,32 @@ class MCPAgent(ABC):
                 try:
                     # 1. Get model response
                     response = await self.get_model_response(messages)
-                    
-                    logger.info("Agent:\n%s", response)
-                    
 
-                    
+                    logger.info("Agent:\n%s", response)
+
                     # Check if we should stop
                     if response.done or not response.tool_calls:
-                        logger.info("Agent finished - done=%s, tool_calls=%s", response.done, len(response.tool_calls))
+                        logger.info(
+                            "Agent finished - done=%s, tool_calls=%s",
+                            response.done,
+                            len(response.tool_calls),
+                        )
                         final_response = response
                         break
-                    
+
                     # 2. Execute tools
                     tool_calls = response.tool_calls
                     tool_results = await self.execute_tools(tool_calls=tool_calls)
-                    
+
                     # 3. Format tool results and add to messages
                     tool_messages = await self.format_tool_results(tool_calls, tool_results)
                     messages.extend(tool_messages)
-                    
+
                 except Exception as e:
                     logger.error("Step failed: %s", e)
                     error = str(e)
                     break
-                    
+
         except KeyboardInterrupt:
             logger.info("Agent execution interrupted by user")
             error = "Interrupted by user"
@@ -412,17 +443,25 @@ class MCPAgent(ABC):
         except Exception as e:
             logger.error("Unexpected error: %s", e)
             error = str(e)
-            
+
         # Build result
-        return AgentResult(
+        trace_result = Trace(
             reward=0.0,  # Default - will be set by task evaluation if applicable
             done=True,
             content=final_response.content if final_response else None,
-            error=error
+            isError=error is not None,
+            info={"error": error} if error else {},
         )
+        
+        # Populate trace steps from current context
+        trace_result.populate_from_context()
+        
+        return trace_result
 
     @abstractmethod
-    async def create_initial_messages(self, prompt: str, initial_screenshot: bool = False) -> list[Any]:
+    async def create_initial_messages(
+        self, prompt: str, initial_screenshot: bool = False
+    ) -> list[Any]:
         """
         Create initial messages for the conversation.
 
@@ -476,14 +515,14 @@ class MCPAgent(ABC):
             Formatted user message
         """
         return {"role": "user", "content": text}
-    
+
     async def execute_tools(self, *, tool_calls: list[MCPToolCall]) -> list[MCPToolResult]:
         """
         Execute a list of tool calls.
-        
+
         Args:
             tool_calls: List of tool calls to execute
-            
+
         Returns:
             List of tool results
         """
@@ -496,8 +535,6 @@ class MCPAgent(ABC):
                 logger.error("Tool execution failed: %s", e)
                 results.append(self._format_error_result(str(e)))
         return results
-    
-
 
 
 def _find_reward(result: MCPToolResult) -> float:

@@ -30,6 +30,7 @@ def _get_pyautogui() -> Any | None:
         if "DISPLAY" not in os.environ:
             try:
                 from hud.tools.computer import computer_settings
+
                 os.environ["DISPLAY"] = str(computer_settings.DISPLAY_NUM)
             except (ImportError, AttributeError):
                 os.environ["DISPLAY"] = ":0"
@@ -587,7 +588,9 @@ class PyAutoGUIExecutor(BaseExecutor):
         except Exception as e:
             return ContentResult(error=str(e))
 
-    async def hold_key(self, key: str, duration: float, take_screenshot: bool = True) -> ContentResult:
+    async def hold_key(
+        self, key: str, duration: float, take_screenshot: bool = True
+    ) -> ContentResult:
         """Hold a key for a specified duration."""
         try:
             # Map CLA key to PyAutoGUI key

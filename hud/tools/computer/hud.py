@@ -9,12 +9,13 @@ from mcp import ErrorData, McpError
 from mcp.types import INVALID_PARAMS, ContentBlock, TextContent
 from pydantic import Field
 
-from .base import BaseTool
-from .types import ContentResult, ToolError
-from .settings import computer_settings
 from hud.tools.executors.base import BaseExecutor
 from hud.tools.executors.pyautogui import PyAutoGUIExecutor
 from hud.tools.executors.xdo import XDOExecutor
+
+from .base import BaseTool
+from .settings import computer_settings
+from .types import ContentResult, ToolError
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +88,7 @@ class HudComputerTool(BaseTool):
             self.height,
             "Environment Screen Width: %s, Environment Screen Height: %s",
             self.environment_width,
-            self.environment_height
+            self.environment_height,
         )
 
         # Calculate scaling factors from base screen size to target size
@@ -356,7 +357,7 @@ class HudComputerTool(BaseTool):
             # Rescale screenshot in result if present
             if isinstance(result, ContentResult) and result.base64_image and self.rescale_images:
                 rescaled_image = await self._rescale_screenshot(result.base64_image)
-                result.base64_image=rescaled_image
+                result.base64_image = rescaled_image
 
             # Convert result to content blocks
             return self._to_content_blocks(result)

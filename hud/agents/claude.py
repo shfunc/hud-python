@@ -20,12 +20,10 @@ if TYPE_CHECKING:
     from hud.datasets import TaskConfig
 
 import mcp.types as types
-from mcp.types import CallToolRequestParams as MCPToolCall
-from mcp.types import CallToolResult as MCPToolResult
 
+from hud.agent import MCPAgent
 from hud.settings import settings
-
-from .base import BaseMCPAgent, ModelResponse
+from hud.types import AgentResponse, MCPToolCall, MCPToolResult
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +48,7 @@ def tool_use_content_block(
     return {"type": "tool_result", "tool_use_id": tool_use_id, "content": content}
 
 
-class ClaudeMCPAgent(BaseMCPAgent):
+class ClaudeMCPAgent(MCPAgent):
     """
     Claude agent that uses MCP servers for tool execution.
 
@@ -131,7 +129,7 @@ class ClaudeMCPAgent(BaseMCPAgent):
             )
         ]
 
-    async def get_model_response(self, messages: list[BetaMessageParam]) -> ModelResponse:
+    async def get_model_response(self, messages: list[BetaMessageParam]) -> AgentResponse:
         """Get response from Claude including any tool calls."""
         # Get Claude tools
         claude_tools = self._convert_tools_for_claude()
@@ -183,7 +181,7 @@ class ClaudeMCPAgent(BaseMCPAgent):
         )
 
         # Process response
-        result = ModelResponse(content="", tool_calls=[], done=True)
+        result = AgentResponse(content="", tool_calls=[], done=True)
 
         # Extract text content and reasoning
         text_content = ""

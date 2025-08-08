@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 # Basic result types for tools
 BaseResult = list[ContentBlock] | EvaluationResult | SetupResult
 
+
 class BaseTool(ABC):
     """
     Base helper class for all MCP tools to constrain their output.
@@ -80,13 +81,13 @@ class BaseTool(ABC):
     @property
     def mcp(self) -> FunctionTool:
         """Get this tool as a FastMCP FunctionTool (cached).
-        
+
         This allows even cleaner registration:
             server.add_tool(my_tool.mcp)
         """
         if not hasattr(self, "_mcp_tool"):
             from fastmcp.tools import FunctionTool
-            
+
             self._mcp_tool = FunctionTool.from_function(
                 self,
                 name=self.name,
@@ -98,6 +99,7 @@ class BaseTool(ABC):
 
 # Tag used to hide internal components
 _INTERNAL_TAG = "internal"
+
 
 class BaseHub(FastMCP):
     """A composition-friendly FastMCP server that hides its internals."""
@@ -187,10 +189,10 @@ class BaseHub(FastMCP):
         else:
             # Called as @hub.tool or @hub.tool()
             name = None
-            
+
         new_name = self._prefix_fn(name) if name is not None else None
         tags = {_INTERNAL_TAG} | (kwargs.pop("tags", None) or set())
-        
+
         # Pass through correctly to parent
         if new_name is not None:
             return super().tool(new_name, **kwargs, tags=tags)
@@ -198,5 +200,4 @@ class BaseHub(FastMCP):
             return super().tool(**kwargs, tags=tags)
 
     resource = FastMCP.resource  # type: ignore[assignment]
-    prompt = FastMCP.prompt      # type: ignore[assignment]
-
+    prompt = FastMCP.prompt  # type: ignore[assignment]

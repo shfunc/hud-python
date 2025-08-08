@@ -474,7 +474,9 @@ class XDOExecutor(BaseExecutor):
         button_num = button_map.get(button, 1)
         return await self.execute(f"mouseup {button_num}", take_screenshot=take_screenshot)
 
-    async def hold_key(self, key: str, duration: float, take_screenshot: bool = True) -> ContentResult:
+    async def hold_key(
+        self, key: str, duration: float, take_screenshot: bool = True
+    ) -> ContentResult:
         """Hold a key for a specified duration."""
         # Map CLA key to XDO key
         mapped_key = self._map_key(key)

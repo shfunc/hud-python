@@ -11,9 +11,7 @@ def test_utils_imports():
     assert hud.utils is not None
 
     # Try importing submodules
-    from hud.utils import common, config, progress, telemetry
+    from hud.utils import progress, telemetry
 
-    assert common is not None
-    assert config is not None
     assert progress is not None
     assert telemetry is not None

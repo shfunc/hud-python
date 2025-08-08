@@ -9,19 +9,19 @@ import mcp.types as types
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
-from mcp.types import CallToolRequestParams as MCPToolCall
-from mcp.types import CallToolResult as MCPToolResult
 from mcp_use.adapters.langchain_adapter import LangChainAdapter
 
 if TYPE_CHECKING:
     from langchain.schema.language_model import BaseLanguageModel
     from langchain_core.tools import BaseTool
-from .base import BaseMCPAgent, ModelResponse
+
+from hud.agent import MCPAgent
+from hud.types import AgentResponse, MCPToolCall, MCPToolResult
 
 logger = logging.getLogger(__name__)
 
 
-class LangChainMCPAgent(BaseMCPAgent):
+class LangChainMCPAgent(MCPAgent):
     """
     LangChain agent that uses MCP servers for tool execution.
 
@@ -61,8 +61,8 @@ class LangChainMCPAgent(BaseMCPAgent):
         # Create LangChain tools from MCP tools using the adapter
         self._langchain_tools = []
 
-        # Get tools grouped by connector
-        tools_by_connector = self.get_tools_by_connector()
+        # Get tools grouped by server (connector)
+        tools_by_connector = self.get_tools_by_server()
 
         # Convert tools using the adapter
         for connector, tools in tools_by_connector.items():
@@ -95,7 +95,7 @@ class LangChainMCPAgent(BaseMCPAgent):
 
         return messages
 
-    async def get_model_response(self, messages: list[BaseMessage]) -> ModelResponse:
+    async def get_model_response(self, messages: list[BaseMessage]) -> AgentResponse:
         """Get response from LangChain model including any tool calls."""
         # Get LangChain tools (created lazily)
         langchain_tools = self._get_langchain_tools()
@@ -142,7 +142,7 @@ class LangChainMCPAgent(BaseMCPAgent):
                 break
 
         if not last_user_msg:
-            return ModelResponse(content="No user message found", tool_calls=[], done=True)
+            return AgentResponse(content="No user message found", tool_calls=[], done=True)
 
         # Extract text from message content
         input_text = ""
@@ -186,14 +186,14 @@ class LangChainMCPAgent(BaseMCPAgent):
                             )
                         )
 
-                return ModelResponse(content=output, tool_calls=tool_calls, done=False)
+                return AgentResponse(content=output, tool_calls=tool_calls, done=False)
             else:
                 # No tools called, just text response
-                return ModelResponse(content=output, tool_calls=[], done=True)
+                return AgentResponse(content=output, tool_calls=[], done=True)
 
         except Exception as e:
             logger.error("Agent execution failed: %s", e)
-            return ModelResponse(content=f"Error: {e!s}", tool_calls=[], done=True)
+            return AgentResponse(content=f"Error: {e!s}", tool_calls=[], done=True)
 
     async def format_tool_results(
         self, tool_calls: list[MCPToolCall], tool_results: list[MCPToolResult]

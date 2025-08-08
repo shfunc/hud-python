@@ -8,7 +8,7 @@ import pytest
 from mcp import types
 from mcp.types import CallToolRequestParams as MCPToolCall
 
-from hud.mcp.openai import OpenAIMCPAgent
+from hud.agents.openai import OpenAIMCPAgent
 
 
 class TestOpenAIMCPAgent:

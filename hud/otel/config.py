@@ -12,8 +12,8 @@ It is *idempotent*: calling :func:`configure_telemetry` more than once
 returns the same provider and does nothing.
 """
 
-from typing import Any, Optional
 import logging
+from typing import Any
 
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
@@ -22,23 +22,21 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 from hud.settings import settings
 
+from .collector import enable_trace_collection, install_collector
 from .exporters import HudSpanExporter
-from .processors import HudEnrichmentProcessor
-from .collector import install_collector, enable_trace_collection
 from .instrumentation import auto_instrument_agents, install_mcp_instrumentation
+from .processors import HudEnrichmentProcessor
 
 logger = logging.getLogger(__name__)
 
 # Global singleton provider so multiple calls do not create duplicates
-_TRACER_PROVIDER: Optional[TracerProvider] = None
-
-
-
+_TRACER_PROVIDER: TracerProvider | None = None
 
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def configure_telemetry(
     *,
@@ -97,18 +95,18 @@ def configure_telemetry(
         provider.add_span_processor(BatchSpanProcessor(exporter))
     else:
         logger.info("Telemetry disabled via settings – spans will not be exported")
-    
+
     # OTLP exporter (optional - for standard OTel viewers)
     if enable_otlp:
         try:
             from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-            
+
             otlp_config = {}
             if otlp_endpoint:
                 otlp_config["endpoint"] = otlp_endpoint
             if otlp_headers:
                 otlp_config["headers"] = otlp_headers
-                
+
             otlp_exporter = OTLPSpanExporter(**otlp_config)
             provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
             logger.info(f"OTLP exporter enabled - endpoint: {otlp_endpoint or 'localhost:4317'}")
@@ -123,13 +121,13 @@ def configure_telemetry(
     # ------------------------------------------------------------------
     trace.set_tracer_provider(provider)
     install_mcp_instrumentation(provider)
-    
+
     # Install in-memory collector if requested
     if enable_collection:
         install_collector()
         enable_trace_collection(True)
         logger.debug("In-memory trace collection enabled")
-    
+
     # Auto-instrument agent classes
     auto_instrument_agents()
     logger.debug("Agent auto-instrumentation completed")

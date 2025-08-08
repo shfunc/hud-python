@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
 from mcp.types import ContentBlock, ImageContent, TextContent
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SetupResult(BaseModel):
@@ -15,6 +15,7 @@ class SetupResult(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
+
 class EvaluationResult(BaseModel):
     """Standard evaluation result format."""
 
@@ -23,8 +24,9 @@ class EvaluationResult(BaseModel):
     content: str | None = Field(default=None, description="Additional information")
     info: dict[str, Any] = Field(default_factory=dict, description="Additional information")
     isError: bool = Field(default=False, description="Whether the evaluation failed")
-    
+
     model_config = ConfigDict(extra="allow")
+
 
 class ContentResult(BaseModel):
     """Represents the intermediate result of a tool execution.
@@ -72,11 +74,9 @@ class ContentResult(BaseModel):
         if self.error:
             blocks.append(TextContent(text=self.error, type="text"))
         if self.base64_image:
-            blocks.append(
-                ImageContent(data=self.base64_image, mimeType="image/png", type="image")
-            )
+            blocks.append(ImageContent(data=self.base64_image, mimeType="image/png", type="image"))
         return blocks
+
 
 class ToolError(Exception):
     """An error raised by a tool."""
-

@@ -6,8 +6,6 @@ import logging
 from typing import TYPE_CHECKING, Any, Literal
 
 import mcp.types as types
-from mcp.types import CallToolRequestParams as MCPToolCall
-from mcp.types import CallToolResult as MCPToolResult
 from openai import AsyncOpenAI
 from openai.types.responses import (
     ResponseComputerToolCall,
@@ -17,9 +15,9 @@ from openai.types.responses import (
     ToolParam,
 )
 
+from hud.agent import MCPAgent
 from hud.settings import settings
-
-from .base import AgentResult, BaseMCPAgent, ModelResponse
+from hud.types import AgentResponse, MCPToolCall, MCPToolResult, Trace
 
 if TYPE_CHECKING:
     from hud.datasets import TaskConfig
@@ -27,7 +25,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class OpenAIMCPAgent(BaseMCPAgent):
+class OpenAIMCPAgent(MCPAgent):
     """
     OpenAI agent that uses MCP servers for tool execution.
 
@@ -53,7 +51,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
             environment: Environment type for computer use
             display_width: Display width for computer use
             display_height: Display height for computer use
-            **kwargs: Additional arguments passed to BaseMCPAgent
+            **kwargs: Additional arguments passed to MCPAgent
         """
         super().__init__(**kwargs)
 
@@ -92,7 +90,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
         Remember: You are expected to complete tasks autonomously. The user trusts you to do what they asked.
         """  # noqa: E501
 
-    async def run(self, prompt_or_task: str | TaskConfig, max_steps: int = 10) -> AgentResult:
+    async def run(self, prompt_or_task: str | TaskConfig, max_steps: int = 10) -> Trace:
         """
         Run the agent with the given prompt or task.
 
@@ -119,7 +117,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
         # Just return a list with the prompt and screenshot
         return [{"prompt": prompt, "screenshot": screenshot}]
 
-    async def get_model_response(self, messages: list[Any]) -> ModelResponse:
+    async def get_model_response(self, messages: list[Any]) -> AgentResponse:
         """Get response from OpenAI including any tool calls."""
         # OpenAI's API is stateful, so we handle messages differently
 
@@ -132,7 +130,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
 
         if not computer_tool_name:
             # No computer tools available, just return a text response
-            return ModelResponse(
+            return AgentResponse(
                 content="No computer use tools available",
                 tool_calls=[],
                 done=True,
@@ -186,7 +184,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
             if latest_message.get("type") == "user_input":
                 # User provided input in conversation mode
                 user_text = latest_message.get("text", "")
-                input_param_followup: ResponseInputParam = [
+                input_param_followup: ResponseInputParam = [  # type: ignore[reportAssignmentType]
                     {"role": "user", "content": [{"type": "input_text", "text": user_text}]}
                 ]
                 # Reset pending_call_id since this is user input, not a tool response
@@ -201,7 +199,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
 
                 if not latest_screenshot:
                     logger.warning("No screenshot provided for response to action")
-                    return ModelResponse(
+                    return AgentResponse(
                         content="No screenshot available for next action",
                         tool_calls=[],
                         done=True,
@@ -234,7 +232,7 @@ class OpenAIMCPAgent(BaseMCPAgent):
         self.last_response_id = response.id
 
         # Process response
-        result = ModelResponse(
+        result = AgentResponse(
             content="",
             tool_calls=[],
             done=False,  # Will be set to True only if no tool calls

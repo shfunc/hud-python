@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
-from opentelemetry import baggage, context
-from opentelemetry.sdk.trace import ReadableSpan, SpanProcessor, Span
+from opentelemetry import baggage
+from opentelemetry.sdk.trace import ReadableSpan, Span, SpanProcessor
 
 from .context import get_current_task_run_id
 
@@ -26,19 +25,19 @@ class HudEnrichmentProcessor(SpanProcessor):
     def on_start(self, span: Span, parent_context) -> None:  # type: ignore[override]
         try:
             # Get task_run_id
-            run_id: Optional[str] = get_current_task_run_id()
+            run_id: str | None = get_current_task_run_id()
             if run_id and span.is_recording():
                 span.set_attribute("hud.task_run_id", run_id)
-            
+
             # Get job_id from baggage if available
             job_id = baggage.get_baggage("hud.job_id", context=parent_context)
             if job_id and span.is_recording():
                 span.set_attribute("hud.job_id", job_id)
-                
+
         except Exception as exc:  # defensive; never fail the tracer
             logger.debug("HudEnrichmentProcessor.on_start error: %s", exc, exc_info=False)
 
-    def on_end(self, span: ReadableSpan) -> None:  # noqa: D401 type: ignore[override]
+    def on_end(self, span: ReadableSpan) -> None:
         # Nothing to do – enrichment is on_start only
         pass
 
@@ -48,4 +47,3 @@ class HudEnrichmentProcessor(SpanProcessor):
 
     def force_flush(self, timeout_millis: int | None = None) -> bool:  # type: ignore[override]
         return True
-

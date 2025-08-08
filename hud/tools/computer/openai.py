@@ -8,8 +8,8 @@ from mcp import ErrorData, McpError
 from mcp.types import INTERNAL_ERROR, INVALID_PARAMS, ContentBlock, TextContent
 from pydantic import Field
 
-from hud.tools.types import ContentResult
 from hud.tools.computer.settings import computer_settings
+from hud.tools.types import ContentResult
 
 from .hud import HudComputerTool
 
@@ -254,7 +254,7 @@ class OpenAIComputerTool(HudComputerTool):
         # Rescale screenshot in result if present
         if isinstance(result, ContentResult) and result.base64_image and self.rescale_images:
             rescaled_image = await self._rescale_screenshot(result.base64_image)
-            result.base64_image=rescaled_image
+            result.base64_image = rescaled_image
 
         # Handle screenshot for actions that need it
         screenshot_actions = {

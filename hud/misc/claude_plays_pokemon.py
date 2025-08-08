@@ -2,20 +2,23 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from anthropic import AsyncAnthropic
-from anthropic.types.beta import (
-    BetaMessageParam,
-    BetaTextBlockParam,
-    BetaImageBlockParam,
-)
 
-from hud.adapters.common.types import CLA, LogType
-from hud.agent import Agent
 from hud.adapters import Adapter
+from hud.adapters.common.types import CLA
+from hud.agent import Agent
 from hud.settings import settings
-from hud.env.environment import Observation
+
+if TYPE_CHECKING:
+    from anthropic.types.beta import (
+        BetaImageBlockParam,
+        BetaMessageParam,
+        BetaTextBlockParam,
+    )
+
+    from hud.env.environment import Observation
 
 logger = logging.getLogger(__name__)
 
@@ -244,7 +247,7 @@ class ClaudePlaysPokemon(Agent[AsyncAnthropic, CLA]):
         response_content = response.content
         self.messages.append(
             cast(
-                BetaMessageParam,
+                "BetaMessageParam",
                 {
                     "role": "user",
                     "content": response_content,

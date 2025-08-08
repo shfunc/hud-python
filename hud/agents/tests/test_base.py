@@ -16,14 +16,14 @@ import pytest
 from mcp import types
 from mcp.types import CallToolRequestParams as MCPToolCall
 
-from hud.mcp.base import BaseMCPAgent
+from hud.agent import MCPAgent
 from hud.tools.executors.base import BaseExecutor
 
 if TYPE_CHECKING:
-    from hud.task import Task
+    from hud.datasets import TaskConfig as Task
 
 
-class MockMCPAgent(BaseMCPAgent):
+class MockMCPAgent(MCPAgent):
     """Concrete implementation of BaseMCPAgent for testing."""
 
     def __init__(self, mcp_client: Any = None, **kwargs: Any) -> None:
@@ -115,7 +115,7 @@ class TestBaseMCPAgent:
         """Test init fails without client."""
 
         # Create a minimal concrete implementation to test the ValueError
-        class TestAgent(BaseMCPAgent):
+        class TestAgent(MCPAgent):
             def create_initial_messages(
                 self, prompt: str, screenshot: str | None = None
             ) -> list[dict[str, Any]]:

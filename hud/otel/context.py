@@ -9,7 +9,7 @@ from __future__ import annotations
 import contextvars
 import logging
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from opentelemetry import baggage, context
 from opentelemetry import trace as otel_trace
@@ -47,9 +47,9 @@ def get_current_task_run_id() -> str | None:
     """Get current task_run_id from either contextvars or OTel baggage."""
     # First try OTel baggage
     task_run_id = baggage.get_baggage(TASK_RUN_ID_KEY)
-    if task_run_id:
+    if task_run_id and isinstance(task_run_id, str):
         return task_run_id
-    
+
     # Fallback to contextvars
     return current_task_run_id.get()
 
@@ -60,7 +60,7 @@ def is_root_trace() -> bool:
     is_root = baggage.get_baggage(IS_ROOT_TRACE_KEY)
     if is_root is not None:
         return is_root.lower() == "true"
-    
+
     # Fallback to contextvars
     return is_root_trace_var.get()
 
@@ -72,22 +72,22 @@ def span_context(
     kind: otel_trace.SpanKind = otel_trace.SpanKind.INTERNAL,
 ) -> Generator[otel_trace.Span, None, None]:
     """Create a child span within the current trace context.
-    
+
     This is a simple wrapper around OpenTelemetry's span creation that
     ensures the span inherits the current HUD context (task_run_id, etc).
-    
+
     Args:
         name: Name for the span
         attributes: Additional attributes to add to the span
         kind: OpenTelemetry span kind
-        
+
     Example:
         with span_context("process_data", {"items": 100}) as span:
             # Process data...
             span.set_attribute("processed", True)
     """
     tracer = otel_trace.get_tracer("hud-sdk")
-    
+
     # Current task_run_id will be added by HudEnrichmentProcessor
     with tracer.start_as_current_span(
         name,
@@ -98,7 +98,7 @@ def span_context(
 
 
 async def _update_task_status_async(
-    task_run_id: str, 
+    task_run_id: str,
     status: str,
     job_id: str | None = None,
     error_message: str | None = None,
@@ -106,14 +106,14 @@ async def _update_task_status_async(
     """Async task status update."""
     if not settings.telemetry_enabled:
         return
-    
+
     try:
         data = {"status": status}
         if job_id:
             data["job_id"] = job_id
         if error_message:
             data["error_message"] = error_message
-            
+
         await make_request(
             method="POST",
             url=f"{settings.base_url}/v2/task_runs/{task_run_id}/status",
@@ -136,16 +136,16 @@ def _fire_and_forget_status_update(
     """Fire and forget status update - works in any context including Jupyter."""
     fire_and_forget(
         _update_task_status_async(task_run_id, status, job_id, error_message),
-        f"update task {task_run_id} status to {status}"
+        f"update task {task_run_id} status to {status}",
     )
 
 
 class trace:
     """Internal OpenTelemetry trace context manager.
-    
+
     This is the implementation class. Users should use hud.trace() instead.
     """
-    
+
     def __init__(
         self,
         task_run_id: str,
@@ -153,30 +153,30 @@ class trace:
         span_name: str = "hud.task",
         attributes: dict[str, Any] | None = None,
         job_id: str | None = None,
-    ):
+    ) -> None:
         self.task_run_id = task_run_id
         self.job_id = job_id
         self.is_root = is_root
         self.span_name = span_name
         self.attributes = attributes or {}
-        self._span: Optional[otel_trace.Span] = None
-        self._otel_token: Optional[object] = None
+        self._span: otel_trace.Span | None = None
+        self._otel_token: object | None = None
         self._task_run_token = None
         self._root_token = None
-        
+
     def __enter__(self) -> str:
         """Enter the trace context and return the task_run_id."""
         # Set context variables
         self._task_run_token = set_current_task_run_id(self.task_run_id)
         self._root_token = is_root_trace_var.set(self.is_root)
-        
+
         # Set OpenTelemetry baggage for propagation
         ctx = baggage.set_baggage(TASK_RUN_ID_KEY, self.task_run_id)
         ctx = baggage.set_baggage(IS_ROOT_TRACE_KEY, str(self.is_root), context=ctx)
         if self.job_id:
             ctx = baggage.set_baggage("hud.job_id", self.job_id, context=ctx)
         self._otel_token = context.attach(ctx)
-        
+
         # Start a span
         tracer = otel_trace.get_tracer("hud-sdk")
         span_attrs = {
@@ -186,43 +186,36 @@ class trace:
         }
         if self.job_id:
             span_attrs["hud.job_id"] = self.job_id
-        
+
         self._span = tracer.start_span(
             self.span_name,
             attributes=span_attrs,
         )
         self._span.__enter__()
-        
+
         # Update task status to initializing if root
         if self.is_root:
             _fire_and_forget_status_update(self.task_run_id, "initializing", job_id=self.job_id)
-        
+
         logger.debug("Started HUD trace context for task_run_id=%s", self.task_run_id)
         return self.task_run_id
-        
+
     def __exit__(
-        self, 
+        self,
         exc_type: type[BaseException] | None,
-        exc_val: BaseException | None, 
-        exc_tb: TracebackType | None
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         """Exit the trace context."""
         # Update task status if root
         if self.is_root:
             if exc_type is not None:
                 _fire_and_forget_status_update(
-                    self.task_run_id, 
-                    "error", 
-                    job_id=self.job_id,
-                    error_message=str(exc_val)
+                    self.task_run_id, "error", job_id=self.job_id, error_message=str(exc_val)
                 )
             else:
-                _fire_and_forget_status_update(
-                    self.task_run_id, 
-                    "completed", 
-                    job_id=self.job_id
-                )
-        
+                _fire_and_forget_status_update(self.task_run_id, "completed", job_id=self.job_id)
+
         # End the span
         if self._span:
             if exc_type is not None:
@@ -231,15 +224,15 @@ class trace:
             else:
                 self._span.set_status(Status(StatusCode.OK))
             self._span.__exit__(exc_type, exc_val, exc_tb)
-        
+
         # Detach OpenTelemetry context
         if self._otel_token:
             context.detach(self._otel_token)
-        
+
         # Reset context variables
         if self._task_run_token is not None:
             current_task_run_id.reset(self._task_run_token)  # type: ignore
         if self._root_token is not None:
             is_root_trace_var.reset(self._root_token)  # type: ignore
-        
+
         logger.debug("Ended HUD trace context for task_run_id=%s", self.task_run_id)

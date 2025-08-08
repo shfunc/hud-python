@@ -8,11 +8,9 @@ from mcp import ErrorData, McpError
 from mcp.types import INTERNAL_ERROR, INVALID_PARAMS, ContentBlock
 from pydantic import Field
 
-from .base import BaseResult
-from .types import ContentResult
-from .settings import computer_settings
-
 from .hud import HudComputerTool
+from .settings import computer_settings
+from .types import ContentResult
 
 if TYPE_CHECKING:
     from anthropic.types.beta import BetaToolComputerUse20250124Param
@@ -374,7 +372,7 @@ class AnthropicComputerTool(HudComputerTool):
         # Rescale screenshot in result if present
         if isinstance(result, ContentResult) and result.base64_image and self.rescale_images:
             rescaled_image = await self._rescale_screenshot(result.base64_image)
-            result.base64_image=rescaled_image
+            result.base64_image = rescaled_image
 
         # Handle screenshot for actions that need it
         screenshot_actions = {

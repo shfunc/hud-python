@@ -18,6 +18,6 @@ __all__ = [
 
 # Version will be added by setuptools_scm
 try:
-    from ._version import version as __version__
+    from .version import __version__
 except ImportError:
     __version__ = "unknown"

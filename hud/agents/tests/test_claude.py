@@ -10,7 +10,7 @@ from anthropic import BadRequestError
 from mcp import types
 from mcp.types import CallToolRequestParams as MCPToolCall
 
-from hud.mcp.claude import (
+from hud.agents.claude import (
     ClaudeMCPAgent,
     base64_to_content_block,
     text_to_content_block,

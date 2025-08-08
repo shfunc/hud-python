@@ -305,9 +305,7 @@ class PlaywrightTool(BaseTool):
         await self._ensure_browser()
 
         try:
-            await self.page.click(
-                selector, button=button, click_count=count
-            )
+            await self.page.click(selector, button=button, click_count=count)
             return {"success": True, "message": f"Clicked element: {selector}"}
         except Exception as e:
             logger.error("Click failed: %s", e)

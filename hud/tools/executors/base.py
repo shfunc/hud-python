@@ -4,8 +4,8 @@ import asyncio
 import logging
 from typing import Literal, TypeAlias
 
-from hud.tools.types import ContentResult
 from hud.tools.computer.settings import computer_settings
+from hud.tools.types import ContentResult
 
 logger = logging.getLogger(__name__)
 
@@ -257,7 +257,9 @@ class BaseExecutor:
         screenshot = await self.screenshot() if take_screenshot else None
         return ContentResult(output=msg, base64_image=screenshot)
 
-    async def hold_key(self, key: str, duration: float, take_screenshot: bool = True) -> ContentResult:
+    async def hold_key(
+        self, key: str, duration: float, take_screenshot: bool = True
+    ) -> ContentResult:
         """
         Hold a key for a specified duration.
 

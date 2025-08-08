@@ -8,7 +8,7 @@ import pytest
 from mcp.shared.exceptions import McpError
 from mcp.types import INVALID_PARAMS, ImageContent, TextContent
 
-from hud.tools.playwright_tool import PlaywrightTool
+from hud.tools.playwright import PlaywrightTool
 
 
 class TestPlaywrightTool:
