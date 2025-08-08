@@ -75,8 +75,7 @@ class MCPAgent(ABC):
 
         # Initialize these here so methods can be called before initialize()
         self._available_tools: list[types.Tool] = []
-        # Map tool name -> Tool (simple), but some helpers expect server mapping
-        self._tool_map: dict[str, types.Tool] = {}
+        self._tool_map: dict[str, types.Tool] = {}  # Simplified: just name to tool
         self.screenshot_history: list[str] = []
 
     async def _filter_tools(self) -> None:
@@ -133,27 +132,6 @@ class MCPAgent(ABC):
         """Get list of available MCP tools for LLM use (excludes lifecycle tools)."""
         lifecycle_tool_names = self.lifecycle_tools
         return [tool for tool in self._available_tools if tool.name not in lifecycle_tool_names]
-
-    # --- Compatibility helpers used by tests and adapters ---
-    def get_tool_map(self) -> dict[str, tuple[str, types.Tool]]:
-        """Return mapping of tool name to (server_name, Tool).
-
-        Since the base agent doesn't track server names, we return a placeholder
-        server name "default" for all tools. Tests that rely on server grouping
-        will still function with this simplified mapping.
-        """
-        return {name: ("default", tool) for name, tool in self._tool_map.items()}
-
-    def get_tools_by_server(self) -> dict[str, list[types.Tool]]:
-        """Group available tools by their server name.
-
-        Uses the simplified get_tool_map() that assigns all tools to "default"
-        unless an implementation overrides this behavior.
-        """
-        tools_by_server: dict[str, list[types.Tool]] = {}
-        for name, (server, tool) in self.get_tool_map().items():
-            tools_by_server.setdefault(server, []).append(tool)
-        return tools_by_server
 
     def get_system_prompt(self) -> str:
         """Generate system prompt with optional tool information."""

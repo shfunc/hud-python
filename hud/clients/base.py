@@ -35,16 +35,6 @@ class AgentMCPClient(Protocol):
         """Execute a tool by name."""
         ...
 
-    # The following methods are used in tests and by some higher-level helpers.
-    # Implementations may or may not provide them; tests often monkey-patch them.
-    def get_all_active_sessions(self) -> dict[str, Any]:  # pragma: no cover - optional helper
-        """Return mapping of server name to active session objects."""
-        ...
-
-    def get_tool_map(self) -> dict[str, tuple[str, types.Tool]]:  # pragma: no cover - optional helper
-        """Return mapping of tool name to (server_name, Tool)."""
-        ...
-
 
 class BaseHUDClient(ABC):
     """Base class with common HUD functionality."""

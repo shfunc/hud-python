@@ -283,6 +283,7 @@ class TestBaseMCPAgent:
         agent.mcp_client.get_all_active_sessions = MagicMock(return_value={"server1": mock_session})
 
         # Mock get_tool_map to return tools discovered from sessions
+        # Tool map now derived from agent; client hook remains for compatibility
         tool_map = {
             "test_tool": (
                 "server1",
