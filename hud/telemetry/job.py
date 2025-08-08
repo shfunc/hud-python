@@ -15,6 +15,11 @@ from functools import wraps
 
 from hud.server import make_request
 from hud.settings import settings
+from hud.utils.async_utils import fire_and_forget
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Job:
@@ -41,6 +46,7 @@ class Job:
                     method="POST",
                     url=f"{settings.base_url}/v2/jobs/{self.id}/status",
                     json={
+                        "name": self.name,
                         "status": status,
                         "metadata": self.metadata,
                         "task_count": len(self.tasks),
@@ -96,13 +102,13 @@ def job(name: str, metadata: Optional[dict[str, Any]] = None, job_id: Optional[s
     
     try:
         # Update status to running
-        asyncio.create_task(job_obj.update_status("running"))
+        fire_and_forget(job_obj.update_status("running"), "update job status to running")
         yield job_obj
         # Update status to completed
-        asyncio.create_task(job_obj.update_status("completed"))
+        fire_and_forget(job_obj.update_status("completed"), "update job status to completed")
     except Exception as e:
         # Update status to failed
-        asyncio.create_task(job_obj.update_status("failed"))
+        fire_and_forget(job_obj.update_status("failed"), "update job status to failed")
         raise
     finally:
         _current_job = old_job

@@ -7,8 +7,12 @@ import logging
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
-from mcp import types
-from hud.types import MCPToolResult
+if TYPE_CHECKING:
+    import mcp.types as types
+    from hud.types import MCPToolResult
+else:
+    import mcp.types as types
+    from hud.types import MCPToolResult
 
 
 logger = logging.getLogger(__name__)
@@ -27,8 +31,8 @@ class AgentMCPClient(Protocol):
         ...
     
     async def call_tool(
-        self, 
-        name: str, 
+        self,
+        name: str,
         arguments: dict[str, Any] | None = None
     ) -> MCPToolResult:
         """Execute a tool by name."""
@@ -38,7 +42,7 @@ class AgentMCPClient(Protocol):
 class BaseHUDClient(ABC):
     """Base class with common HUD functionality."""
     
-    def __init__(self, mcp_config: dict[str, dict[str, Any]], verbose: bool = False):
+    def __init__(self, mcp_config: dict[str, dict[str, Any]], verbose: bool = False) -> None:
         """
         Initialize base client.
         
@@ -135,6 +139,11 @@ class BaseHUDClient(ABC):
     def get_available_tools(self) -> list[types.Tool]:
         """Get list of discovered tools."""
         return self._tools
+
+    @property
+    def is_connected(self) -> bool:
+        """Check if client is connected and initialized."""
+        return self._initialized
     
     @abstractmethod
     async def list_tools(self) -> list[types.Tool]:
@@ -143,8 +152,8 @@ class BaseHUDClient(ABC):
     
     @abstractmethod
     async def call_tool(
-        self, 
-        name: str, 
+        self,
+        name: str,
         arguments: dict[str, Any] | None = None
     ) -> MCPToolResult:
         """Execute a tool by name."""

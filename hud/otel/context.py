@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
 from hud.server import make_request
 from hud.settings import settings
+from hud.utils.async_utils import fire_and_forget
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ logger = logging.getLogger(__name__)
 current_task_run_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "current_task_run_id", default=None
 )
-is_root_trace: contextvars.ContextVar[bool] = contextvars.ContextVar(
+is_root_trace_var: contextvars.ContextVar[bool] = contextvars.ContextVar(
     "is_root_trace", default=False
 )
 
@@ -61,7 +62,7 @@ def is_root_trace() -> bool:
         return is_root.lower() == "true"
     
     # Fallback to contextvars
-    return is_root_trace.get()
+    return is_root_trace_var.get()
 
 
 @contextmanager
@@ -133,37 +134,10 @@ def _fire_and_forget_status_update(
     error_message: str | None = None,
 ) -> None:
     """Fire and forget status update - works in any context including Jupyter."""
-    import asyncio
-    
-    coro = _update_task_status_async(task_run_id, status, job_id, error_message)
-    
-    try:
-        # Try to get current event loop
-        loop = asyncio.get_running_loop()
-        # Schedule the coroutine
-        task = loop.create_task(coro)
-        # Add error handler to prevent unhandled exceptions
-        task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
-    except RuntimeError:
-        # No running event loop (e.g., Jupyter without %autoawait)
-        # Use the same pattern as the old telemetry system
-        try:
-            # Try to run in a thread as a fallback
-            import threading
-            import asyncio
-            
-            def run_in_thread():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(coro)
-                
-            thread = threading.Thread(target=run_in_thread, daemon=True)
-            thread.start()
-        except Exception as e:
-            # If that fails too, just log and continue
-            # Special case: suppress "cannot schedule new futures after interpreter shutdown"
-            if "interpreter shutdown" not in str(e):
-                logger.debug(f"Could not update task status - no event loop available: {e}")
+    fire_and_forget(
+        _update_task_status_async(task_run_id, status, job_id, error_message),
+        f"update task {task_run_id} status to {status}"
+    )
 
 
 class trace:
@@ -194,7 +168,7 @@ class trace:
         """Enter the trace context and return the task_run_id."""
         # Set context variables
         self._task_run_token = set_current_task_run_id(self.task_run_id)
-        self._root_token = is_root_trace.set(self.is_root)
+        self._root_token = is_root_trace_var.set(self.is_root)
         
         # Set OpenTelemetry baggage for propagation
         ctx = baggage.set_baggage(TASK_RUN_ID_KEY, self.task_run_id)
@@ -266,6 +240,6 @@ class trace:
         if self._task_run_token is not None:
             current_task_run_id.reset(self._task_run_token)  # type: ignore
         if self._root_token is not None:
-            is_root_trace.reset(self._root_token)  # type: ignore
+            is_root_trace_var.reset(self._root_token)  # type: ignore
         
         logger.debug("Ended HUD trace context for task_run_id=%s", self.task_run_id)
