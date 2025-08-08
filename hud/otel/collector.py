@@ -41,8 +41,7 @@ class TraceCollector:
     
     def to_trace(self) -> Trace:
         """Convert collected spans to a Trace object."""
-        from .exporters import _span_to_dict
-        from .hud_models import HudSpan
+        from .exporters import _span_to_dict, HudSpan
         
         trace = Trace()
         

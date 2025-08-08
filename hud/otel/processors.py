@@ -6,7 +6,7 @@ from typing import Optional
 from opentelemetry import baggage, context
 from opentelemetry.sdk.trace import ReadableSpan, SpanProcessor, Span
 
-from hud.otel.context import get_current_task_run_id
+from .context import get_current_task_run_id
 
 logger = logging.getLogger(__name__)
 

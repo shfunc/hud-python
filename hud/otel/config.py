@@ -25,7 +25,7 @@ from hud.settings import settings
 from .exporters import HudSpanExporter
 from .processors import HudEnrichmentProcessor
 from .collector import install_collector, enable_trace_collection
-from .auto_instrument import auto_instrument_agents
+from .instrumentation import auto_instrument_agents, install_mcp_instrumentation
 
 logger = logging.getLogger(__name__)
 
@@ -33,19 +33,7 @@ logger = logging.getLogger(__name__)
 _TRACER_PROVIDER: Optional[TracerProvider] = None
 
 
-def _install_mcp_instrumentation(provider: TracerProvider) -> None:  # pragma: no cover
-    """Enable community MCP OpenTelemetry instrumentation if present."""
-    try:
-        from opentelemetry.instrumentation.mcp.instrumentation import (  # type: ignore
-            McpInstrumentor,
-        )
 
-        McpInstrumentor().instrument(tracer_provider=provider)
-        logger.debug("MCP instrumentation installed")
-    except ImportError:
-        logger.debug("opentelemetry-instrumentation-mcp not available – skipping")
-    except Exception as exc:  # pragma: no cover
-        logger.warning("Failed to install MCP instrumentation: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +122,7 @@ def configure_telemetry(
     # 4. Activate provider and instrumentation
     # ------------------------------------------------------------------
     trace.set_tracer_provider(provider)
-    _install_mcp_instrumentation(provider)
+    install_mcp_instrumentation(provider)
     
     # Install in-memory collector if requested
     if enable_collection:

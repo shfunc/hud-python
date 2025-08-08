@@ -4,17 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 import mcp.types as types
-from .types import MCPToolCall, MCPToolResult, AgentResponse, AgentResult
+
+from .types import AgentResponse, AgentResult, MCPToolCall, MCPToolResult
 
 if TYPE_CHECKING:
     from hud.datasets import TaskConfig
 
-    from .client import MCPClient
+    from .clients.base import AgentMCPClient
 
 
 logger = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ class MCPAgent(ABC):
 
     def __init__(
         self,
-        mcp_client: MCPClient | None = None,
+        mcp_client: AgentMCPClient | None = None,
         allowed_tools: list[str] | None = None,
         disallowed_tools: list[str] | None = None,
         initial_screenshot: bool = False,
@@ -44,7 +44,7 @@ class MCPAgent(ABC):
         Initialize the base MCP agent.
 
         Args:
-            mcp_client: MCPClient instance for server connections
+            mcp_client: AgentMCPClient instance for server connections
             allowed_tools: List of tool names to allow (None = all tools)
             disallowed_tools: List of tool names to disallow
             initial_screenshot: Whether to capture screenshot before first prompt
@@ -75,33 +75,33 @@ class MCPAgent(ABC):
 
         # Initialize these here so methods can be called before initialize()
         self._available_tools: list[types.Tool] = []
-        self._tool_map: dict[str, tuple[str, types.Tool]] = {}
+        self._tool_map: dict[str, types.Tool] = {}  # Simplified: just name to tool
         self.screenshot_history: list[str] = []
 
-    def _filter_tools(self) -> None:
+    async def _filter_tools(self) -> None:
         """Apply tool filtering based on allowed/disallowed lists."""
         # Get all tools from client
-        tool_map = self.mcp_client.get_tool_map()
+        all_tools = await self.mcp_client.list_tools()
 
         # Filter tools
         self._available_tools = []
         self._tool_map = {}
 
-        for tool_name, (server_name, tool) in tool_map.items():
+        for tool in all_tools:
             # Check if tool should be included
-            if self.allowed_tools and tool_name not in self.allowed_tools:
+            if self.allowed_tools and tool.name not in self.allowed_tools:
                 continue
-            if tool_name in self.disallowed_tools:
+            if tool.name in self.disallowed_tools:
                 continue
 
             self._available_tools.append(tool)
-            self._tool_map[tool_name] = (server_name, tool)
+            # Simplified mapping - just tool name to tool
+            self._tool_map[tool.name] = tool
 
     async def initialize(self, task: str | TaskConfig | None = None) -> None:
         """Initialize the agent with task-specific configuration."""
-        # If client wasn't initialized on construction, do it now
-        if not self.mcp_client.get_sessions():
-            await self.mcp_client.initialize()
+        # Initialize client if needed
+        await self.mcp_client.initialize()
 
         # If task is provided, add lifecycle tools
         from hud.datasets import TaskConfig
@@ -121,7 +121,7 @@ class MCPAgent(ABC):
                     self.lifecycle_tools.append(task.evaluate_tool.name)
 
         # Re-apply filtering with updated lifecycle tools
-        self._filter_tools()
+        await self._filter_tools()
 
         logger.info(
             "Agent initialized with %d available tools (after filtering)",
@@ -133,35 +133,6 @@ class MCPAgent(ABC):
         lifecycle_tool_names = self.lifecycle_tools
         return [tool for tool in self._available_tools if tool.name not in lifecycle_tool_names]
 
-    def get_tool_map(self) -> dict[str, tuple[str, types.Tool]]:
-        """Get mapping of tool names to (server_name, tool) tuples."""
-        return self._tool_map
-
-    def get_sessions(self) -> dict[str, Any]:
-        """Get active MCP sessions."""
-        return self.mcp_client.get_sessions()
-
-    def get_tools_by_server(self) -> dict[str, list[types.Tool]]:
-        """Get tools grouped by server name."""
-        tools_by_server = {}
-        for server_name, tool in self._tool_map.values():
-            if server_name not in tools_by_server:
-                tools_by_server[server_name] = []
-            tools_by_server[server_name].append(tool)
-        return tools_by_server
-
-    def get_tools_by_connector(self) -> dict[Any, list[types.Tool]]:
-        """Get tools grouped by connector instance."""
-        tools_by_connector = {}
-        sessions = self.mcp_client.get_sessions()
-        for server_name, tool in self._tool_map.values():
-            session = sessions[server_name]
-            connector = session.connector
-
-            if connector not in tools_by_connector:
-                tools_by_connector[connector] = []
-            tools_by_connector[connector].append(tool)
-        return tools_by_connector
 
     def get_system_prompt(self) -> str:
         """Generate system prompt with optional tool information."""
@@ -405,8 +376,6 @@ class MCPAgent(ABC):
                 else:
                     logger.info("Step %s/%s", step_count, max_steps)
 
-                start_timestamp = datetime.now().isoformat()
-                
                 try:
                     # 1. Get model response
                     response = await self.get_model_response(messages)
@@ -429,8 +398,6 @@ class MCPAgent(ABC):
                     tool_messages = await self.format_tool_results(tool_calls, tool_results)
                     messages.extend(tool_messages)
                     
-
-
                 except Exception as e:
                     logger.error("Step failed: %s", e)
                     error = str(e)

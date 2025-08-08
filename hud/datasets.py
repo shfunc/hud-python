@@ -6,12 +6,10 @@ import asyncio
 import json
 import logging
 from string import Template
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from datasets import Dataset
 from pydantic import BaseModel, Field, field_validator
-
-from hud.job import job
 
 from .types import MCPToolCall
 
@@ -19,7 +17,6 @@ if TYPE_CHECKING:
     from datasets import Dataset
 
     from hud.agent import MCPAgent
-    from hud.types import Trajectory
 
 logger = logging.getLogger("hud.datasets")
 
@@ -65,7 +62,7 @@ class TaskConfig(BaseModel):
         """
         import os
 
-        from hud.otel.context import get_current_task_run_id
+        from hud.otel import get_current_task_run_id
 
         # Start with current environment variables
         mapping = dict(os.environ)
@@ -117,8 +114,10 @@ def to_taskconfigs(dataset: Dataset) -> list[TaskConfig]:
     try:
         tasks = []
         for row in dataset:
+            # Cast row to dict for type checker
+            row = cast("dict[str, Any]", row)
             # Build TaskConfig dict, parsing JSON string fields
-            tc_dict = {
+            tc_dict: dict[str, Any] = {
                 "prompt": row["prompt"],
                 "mcp_config": json.loads(row["mcp_config"]),
             }
@@ -149,7 +148,7 @@ def to_taskconfigs(dataset: Dataset) -> list[TaskConfig]:
 async def run_dataset(
     name: str,
     dataset: Dataset | list[TaskConfig],
-    agent_class: type[BaseMCPAgent],
+    agent_class: type[MCPAgent],
     agent_config: dict[str, Any] | None = None,
     max_concurrent: int = 5,
     metadata: dict[str, Any] | None = None,
@@ -199,15 +198,15 @@ async def run_dataset(
     if agent_config:
         job_metadata["agent_config"] = agent_config
 
-    with job(name, metadata=job_metadata):
+    with hud.job(name, metadata=job_metadata) as job_obj:
         # Run tasks with semaphore for concurrency control
         sem = asyncio.Semaphore(max_concurrent)
-        results: list[Trajectory | None] = [None] * len(tasks)
+        results: list[Any | None] = [None] * len(tasks)
 
         async def _worker(index: int, task: TaskConfig) -> None:
             async with sem:
                 # Create trace for this task
-                with hud.trace(f"task_{index}"):
+                with hud.trace(f"task_{index}", job_id=job_obj.id):
                     # Create fresh MCP client per task
                     if task.mcp_config:
                         client = MCPClient(mcp_config=task.mcp_config)

@@ -5,12 +5,15 @@ The HUD SDK provides tools for building, evaluating, and deploying AI agents.
 
 from __future__ import annotations
 
-# Import trace function directly for clean access
-from .trace import trace, get_trace
+# Import telemetry functions directly for clean access
+from .telemetry import trace, job, get_trace, clear_trace, create_job
 
 __all__ = [
     "trace",
-    "get_trace",
+    "job",
+    "get_trace", 
+    "clear_trace",
+    "create_job",
 ]
 
 # Version will be added by setuptools_scm

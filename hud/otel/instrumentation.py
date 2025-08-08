@@ -1,7 +1,7 @@
-"""Automatic instrumentation for HUD agents.
+"""Automatic instrumentation for HUD agents and MCP.
 
 This module provides functions to automatically instrument agent classes
-without requiring decorators or code changes.
+and MCP communication without requiring decorators or code changes.
 """
 
 from __future__ import annotations
@@ -149,3 +149,25 @@ def auto_instrument_agents() -> None:
         except Exception as e:
             import logging
             logging.getLogger(__name__).debug(f"Failed to instrument {agent_cls.__name__}: {e}")
+
+
+def install_mcp_instrumentation(provider) -> None:
+    """Enable community MCP OpenTelemetry instrumentation if present.
+    
+    Args:
+        provider: The TracerProvider to use for instrumentation
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        from opentelemetry.instrumentation.mcp.instrumentation import (  # type: ignore
+            McpInstrumentor,
+        )
+
+        McpInstrumentor().instrument(tracer_provider=provider)
+        logger.debug("MCP instrumentation installed")
+    except ImportError:
+        logger.debug("opentelemetry-instrumentation-mcp not available – skipping")
+    except Exception as exc:
+        logger.warning("Failed to install MCP instrumentation: %s", exc)
