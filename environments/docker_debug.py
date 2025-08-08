@@ -447,7 +447,7 @@ async def debug_mcp_stdio(command: List[str], logger: CaptureLogger, max_phase: 
     logger.phase(3, "MCP Tool Discovery Test")
 
     try:
-        from hud.mcp import MCPClient
+        from hud.client import MCPClient
 
         # Create MCP config for the command
         mcp_config = {
@@ -493,13 +493,11 @@ async def debug_mcp_stdio(command: List[str], logger: CaptureLogger, max_phase: 
 
             # Try to list resources
             try:
-                session = client._sessions.get("test")
-                if session and hasattr(session, "list_resources"):
-                    resources = await session.list_resources()
-                    if resources:
-                        logger.info(
-                            f"Found {len(resources)} resources: {', '.join(r.uri for r in resources[:3])}..."
-                        )
+                resources = await client.list_resources()
+                if resources:
+                    logger.info(
+                        f"Found {len(resources)} resources: {', '.join(str(r.uri) for r in resources[:3])}..."
+                    )
             except:
                 pass
 
