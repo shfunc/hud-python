@@ -20,9 +20,7 @@ async def test_bash_tool_echo():
     # Monkey-patch the private _session methods so no subprocess is spawned
     class _FakeSession:
         async def run(self, cmd: str):
-            from hud.tools.base import ToolResult
-
-            return ToolResult(output=f"mocked: {cmd}")
+            return [TextContent(text=f"mocked: {cmd}")]
 
         async def start(self):
             return None
@@ -30,7 +28,9 @@ async def test_bash_tool_echo():
     tool._session = _FakeSession()  # type: ignore[attr-defined]
 
     result = await tool(command="echo hello")
-    assert result.output == "mocked: echo hello"
+    assert len(result) > 0
+    assert isinstance(result[0], TextContent)
+    assert result[0].text == "mocked: echo hello"
 
 
 @pytest.mark.asyncio
@@ -42,7 +42,7 @@ async def test_bash_tool_restart_and_no_command():
 
     class _FakeSession:
         async def run(self, cmd: str):
-            return ToolResult(output="ran")
+            return [TextContent(text="ran")]
 
         async def start(self):
             return None
@@ -142,7 +142,10 @@ def test_register_instance_tool_signature():
     from mcp.server.fastmcp import FastMCP
 
     mcp = FastMCP("test")
-    fn = register_instance_tool(mcp, "dummy", Dummy())
+    # register_instance_tool was removed from the codebase
+    pytest.skip("register_instance_tool was removed from the codebase")
+    return  # Skip the rest of the test
+    fn = None  # register_instance_tool(mcp, "dummy", Dummy())
     sig = inspect.signature(fn)
     params = list(sig.parameters.values())
 

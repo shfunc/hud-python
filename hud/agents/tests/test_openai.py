@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from mcp import types
-from mcp.types import CallToolRequestParams as MCPToolCall
+from hud.types import MCPToolCall, MCPToolResult
 
 from hud.agents.openai import OpenAIMCPAgent
 
@@ -18,8 +18,6 @@ class TestOpenAIMCPAgent:
     def mock_mcp_client(self):
         """Create a mock MCP client."""
         mcp_client = MagicMock()
-        mcp_client.get_all_active_sessions = MagicMock(return_value={})
-        mcp_client.get_tool_map = MagicMock(return_value={})
         return mcp_client
 
     @pytest.fixture
@@ -71,10 +69,10 @@ class TestOpenAIMCPAgent:
         ]
 
         tool_results = [
-            types.CallToolResult(
+            MCPToolResult(
                 content=[types.TextContent(type="text", text="Success")], isError=False
             ),
-            types.CallToolResult(
+            MCPToolResult(
                 content=[types.ImageContent(type="image", data="base64data", mimeType="image/png")],
                 isError=False,
             ),
@@ -99,7 +97,7 @@ class TestOpenAIMCPAgent:
         ]
 
         tool_results = [
-            types.CallToolResult(
+            MCPToolResult(
                 content=[types.TextContent(type="text", text="Something went wrong")], isError=True
             ),
         ]
@@ -159,14 +157,7 @@ class TestOpenAIMCPAgent:
         agent._available_tools = [
             types.Tool(name="search", description="Search tool", inputSchema={"type": "object"})
         ]
-        agent._tool_map = {
-            "search": (
-                "server1",
-                types.Tool(
-                    name="search", description="Search tool", inputSchema={"type": "object"}
-                ),
-            )
-        }
+        # Base agent doesn't require server mapping for tool execution
 
         # Mock initial response with tool use
         initial_choice = MagicMock()

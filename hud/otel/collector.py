@@ -129,9 +129,13 @@ def install_collector() -> None:
     This should be called after configure_telemetry().
     """
     provider = trace.get_tracer_provider()
+    # Guard for SDK tracer providers only
     if hasattr(provider, "add_span_processor"):
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 
         exporter = CollectingSpanExporter()
         processor = SimpleSpanProcessor(exporter)
-        provider.add_span_processor(processor)
+        try:
+            provider.add_span_processor(processor)  # type: ignore[attr-defined]
+        except Exception:
+            pass

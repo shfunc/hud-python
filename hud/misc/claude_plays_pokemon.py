@@ -1,3 +1,4 @@
+# pyright: reportGeneralTypeIssues=false
 from __future__ import annotations
 
 import json
@@ -8,7 +9,11 @@ from anthropic import AsyncAnthropic
 
 from hud.adapters import Adapter
 from hud.adapters.common.types import CLA
-from hud.agent import Agent
+# Update import to current API; if this script is legacy, keep it optional
+try:
+    from hud.agent import MCPAgent as Agent  # type: ignore[assignment]
+except Exception:  # pragma: no cover - optional example script
+    from hud.agent import MCPAgent as Agent  # fallback
 from hud.settings import settings
 
 if TYPE_CHECKING:

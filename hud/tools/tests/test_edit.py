@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from hud.tools.base import ToolResult
+from hud.types import TextContent
 from hud.tools.edit import EditTool, ToolError
 
 
@@ -21,7 +22,8 @@ class TestEditTool:
         """Test EditTool initialization."""
         tool = EditTool()
         assert tool is not None
-        assert tool._file_history == {}
+        # File history tracking was removed
+        # assert tool._file_history == {}
 
     @pytest.mark.asyncio
     async def test_validate_path_not_absolute(self):
@@ -78,13 +80,15 @@ class TestEditTool:
             with patch.object(tool, "write_file", new_callable=AsyncMock) as mock_write:
                 result = await tool(command="create", path=str(file_path), file_text=content)
 
-                assert isinstance(result, ToolResult)
-                assert result.output is not None
-                assert "created successfully" in result.output
+                assert isinstance(result, list)
+                assert len(result) > 0
+                assert isinstance(result[0], TextContent)
+                assert "created successfully" in result[0].text
                 mock_write.assert_called_once_with(file_path, content)
                 # Check history
-                assert file_path in tool._file_history
-                assert tool._file_history[file_path] == [content]
+                # File history tracking was removed
+                # assert file_path in tool._file_history
+                # assert tool._file_history[file_path] == [content]
 
     @pytest.mark.asyncio
     async def test_create_file_no_text(self):
@@ -115,11 +119,12 @@ class TestEditTool:
 
             result = await tool(command="view", path="/tmp/test.txt")
 
-            assert isinstance(result, ToolResult)
-            assert result.output is not None
-            assert "Line 1" in result.output
-            assert "Line 2" in result.output
-            assert "Line 3" in result.output
+            assert isinstance(result, list)
+            assert len(result) > 0
+            assert isinstance(result[0], TextContent)
+            assert "Line 1" in result[0].text
+            assert "Line 2" in result[0].text
+            assert "Line 3" in result[0].text
 
     @pytest.mark.asyncio
     async def test_view_with_range(self):
@@ -137,15 +142,16 @@ class TestEditTool:
 
             result = await tool(command="view", path="/tmp/test.txt", view_range=[3, 5])
 
-            assert isinstance(result, ToolResult)
-            assert result.output is not None
+            assert isinstance(result, list)
+            assert len(result) > 0
+            assert isinstance(result[0], TextContent)
             # Lines 3-5 should be in output (using tab format)
-            assert "3\tLine 3" in result.output
-            assert "4\tLine 4" in result.output
-            assert "5\tLine 5" in result.output
+            assert "3\tLine 3" in result[0].text
+            assert "4\tLine 4" in result[0].text
+            assert "5\tLine 5" in result[0].text
             # Line 1 and 10 should not be in output (outside range)
-            assert "1\tLine 1" not in result.output
-            assert "10\tLine 10" not in result.output
+            assert "1\tLine 1" not in result[0].text
+            assert "10\tLine 10" not in result[0].text
 
     @pytest.mark.asyncio
     async def test_str_replace_success(self):
@@ -167,9 +173,10 @@ class TestEditTool:
                 command="str_replace", path="/tmp/test.txt", old_str="World", new_str="Universe"
             )
 
-            assert isinstance(result, ToolResult)
-            assert result.output is not None
-            assert "has been edited" in result.output
+            assert isinstance(result, list)
+            assert len(result) > 0
+            assert isinstance(result[0], TextContent)
+            assert "has been edited" in result[0].text
             mock_write.assert_called_once_with(Path("/tmp/test.txt"), expected_content)
 
     @pytest.mark.asyncio

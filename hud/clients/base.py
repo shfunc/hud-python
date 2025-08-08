@@ -146,6 +146,11 @@ class BaseHUDClient(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def list_resources(self) -> list[types.Resource]:
+        """List all available resources."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def call_tool(self, name: str, arguments: dict[str, Any] | None = None) -> MCPToolResult:
         """Execute a tool by name."""
         raise NotImplementedError

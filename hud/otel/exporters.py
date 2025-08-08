@@ -131,11 +131,12 @@ def extract_span_attributes(
                             output_data
                         )  # TraceStep expects mcp_result
                         # Check for isError in the result
-                        if (
-                            hasattr(result_attrs["mcp_result"].root, "isError")
-                            and result_attrs["mcp_result"].root.isError
-                        ):
-                            result_attrs["mcp_error"] = True
+                        try:
+                            root = result_attrs["mcp_result"].root  # type: ignore[assignment]
+                            if getattr(root, "isError", False):
+                                result_attrs["mcp_error"] = True
+                        except Exception:
+                            pass
             except Exception as e:
                 logger.debug(f"Failed to parse result as MCP type: {e}")
 
@@ -180,26 +181,45 @@ def _span_to_dict(span: ReadableSpan) -> dict[str, Any]:
     attrs = dict(span.attributes or {})
 
     # Extract method name from span name if not in attributes
-    method_name = attrs.get("semconv_ai.mcp.method_name")
-    if not method_name and span.name.endswith(".mcp"):
+    raw_method = attrs.get("semconv_ai.mcp.method_name")
+    method_name: str | None = None
+    if isinstance(raw_method, str):
+        method_name = raw_method
+    if method_name is None and isinstance(span.name, str) and span.name.endswith(".mcp"):
         method_name = span.name[:-4]  # Remove .mcp suffix
 
     # Create typed attributes
-    typed_attrs = extract_span_attributes(attrs, method_name, span.name)
+    typed_attrs = extract_span_attributes(attrs, method_name, str(span.name))
 
-    # Override span kind from the span itself
-    typed_attrs.span_kind = span.kind.name
+    # Record span kind as extra attribute (TraceStep allows extras)
+    try:
+        typed_attrs.span_kind = span.kind.name  # type: ignore[attr-defined]
+    except Exception:
+        pass
 
     # Build typed span
+    # Guard context/parent/timestamps
+    trace_id_hex = (
+        format(span.context.trace_id, "032x") if getattr(span, "context", None) else "0" * 32
+    )
+    span_id_hex = (
+        format(span.context.span_id, "016x") if getattr(span, "context", None) else "0" * 16
+    )
+    parent_id_hex = (
+        format(span.parent.span_id, "016x")
+        if getattr(span, "parent", None) and getattr(span.parent, "span_id", None)
+        else None
+    )
+    start_ns = span.start_time or 0
+    end_ns = span.end_time or start_ns
+
     typed_span = HudSpan(
         name=span.name,
-        trace_id=format(span.context.trace_id, "032x"),
-        span_id=format(span.context.span_id, "016x"),
-        parent_span_id=format(span.parent.span_id, "016x")
-        if span.parent and span.parent.span_id
-        else None,
-        start_time=_ts_ns_to_iso(span.start_time),
-        end_time=_ts_ns_to_iso(span.end_time),
+        trace_id=trace_id_hex,
+        span_id=span_id_hex,
+        parent_span_id=parent_id_hex,
+        start_time=_ts_ns_to_iso(int(start_ns)),
+        end_time=_ts_ns_to_iso(int(end_ns)),
         status_code=span.status.status_code.name if span.status else "UNSET",
         status_message=span.status.description if span.status else None,
         attributes=typed_attrs,

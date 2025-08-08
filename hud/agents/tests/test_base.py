@@ -14,7 +14,7 @@ except ImportError:
 
 import pytest
 from mcp import types
-from mcp.types import CallToolRequestParams as MCPToolCall
+from hud.types import MCPToolCall
 
 from hud.agent import MCPAgent
 from hud.tools.executors.base import BaseExecutor
@@ -159,24 +159,6 @@ class TestBaseMCPAgent:
         mock_session.connector.client_session.list_tools = mock_list_tools
 
         assert agent.mcp_client is not None
-        agent.mcp_client.get_all_active_sessions = MagicMock(return_value={"server1": mock_session})
-
-        # Mock get_tool_map to return tools discovered from sessions
-        tool_map = {
-            "tool1": (
-                "server1",
-                types.Tool(name="tool1", description="Tool 1", inputSchema={"type": "object"}),
-            ),
-            "tool2": (
-                "server1",
-                types.Tool(name="tool2", description="Tool 2", inputSchema={"type": "object"}),
-            ),
-            "setup": (
-                "server1",
-                types.Tool(name="setup", description="Setup tool", inputSchema={"type": "object"}),
-            ),
-        }
-        agent.mcp_client.get_tool_map = MagicMock(return_value=tool_map)
 
         await agent.initialize()
 
@@ -184,12 +166,9 @@ class TestBaseMCPAgent:
         tools = agent.get_available_tools()
         assert len(tools) == 3  # All tools (setup is not in default lifecycle tools)
 
-        # Check tool map was populated (includes all tools)
-        tool_map = agent.get_tool_map()
-        assert len(tool_map) == 3
-        assert "tool1" in tool_map
-        assert "tool2" in tool_map
-        assert "setup" in tool_map
+        # Ensure names exist in available tools
+        names = {t.name for t in tools}
+        assert {"tool1", "tool2", "setup"} <= names
 
     @pytest.mark.asyncio
     async def test_initialize_with_filtering(self):
@@ -216,28 +195,6 @@ class TestBaseMCPAgent:
         mock_session.connector.client_session.list_tools = mock_list_tools
 
         assert agent.mcp_client is not None
-        agent.mcp_client.get_all_active_sessions = MagicMock(return_value={"server1": mock_session})
-
-        # Mock get_tool_map to return tools discovered from sessions
-        tool_map = {
-            "tool1": (
-                "server1",
-                types.Tool(name="tool1", description="Tool 1", inputSchema={"type": "object"}),
-            ),
-            "tool2": (
-                "server1",
-                types.Tool(name="tool2", description="Tool 2", inputSchema={"type": "object"}),
-            ),
-            "tool3": (
-                "server1",
-                types.Tool(name="tool3", description="Tool 3", inputSchema={"type": "object"}),
-            ),
-            "setup": (
-                "server1",
-                types.Tool(name="setup", description="Setup", inputSchema={"type": "object"}),
-            ),
-        }
-        agent.mcp_client.get_tool_map = MagicMock(return_value=tool_map)
 
         await agent.initialize()
 
@@ -280,17 +237,6 @@ class TestBaseMCPAgent:
         mock_session.connector.client_session.call_tool = mock_call_tool
 
         assert agent.mcp_client is not None
-        agent.mcp_client.get_all_active_sessions = MagicMock(return_value={"server1": mock_session})
-
-        # Mock get_tool_map to return tools discovered from sessions
-        # Tool map now derived from agent; client hook remains for compatibility
-        tool_map = {
-            "test_tool": (
-                "server1",
-                types.Tool(name="test_tool", description="Test", inputSchema={"type": "object"}),
-            )
-        }
-        agent.mcp_client.get_tool_map = MagicMock(return_value=tool_map)
 
         # Mock the client's call_tool method directly
         agent.mcp_client.call_tool = AsyncMock(return_value=mock_result)
@@ -317,7 +263,6 @@ class TestBaseMCPAgent:
 
         mock_session.list_tools = mock_list_tools
         assert agent.mcp_client is not None
-        agent.mcp_client.get_all_active_sessions = MagicMock(return_value={"server1": mock_session})
 
         await agent.initialize()
 
@@ -443,18 +388,8 @@ class TestBaseMCPAgent:
         mock_session.connector.client_session.call_tool = mock_call_tool
 
         assert agent.mcp_client is not None
-        agent.mcp_client.get_all_active_sessions = MagicMock(return_value={"server1": mock_session})
 
-        # Mock get_tool_map to return tools discovered from sessions
-        tool_map = {
-            "screenshot": (
-                "server1",
-                types.Tool(
-                    name="screenshot", description="Screenshot", inputSchema={"type": "object"}
-                ),
-            )
-        }
-        agent.mcp_client.get_tool_map = MagicMock(return_value=tool_map)
+        # No tool map mocking required
 
         # Mock the client's call_tool method directly
         agent.mcp_client.call_tool = AsyncMock(return_value=mock_result)
@@ -476,18 +411,8 @@ class TestBaseMCPAgent:
         tool2 = types.Tool(name="tool2", description="Tool 2", inputSchema={"type": "object"})
 
         agent._available_tools = [tool1, tool2]
-        agent._tool_map = {
-            "tool1": ("server1", tool1),
-            "tool2": ("server2", tool2),
-        }
-
-        tools_by_server = agent.get_tools_by_server()
-
-        assert len(tools_by_server) == 2
-        assert "server1" in tools_by_server
-        assert "server2" in tools_by_server
-        assert tools_by_server["server1"] == [tool1]
-        assert tools_by_server["server2"] == [tool2]
+        tools = agent.get_available_tools()
+        assert {t.name for t in tools} == {"tool1", "tool2"}
 
     @pytest.mark.asyncio
     async def test_executor_integration(self):

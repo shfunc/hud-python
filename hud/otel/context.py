@@ -58,7 +58,7 @@ def is_root_trace() -> bool:
     """Check if current context is a root trace."""
     # First try OTel baggage
     is_root = baggage.get_baggage(IS_ROOT_TRACE_KEY)
-    if is_root is not None:
+    if isinstance(is_root, str):
         return is_root.lower() == "true"
 
     # Fallback to contextvars
@@ -140,6 +140,61 @@ def _fire_and_forget_status_update(
     )
 
 
+def _print_trace_url(task_run_id: str) -> None:
+    """Print the trace URL in a colorful box."""
+    url = f"https://app.hud.so/trace/{task_run_id}"
+    header = "🚀 See your agent live at:"
+
+    # ANSI color codes
+    DIM = "\033[90m"  # Dim/Gray for border (visible on both light and dark terminals)
+    GOLD = "\033[33m"  # Gold/Yellow for URL
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+
+    # Calculate box width based on the longest line
+    box_width = max(len(url), len(header)) + 6
+
+    # Box drawing characters
+    top_border = "╔" + "═" * (box_width - 2) + "╗"
+    bottom_border = "╚" + "═" * (box_width - 2) + "╝"
+    divider = "╟" + "─" * (box_width - 2) + "╢"
+
+    # Center the content
+    header_padding = (box_width - len(header) - 2) // 2
+    url_padding = (box_width - len(url) - 2) // 2
+
+    # Print the box
+    print(f"\n{DIM}{top_border}{RESET}")
+    print(
+        f"{DIM}║{RESET}{' ' * header_padding}{header}{' ' * (box_width - len(header) - header_padding - 3)}{DIM}║{RESET}"  # noqa: E501
+    )
+    print(f"{DIM}{divider}{RESET}")
+    print(
+        f"{DIM}║{RESET}{' ' * url_padding}{BOLD}{GOLD}{url}{RESET}{' ' * (box_width - len(url) - url_padding - 2)}{DIM}║{RESET}"  # noqa: E501
+    )
+    print(f"{DIM}{bottom_border}{RESET}\n")
+
+
+def _print_trace_complete_url(task_run_id: str, error_occurred: bool = False) -> None:
+    """Print the trace completion URL with appropriate messaging."""
+    url = f"https://app.hud.so/trace/{task_run_id}"
+
+    # ANSI color codes
+    GREEN = "\033[92m"
+    RED = "\033[91m"
+    GOLD = "\033[33m"
+    RESET = "\033[0m"
+    DIM = "\033[2m"
+    BOLD = "\033[1m"
+
+    if error_occurred:
+        print(
+            f"\n{RED}✗ Trace errored!{RESET} {DIM}More error details available at:{RESET} {BOLD}{GOLD}{url}{RESET}\n"  # noqa: E501
+        )
+    else:
+        print(f"\n{GREEN}✓ Trace complete!{RESET} {DIM}View at:{RESET} {BOLD}{GOLD}{url}{RESET}\n")
+
+
 class trace:
     """Internal OpenTelemetry trace context manager.
 
@@ -196,6 +251,8 @@ class trace:
         # Update task status to initializing if root
         if self.is_root:
             _fire_and_forget_status_update(self.task_run_id, "initializing", job_id=self.job_id)
+            # Print the nice trace URL box
+            _print_trace_url(self.task_run_id)
 
         logger.debug("Started HUD trace context for task_run_id=%s", self.task_run_id)
         return self.task_run_id
@@ -213,12 +270,16 @@ class trace:
                 _fire_and_forget_status_update(
                     self.task_run_id, "error", job_id=self.job_id, error_message=str(exc_val)
                 )
+                # Print error completion message
+                _print_trace_complete_url(self.task_run_id, error_occurred=True)
             else:
                 _fire_and_forget_status_update(self.task_run_id, "completed", job_id=self.job_id)
+                # Print success completion message
+                _print_trace_complete_url(self.task_run_id, error_occurred=False)
 
         # End the span
         if self._span:
-            if exc_type is not None:
+            if exc_type is not None and exc_val is not None:
                 self._span.record_exception(exc_val)
                 self._span.set_status(Status(StatusCode.ERROR, str(exc_val)))
             else:
@@ -226,8 +287,11 @@ class trace:
             self._span.__exit__(exc_type, exc_val, exc_tb)
 
         # Detach OpenTelemetry context
-        if self._otel_token:
-            context.detach(self._otel_token)
+        if self._otel_token is not None:
+            try:
+                context.detach(self._otel_token)  # type: ignore[arg-type]
+            except Exception:
+                pass
 
         # Reset context variables
         if self._task_run_token is not None:

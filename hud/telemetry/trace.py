@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import uuid
 from contextlib import contextmanager
-from typing import Any
+from typing import Any, Generator
 
 from hud.otel import configure_telemetry
 from hud.otel import trace as OtelTrace
@@ -18,48 +18,45 @@ __all__ = ["trace"]
 
 @contextmanager
 def trace(
-    task_run_id: str | None = None,
+    name: str = "Test task from hud",
     *,
     root: bool = True,
-    name: str = "hud.task",
     attrs: dict[str, Any] | None = None,
     job_id: str | None = None,
-):
+) -> Generator[str, None, None]:
     """Start a HUD trace context.
 
-    If ``task_run_id`` is not provided, a new one is generated.
+    A unique task_run_id is automatically generated for each trace.
 
     Args:
-        task_run_id: Unique identifier for this task run. Auto-generated if not provided.
+        name: Descriptive name for this trace/task
         root: Whether this is a root trace (updates task status)
-        name: Span name for OpenTelemetry
         attrs: Additional attributes to attach to the trace
         job_id: Optional job ID to associate with this trace
 
     Yields:
-        str: The task run ID
+        str: The auto-generated task run ID
 
     Usage:
         import hud
 
-        with hud.trace() as task_run_id:
+        with hud.trace("My Task") as task_run_id:
             # Your code here
             print(f"Running task: {task_run_id}")
 
-        # Or with job_id:
-        with hud.trace(job_id="job-123") as task_run_id:
+        # Or with default name:
+        with hud.trace() as task_run_id:
             pass
 
-        # Or with custom ID:
-        with hud.trace("my-specific-task-id") as task_run_id:
+        # Or with job_id:
+        with hud.trace("My Task", job_id="job-123") as task_run_id:
             pass
     """
     # Ensure telemetry is configured
     configure_telemetry()
 
-    # Auto-generate a task_run_id if missing
-    if not task_run_id:
-        task_run_id = f"auto-{uuid.uuid4().hex[:12]}"
+    # Always auto-generate a task_run_id
+    task_run_id = str(uuid.uuid4())
 
     # Delegate to OpenTelemetry implementation
     with OtelTrace(

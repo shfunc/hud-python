@@ -61,10 +61,9 @@ class LangChainMCPAgent(MCPAgent):
         # Create LangChain tools from MCP tools using the adapter
         self._langchain_tools = []
 
-        # Convert tools using the adapter
-        for connector, tools in self._tool_map.items():
-            langchain_tools = self.adapter._convert_tools(tools, connector)  # type: ignore[reportAttributeAccessIssue]
-            self._langchain_tools.extend(langchain_tools)
+        # Convert available tools using the adapter; no server grouping
+        langchain_tools = self.adapter._convert_tools(self._available_tools, "default")  # type: ignore[reportAttributeAccessIssue]
+        self._langchain_tools.extend(langchain_tools)
 
         logger.info("Created %s LangChain tools from MCP tools", len(self._langchain_tools))
         return self._langchain_tools

@@ -149,6 +149,29 @@ class MCPUseHUDClient(BaseHUDClient):
             structuredContent=result.structuredContent,
         )
 
+    async def list_resources(self) -> list[types.Resource]:
+        """List all available resources."""
+        for server_name, session in self._sessions.items():
+            try:
+                if not hasattr(session, "connector") or not hasattr(
+                    session.connector, "client_session"
+                ):
+                    continue
+                if session.connector.client_session is None:
+                    continue
+                # Prefer standard method name if available
+                if hasattr(session.connector.client_session, "list_resources"):
+                    resources = await session.connector.client_session.list_resources()
+                else:
+                    # If the client doesn't support resource listing, skip
+                    continue
+                return resources.resources
+            except Exception as e:
+                if self.verbose:
+                    logger.debug("Could not list resources from server '%s': %s", server_name, e)
+                continue
+        return []
+
     async def _read_resource_internal(self, uri: str | AnyUrl) -> types.ReadResourceResult | None:
         """Read a resource by URI from any server that provides it."""
         for server_name, session in self._sessions.items():
@@ -163,7 +186,12 @@ class MCPUseHUDClient(BaseHUDClient):
 
                 # Convert str to AnyUrl if needed
                 resource_uri = AnyUrl(uri) if isinstance(uri, str) else uri
-                result = await session.connector.client_session.read_resource(resource_uri)
+                # Prefer read_resource; fall back to list_resources if needed
+                if hasattr(session.connector.client_session, "read_resource"):
+                    result = await session.connector.client_session.read_resource(resource_uri)
+                else:
+                    # Fallback path for older clients: not supported in strict typing
+                    raise AttributeError("read_resource not available")
 
                 if self.verbose:
                     logger.debug(
@@ -198,11 +226,7 @@ class MCPUseHUDClient(BaseHUDClient):
         """Async context manager exit."""
         await self.close()
 
-    # Legacy compatibility methods
-    def get_tool_map(self) -> dict[str, tuple[str, types.Tool]]:
-        """Get mapping of tool names to (server_name, tool) tuples."""
-        return self._tool_map
-
+    # Legacy compatibility methods (limited; tests should not rely on these)
     def get_sessions(self) -> dict[str, MCPUseSession]:
         """Get active MCP sessions."""
         return self._sessions

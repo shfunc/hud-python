@@ -25,13 +25,12 @@ def _wrap_get_model_response(original_method):
         provider = self.__class__.__name__.replace("Agent", "").lower()
         model_name = getattr(self, "model", getattr(self, "model_name", "unknown"))
 
-        # Message metadata
+        # Message metadata (guard for non-dict provider-specific messages)
+        last = messages[-1] if messages else None
         metadata = {
             "message_count": len(messages),
-            "has_system": any(m.get("role") == "system" for m in messages if isinstance(m, dict)),
-            "last_role": messages[-1].get("role")
-            if messages and isinstance(messages[-1], dict)
-            else None,
+            "has_system": any(isinstance(m, dict) and m.get("role") == "system" for m in messages),
+            "last_role": (last.get("role") if isinstance(last, dict) else None),
         }
 
         tracer = trace.get_tracer("hud-sdk")
@@ -53,8 +52,16 @@ def _wrap_get_model_response(original_method):
                 response = await original_method(self, messages, **kwargs)
 
                 # Set response data
-                response_dict = response.model_dump(mode="json", exclude_none=True)
-                span.set_attribute("agent_response", json.dumps(response_dict))
+                # Convert response for telemetry
+                try:
+                    response_dict = (
+                        response.model_dump(mode="json", exclude_none=True)  # type: ignore[attr-defined]
+                        if hasattr(response, "model_dump")
+                        else json.loads(json.dumps(response, default=str))
+                    )
+                    span.set_attribute("agent_response", json.dumps(response_dict))
+                except Exception:
+                    pass
 
                 # Set status
                 if response.isError:
@@ -171,9 +178,64 @@ def install_mcp_instrumentation(provider) -> None:
             McpInstrumentor,
         )
 
+        # First, patch the instrumentation to handle 3-value transports correctly
+        _patch_mcp_instrumentation()
+        
         McpInstrumentor().instrument(tracer_provider=provider)
-        logger.debug("MCP instrumentation installed")
+        logger.debug("MCP instrumentation installed with fastmcp compatibility patch")
     except ImportError:
         logger.debug("opentelemetry-instrumentation-mcp not available – skipping")
     except Exception as exc:
         logger.warning("Failed to install MCP instrumentation: %s", exc)
+
+
+def _patch_mcp_instrumentation() -> None:
+    """Patch MCP instrumentation to handle 3-value transport yields correctly."""
+    from contextlib import asynccontextmanager
+    from typing import Any, AsyncGenerator, Callable, Tuple, Union
+    
+    try:
+        from opentelemetry.instrumentation.mcp.instrumentation import McpInstrumentor
+        
+        original_transport_wrapper = McpInstrumentor._transport_wrapper
+        
+        def patched_transport_wrapper(self, tracer):
+            @asynccontextmanager
+            async def traced_method(
+                wrapped: Callable[..., Any], instance: Any, args: Any, kwargs: Any
+            ) -> AsyncGenerator[Any, None]:
+                async with wrapped(*args, **kwargs) as result:
+                    # Check if we got a tuple with 3 values
+                    if isinstance(result, tuple) and len(result) == 3:
+                        read_stream, write_stream, third_value = result
+                        # Import here to avoid circular imports
+                        from opentelemetry.instrumentation.mcp.instrumentation import (
+                            InstrumentedStreamReader,
+                            InstrumentedStreamWriter,
+                        )
+                        yield (
+                            InstrumentedStreamReader(read_stream, tracer),
+                            InstrumentedStreamWriter(write_stream, tracer),
+                            third_value
+                        )
+                    else:
+                        # Fall back to 2-value case
+                        read_stream, write_stream = result
+                        from opentelemetry.instrumentation.mcp.instrumentation import (
+                            InstrumentedStreamReader,
+                            InstrumentedStreamWriter,
+                        )
+                        yield (
+                            InstrumentedStreamReader(read_stream, tracer),
+                            InstrumentedStreamWriter(write_stream, tracer)
+                        )
+            
+            return traced_method
+        
+        # Apply the patch
+        McpInstrumentor._transport_wrapper = patched_transport_wrapper
+        
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Failed to patch MCP instrumentation: {e}")

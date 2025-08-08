@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from anthropic import BadRequestError
 from mcp import types
-from mcp.types import CallToolRequestParams as MCPToolCall
+from hud.types import MCPToolCall, MCPToolResult
 
 from hud.agents.claude import (
     ClaudeMCPAgent,
@@ -63,8 +63,6 @@ class TestClaudeMCPAgent:
     def mock_mcp_client(self):
         """Create a mock MCP client."""
         mcp_client = MagicMock()
-        mcp_client.get_all_active_sessions = MagicMock(return_value={})
-        mcp_client.get_tool_map = MagicMock(return_value={})
         return mcp_client
 
     @pytest.fixture
@@ -139,7 +137,7 @@ class TestClaudeMCPAgent:
         ]
 
         tool_results = [
-            types.CallToolResult(
+            MCPToolResult(
                 content=[types.TextContent(type="text", text="Success")], isError=False
             ),
         ]
@@ -248,14 +246,7 @@ class TestClaudeMCPAgent:
         agent._available_tools = [
             types.Tool(name="calculator", description="Calculator", inputSchema={"type": "object"})
         ]
-        agent._tool_map = {
-            "calculator": (
-                "server1",
-                types.Tool(
-                    name="calculator", description="Calculator", inputSchema={"type": "object"}
-                ),
-            )
-        }
+        agent._tool_map = {"calculator": types.Tool(name="calculator", description="Calculator", inputSchema={"type": "object"})}
 
         # Mock initial response with tool use
         initial_response = MagicMock()

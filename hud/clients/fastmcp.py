@@ -70,6 +70,10 @@ class FastMCPHUDClient(BaseHUDClient):
             structuredContent=result.structured_content,
         )
 
+    async def list_resources(self) -> list[types.Resource]:
+        """List all available resources."""
+        return await self._client.list_resources()
+
     async def _read_resource_internal(self, uri: str | AnyUrl) -> types.ReadResourceResult | None:
         """Read a resource by URI."""
         try:
