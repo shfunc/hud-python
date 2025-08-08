@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from mcp.types import CallToolRequestParams, CallToolResult, ClientRequest, ServerResult
+from mcp.types import CallToolRequestParams, CallToolResult
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -68,8 +68,8 @@ class TraceStep(BaseModel):
     category: Literal["mcp", "agent"] = Field(default="mcp")
 
     # === MCP fields ===
-    mcp_request: ClientRequest | None = None
-    mcp_result: ServerResult | None = None
+    mcp_request: Any | None = None # ClientRequest
+    mcp_result: Any | None = None # ServerResult
 
     # === Agent fields ===
     agent_request: dict[str, Any] | None = None

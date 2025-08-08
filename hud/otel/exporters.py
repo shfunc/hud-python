@@ -76,13 +76,24 @@ def extract_span_attributes(
     }
 
     # Determine span type based on presence of agent or MCP attributes
-    if (
+    # Note: The input attrs might already have "category" set
+    existing_category = attrs.get("category")
+    
+    if existing_category == "mcp":
+        result_attrs["category"] = "mcp"
+    elif existing_category == "agent":
+        result_attrs["category"] = "agent"
+    elif (
         "agent_request" in attrs
         or "agent_response" in attrs
         or (span_name and span_name.startswith("agent."))
     ):
         result_attrs["category"] = "agent"  # TraceStep expects category field
-        # Check for agent span attributes
+    else:
+        result_attrs["category"] = "mcp"  # Default to MCP
+        
+    # Process agent attributes if it's an agent span
+    if result_attrs["category"] == "agent":
         if "agent_request" in attrs:
             agent_req = attrs["agent_request"]
             if isinstance(agent_req, str):
@@ -95,50 +106,79 @@ def extract_span_attributes(
                 with contextlib.suppress(json.JSONDecodeError):
                     agent_resp = json.loads(agent_resp)
             result_attrs["agent_response"] = agent_resp
-    else:
-        result_attrs["category"] = "mcp"  # TraceStep expects category field
-        # Add method_name and request_id only if present (MCP spans)
+    
+    # Add method_name and request_id for MCP spans
+    if result_attrs["category"] == "mcp":
         if method_name:
             result_attrs["method_name"] = method_name
-        if "semconv_ai.mcp.request_id" in attrs:
-            result_attrs["request_id"] = attrs.get("semconv_ai.mcp.request_id")
+        # Check for request_id with and without semconv_ai prefix
+        request_id = attrs.get("semconv_ai.mcp.request_id") or attrs.get("mcp.request.id")
+        if request_id:
+            result_attrs["request_id"] = request_id
 
-    # Parse input/output
-    input_str = attrs.get("semconv_ai.traceloop.entity.input")
-    output_str = attrs.get("semconv_ai.traceloop.entity.output")
+    # Parse input/output - check both with and without semconv_ai prefix
+    input_str = attrs.get("semconv_ai.traceloop.entity.input") or attrs.get("traceloop.entity.input")
+    output_str = attrs.get("semconv_ai.traceloop.entity.output") or attrs.get("traceloop.entity.output")
+    
+    logger.debug(f"Category: {result_attrs.get('category')}, has input: {bool(input_str)}, has output: {bool(output_str)}")
 
     # Try to parse as MCP types (only for MCP spans)
     if result_attrs["category"] == "mcp":
+        logger.debug(f"Processing MCP span with input_str: {input_str[:100] if input_str else None}...")
         if input_str:
             try:
                 input_data = json.loads(input_str) if isinstance(input_str, str) else input_str
+                logger.debug(f"Parsed input_data type: {type(input_data)}, has method: {'method' in input_data if isinstance(input_data, dict) else False}")
                 if isinstance(input_data, dict):
-                    result_attrs["mcp_request"] = ClientRequest.model_validate(
-                        input_data
-                    )  # TraceStep expects mcp_request
+                    # Create a ClientRequest and extract its root
+                    try:
+                        # ClientRequest expects the full request structure with method
+                        if "method" in input_data and "params" in input_data:
+                            # This is already in the correct format
+                            logger.debug(f"Attempting to validate ClientRequest with method: {input_data.get('method')}")
+                            client_request = ClientRequest.model_validate(input_data)
+                            # Store the root of the RootModel, which is the actual request
+                            result_attrs["mcp_request"] = client_request.root
+                            logger.debug(f"Successfully parsed ClientRequest: {type(client_request.root).__name__}")
+                        else:
+                            # If it's just params, we can't create a proper request
+                            logger.debug("No method/params found, storing raw data")
+                            result_attrs["mcp_request"] = input_data
+                    except Exception as e:
+                        logger.debug(f"Failed to parse request as MCP type: {e}")
+                        # Fallback: store the raw data
+                        result_attrs["mcp_request"] = input_data
+                        logger.debug(f"Stored raw data as fallback")
             except Exception as e:
-                logger.debug(f"Failed to parse request as MCP type: {e}")
+                logger.debug(f"Failed to parse request JSON: {e}")
 
+        logger.debug(f"Processing MCP span with output_str: {output_str[:100] if output_str else None}...")
         if output_str:
             try:
                 output_data = json.loads(output_str) if isinstance(output_str, str) else output_str
+                logger.debug(f"Parsed output_data type: {type(output_data)}")
                 if isinstance(output_data, dict):
                     # Check for error first
                     if "error" in output_data:
                         result_attrs["mcp_error"] = True
                     else:
-                        result_attrs["mcp_result"] = ServerResult.model_validate(
-                            output_data
-                        )  # TraceStep expects mcp_result
-                        # Check for isError in the result
+                        # Create a ServerResult and extract its root
                         try:
-                            root = result_attrs["mcp_result"].root  # type: ignore[assignment]
-                            if getattr(root, "isError", False):
+                            logger.debug("Attempting to validate ServerResult")
+                            server_result = ServerResult.model_validate(output_data)
+                            # Store the root of the RootModel, which is the actual result
+                            result_attrs["mcp_result"] = server_result.root
+                            logger.debug(f"Successfully parsed ServerResult: {type(server_result.root).__name__}")
+                            # Check for isError in the result
+                            if getattr(server_result.root, "isError", False):
                                 result_attrs["mcp_error"] = True
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug(f"Failed to parse result as MCP type: {e}")
+                            # Fallback: store the raw data
+                            result_attrs["mcp_result"] = output_data
+                            logger.debug(f"Stored raw result data as fallback")
             except Exception as e:
-                logger.debug(f"Failed to parse result as MCP type: {e}")
+                logger.debug(f"Failed to parse result JSON: {e}")
 
     # Don't include the verbose attributes or ones we've already processed
     exclude_keys = {
@@ -146,13 +186,19 @@ def extract_span_attributes(
         "hud.job_id",
         "span.kind",
         "semconv_ai.mcp.method_name",
+        "mcp.method.name",  # Also exclude non-prefixed version
         "semconv_ai.mcp.request_id",
+        "mcp.request.id",  # Also exclude non-prefixed version
         "semconv_ai.traceloop.entity.input",
         "semconv_ai.traceloop.entity.output",
+        "traceloop.entity.input",  # Also exclude non-prefixed versions
+        "traceloop.entity.output",
         "agent_request",
         "agent_response",
         "agent.provider",
         "agent.model",
+        "mcp_request",  # Exclude to prevent overwriting parsed values
+        "mcp_result",   # Exclude to prevent overwriting parsed values
     }
 
     # Add any extra attributes
@@ -160,6 +206,7 @@ def extract_span_attributes(
         if key not in exclude_keys:
             result_attrs[key] = value
 
+    logger.debug(f"Final result_attrs before creating HudSpanAttributes: mcp_request={result_attrs.get('mcp_request')}, mcp_result={result_attrs.get('mcp_result')}")
     return HudSpanAttributes(**result_attrs)
 
 
@@ -181,7 +228,8 @@ def _span_to_dict(span: ReadableSpan) -> dict[str, Any]:
     attrs = dict(span.attributes or {})
 
     # Extract method name from span name if not in attributes
-    raw_method = attrs.get("semconv_ai.mcp.method_name")
+    # Check both with and without semconv_ai prefix
+    raw_method = attrs.get("semconv_ai.mcp.method_name") or attrs.get("mcp.method.name")
     method_name: str | None = None
     if isinstance(raw_method, str):
         method_name = raw_method

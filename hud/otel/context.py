@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator
     from types import TracebackType
 
-from hud.server import make_request
+from hud.server import make_request, make_request_sync
 from hud.settings import settings
 from hud.utils.async_utils import fire_and_forget
 
@@ -138,6 +138,36 @@ def _fire_and_forget_status_update(
         _update_task_status_async(task_run_id, status, job_id, error_message),
         f"update task {task_run_id} status to {status}",
     )
+
+
+def _update_task_status_sync(
+    task_run_id: str,
+    status: str,
+    job_id: str | None = None,
+    error_message: str | None = None,
+) -> None:
+    """Synchronous task status update."""
+    if not settings.telemetry_enabled:
+        return
+
+    try:
+        data = {"status": status}
+        if job_id:
+            data["job_id"] = job_id
+        if error_message:
+            data["error_message"] = error_message
+
+        make_request_sync(
+            method="POST",
+            url=f"{settings.base_url}/v2/task_runs/{task_run_id}/status",
+            json=data,
+            api_key=settings.api_key,
+        )
+        logger.debug(f"Updated task {task_run_id} status to {status}")
+    except Exception as e:
+        # Suppress warnings about interpreter shutdown
+        if "interpreter shutdown" not in str(e):
+            logger.warning(f"Failed to update task status: {e}")
 
 
 def _print_trace_url(task_run_id: str) -> None:
@@ -267,13 +297,15 @@ class trace:
         # Update task status if root
         if self.is_root:
             if exc_type is not None:
-                _fire_and_forget_status_update(
+                # Use synchronous update to ensure it completes before process exit
+                _update_task_status_sync(
                     self.task_run_id, "error", job_id=self.job_id, error_message=str(exc_val)
                 )
                 # Print error completion message
                 _print_trace_complete_url(self.task_run_id, error_occurred=True)
             else:
-                _fire_and_forget_status_update(self.task_run_id, "completed", job_id=self.job_id)
+                # Use synchronous update to ensure it completes before process exit
+                _update_task_status_sync(self.task_run_id, "completed", job_id=self.job_id)
                 # Print success completion message
                 _print_trace_complete_url(self.task_run_id, error_occurred=False)
 

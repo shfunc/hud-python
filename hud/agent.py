@@ -303,7 +303,13 @@ class MCPAgent(ABC):
                 )
 
                 for tool in setup_tools:
-                    await self.call_tool(tool)
+                    result = await self.call_tool(tool)
+                    if result.isError:
+                        error_msg = ""
+                        for content in result.content:
+                            if hasattr(content, 'text'):
+                                error_msg += content.text
+                        raise RuntimeError(f"{error_msg}")
 
             # Execute the task prompt
             prompt_result = await self.run_prompt(task.prompt, max_steps=max_steps)

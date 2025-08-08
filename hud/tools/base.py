@@ -102,7 +102,7 @@ _INTERNAL_PREFIX = "int_"
 
 
 class BaseHub(FastMCP):
-    """A composition-friendly FastMCP server that hides its internals."""
+    """A composition-friendly FastMCP server that holds an internal tool dispatcher."""
 
     env: Any
 
@@ -129,8 +129,8 @@ class BaseHub(FastMCP):
         # Naming scheme for hidden objects
         self._prefix_fn: Callable[[str], str] = lambda n: f"{_INTERNAL_PREFIX}{n}"
 
-        # CHANGE 1: Don't use exclude_tags - prevents accessing our own internal tools
-        # CHANGE 2: Set env directly instead of using lifespan (avoids async_generator error)
+        # Don't use exclude_tags - prevents accessing our own internal tools
+        # Set env directly instead of using lifespan (avoids async_generator error)
         super().__init__(name=name)
         
         if env is not None:
@@ -140,7 +140,7 @@ class BaseHub(FastMCP):
         dispatcher_title = title or f"{name.title()} Dispatcher"
         dispatcher_desc = description or f"Call internal '{name}' functions"
 
-        # CHANGE 3: Register dispatcher manually with FunctionTool
+        # Register dispatcher manually with FunctionTool
         async def _dispatch(
             function: str,
             ctx: Context,
@@ -171,14 +171,12 @@ class BaseHub(FastMCP):
         )
         self._tool_manager.add_tool(dispatcher_tool)
 
-        # ------------- catalogue resource for debugging ----------
         # Expose list of internal functions via read-only resource
-        # CHANGE 7: Register resource manually - @self.resource doesn't work in __init__
         async def _functions_catalogue() -> list[str]:
             # List all internal function names without prefix
             return [
                 key.removeprefix(_INTERNAL_PREFIX)
-                for key in self._tool_manager._tools.keys()
+                for key in self._tool_manager._tools
                 if key.startswith(_INTERNAL_PREFIX)
             ]
         
@@ -195,12 +193,12 @@ class BaseHub(FastMCP):
 
     def tool(self, name_or_fn: Any = None, /, **kwargs: Any) -> Callable[..., Any]:
         """Register an *internal* tool (hidden from clients)."""
-        # CHANGE 6: Handle when decorator's partial calls us back with the function
+        # Handle when decorator's partial calls us back with the function
         if callable(name_or_fn):
             # This only happens in phase 2 of decorator application
             # The name was already prefixed in phase 1, just pass through
             result = super().tool(name_or_fn, **kwargs)
-            return cast(Callable[..., Any], result)
+            return cast("Callable[..., Any]", result)
         
         # Handle the name from either positional or keyword argument
         if isinstance(name_or_fn, str):
@@ -214,7 +212,6 @@ class BaseHub(FastMCP):
             name = None
 
         new_name = self._prefix_fn(name) if name is not None else None
-        # CHANGE 4: Don't add _INTERNAL_TAG - we need tools accessible internally
         tags = kwargs.pop("tags", None) or set()
 
         # Pass through correctly to parent
@@ -223,7 +220,7 @@ class BaseHub(FastMCP):
         else:
             return super().tool(**kwargs, tags=tags)
 
-    # CHANGE 5: Override _list_tools to hide internal tools when mounted
+    # Override _list_tools to hide internal tools when mounted
     async def _list_tools(self) -> list[Tool]:
         """Override _list_tools to hide internal tools when mounted."""
         return [
