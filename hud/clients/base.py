@@ -60,14 +60,22 @@ class BaseHUDClient(ABC):
         """Configure verbose logging for debugging."""
         logging.getLogger("mcp").setLevel(logging.DEBUG)
         logging.getLogger("fastmcp").setLevel(logging.DEBUG)
+        logger.setLevel(logging.DEBUG)
 
-        if not any(isinstance(h, logging.StreamHandler) for h in logger.handlers):
-            handler = logging.StreamHandler()
+        # Only add handler if no logging configuration exists
+        root_logger = logging.getLogger()
+        if not root_logger.handlers and not any(isinstance(h, logging.StreamHandler) for h in logger.handlers):
+            import sys
+            from hud.settings import settings
+            
+            # Respect HUD_LOG_STREAM setting
+            stream = sys.stderr if settings.log_stream.lower() == "stderr" else sys.stdout
+            handler = logging.StreamHandler(stream)
             handler.setFormatter(
                 logging.Formatter("[%(levelname)s] %(asctime)s - %(name)s - %(message)s")
             )
             logger.addHandler(handler)
-            logger.setLevel(logging.DEBUG)
+            logger.propagate = False
 
     async def initialize(self) -> None:
         """Initialize connection and fetch telemetry."""

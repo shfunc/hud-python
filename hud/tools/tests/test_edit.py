@@ -9,9 +9,8 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from mcp.types import TextContent
 
-from hud.tools.base import ToolResult
-from hud.types import TextContent
 from hud.tools.edit import EditTool, ToolError
 
 
@@ -82,8 +81,12 @@ class TestEditTool:
 
                 assert isinstance(result, list)
                 assert len(result) > 0
-                assert isinstance(result[0], TextContent)
-                assert "created successfully" in result[0].text
+                # Check that we have a content block with the success message
+                assert any("created successfully" in str(block) for block in result)
+                # For TextContent, we need to check the text attribute
+                text_blocks = [block for block in result if isinstance(block, TextContent)]
+                assert len(text_blocks) > 0
+                assert "created successfully" in text_blocks[0].text
                 mock_write.assert_called_once_with(file_path, content)
                 # Check history
                 # File history tracking was removed
@@ -121,10 +124,13 @@ class TestEditTool:
 
             assert isinstance(result, list)
             assert len(result) > 0
-            assert isinstance(result[0], TextContent)
-            assert "Line 1" in result[0].text
-            assert "Line 2" in result[0].text
-            assert "Line 3" in result[0].text
+            # Check that we have text content blocks with the file contents
+            text_blocks = [block for block in result if isinstance(block, TextContent)]
+            assert len(text_blocks) > 0
+            combined_text = "".join(block.text for block in text_blocks)
+            assert "Line 1" in combined_text
+            assert "Line 2" in combined_text
+            assert "Line 3" in combined_text
 
     @pytest.mark.asyncio
     async def test_view_with_range(self):
@@ -144,14 +150,17 @@ class TestEditTool:
 
             assert isinstance(result, list)
             assert len(result) > 0
-            assert isinstance(result[0], TextContent)
+            # Check that we have text content blocks with the specified range
+            text_blocks = [block for block in result if isinstance(block, TextContent)]
+            assert len(text_blocks) > 0
+            combined_text = "".join(block.text for block in text_blocks)
             # Lines 3-5 should be in output (using tab format)
-            assert "3\tLine 3" in result[0].text
-            assert "4\tLine 4" in result[0].text
-            assert "5\tLine 5" in result[0].text
+            assert "3\tLine 3" in combined_text
+            assert "4\tLine 4" in combined_text
+            assert "5\tLine 5" in combined_text
             # Line 1 and 10 should not be in output (outside range)
-            assert "1\tLine 1" not in result[0].text
-            assert "10\tLine 10" not in result[0].text
+            assert "1\tLine 1" not in combined_text
+            assert "10\tLine 10" not in combined_text
 
     @pytest.mark.asyncio
     async def test_str_replace_success(self):
@@ -175,8 +184,11 @@ class TestEditTool:
 
             assert isinstance(result, list)
             assert len(result) > 0
-            assert isinstance(result[0], TextContent)
-            assert "has been edited" in result[0].text
+            # Check for success message
+            text_blocks = [block for block in result if isinstance(block, TextContent)]
+            assert len(text_blocks) > 0
+            combined_text = "".join(block.text for block in text_blocks)
+            assert "has been edited" in combined_text
             mock_write.assert_called_once_with(Path("/tmp/test.txt"), expected_content)
 
     @pytest.mark.asyncio

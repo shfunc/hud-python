@@ -140,9 +140,9 @@ class BaseHub(FastMCP):
         # Register dispatcher manually with FunctionTool
         async def _dispatch(
             function: str,
-            ctx: Context,
+            ctx,  # FastMCP will inject Context based on param name
             args: dict | None = None,
-        ) -> ToolResult:
+        ):
             """Gateway to hidden tools.
 
             Parameters
@@ -158,8 +158,7 @@ class BaseHub(FastMCP):
             # Use our own _call_tool since we're mounted
             return await self._call_tool(self._prefix_fn(function), args or {})
 
-        from fastmcp import Context
-        from fastmcp.tools.tool import FunctionTool, ToolResult
+        from fastmcp.tools.tool import FunctionTool
         dispatcher_tool = FunctionTool.from_function(
             _dispatch,
             name=name,

@@ -32,7 +32,7 @@ class HudEnrichmentProcessor(SpanProcessor):
             # Get job_id from baggage if available
             job_id = baggage.get_baggage("hud.job_id", context=parent_context)
             if job_id and span.is_recording():
-                span.set_attribute("hud.job_id", job_id)
+                span.set_attribute("hud.job_id", str(job_id))
 
         except Exception as exc:  # defensive; never fail the tracer
             logger.debug("HudEnrichmentProcessor.on_start error: %s", exc, exc_info=False)

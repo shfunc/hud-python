@@ -57,7 +57,7 @@ class Job:
                 )
             except Exception:
                 pass  # Best effort
-    
+
     def update_status_sync(self, status: str) -> None:
         """Synchronously update job status on the server."""
         self.status = status

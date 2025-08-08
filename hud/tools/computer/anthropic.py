@@ -8,9 +8,10 @@ from mcp import ErrorData, McpError
 from mcp.types import INTERNAL_ERROR, INVALID_PARAMS, ContentBlock
 from pydantic import Field
 
+from hud.tools.types import ContentResult
+
 from .hud import HudComputerTool
 from .settings import computer_settings
-from hud.tools.types import ContentResult
 
 if TYPE_CHECKING:
     from anthropic.types.beta import BetaToolComputerUse20250124Param

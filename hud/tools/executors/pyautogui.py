@@ -36,7 +36,7 @@ def _get_pyautogui() -> Any | None:
                 os.environ["DISPLAY"] = ":0"
 
         try:
-            import pyautogui
+            import pyautogui  # type: ignore[import-not-found]
 
             _pyautogui = pyautogui
             _pyautogui_available = True

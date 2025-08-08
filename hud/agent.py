@@ -307,7 +307,7 @@ class MCPAgent(ABC):
                     if result.isError:
                         error_msg = ""
                         for content in result.content:
-                            if hasattr(content, 'text'):
+                            if isinstance(content, types.TextContent):
                                 error_msg += content.text
                         raise RuntimeError(f"{error_msg}")
 
@@ -436,10 +436,10 @@ class MCPAgent(ABC):
             isError=error is not None,
             info={"error": error} if error else {},
         )
-        
+
         # Populate trace steps from current context
         trace_result.populate_from_context()
-        
+
         return trace_result
 
     @abstractmethod

@@ -14,10 +14,10 @@ except ImportError:
 
 import pytest
 from mcp import types
-from hud.types import MCPToolCall
 
 from hud.agent import MCPAgent
 from hud.tools.executors.base import BaseExecutor
+from hud.types import MCPToolCall
 
 if TYPE_CHECKING:
     from hud.datasets import TaskConfig as Task

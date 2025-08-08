@@ -18,14 +18,16 @@ async def test_bash_tool_echo():
     tool = BashTool()
 
     # Monkey-patch the private _session methods so no subprocess is spawned
+    from hud.tools.types import ContentResult
+
     class _FakeSession:
         async def run(self, cmd: str):
-            return [TextContent(text=f"mocked: {cmd}")]
+            return ContentResult(output=f"mocked: {cmd}")
 
         async def start(self):
             return None
 
-    tool._session = _FakeSession()  # type: ignore[attr-defined]
+    tool.session = _FakeSession()  # type: ignore[assignment]
 
     result = await tool(command="echo hello")
     assert len(result) > 0
@@ -35,14 +37,15 @@ async def test_bash_tool_echo():
 
 @pytest.mark.asyncio
 async def test_bash_tool_restart_and_no_command():
-    from hud.tools.base import ToolResult
     from hud.tools.types import ToolError
 
     tool = BashTool()
 
+    from hud.tools.types import ContentResult
+
     class _FakeSession:
         async def run(self, cmd: str):
-            return [TextContent(text="ran")]
+            return ContentResult(output="ran")
 
         async def start(self):
             return None
@@ -50,7 +53,7 @@ async def test_bash_tool_restart_and_no_command():
         def stop(self):
             return None
 
-    tool._session = _FakeSession()  # type: ignore[attr-defined]
+    tool.session = _FakeSession()  # type: ignore[assignment]
 
     # Monkey-patch _BashSession.start to avoid launching a real shell
     async def _dummy_start(self):
@@ -66,7 +69,10 @@ async def test_bash_tool_restart_and_no_command():
 
     # restart=True returns system message
     res = await tool(command="ignored", restart=True)
-    assert res.system == "tool has been restarted."
+    # Check that we get content blocks with the restart message
+    assert len(res) > 0
+    text_blocks = [b for b in res if isinstance(b, TextContent)]
+    assert any("restarted" in b.text for b in text_blocks)
 
     # Calling without command raises ToolError
     with pytest.raises(ToolError):
@@ -82,15 +88,23 @@ async def test_edit_tool_flow(tmp_path):
 
     # create
     res = await edit(command="create", path=str(file_path), file_text="hello\nworld\n")
-    assert "File created" in (res.output or "")
+    # Check for success message in content blocks
+    text_blocks = [b for b in res if isinstance(b, TextContent)]
+    assert any("created" in b.text for b in text_blocks)
 
     # view
     res = await edit(command="view", path=str(file_path))
-    assert "hello" in (res.output or "")
+    # Check content blocks for file content
+    text_blocks = [b for b in res if isinstance(b, TextContent)]
+    combined_text = "".join(b.text for b in text_blocks)
+    assert "hello" in combined_text
 
     # replace
     res = await edit(command="str_replace", path=str(file_path), old_str="world", new_str="earth")
-    assert "has been edited" in (res.output or "")
+    # Check for success message in content blocks
+    text_blocks = [b for b in res if isinstance(b, TextContent)]
+    combined_text = "".join(b.text for b in text_blocks)
+    assert "has been edited" in combined_text
 
     # insert
     res = await edit(command="insert", path=str(file_path), insert_line=1, new_str="first line\n")
@@ -117,8 +131,10 @@ async def test_edit_tool_view(tmp_path):
 
     tool = EditTool()
     result = await tool(command="view", path=str(p))
-    assert result.output is not None
-    assert "Sample content" in result.output
+    # Check content blocks for file content
+    text_blocks = [b for b in result if isinstance(b, TextContent)]
+    combined_text = "".join(b.text for b in text_blocks)
+    assert "Sample content" in combined_text
 
 
 @pytest.mark.asyncio

@@ -78,7 +78,7 @@ def extract_span_attributes(
     # Determine span type based on presence of agent or MCP attributes
     # Note: The input attrs might already have "category" set
     existing_category = attrs.get("category")
-    
+
     if existing_category == "mcp":
         result_attrs["category"] = "mcp"
     elif existing_category == "agent":
@@ -91,7 +91,7 @@ def extract_span_attributes(
         result_attrs["category"] = "agent"  # TraceStep expects category field
     else:
         result_attrs["category"] = "mcp"  # Default to MCP
-        
+
     # Process agent attributes if it's an agent span
     if result_attrs["category"] == "agent":
         if "agent_request" in attrs:
@@ -106,7 +106,7 @@ def extract_span_attributes(
                 with contextlib.suppress(json.JSONDecodeError):
                     agent_resp = json.loads(agent_resp)
             result_attrs["agent_response"] = agent_resp
-    
+
     # Add method_name and request_id for MCP spans
     if result_attrs["category"] == "mcp":
         if method_name:
@@ -117,29 +117,43 @@ def extract_span_attributes(
             result_attrs["request_id"] = request_id
 
     # Parse input/output - check both with and without semconv_ai prefix
-    input_str = attrs.get("semconv_ai.traceloop.entity.input") or attrs.get("traceloop.entity.input")
-    output_str = attrs.get("semconv_ai.traceloop.entity.output") or attrs.get("traceloop.entity.output")
-    
-    logger.debug(f"Category: {result_attrs.get('category')}, has input: {bool(input_str)}, has output: {bool(output_str)}")
+    input_str = attrs.get("semconv_ai.traceloop.entity.input") or attrs.get(
+        "traceloop.entity.input"
+    )
+    output_str = attrs.get("semconv_ai.traceloop.entity.output") or attrs.get(
+        "traceloop.entity.output"
+    )
+
+    logger.debug(
+        f"Category: {result_attrs.get('category')}, has input: {bool(input_str)}, has output: {bool(output_str)}"
+    )
 
     # Try to parse as MCP types (only for MCP spans)
     if result_attrs["category"] == "mcp":
-        logger.debug(f"Processing MCP span with input_str: {input_str[:100] if input_str else None}...")
+        logger.debug(
+            f"Processing MCP span with input_str: {input_str[:100] if input_str else None}..."
+        )
         if input_str:
             try:
                 input_data = json.loads(input_str) if isinstance(input_str, str) else input_str
-                logger.debug(f"Parsed input_data type: {type(input_data)}, has method: {'method' in input_data if isinstance(input_data, dict) else False}")
+                logger.debug(
+                    f"Parsed input_data type: {type(input_data)}, has method: {'method' in input_data if isinstance(input_data, dict) else False}"
+                )
                 if isinstance(input_data, dict):
                     # Create a ClientRequest and extract its root
                     try:
                         # ClientRequest expects the full request structure with method
                         if "method" in input_data and "params" in input_data:
                             # This is already in the correct format
-                            logger.debug(f"Attempting to validate ClientRequest with method: {input_data.get('method')}")
+                            logger.debug(
+                                f"Attempting to validate ClientRequest with method: {input_data.get('method')}"
+                            )
                             client_request = ClientRequest.model_validate(input_data)
                             # Store the root of the RootModel, which is the actual request
                             result_attrs["mcp_request"] = client_request.root
-                            logger.debug(f"Successfully parsed ClientRequest: {type(client_request.root).__name__}")
+                            logger.debug(
+                                f"Successfully parsed ClientRequest: {type(client_request.root).__name__}"
+                            )
                         else:
                             # If it's just params, we can't create a proper request
                             logger.debug("No method/params found, storing raw data")
@@ -148,11 +162,13 @@ def extract_span_attributes(
                         logger.debug(f"Failed to parse request as MCP type: {e}")
                         # Fallback: store the raw data
                         result_attrs["mcp_request"] = input_data
-                        logger.debug(f"Stored raw data as fallback")
+                        logger.debug("Stored raw data as fallback")
             except Exception as e:
                 logger.debug(f"Failed to parse request JSON: {e}")
 
-        logger.debug(f"Processing MCP span with output_str: {output_str[:100] if output_str else None}...")
+        logger.debug(
+            f"Processing MCP span with output_str: {output_str[:100] if output_str else None}..."
+        )
         if output_str:
             try:
                 output_data = json.loads(output_str) if isinstance(output_str, str) else output_str
@@ -168,7 +184,9 @@ def extract_span_attributes(
                             server_result = ServerResult.model_validate(output_data)
                             # Store the root of the RootModel, which is the actual result
                             result_attrs["mcp_result"] = server_result.root
-                            logger.debug(f"Successfully parsed ServerResult: {type(server_result.root).__name__}")
+                            logger.debug(
+                                f"Successfully parsed ServerResult: {type(server_result.root).__name__}"
+                            )
                             # Check for isError in the result
                             if getattr(server_result.root, "isError", False):
                                 result_attrs["mcp_error"] = True
@@ -176,7 +194,7 @@ def extract_span_attributes(
                             logger.debug(f"Failed to parse result as MCP type: {e}")
                             # Fallback: store the raw data
                             result_attrs["mcp_result"] = output_data
-                            logger.debug(f"Stored raw result data as fallback")
+                            logger.debug("Stored raw result data as fallback")
             except Exception as e:
                 logger.debug(f"Failed to parse result JSON: {e}")
 
@@ -198,7 +216,7 @@ def extract_span_attributes(
         "agent.provider",
         "agent.model",
         "mcp_request",  # Exclude to prevent overwriting parsed values
-        "mcp_result",   # Exclude to prevent overwriting parsed values
+        "mcp_result",  # Exclude to prevent overwriting parsed values
     }
 
     # Add any extra attributes
@@ -206,7 +224,9 @@ def extract_span_attributes(
         if key not in exclude_keys:
             result_attrs[key] = value
 
-    logger.debug(f"Final result_attrs before creating HudSpanAttributes: mcp_request={result_attrs.get('mcp_request')}, mcp_result={result_attrs.get('mcp_result')}")
+    logger.debug(
+        f"Final result_attrs before creating HudSpanAttributes: mcp_request={result_attrs.get('mcp_request')}, mcp_result={result_attrs.get('mcp_result')}"
+    )
     return HudSpanAttributes(**result_attrs)
 
 
@@ -247,15 +267,17 @@ def _span_to_dict(span: ReadableSpan) -> dict[str, Any]:
 
     # Build typed span
     # Guard context/parent/timestamps
+    context = getattr(span, "context", None)
     trace_id_hex = (
-        format(span.context.trace_id, "032x") if getattr(span, "context", None) else "0" * 32
+        format(context.trace_id, "032x") if context and hasattr(context, "trace_id") else "0" * 32
     )
     span_id_hex = (
-        format(span.context.span_id, "016x") if getattr(span, "context", None) else "0" * 16
+        format(context.span_id, "016x") if context and hasattr(context, "span_id") else "0" * 16
     )
+    parent = getattr(span, "parent", None)
     parent_id_hex = (
-        format(span.parent.span_id, "016x")
-        if getattr(span, "parent", None) and getattr(span.parent, "span_id", None)
+        format(parent.span_id, "016x")
+        if parent and hasattr(parent, "span_id")
         else None
     )
     start_ns = span.start_time or 0
@@ -315,7 +337,7 @@ class HudSpanExporter(SpanExporter):
         # Group spans by hud.task_run_id attribute
         grouped: dict[str, list[ReadableSpan]] = defaultdict(list)
         for span in spans:
-            run_id = span.attributes.get("hud.task_run_id")
+            run_id = span.attributes.get("hud.task_run_id") if span.attributes else None
             if not run_id:
                 # Skip spans that are outside HUD traces
                 continue

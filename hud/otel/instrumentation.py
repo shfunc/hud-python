@@ -128,13 +128,13 @@ def instrument_agent_class(agent_class: type[MCPAgent]) -> None:
     # Wrap get_model_response
     if hasattr(agent_class, "get_model_response"):
         wrapped = _wrap_get_model_response(agent_class.get_model_response)
-        wrapped._telemetry_wrapped = True
+        wrapped._telemetry_wrapped = True  # type: ignore[attr-defined]
         agent_class.get_model_response = wrapped
 
     # Wrap execute_tools
     if hasattr(agent_class, "execute_tools"):
         wrapped = _wrap_execute_tools(agent_class.execute_tools)
-        wrapped._telemetry_wrapped = True
+        wrapped._telemetry_wrapped = True  # type: ignore[attr-defined]
         agent_class.execute_tools = wrapped
 
 
@@ -174,13 +174,13 @@ def install_mcp_instrumentation(provider) -> None:
     logger = logging.getLogger(__name__)
 
     try:
-        from opentelemetry.instrumentation.mcp.instrumentation import (  # type: ignore
+        from opentelemetry.instrumentation.mcp.instrumentation import (
             McpInstrumentor,
         )
 
         # First, patch the instrumentation to handle 3-value transports correctly
         _patch_mcp_instrumentation()
-        
+
         McpInstrumentor().instrument(tracer_provider=provider)
         logger.debug("MCP instrumentation installed with fastmcp compatibility patch")
     except ImportError:
@@ -191,14 +191,14 @@ def install_mcp_instrumentation(provider) -> None:
 
 def _patch_mcp_instrumentation() -> None:
     """Patch MCP instrumentation to handle 3-value transport yields correctly."""
+    from collections.abc import AsyncGenerator, Callable
     from contextlib import asynccontextmanager
-    from typing import Any, AsyncGenerator, Callable, Tuple, Union
-    
+
     try:
         from opentelemetry.instrumentation.mcp.instrumentation import McpInstrumentor
-        
+
         original_transport_wrapper = McpInstrumentor._transport_wrapper
-        
+
         def patched_transport_wrapper(self, tracer):
             @asynccontextmanager
             async def traced_method(
@@ -213,10 +213,11 @@ def _patch_mcp_instrumentation() -> None:
                             InstrumentedStreamReader,
                             InstrumentedStreamWriter,
                         )
+
                         yield (
                             InstrumentedStreamReader(read_stream, tracer),
                             InstrumentedStreamWriter(write_stream, tracer),
-                            third_value
+                            third_value,
                         )
                     else:
                         # Fall back to 2-value case
@@ -225,17 +226,19 @@ def _patch_mcp_instrumentation() -> None:
                             InstrumentedStreamReader,
                             InstrumentedStreamWriter,
                         )
+
                         yield (
                             InstrumentedStreamReader(read_stream, tracer),
-                            InstrumentedStreamWriter(write_stream, tracer)
+                            InstrumentedStreamWriter(write_stream, tracer),
                         )
-            
+
             return traced_method
-        
+
         # Apply the patch
         McpInstrumentor._transport_wrapper = patched_transport_wrapper
-        
+
     except Exception as e:
         import logging
+
         logger = logging.getLogger(__name__)
         logger.warning(f"Failed to patch MCP instrumentation: {e}")

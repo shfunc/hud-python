@@ -9,12 +9,12 @@ from mcp import ErrorData, McpError
 from mcp.types import INVALID_PARAMS, ContentBlock, TextContent
 from pydantic import Field
 
+from hud.tools.base import BaseTool
 from hud.tools.executors.base import BaseExecutor
 from hud.tools.executors.pyautogui import PyAutoGUIExecutor
 from hud.tools.executors.xdo import XDOExecutor
-
-from hud.tools.base import BaseTool
 from hud.tools.types import ContentResult, ToolError
+
 from .settings import computer_settings
 
 logger = logging.getLogger(__name__)
@@ -193,7 +193,7 @@ class HudComputerTool(BaseTool):
             import base64
             from io import BytesIO
 
-            from PIL import Image
+            from PIL import Image  # type: ignore[import-not-found]
 
             # Decode base64 to image
             image_data = base64.b64decode(screenshot_base64)
@@ -360,7 +360,7 @@ class HudComputerTool(BaseTool):
                 result.base64_image = rescaled_image
 
             # Convert result to content blocks
-            return self._to_content_blocks(result)
+            return result.to_content_blocks()
 
         except TypeError as e:
             raise McpError(

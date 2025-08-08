@@ -68,8 +68,8 @@ class TraceStep(BaseModel):
     category: Literal["mcp", "agent"] = Field(default="mcp")
 
     # === MCP fields ===
-    mcp_request: Any | None = None # ClientRequest
-    mcp_result: Any | None = None # ServerResult
+    mcp_request: Any | None = None  # ClientRequest
+    mcp_result: Any | None = None  # ServerResult
 
     # === Agent fields ===
     agent_request: dict[str, Any] | None = None
@@ -106,16 +106,16 @@ class Trace(BaseModel):
 
     def append(self, step: TraceStep) -> None:
         self.trace.append(step)
-    
+
     def populate_from_context(self) -> None:
         """Populate trace steps from the current trace context if available.
-        
+
         This checks if we're executing within a hud.trace() context and
         automatically populates the trace field with collected steps.
         """
         from hud.otel.context import get_current_task_run_id
         from hud.telemetry.replay import get_trace
-        
+
         task_run_id = get_current_task_run_id()
         if task_run_id:
             collected_trace = get_trace(task_run_id)

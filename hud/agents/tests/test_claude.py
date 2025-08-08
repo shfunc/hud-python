@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from anthropic import BadRequestError
 from mcp import types
-from hud.types import MCPToolCall, MCPToolResult
 
 from hud.agents.claude import (
     ClaudeMCPAgent,
@@ -16,6 +15,7 @@ from hud.agents.claude import (
     text_to_content_block,
     tool_use_content_block,
 )
+from hud.types import MCPToolCall, MCPToolResult
 
 if TYPE_CHECKING:
     from anthropic.types.beta import BetaImageBlockParam, BetaMessageParam, BetaTextBlockParam
@@ -137,9 +137,7 @@ class TestClaudeMCPAgent:
         ]
 
         tool_results = [
-            MCPToolResult(
-                content=[types.TextContent(type="text", text="Success")], isError=False
-            ),
+            MCPToolResult(content=[types.TextContent(type="text", text="Success")], isError=False),
         ]
 
         messages = await agent.format_tool_results(tool_calls, tool_results)
@@ -246,7 +244,11 @@ class TestClaudeMCPAgent:
         agent._available_tools = [
             types.Tool(name="calculator", description="Calculator", inputSchema={"type": "object"})
         ]
-        agent._tool_map = {"calculator": types.Tool(name="calculator", description="Calculator", inputSchema={"type": "object"})}
+        agent._tool_map = {
+            "calculator": types.Tool(
+                name="calculator", description="Calculator", inputSchema={"type": "object"}
+            )
+        }
 
         # Mock initial response with tool use
         initial_response = MagicMock()

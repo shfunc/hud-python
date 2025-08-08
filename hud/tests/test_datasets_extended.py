@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -57,8 +58,12 @@ class TestTaskConfigExtended:
 
         assert isinstance(task.setup_tool, list)
         assert len(task.setup_tool) == 2
-        assert task.setup_tool[0].name == "init"
-        assert task.setup_tool[1].arguments["mode"] == "test"
+        # Type narrowing for pyright - we know it's a list with 2 items
+        # Cast to list to satisfy type checker
+        setup_tools = cast("list[MCPToolCall]", task.setup_tool)
+        assert setup_tools[0].name == "init"
+        assert setup_tools[1].arguments is not None
+        assert setup_tools[1].arguments["mode"] == "test"
 
     def test_env_var_complex_resolution(self):
         """Test complex environment variable scenarios."""
@@ -122,7 +127,9 @@ class TestDatasetOperations:
 
     def test_to_taskconfigs_with_nulls(self):
         """Test handling of null/missing fields in dataset."""
-        mock_dataset = [
+        from datasets import Dataset
+
+        mock_dataset_data = [
             {
                 "prompt": "Minimal task",
                 "mcp_config": json.dumps({"basic": True}),
@@ -138,6 +145,7 @@ class TestDatasetOperations:
             },
         ]
 
+        mock_dataset = Dataset.from_list(mock_dataset_data)
         tasks = to_taskconfigs(mock_dataset)
 
         assert len(tasks) == 2
@@ -152,7 +160,10 @@ class TestDatasetOperations:
 
     def test_to_taskconfigs_invalid_json(self):
         """Test error handling for invalid JSON in dataset."""
-        mock_dataset = [{"prompt": "Bad JSON task", "mcp_config": "not-valid-json"}]
+        from datasets import Dataset
+
+        mock_dataset_data = [{"prompt": "Bad JSON task", "mcp_config": "not-valid-json"}]
+        mock_dataset = Dataset.from_list(mock_dataset_data)
 
         with pytest.raises(json.JSONDecodeError):
             to_taskconfigs(mock_dataset)
@@ -176,7 +187,7 @@ class TestDatasetOperations:
 
         # First item is dict, second is object
         with pytest.raises(ValueError, match="Item 1 is a TaskConfig object"):
-            save_taskconfigs([valid_dict, task_object], "test-org/mixed")
+            save_taskconfigs([valid_dict, task_object], "test-org/mixed")  # type: ignore
 
 
 class TestRunDatasetExtended:
@@ -190,10 +201,15 @@ class TestRunDatasetExtended:
             mock_job.id = "job-empty"
             mock_hud.job.return_value.__enter__.return_value = mock_job
 
+            # Create a mock agent class with proper type
+            from hud.agent import MCPAgent
+
+            mock_agent_class = type("MockAgent", (MCPAgent,), {})
+
             results = await run_dataset(
                 "empty_run",
                 [],  # Empty task list
-                MagicMock(),
+                mock_agent_class,
             )
 
             assert results == []
@@ -202,10 +218,20 @@ class TestRunDatasetExtended:
     @pytest.mark.asyncio
     async def test_run_dataset_with_metadata(self):
         """Test run_dataset with custom metadata."""
-        mock_agent_class = MagicMock()
+        from hud.agent import MCPAgent
+
+        # Create a proper mock agent class
         mock_agent_instance = AsyncMock()
-        mock_agent_class.return_value = mock_agent_instance
         mock_agent_instance.run.return_value = {"status": "complete"}
+
+        mock_agent_class = type(
+            "MockAgent",
+            (MCPAgent,),
+            {
+                "__init__": lambda self, **kwargs: None,
+                "__new__": lambda cls, **kwargs: mock_agent_instance,
+            },
+        )
 
         tasks = [TaskConfig(prompt="Task 1", mcp_config={"url": "test1"})]
 
@@ -228,7 +254,7 @@ class TestRunDatasetExtended:
                 await run_dataset(
                     "metadata_run",
                     tasks,
-                    mock_agent_class,
+                    mock_agent_class,  # type: ignore
                     {"model": "test-model"},
                     metadata=custom_metadata,
                 )
@@ -238,7 +264,7 @@ class TestRunDatasetExtended:
                     "experiment_id": "exp-123",
                     "tags": ["test", "v2"],
                     "config": {"temperature": 0.7},
-                    "agent_class": mock_agent_class.__name__,
+                    "agent_class": "MockAgent",
                     "agent_config": {"model": "test-model"},
                 }
 
@@ -247,9 +273,18 @@ class TestRunDatasetExtended:
     @pytest.mark.asyncio
     async def test_run_dataset_exception_handling(self):
         """Test exception handling during task execution."""
-        mock_agent_class = MagicMock()
+        from hud.agent import MCPAgent
+
         mock_agent_instance = AsyncMock()
-        mock_agent_class.return_value = mock_agent_instance
+
+        mock_agent_class = type(
+            "MockAgent",
+            (MCPAgent,),
+            {
+                "__init__": lambda self, **kwargs: None,
+                "__new__": lambda cls, **kwargs: mock_agent_instance,
+            },
+        )
 
         # Make second task fail
         call_count = 0
@@ -276,7 +311,7 @@ class TestRunDatasetExtended:
                 MockClient.return_value = mock_client
 
                 # Should complete without raising
-                results = await run_dataset("error_run", tasks, mock_agent_class)
+                results = await run_dataset("error_run", tasks, mock_agent_class)  # type: ignore
 
                 # First and third should succeed
                 assert results[0] == {"result": "success-1"}
@@ -286,10 +321,19 @@ class TestRunDatasetExtended:
     @pytest.mark.asyncio
     async def test_run_dataset_client_cleanup(self):
         """Test that MCP clients are properly cleaned up."""
-        mock_agent_class = MagicMock()
+        from hud.agent import MCPAgent
+
         mock_agent_instance = AsyncMock()
-        mock_agent_class.return_value = mock_agent_instance
         mock_agent_instance.run.return_value = {"done": True}
+
+        mock_agent_class = type(
+            "MockAgent",
+            (MCPAgent,),
+            {
+                "__init__": lambda self, **kwargs: None,
+                "__new__": lambda cls, **kwargs: mock_agent_instance,
+            },
+        )
 
         tasks = [TaskConfig(prompt=f"Task {i}", mcp_config={"url": f"test{i}"}) for i in range(3)]
 
@@ -308,7 +352,7 @@ class TestRunDatasetExtended:
                 mock_hud.job.return_value.__enter__.return_value = mock_job
                 mock_hud.trace.return_value.__enter__.return_value = "trace-id"
 
-                await run_dataset("cleanup_run", tasks, mock_agent_class)
+                await run_dataset("cleanup_run", tasks, mock_agent_class)  # type: ignore
 
                 # Verify all clients were created and closed
                 assert len(client_instances) == 3
@@ -322,7 +366,9 @@ class TestRunDatasetExtended:
         mock_task = MagicMock()
         mock_task.mcp_config = None
 
-        mock_agent_class = MagicMock()
+        from hud.agent import MCPAgent
+
+        mock_agent_class = type("MockAgent", (MCPAgent,), {})
 
         with patch("hud.datasets.to_taskconfigs", return_value=[mock_task]):
             with patch("hud.datasets.hud") as mock_hud:
@@ -335,7 +381,7 @@ class TestRunDatasetExtended:
                     results = await run_dataset(
                         "no_config_run",
                         [],  # Will be converted by to_taskconfigs
-                        mock_agent_class,
+                        mock_agent_class,  # type: ignore
                     )
 
                     # Should log warning

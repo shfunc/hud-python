@@ -9,6 +9,7 @@ from anthropic import AsyncAnthropic
 
 from hud.adapters import Adapter
 from hud.adapters.common.types import CLA
+
 # Update import to current API; if this script is legacy, keep it optional
 try:
     from hud.agent import MCPAgent as Agent  # type: ignore[assignment]
