@@ -129,8 +129,6 @@ class BaseHub(FastMCP):
         # Naming scheme for hidden objects
         self._prefix_fn: Callable[[str], str] = lambda n: f"{_INTERNAL_PREFIX}{n}"
 
-        # Don't use exclude_tags - prevents accessing our own internal tools
-        # Set env directly instead of using lifespan (avoids async_generator error)
         super().__init__(name=name)
         
         if env is not None:
@@ -143,9 +141,9 @@ class BaseHub(FastMCP):
         # Register dispatcher manually with FunctionTool
         async def _dispatch(
             function: str,
-            ctx: Any,  # Remove type annotation to avoid import issues
-            args: Any = None,
-        ) -> Any:
+            ctx: Context,
+            args: dict | None = None,
+        ) -> ToolResult:
             """Gateway to hidden tools.
 
             Parameters
@@ -167,7 +165,7 @@ class BaseHub(FastMCP):
             name=name,
             title=dispatcher_title,
             description=dispatcher_desc,
-            tags=set(),  # No tags so it's visible
+            tags=set(),
         )
         self._tool_manager.add_tool(dispatcher_tool)
 
