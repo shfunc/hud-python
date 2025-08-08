@@ -8,7 +8,7 @@ from fastmcp import Context, FastMCP
 from hud.tools.types import ContentBlock, EvaluationResult, SetupResult
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Callable
+    from collections.abc import Callable
 
     from fastmcp.tools import FunctionTool
     from fastmcp.tools.tool import Tool, ToolResult
@@ -130,11 +130,10 @@ class BaseHub(FastMCP):
         self._prefix_fn: Callable[[str], str] = lambda n: f"{_INTERNAL_PREFIX}{n}"
 
         super().__init__(name=name)
-        
+
         if env is not None:
             self.env = env
 
-        # Human-friendly metadata for dispatcher
         dispatcher_title = title or f"{name.title()} Dispatcher"
         dispatcher_desc = description or f"Call internal '{name}' functions"
 
@@ -158,8 +157,9 @@ class BaseHub(FastMCP):
 
             # Use our own _call_tool since we're mounted
             return await self._call_tool(self._prefix_fn(function), args or {})
-        
-        from fastmcp.tools.tool import FunctionTool
+
+        from fastmcp import Context
+        from fastmcp.tools.tool import FunctionTool, ToolResult
         dispatcher_tool = FunctionTool.from_function(
             _dispatch,
             name=name,
@@ -177,7 +177,7 @@ class BaseHub(FastMCP):
                 for key in self._tool_manager._tools
                 if key.startswith(_INTERNAL_PREFIX)
             ]
-        
+
         from fastmcp.resources import Resource
         catalogue_resource = Resource.from_function(
             _functions_catalogue,
@@ -197,7 +197,7 @@ class BaseHub(FastMCP):
             # The name was already prefixed in phase 1, just pass through
             result = super().tool(name_or_fn, **kwargs)
             return cast("Callable[..., Any]", result)
-        
+
         # Handle the name from either positional or keyword argument
         if isinstance(name_or_fn, str):
             # Called as @hub.tool("name")
@@ -222,9 +222,10 @@ class BaseHub(FastMCP):
     async def _list_tools(self) -> list[Tool]:
         """Override _list_tools to hide internal tools when mounted."""
         return [
-            tool for key, tool in self._tool_manager._tools.items()
+            tool
+            for key, tool in self._tool_manager._tools.items()
             if not key.startswith(_INTERNAL_PREFIX)
         ]
 
-    resource = FastMCP.resource  # type: ignore[assignment]
-    prompt = FastMCP.prompt  # type: ignore[assignment]
+    resource = FastMCP.resource
+    prompt = FastMCP.prompt
