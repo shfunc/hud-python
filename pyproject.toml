@@ -89,6 +89,10 @@ dev = [
     "pytest-cov",
     "setuptools",
     "fastmcp>=2.11.2",
+    # OpenTelemetry packages
+    "opentelemetry-api>=1.24.0",
+    "opentelemetry-sdk>=1.24.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.24.0",
     "opentelemetry-instrumentation-mcp>=0.44.1",
 ]
 
