@@ -10,11 +10,11 @@ import asyncio
 import logging
 import uuid
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import UTC, datetime
 from functools import wraps
 from typing import TYPE_CHECKING, Any
 
-from hud.server import make_request
+from hud.server import make_request, make_request_sync
 from hud.settings import settings
 from hud.utils.async_utils import fire_and_forget
 
@@ -32,7 +32,7 @@ class Job:
         self.name = name
         self.metadata = metadata or {}
         self.status = "created"
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(UTC)
         self.tasks: list[str] = []
 
     def add_task(self, task_id: str) -> None:
@@ -45,6 +45,25 @@ class Job:
         if settings.telemetry_enabled:
             try:
                 await make_request(
+                    method="POST",
+                    url=f"{settings.base_url}/v2/jobs/{self.id}/status",
+                    json={
+                        "name": self.name,
+                        "status": status,
+                        "metadata": self.metadata,
+                        "task_count": len(self.tasks),
+                    },
+                    api_key=settings.api_key,
+                )
+            except Exception:
+                pass  # Best effort
+    
+    def update_status_sync(self, status: str) -> None:
+        """Synchronously update job status on the server."""
+        self.status = status
+        if settings.telemetry_enabled:
+            try:
+                make_request_sync(
                     method="POST",
                     url=f"{settings.base_url}/v2/jobs/{self.id}/status",
                     json={
@@ -106,11 +125,11 @@ def job(name: str, metadata: dict[str, Any] | None = None, job_id: str | None = 
         # Update status to running
         fire_and_forget(job_obj.update_status("running"), "update job status to running")
         yield job_obj
-        # Update status to completed
-        fire_and_forget(job_obj.update_status("completed"), "update job status to completed")
+        # Update status to completed synchronously to ensure it completes before process exit
+        job_obj.update_status_sync("completed")
     except Exception:
-        # Update status to failed
-        fire_and_forget(job_obj.update_status("failed"), "update job status to failed")
+        # Update status to failed synchronously to ensure it completes before process exit
+        job_obj.update_status_sync("failed")
         raise
     finally:
         _current_job = old_job

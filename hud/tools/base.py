@@ -143,9 +143,9 @@ class BaseHub(FastMCP):
         # Register dispatcher manually with FunctionTool
         async def _dispatch(
             function: str,
-            ctx: Context,
-            args: dict | None = None,
-        ) -> ToolResult:
+            ctx: Any,  # Remove type annotation to avoid import issues
+            args: Any = None,
+        ) -> Any:
             """Gateway to hidden tools.
 
             Parameters
