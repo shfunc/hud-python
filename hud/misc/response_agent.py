@@ -38,7 +38,7 @@ class ResponseAgent:
           or "I've entered the right values into this form. Would you like me to continue with the rest of the task?"
         
         Respond ONLY with one of these two options.
-        """
+        """  # noqa: E501
 
     async def determine_response(self, agent_message: str) -> ResponseType:
         """
@@ -57,7 +57,7 @@ class ResponseAgent:
                     {"role": "system", "content": self.system_prompt},
                     {
                         "role": "user",
-                        "content": f"Agent message: {agent_message}\n\nWhat is the appropriate response?",
+                        "content": f"Agent message: {agent_message}\n\nWhat is the appropriate response?",  # noqa: E501
                     },
                 ],
                 temperature=0.1,  # Low temperature for more deterministic responses

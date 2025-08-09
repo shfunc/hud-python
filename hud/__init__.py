@@ -44,4 +44,4 @@ try:
 
     apply_all_patches()
 except Exception as e:
-    logging.getLogger(__name__).debug(f"Failed to apply agent patches: {e}")
+    logging.getLogger(__name__).debug("Failed to apply agent patches: %s", e)

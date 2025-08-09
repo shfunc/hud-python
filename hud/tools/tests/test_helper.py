@@ -75,17 +75,17 @@ class TestMCPInitializeWrapper:
         mock_session.send_progress_notification = AsyncMock()
 
         from hud.tools.helper.server_initialization import (
-            _init_function,
             _patched_received_request,
         )
-        
+
         # Mock the original _received_request to prevent calling it
-        with patch("hud.tools.helper.server_initialization._original_received_request") as mock_original:
+        with patch("hud.tools.helper.server_initialization._original_received_request"):
             # Create a mock responder with initialization request
             mock_responder = MagicMock()
-            
+
             # Check if it's an InitializeRequest
             from mcp import types
+
             # Create params with proper meta structure
             params = types.InitializeRequestParams(
                 protocolVersion="1.0.0",
@@ -95,11 +95,9 @@ class TestMCPInitializeWrapper:
             # Add meta with progressToken as an attribute
             params.meta = MagicMock()
             params.meta.progressToken = "test_token"
-            
+
             mock_responder.request.root = types.InitializeRequest(
-                id="test",
-                method="initialize",
-                params=params
+                id="test", method="initialize", params=params
             )
 
             # Should raise the exception when calling the patched method

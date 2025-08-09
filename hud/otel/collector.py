@@ -7,6 +7,7 @@ without modifying agent code.
 
 from __future__ import annotations
 
+import logging
 import threading
 from contextvars import ContextVar
 from typing import TYPE_CHECKING
@@ -18,6 +19,8 @@ from hud.types import Trace
 
 if TYPE_CHECKING:
     from opentelemetry.sdk.trace import ReadableSpan
+
+logger = logging.getLogger(__name__)
 
 # Global storage for collected spans by task_run_id
 _TRACE_STORAGE: dict[str, TraceCollector] = {}
@@ -62,9 +65,7 @@ class TraceCollector:
 
             except Exception as e:
                 # Log but don't fail the whole trace
-                import logging
-
-                logging.getLogger(__name__).debug(f"Failed to convert span: {e}")
+                logger.debug("Failed to convert span: %s", e)
 
         return trace
 
@@ -138,4 +139,4 @@ def install_collector() -> None:
         try:
             provider.add_span_processor(processor)  # type: ignore[attr-defined]
         except Exception:
-            pass
+            logger.warning("Failed to add span processor")

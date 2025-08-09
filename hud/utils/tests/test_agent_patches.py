@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from mcp import types
@@ -36,7 +36,7 @@ class TestAgentPatches:
             content=[
                 types.TextContent(
                     type="text",
-                    text="Tool 'test_tool' has an output schema but did not return structured content",
+                    text="Tool 'test_tool' has an output schema but did not return structured content",  # noqa: E501
                 )
             ],
             isError=True,
@@ -95,18 +95,19 @@ class TestAgentPatches:
         with patch("hud.utils.agent_patches.logger") as mock_logger:
             # Mock the imports to fail
             import sys
+
             original_modules = {}
             modules_to_fail = ["mcp", "hud.clients.fastmcp", "hud.types"]
-            
+
             for module in modules_to_fail:
                 if module in sys.modules:
                     original_modules[module] = sys.modules[module]
                     del sys.modules[module]
-            
+
             try:
                 # This should fail and log an error
                 patch_mcp_client_call_tool()
-                
+
                 # Check if error was logged
                 if mock_logger.error.called:
                     error_args = mock_logger.error.call_args[0]

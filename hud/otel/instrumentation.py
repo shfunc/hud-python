@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import functools
 import json
+import logging
 from typing import TYPE_CHECKING, Any
 
 from opentelemetry import trace
@@ -17,14 +18,17 @@ from hud.agent import MCPAgent
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable
+
     from opentelemetry.trace import TracerProvider
 
+logger = logging.getLogger(__name__)
 
-def _wrap_get_model_response(original_method):
+
+def _wrap_get_model_response(original_method: Any) -> Any:
     """Wrap get_model_response to emit telemetry."""
 
     @functools.wraps(original_method)
-    async def wrapper(self, messages: list[Any], **kwargs):
+    async def wrapper(self: Any, messages: list[Any], **kwargs: Any) -> Any:
         # Extract metadata
         provider = self.__class__.__name__.replace("Agent", "").lower()
         model_name = getattr(self, "model", getattr(self, "model_name", "unknown"))
@@ -65,7 +69,7 @@ def _wrap_get_model_response(original_method):
                     )
                     span.set_attribute("agent_response", json.dumps(response_dict))
                 except Exception:
-                    pass
+                    logger.warning("Failed to set agent response attribute")
 
                 # Set status
                 if response.isError:
@@ -83,11 +87,11 @@ def _wrap_get_model_response(original_method):
     return wrapper
 
 
-def _wrap_execute_tools(original_method):
+def _wrap_execute_tools(original_method: Any) -> Any:
     """Wrap execute_tools to emit telemetry."""
 
     @functools.wraps(original_method)
-    async def wrapper(self, *, tool_calls, **kwargs):
+    async def wrapper(self: Any, *, tool_calls: Any, **kwargs: Any) -> Any:
         provider = self.__class__.__name__.replace("Agent", "").lower()
 
         tracer = trace.get_tracer("hud-sdk")

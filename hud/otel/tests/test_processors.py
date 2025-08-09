@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from opentelemetry.sdk.trace import Span
-
 from hud.otel.processors import HudEnrichmentProcessor
 
 
@@ -83,7 +81,10 @@ class TestHudEnrichmentProcessor:
         span.is_recording.return_value = True
 
         # Mock baggage with job ID
-        with patch("hud.otel.processors.baggage.get_baggage", return_value="job-123"), patch("hud.otel.processors.get_current_task_run_id", return_value=None):
+        with (
+            patch("hud.otel.processors.baggage.get_baggage", return_value="job-123"),
+            patch("hud.otel.processors.get_current_task_run_id", return_value=None),
+        ):
             processor.on_start(span, parent_context=None)
 
         # Verify job ID attribute was set
@@ -104,7 +105,7 @@ class TestHudEnrichmentProcessor:
     def test_on_start_exception_handling_extended(self):
         """Test that exceptions in on_start are caught and logged."""
         from hud.otel.processors import HudEnrichmentProcessor
-        
+
         processor = HudEnrichmentProcessor()
 
         # Create a mock span that raises when setting attributes
@@ -115,8 +116,10 @@ class TestHudEnrichmentProcessor:
         parent_context = {}
 
         # Patch logger and other dependencies to force an exception
-        with patch("hud.otel.processors.logger") as mock_logger, \
-             patch("hud.otel.processors.get_current_task_run_id", return_value="test-id"):
+        with (
+            patch("hud.otel.processors.logger") as mock_logger,
+            patch("hud.otel.processors.get_current_task_run_id", return_value="test-id"),
+        ):
             # Should not raise, exception should be caught
             processor.on_start(mock_span, parent_context)
 
@@ -136,9 +139,13 @@ class TestHudEnrichmentProcessor:
         parent_context = {}
 
         # Make get_current_task_run_id raise an exception
-        with patch(
-            "hud.otel.processors.get_current_task_run_id", side_effect=ValueError("Context error")
-        ), patch("hud.otel.processors.logger") as mock_logger:
+        with (
+            patch(
+                "hud.otel.processors.get_current_task_run_id",
+                side_effect=ValueError("Context error"),
+            ),
+            patch("hud.otel.processors.logger") as mock_logger,
+        ):
             # Should not raise
             processor.on_start(mock_span, parent_context)
 
@@ -157,9 +164,10 @@ class TestHudEnrichmentProcessor:
         parent_context = {}
 
         # Make baggage.get_baggage raise an exception
-        with patch(
-            "hud.otel.processors.baggage.get_baggage", side_effect=KeyError("Baggage error")
-        ), patch("hud.otel.processors.logger") as mock_logger:
+        with (
+            patch("hud.otel.processors.baggage.get_baggage", side_effect=KeyError("Baggage error")),
+            patch("hud.otel.processors.logger") as mock_logger,
+        ):
             # Should not raise
             processor.on_start(mock_span, parent_context)
 

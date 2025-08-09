@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -10,6 +11,8 @@ from pydantic import AnyUrl
 
 from hud.clients.mcp_use import MCPUseHUDClient as MCPClient
 from hud.types import MCPToolResult
+
+logger = logging.getLogger(__name__)
 
 
 class TestMCPClient:
@@ -165,11 +168,6 @@ class TestMCPClient:
 
         mock_session.connector.client_session.list_tools = mock_list_tools
 
-        # Mock tool execution
-        mock_mcp_result = MCPToolResult(
-            content=[types.TextContent(type="text", text="Result: 42")], isError=False
-        )
-
         # The session returns CallToolResult, but the client should return MCPToolResult
         mock_call_result = types.CallToolResult(
             content=[types.TextContent(type="text", text="Result: 42")], isError=False
@@ -307,7 +305,7 @@ class TestMCPClient:
                 types.Tool(name="tool2", description="Tool 2", inputSchema={"type": "object"}),
             ]
         except Exception:
-            pass
+            logger.warning("Failed to set tools")
 
         tools = client.get_available_tools()
         names = {t.name for t in tools}

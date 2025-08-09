@@ -14,17 +14,20 @@ def test_stream():
 
 def test_stream_with_display_exception():
     """Test stream when IPython display raises an exception."""
-    with patch("IPython.display.display", side_effect=Exception("Display error")), patch("hud.utils.telemetry.logger") as mock_logger:
+    with (
+        patch("IPython.display.display", side_effect=Exception("Display error")),
+        patch("hud.utils.telemetry.logger") as mock_logger,
+    ):
         html_content = stream("https://example.com")
 
-            # Should still return the HTML content
-            assert html_content is not None
-            assert 'src="https://example.com"' in html_content
+        # Should still return the HTML content
+        assert html_content is not None
+        assert 'src="https://example.com"' in html_content
 
-            # Should log the warning
-            mock_logger.warning.assert_called_once()
-            args = mock_logger.warning.call_args[0]
-            assert "Display error" in str(args[0])
+        # Should log the warning
+        mock_logger.warning.assert_called_once()
+        args = mock_logger.warning.call_args[0]
+        assert "Display error" in str(args[0])
 
 
 def test_display_screenshot():
@@ -63,14 +66,17 @@ def test_display_screenshot_with_exception():
         "AAABJRU5ErkJggg=="
     )
 
-    with patch("IPython.display.display", side_effect=Exception("Display error")), patch("hud.utils.telemetry.logger") as mock_logger:
+    with (
+        patch("IPython.display.display", side_effect=Exception("Display error")),
+        patch("hud.utils.telemetry.logger") as mock_logger,
+    ):
         html_content = display_screenshot(base64_image)
 
-            # Should still return the HTML content
-            assert html_content is not None
-            assert f"data:image/png;base64,{base64_image}" in html_content
+        # Should still return the HTML content
+        assert html_content is not None
+        assert f"data:image/png;base64,{base64_image}" in html_content
 
-            # Should log the warning
-            mock_logger.warning.assert_called_once()
-            args = mock_logger.warning.call_args[0]
-            assert "Display error" in str(args[0])
+        # Should log the warning
+        mock_logger.warning.assert_called_once()
+        args = mock_logger.warning.call_args[0]
+        assert "Display error" in str(args[0])

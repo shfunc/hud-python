@@ -79,9 +79,13 @@ class TestHudComputerToolExtended:
     @pytest.mark.asyncio
     async def test_platform_auto_selection_linux(self):
         """Test platform auto-selection on Linux."""
-        with patch("platform.system", return_value="Linux"), patch("hud.tools.executors.xdo.XDOExecutor.is_available", return_value=False), patch(
-            "hud.tools.executors.pyautogui.PyAutoGUIExecutor.is_available",
-            return_value=False,
+        with (
+            patch("platform.system", return_value="Linux"),
+            patch("hud.tools.executors.xdo.XDOExecutor.is_available", return_value=False),
+            patch(
+                "hud.tools.executors.pyautogui.PyAutoGUIExecutor.is_available",
+                return_value=False,
+            ),
         ):
             tool = HudComputerTool()
             assert isinstance(tool.executor, BaseExecutor)
@@ -89,8 +93,11 @@ class TestHudComputerToolExtended:
     @pytest.mark.asyncio
     async def test_platform_auto_selection_windows(self):
         """Test platform auto-selection on Windows."""
-        with patch("platform.system", return_value="Windows"), patch(
-            "hud.tools.executors.pyautogui.PyAutoGUIExecutor.is_available", return_value=False
+        with (
+            patch("platform.system", return_value="Windows"),
+            patch(
+                "hud.tools.executors.pyautogui.PyAutoGUIExecutor.is_available", return_value=False
+            ),
         ):
             tool = HudComputerTool()
             assert isinstance(tool.executor, BaseExecutor)
@@ -147,7 +154,9 @@ class TestHudComputerToolExtended:
         result = await tool(action="type", text="Hello World", enter_after=True)
         assert result
         assert any(
-            "[SIMULATED] Type" in content.text for content in result if isinstance(content, TextContent)
+            "[SIMULATED] Type" in content.text
+            for content in result
+            if isinstance(content, TextContent)
         )
 
     @pytest.mark.asyncio
@@ -157,7 +166,9 @@ class TestHudComputerToolExtended:
         result = await tool(action="press", keys=["ctrl", "c"])
         assert result
         assert any(
-            "[SIMULATED] Press" in content.text for content in result if isinstance(content, TextContent)
+            "[SIMULATED] Press" in content.text
+            for content in result
+            if isinstance(content, TextContent)
         )
 
     @pytest.mark.asyncio
@@ -294,7 +305,7 @@ class TestHudComputerToolExtended:
 
         result = await tool(action="screenshot")
         assert result
-        # The rescale method is called twice - once for the screenshot action, 
+        # The rescale method is called twice - once for the screenshot action,
         # and once when processing the result
         assert tool._rescale_screenshot.call_count == 2
         tool._rescale_screenshot.assert_any_call("fake_base64_data")
@@ -347,6 +358,7 @@ class TestHudComputerToolExtended:
 
         # Test type without text
         from hud.tools.types import ToolError
+
         with pytest.raises(ToolError, match="text parameter is required"):
             await tool(action="type", text=None)
 
@@ -389,17 +401,25 @@ class TestHudComputerToolExtended:
         """Test platform selection when executors are available."""
         # Test Linux with XDO available
         mock_xdo_instance = MagicMock()
-        with patch("platform.system", return_value="Linux"), \
-             patch("hud.tools.executors.xdo.XDOExecutor.is_available", return_value=True), \
-             patch("hud.tools.computer.hud.XDOExecutor", return_value=mock_xdo_instance) as mock_xdo:
+        with (
+            patch("platform.system", return_value="Linux"),
+            patch("hud.tools.executors.xdo.XDOExecutor.is_available", return_value=True),
+            patch("hud.tools.computer.hud.XDOExecutor", return_value=mock_xdo_instance) as mock_xdo,
+        ):
             tool = HudComputerTool(platform_type="auto")
             mock_xdo.assert_called_once()
             assert tool.executor is mock_xdo_instance
 
         # Test with PyAutoGUI available
         mock_pyautogui_instance = MagicMock()
-        with patch("hud.tools.executors.pyautogui.PyAutoGUIExecutor.is_available", return_value=True), \
-             patch("hud.tools.computer.hud.PyAutoGUIExecutor", return_value=mock_pyautogui_instance) as mock_pyautogui:
+        with (
+            patch(
+                "hud.tools.executors.pyautogui.PyAutoGUIExecutor.is_available", return_value=True
+            ),
+            patch(
+                "hud.tools.computer.hud.PyAutoGUIExecutor", return_value=mock_pyautogui_instance
+            ) as mock_pyautogui,
+        ):
             tool = HudComputerTool(platform_type="pyautogui")
             mock_pyautogui.assert_called_once()
             assert tool.executor is mock_pyautogui_instance

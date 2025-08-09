@@ -17,9 +17,8 @@ from openai.types.responses import (
 
 from hud.agent import MCPAgent
 from hud.settings import settings
+from hud.tools.computer.settings import computer_settings
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult, Trace
-
-from ..tools.computer.settings import computer_settings
 
 if TYPE_CHECKING:
     from hud.datasets import TaskConfig

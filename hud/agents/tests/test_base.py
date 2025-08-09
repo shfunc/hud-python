@@ -556,8 +556,7 @@ class TestMCPAgentExtended:
     @pytest.mark.asyncio
     async def test_run_with_task_object(self, agent_with_tools):
         """Test running agent with TaskConfig object."""
-        from hud.datasets import TaskConfig
-        from hud.types import MCPToolResult, Trace
+        from hud.types import MCPToolResult
 
         task = TaskConfig(
             id="test_task",
@@ -608,8 +607,7 @@ class TestMCPAgentExtended:
     @pytest.mark.asyncio
     async def test_run_with_setup_error(self, agent_with_tools):
         """Test task execution with setup phase error."""
-        from hud.datasets import TaskConfig
-        from hud.types import MCPToolResult, Trace
+        from hud.types import MCPToolResult
 
         task = TaskConfig(
             id="test_task",
@@ -635,7 +633,6 @@ class TestMCPAgentExtended:
     @pytest.mark.asyncio
     async def test_run_with_multiple_setup_tools(self, agent_with_tools):
         """Test task with multiple setup tools."""
-        from hud.datasets import TaskConfig
 
         task = TaskConfig(
             id="test_task",
@@ -669,7 +666,7 @@ class TestMCPAgentExtended:
         """Test successful screenshot capture."""
         # Initialize agent to make tools available
         await agent_with_tools.initialize()
-        
+
         agent_with_tools.mcp_client.call_tool = AsyncMock(
             return_value=types.CallToolResult(
                 content=[
@@ -789,7 +786,7 @@ class TestMCPAgentExtended:
                 types.Tool(name="screenshot", description="Take screenshot", inputSchema={})
             ]
         )
-        
+
         # Initialize to make tools available
         await agent.initialize()
 
@@ -842,7 +839,7 @@ class TestMCPAgentExtended:
         """Test system prompt generation with custom and tool prompts."""
         # Initialize to populate available tools
         await agent_with_tools.initialize()
-        
+
         agent_with_tools.custom_system_prompt = "Custom instructions."
         agent_with_tools.append_tool_system_prompt = True
 
@@ -869,7 +866,6 @@ class TestMCPAgentExtended:
     @pytest.mark.asyncio
     async def test_evaluate_phase_with_multiple_tools(self, agent_with_tools):
         """Test evaluation phase with multiple evaluation tools."""
-        from hud.datasets import TaskConfig
         from hud.types import MCPToolResult
 
         task = TaskConfig(
@@ -903,7 +899,6 @@ class TestMCPAgentExtended:
     @pytest.mark.asyncio
     async def test_trace_population_on_error(self, agent_with_tools):
         """Test that trace is populated on task execution error."""
-        from hud.datasets import TaskConfig
 
         task = TaskConfig(
             id="test_task",

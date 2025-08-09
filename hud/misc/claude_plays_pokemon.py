@@ -94,7 +94,7 @@ IMPORTANT: Do not include any conversation markers like <<ASSISTANT_CONVERSATION
 7. **Memory**: Maintain awareness of the game history and your previous actions to avoid repetitive behaviors
 
 Always provide thoughtful analysis and clear reasoning for your decisions. If you're uncertain about the best course of action, prioritize safe moves that gather more information.
-"""
+"""  # noqa: E501
 
 
 def extract_action_from_response_block(block: dict[str, Any]) -> list[dict[str, Any]]:
@@ -205,7 +205,7 @@ class ClaudePlaysPokemon(Agent[AsyncAnthropic, CLA]):
 
         Raises:
             ValueError: If client is not initialized
-        """
+        """  # noqa: E501
         if not self.client:
             raise ValueError("Client is not initialized")
 

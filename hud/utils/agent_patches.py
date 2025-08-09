@@ -36,7 +36,8 @@ def patch_mcp_client_call_tool() -> None:
                     if (
                         "has an output schema but did not return structured content" in error_text
                         or "Output validation error: outputSchema defined but no structured output "
-                        "returned" in error_text
+                        "returned"
+                        in error_text
                     ):
                         logger.warning(
                             "Tool '%s' returned output schema validation error. "
@@ -67,7 +68,8 @@ def patch_mcp_client_call_tool() -> None:
                 if (
                     "has an output schema but did not return structured content" in error_msg
                     or "Output validation error: outputSchema defined but no structured output "
-                    "returned" in error_msg
+                    "returned"
+                    in error_msg
                 ):
                     logger.warning(
                         "Tool '%s' raised output schema validation error. "

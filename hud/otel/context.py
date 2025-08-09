@@ -194,15 +194,15 @@ def _print_trace_url(task_run_id: str) -> None:
     url_padding = (box_width - len(url) - 2) // 2
 
     # Print the box
-    print(f"\n{DIM}{top_border}{RESET}")
-    print(
+    print(f"\n{DIM}{top_border}{RESET}")  # noqa: T201
+    print(  # noqa: T201
         f"{DIM}║{RESET}{' ' * header_padding}{header}{' ' * (box_width - len(header) - header_padding - 3)}{DIM}║{RESET}"  # noqa: E501
     )
-    print(f"{DIM}{divider}{RESET}")
-    print(
+    print(f"{DIM}{divider}{RESET}")  # noqa: T201
+    print(  # noqa: T201
         f"{DIM}║{RESET}{' ' * url_padding}{BOLD}{GOLD}{url}{RESET}{' ' * (box_width - len(url) - url_padding - 2)}{DIM}║{RESET}"  # noqa: E501
     )
-    print(f"{DIM}{bottom_border}{RESET}\n")
+    print(f"{DIM}{bottom_border}{RESET}\n")  # noqa: T201
 
 
 def _print_trace_complete_url(task_run_id: str, error_occurred: bool = False) -> None:
@@ -218,11 +218,11 @@ def _print_trace_complete_url(task_run_id: str, error_occurred: bool = False) ->
     BOLD = "\033[1m"
 
     if error_occurred:
-        print(
+        print(  # noqa: T201
             f"\n{RED}✗ Trace errored!{RESET} {DIM}More error details available at:{RESET} {BOLD}{GOLD}{url}{RESET}\n"  # noqa: E501
         )
     else:
-        print(f"\n{GREEN}✓ Trace complete!{RESET} {DIM}View at:{RESET} {BOLD}{GOLD}{url}{RESET}\n")
+        print(f"\n{GREEN}✓ Trace complete!{RESET} {DIM}View at:{RESET} {BOLD}{GOLD}{url}{RESET}\n")  # noqa: T201
 
 
 class trace:
@@ -323,7 +323,7 @@ class trace:
             try:
                 context.detach(self._otel_token)  # type: ignore[arg-type]
             except Exception:
-                pass
+                logger.warning("Failed to detach OpenTelemetry context")
 
         # Reset context variables
         if self._task_run_token is not None:
