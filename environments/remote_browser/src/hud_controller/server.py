@@ -19,15 +19,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from mcp.server.fastmcp import FastMCP
-from hud.tools.helper import mcp_intialize_wrapper, register_instance_tool
+from fastmcp import FastMCP
+from hud.tools.helper import mcp_intialize_wrapper
 
 # Import tools
 from .tools import PlaywrightToolWithMemory, BrowserExecutor, create_computer_tools
 
-# Import setup and evaluate tools
-from .setup import setup_tool
-from .evaluate import evaluate_tool
+# Import setup and evaluate hubs
+from .setup import setup as setup_hub
+from .evaluate import evaluate as evaluate_hub
 
 # Import providers
 from .providers import get_provider, BrowserProvider
@@ -57,20 +57,6 @@ mcp = FastMCP(
 )
 
 
-@mcp.resource("setup://registry")
-async def get_setup_registry() -> str:
-    """Get the list of available setup functions."""
-    return setup_tool.get_registry_json()
-
-
-@mcp.resource("evaluators://registry")
-async def get_evaluator_registry() -> str:
-    """Get the list of available evaluator functions."""
-    return evaluate_tool.get_registry_json()
-
-
-
-
 class Telemetry(TypedDict):
     """Standard evaluation result format."""
 
@@ -80,6 +66,7 @@ class Telemetry(TypedDict):
     timestamp: str
     cdp_url: str | None
     instance_id: str | None
+
 
 @mcp.resource("telemetry://live")
 async def get_telemetry_resource() -> Telemetry:
@@ -220,8 +207,8 @@ async def initialize_environment(session=None, progress_token=None):
         await playwright_tool._ensure_browser()
         await send_progress(65, "Browser connection established")
 
-        # Register playwright tool with MCP
-        register_instance_tool(mcp, playwright_tool)
+        # Add playwright tool to MCP
+        mcp.add_tool(playwright_tool.mcp)
         await send_progress(70, "Playwright tool registered")
 
         # Initialize browser executor
@@ -231,17 +218,17 @@ async def initialize_environment(session=None, progress_token=None):
         # Create and register computer tools
         computer_tools = create_computer_tools(browser_executor)
         for tool_name, tool_instance in computer_tools.items():
-            register_instance_tool(mcp, tool_instance, tool_name)
+            mcp.add_tool(tool_instance.mcp)
         await send_progress(80, f"Registered {len(computer_tools)} computer tools")
 
-        # Set the playwright_tool as context for setup and evaluate tools
-        # This is simpler - the tool itself IS the context with all needed properties
-        setup_tool.context = playwright_tool
-        evaluate_tool.context = playwright_tool
+        # Set the playwright_tool as environment for setup and evaluate hubs
+        # This allows all setup/evaluate functions to access the browser
+        setup_hub.env = playwright_tool
+        evaluate_hub.env = playwright_tool
 
-        # Register setup and evaluate tools
-        register_instance_tool(mcp, setup_tool)
-        register_instance_tool(mcp, evaluate_tool)
+        # Mount the hubs
+        mcp.mount(setup_hub)
+        mcp.mount(evaluate_hub)
         await send_progress(90, "Setup and evaluate tools registered")
 
         # Navigate to initial URL if specified

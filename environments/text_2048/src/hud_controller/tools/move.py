@@ -11,14 +11,14 @@ logger = logging.getLogger(__name__)
 class MoveTool(BaseTool):
     """Tool for making moves in the 2048 game."""
 
-    def __init__(self, context: Any = None):
+    def __init__(self, env: Any = None):
         """Initialize the move tool.
 
         Args:
             context: The game instance
         """
         super().__init__(
-            context=context,
+            env=env,
             name="move",
             title="Move Tiles",
             description="Make a move in the 2048 game by sliding tiles in a direction",
@@ -30,7 +30,7 @@ class MoveTool(BaseTool):
         Args:
             direction: The direction to move ('up', 'down', 'left', 'right')
         """
-        if self.context is None:
+        if self.env is None:
             return [TextContent(text="❌ Game not initialized. Run setup first.", type="text")]
 
         direction = direction.lower()
@@ -43,7 +43,7 @@ class MoveTool(BaseTool):
             ]
 
         # Make the move using context (the game)
-        moved = self.context.move(direction)
+        moved = self.env.move(direction)
 
         if not moved:
             return [
@@ -54,10 +54,10 @@ class MoveTool(BaseTool):
             ]
 
         # Get game state
-        state = self.context.get_state()
+        state = self.env.get_state()
 
         # Format response
-        board_str = self.context.get_board_ascii()
+        board_str = self.env.get_board_ascii()
         text = f"✅ Moved {direction}\n"
         text += f"Score: {state['score']} | Moves: {state['moves']}\n"
         text += f"{board_str}"

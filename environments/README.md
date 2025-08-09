@@ -680,6 +680,65 @@ class MyCheckEvaluator(BaseEvaluator):
 }
 ```
 
+## Testing Your Environment
+
+Once your environment is working, create comprehensive tests to ensure it stays that way:
+
+### Creating Test Files
+
+Each environment should have a test file following this pattern:
+- `environments/<env_name>/test_<env_name>_mcp.py`
+
+The test file should include:
+1. **Docker Build Test**: Ensure the image builds successfully
+2. **MCP Initialization Tests**: Verify phases 1-3 from docker_debug.py
+3. **Tool-Specific Tests**: Test your environment's unique tools
+4. **Integration Tests**: Test complete workflows
+
+Example test structure:
+```python
+class TestMyEnvironment:
+    IMAGE_NAME = "my-environment-test:latest"
+    
+    @classmethod
+    def setup_class(cls):
+        """Build Docker image before tests"""
+        # Build the image
+    
+    def test_phase1_basic_startup(self):
+        """Test container starts"""
+    
+    @pytest.mark.asyncio
+    async def test_phase2_3_mcp_initialize_and_tools(self):
+        """Test MCP init and tool discovery"""
+    
+    @pytest.mark.asyncio
+    async def test_environment_specific_tools(self):
+        """Test your custom tools"""
+```
+
+### Running Tests
+
+Use the generic test runner:
+```bash
+# Run all tests for an environment
+python environments/run_environment_tests.py browser
+
+# Run specific tests
+python environments/run_environment_tests.py text_2048 -k test_game_tools
+
+# List available environments
+python environments/run_environment_tests.py --list
+```
+
+### Test Dependencies
+
+Add pytest to your environment's `pyproject.toml`:
+```toml
+[project.optional-dependencies]
+test = ["pytest>=7.0", "pytest-asyncio>=0.20"]
+```
+
 ## Summary
 
 1. Start with a *plain* Dockerfile – verify it runs.  
@@ -687,6 +746,7 @@ class MyCheckEvaluator(BaseEvaluator):
 3. Implement tools – verify discovery + execution.  
 4. Run the same image remotely – verify telemetry.  
 5. Automate the loop with cursor-mcp.  
-6. Polish and extend as inspiration strikes.
+6. **Write comprehensive tests** – ensure reliability.
+7. Polish and extend as inspiration strikes.
 
 Happy building – and remember: **stderr is your friend, stdout belongs to MCP.** 🚀

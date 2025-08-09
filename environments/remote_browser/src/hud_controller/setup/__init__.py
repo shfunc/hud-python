@@ -1,14 +1,16 @@
-"""Setup module for remote browser environment."""
+"""Setup layer for remote browser environment.
 
-from hud.tools import SetupTool
+This module exposes:
+- ``setup``, the BaseHub instance for setup operations
+"""
 
-# Create the setup tool instance
-setup_tool = SetupTool(name="setup", description="Setup the remote browser environment")
+from __future__ import annotations
 
-# Create decorator for registering to this tool
-setup = setup_tool.register
+from hud.tools.base import BaseHub
 
-# Import all setup modules to trigger registration
+setup = BaseHub("setup")
+
+# Import all setup functions to register them
 from . import navigate, cookies, load_html, interact, sheets
 
-__all__ = ["setup_tool", "setup"]
+__all__ = ["setup"]

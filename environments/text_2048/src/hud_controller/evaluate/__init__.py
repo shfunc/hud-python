@@ -1,16 +1,12 @@
-"""Evaluate module for 2048 environment."""
+"""Evaluation layer for 2048 environment."""
 
-from hud.tools import EvaluateTool
+from __future__ import annotations
 
-# Create the evaluate tool instance
-evaluate_tool = EvaluateTool(
-    name="evaluate", title="Game Evaluator", description="Evaluate the current game state"
-)
+from hud.tools.base import BaseHub
 
-# Create decorator for registering to this tool
-evaluator = evaluate_tool.register
+evaluate = BaseHub("evaluate")
 
-# Import registry to trigger registration
-from . import registry
+# Import all evaluator functions to register them
+from . import efficiency, max_number
 
-__all__ = ["evaluate_tool"]
+__all__ = ["evaluate"]

@@ -9,11 +9,13 @@ from mcp import ErrorData, McpError
 from mcp.types import INVALID_PARAMS, ContentBlock, TextContent
 from pydantic import Field
 
-from hud.tools.base import BaseTool, ToolError, ToolResult
-from hud.tools.computer.settings import computer_settings
+from hud.tools.base import BaseTool
 from hud.tools.executors.base import BaseExecutor
 from hud.tools.executors.pyautogui import PyAutoGUIExecutor
 from hud.tools.executors.xdo import XDOExecutor
+from hud.tools.types import ContentResult, ToolError
+
+from .settings import computer_settings
 
 logger = logging.getLogger(__name__)
 
@@ -56,9 +58,9 @@ class HudComputerTool(BaseTool):
             title: Human-readable display name for the tool (auto-generated from class name)
             description: Tool description (auto-generated from docstring if not provided)
         """
-        # Initialize base tool with executor as context
+        # Initialize base tool with executor as env
         super().__init__(
-            context=executor,
+            env=executor,
             name=name or "computer",
             title=title or "Computer Control",
             description=description or "Control computer with mouse, keyboard, and screenshots",
@@ -102,18 +104,18 @@ class HudComputerTool(BaseTool):
         logger.debug("Display number: %s", self.display_num)
 
         # If no executor provided, create one based on platform
-        if self.context is None:
+        if self.env is None:
             self._choose_executor(platform_type, self.display_num)
 
     @property
     def executor(self) -> BaseExecutor:
         """Get the executor (alias for context)."""
-        return self.context
+        return self.env
 
     @executor.setter
     def executor(self, value: BaseExecutor) -> None:
         """Set the executor (alias for context)."""
-        self.context = value
+        self.env = value
 
     def _choose_executor(
         self,
@@ -191,7 +193,7 @@ class HudComputerTool(BaseTool):
             import base64
             from io import BytesIO
 
-            from PIL import Image
+            from PIL import Image  # type: ignore[import-not-found]
 
             # Decode base64 to image
             image_data = base64.b64decode(screenshot_base64)
@@ -284,7 +286,7 @@ class HudComputerTool(BaseTool):
             elif action == "type":
                 if text is None:
                     raise ToolError("text parameter is required for type")
-                result = await self.executor.type(text=text, enter_after=enter_after or False)
+                result = await self.executor.write(text=text, enter_after=enter_after or False)
 
             elif action == "scroll":
                 # Scale coordinates from client space to screen space
@@ -329,9 +331,9 @@ class HudComputerTool(BaseTool):
                 if screenshot:
                     # Rescale screenshot if requested
                     screenshot = await self._rescale_screenshot(screenshot)
-                    result = ToolResult(base64_image=screenshot)
+                    result = ContentResult(base64_image=screenshot)
                 else:
-                    result = ToolResult(error="Failed to take screenshot")
+                    result = ContentResult(error="Failed to take screenshot")
 
             elif action == "position":
                 result = await self.executor.position()
@@ -353,12 +355,12 @@ class HudComputerTool(BaseTool):
                 raise McpError(ErrorData(code=INVALID_PARAMS, message=f"Unknown action: {action}"))
 
             # Rescale screenshot in result if present
-            if isinstance(result, ToolResult) and result.base64_image and self.rescale_images:
+            if isinstance(result, ContentResult) and result.base64_image and self.rescale_images:
                 rescaled_image = await self._rescale_screenshot(result.base64_image)
-                result = result.replace(base64_image=rescaled_image)
+                result.base64_image = rescaled_image
 
             # Convert result to content blocks
-            return self._to_content_blocks(result)
+            return result.to_content_blocks()
 
         except TypeError as e:
             raise McpError(

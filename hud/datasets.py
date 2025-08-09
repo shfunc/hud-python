@@ -6,18 +6,17 @@ import asyncio
 import json
 import logging
 from string import Template
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from datasets import Dataset
-from mcp.types import CallToolRequestParams as MCPToolParams
 from pydantic import BaseModel, Field, field_validator
 
-from hud.telemetry.job import job
+from .types import MCPToolCall
 
 if TYPE_CHECKING:
     from datasets import Dataset
 
-    from hud.mcp.base import AgentResult, BaseMCPAgent
+    from hud.agent import MCPAgent
 
 logger = logging.getLogger("hud.datasets")
 
@@ -45,8 +44,8 @@ class TaskConfig(BaseModel):
     id: str | None = None
     prompt: str
     mcp_config: dict[str, Any]
-    setup_tool: MCPToolParams | list[MCPToolParams] | None = None
-    evaluate_tool: MCPToolParams | list[MCPToolParams] | None = None
+    setup_tool: MCPToolCall | list[MCPToolCall] | None = None
+    evaluate_tool: MCPToolCall | list[MCPToolCall] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("mcp_config", mode="before")
@@ -63,7 +62,7 @@ class TaskConfig(BaseModel):
         """
         import os
 
-        from hud.telemetry.context import get_current_task_run_id
+        from hud.otel import get_current_task_run_id
 
         # Start with current environment variables
         mapping = dict(os.environ)
@@ -115,8 +114,10 @@ def to_taskconfigs(dataset: Dataset) -> list[TaskConfig]:
     try:
         tasks = []
         for row in dataset:
+            # Cast row to dict for type checker
+            row = cast("dict[str, Any]", row)
             # Build TaskConfig dict, parsing JSON string fields
-            tc_dict = {
+            tc_dict: dict[str, Any] = {
                 "prompt": row["prompt"],
                 "mcp_config": json.loads(row["mcp_config"]),
             }
@@ -147,7 +148,7 @@ def to_taskconfigs(dataset: Dataset) -> list[TaskConfig]:
 async def run_dataset(
     name: str,
     dataset: Dataset | list[TaskConfig],
-    agent_class: type[BaseMCPAgent],
+    agent_class: type[MCPAgent],
     agent_config: dict[str, Any] | None = None,
     max_concurrent: int = 5,
     metadata: dict[str, Any] | None = None,
@@ -186,7 +187,7 @@ async def run_dataset(
     """
     # Import here to avoid circular imports
     import hud
-    from hud.mcp.client import MCPClient
+    from hud.client import MCPClient
 
     # Convert dataset to TaskConfigs if needed
     tasks = dataset if isinstance(dataset, list) else to_taskconfigs(dataset)
@@ -197,15 +198,15 @@ async def run_dataset(
     if agent_config:
         job_metadata["agent_config"] = agent_config
 
-    with job(name, metadata=job_metadata):
+    with hud.job(name, metadata=job_metadata) as job_obj:
         # Run tasks with semaphore for concurrency control
         sem = asyncio.Semaphore(max_concurrent)
-        results: list[AgentResult | None] = [None] * len(tasks)
+        results: list[Any | None] = [None] * len(tasks)
 
         async def _worker(index: int, task: TaskConfig) -> None:
             async with sem:
                 # Create trace for this task
-                with hud.trace(f"task_{index}"):
+                with hud.trace(f"task_{index}", job_id=job_obj.id):
                     # Create fresh MCP client per task
                     if task.mcp_config:
                         client = MCPClient(mcp_config=task.mcp_config)
