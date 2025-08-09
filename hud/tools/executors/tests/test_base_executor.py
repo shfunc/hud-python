@@ -305,7 +305,7 @@ class TestBaseExecutor:
     async def test_type_text_alias(self):
         """Test type_text alias method."""
         executor = BaseExecutor()
-        result = await executor.type_text("test", delay=20, take_screenshot=False)
+        result = await executor.write("test", delay=20, take_screenshot=False)
 
         assert isinstance(result, ContentResult)
         assert result.output == "[SIMULATED] Type 'test'"

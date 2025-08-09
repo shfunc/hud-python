@@ -1,107 +1,80 @@
 """Cookie match evaluator for remote browser environment."""
 
 import logging
-from typing import Any, Dict
-from hud.tools import BaseEvaluator, EvaluationResult
-from . import evaluator
+from fastmcp import Context
+from hud.tools.types import EvaluationResult
+from . import evaluate
 
 logger = logging.getLogger(__name__)
 
 
-@evaluator("cookie_match", "Check if cookies match expected values")
-class CookieMatchEvaluator(BaseEvaluator):
-    """Evaluator that checks if cookies match expected values."""
+@evaluate.tool("cookie_match")
+async def cookie_match(ctx: Context, cookie_name: str, expected_value: str):
+    """Check if a cookie value matches expected value.
 
-    async def __call__(
-        self, context: Any, expected_cookies: Dict[str, str], **kwargs
-    ) -> EvaluationResult:
-        """Check if cookies match expected values.
+    Args:
+        cookie_name: Name of the cookie to check
+        expected_value: Expected value of the cookie
 
-        Args:
-            context: Browser context with playwright_tool
-            expected_cookies: Dictionary of cookie name to expected value
-            **kwargs: Additional arguments
+    Returns:
+        Evaluation result
+    """
+    logger.info(f"Checking cookie {cookie_name} for value: {expected_value}")
 
-        Returns:
-            Standard evaluation result
-        """
-        logger.info(f"Evaluating cookie_match for: {list(expected_cookies.keys())}")
+    # Get the playwright tool from the environment
+    playwright_tool = evaluate.env
+    if not playwright_tool or not hasattr(playwright_tool, "page") or not playwright_tool.page:
+        logger.error("No browser page available")
+        return EvaluationResult(
+            reward=0.0, done=False, content="No browser page available", info={"success": False}
+        )
 
-        # Context IS the playwright tool
-        if not context or not hasattr(context, "page") or not context.page:
-            logger.error("No browser page available")
-            return {
-                "reward": 0.0,
-                "done": False,
-                "info": {
-                    "success": False,
-                    "message": "No browser page available",
-                },
-            }
-
+    try:
         # Get all cookies
-        try:
-            cookies = await context.page.context.cookies()
-            cookie_dict = {cookie["name"]: cookie["value"] for cookie in cookies}
-            logger.info(f"Found {len(cookies)} cookies in browser")
-        except Exception as e:
-            logger.error(f"Failed to get cookies: {e}")
-            return {
-                "reward": 0.0,
-                "done": False,
-                "info": {
+        cookies = await playwright_tool.page.context.cookies()
+
+        # Find the cookie
+        cookie = next((c for c in cookies if c.get("name") == cookie_name), None)
+
+        if not cookie:
+            logger.info(f"❌ Cookie not found: {cookie_name}")
+            return EvaluationResult(
+                reward=0.0,
+                done=False,
+                content=f"Cookie not found: {cookie_name}",
+                info={"success": False, "cookie_name": cookie_name},
+            )
+
+        actual_value = cookie.get("value", "")
+        if actual_value == expected_value:
+            logger.info(f"✅ Cookie value matches: {cookie_name}={expected_value}")
+            return EvaluationResult(
+                reward=1.0,
+                done=True,
+                content=f"Cookie value matches",
+                info={"success": True, "cookie_name": cookie_name, "value": actual_value},
+            )
+        else:
+            logger.info(
+                f"❌ Cookie value mismatch: expected '{expected_value}', got '{actual_value}'"
+            )
+            return EvaluationResult(
+                reward=0.0,
+                done=False,
+                content=f"Cookie value mismatch",
+                info={
                     "success": False,
-                    "message": f"Failed to get cookies: {str(e)}",
+                    "cookie_name": cookie_name,
+                    "expected": expected_value,
+                    "actual": actual_value,
                 },
-            }
+            )
 
-        # Check cookie values
-        matches = []
-        mismatches = []
-        missing = []
-
-        for name, expected_value in expected_cookies.items():
-            if name not in cookie_dict:
-                missing.append(name)
-                logger.info(f"❌ Cookie missing: '{name}'")
-            elif cookie_dict[name] == expected_value:
-                matches.append(name)
-                logger.info(f"✅ Cookie matches: '{name}'")
-            else:
-                mismatches.append(
-                    {"name": name, "expected": expected_value, "actual": cookie_dict[name]}
-                )
-                logger.info(
-                    f"❌ Cookie mismatch: '{name}' - expected '{expected_value}', got '{cookie_dict[name]}'"
-                )
-
-        # Calculate reward
-        total = len(expected_cookies)
-        if total > 0:
-            reward = len(matches) / total
-        else:
-            reward = 1.0
-
-        # Build info
-        info = {
-            "success": reward == 1.0,
-            "matches": matches,
-            "mismatches": mismatches,
-            "missing": missing,
-            "total_expected": total,
-        }
-
-        if reward == 1.0:
-            info["message"] = "All cookies match expected values"
-        elif reward > 0:
-            info["message"] = f"{len(matches)} of {total} cookies match"
-        else:
-            info["message"] = "No cookies match expected values"
-
-        logger.info(f"Cookie match evaluation complete. Reward: {reward}")
-
-        return {
-            "reward": float(reward),
-            "done": reward == 1.0,
-            "info": info,
-        }
+    except Exception as e:
+        logger.error(f"Error checking cookie: {e}")
+        return EvaluationResult(
+            reward=0.0,
+            done=False,
+            content=f"Error checking cookie: {str(e)}",
+            info={"success": False, "error": str(e)},
+        )

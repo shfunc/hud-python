@@ -465,7 +465,7 @@ class TestBaseMCPAgent:
         assert click_result.output is not None
         assert "[SIMULATED] Click at (100, 200)" in click_result.output
 
-        type_result = await agent.executor.type("Test input", take_screenshot=False)
+        type_result = await agent.executor.write("Test input", take_screenshot=False)
         assert type_result.output is not None
         assert "[SIMULATED] Type 'Test input'" in type_result.output
 

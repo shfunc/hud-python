@@ -23,7 +23,7 @@ def create_computer_tools(executor: BaseExecutor) -> dict:
         # Create HUD computer tool
         hud_tool = HudComputerTool(executor=executor)
         tools["computer"] = hud_tool
-        logger.info("Created HUD computer tool")
+        logger.debug("Created HUD computer tool")
     except Exception as e:
         logger.error(f"Failed to create HUD computer tool: {e}")
 
@@ -31,7 +31,7 @@ def create_computer_tools(executor: BaseExecutor) -> dict:
         # Create Anthropic computer tool
         anthropic_tool = AnthropicComputerTool(executor=executor)
         tools["anthropic_computer"] = anthropic_tool
-        logger.info("Created Anthropic computer tool")
+        logger.debug("Created Anthropic computer tool")
     except Exception as e:
         logger.error(f"Failed to create Anthropic computer tool: {e}")
 
@@ -39,7 +39,7 @@ def create_computer_tools(executor: BaseExecutor) -> dict:
         # Create OpenAI computer tool
         openai_tool = OpenAIComputerTool(executor=executor)
         tools["openai_computer"] = openai_tool
-        logger.info("Created OpenAI computer tool")
+        logger.debug("Created OpenAI computer tool")
     except Exception as e:
         logger.error(f"Failed to create OpenAI computer tool: {e}")
 

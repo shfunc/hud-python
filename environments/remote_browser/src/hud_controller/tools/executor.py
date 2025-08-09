@@ -5,7 +5,7 @@ import logging
 from typing import Literal, Optional
 
 from hud.tools.executors.base import BaseExecutor
-from hud.tools.base import ToolResult
+from hud.tools.types import ContentResult
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class BrowserExecutor(BaseExecutor):
             page = await self._ensure_page()
             screenshot_bytes = await page.screenshot(full_page=False)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
-            logger.info("Browser screenshot captured")
+            logger.debug("Browser screenshot captured")
             return screenshot_b64
         except Exception as e:
             logger.error(f"Screenshot failed: {e}")
@@ -60,13 +60,13 @@ class BrowserExecutor(BaseExecutor):
         pattern: list[int] | None = None,
         hold_keys: list[str] | None = None,
         take_screenshot: bool = True,
-    ) -> ToolResult:
+    ) -> ContentResult:
         """Click at coordinates in the browser viewport."""
         try:
             page = await self._ensure_page()
 
             if x is None or y is None:
-                return ToolResult(error="Coordinates required for click")
+                return ContentResult(error="Coordinates required for click")
 
             # Handle modifier keys
             if hold_keys:
@@ -98,24 +98,24 @@ class BrowserExecutor(BaseExecutor):
                 for key in hold_keys:
                     await page.keyboard.up(key)
 
-            logger.info(f"Clicked at ({x}, {y}) with button {button}")
+            logger.debug(f"Clicked at ({x}, {y}) with button {button}")
 
-            result = ToolResult(output=f"Clicked at ({x}, {y})")
+            result = ContentResult(output=f"Clicked at ({x}, {y})")
             if take_screenshot:
-                result = result + ToolResult(base64_image=await self.screenshot())
+                result = result + ContentResult(base64_image=await self.screenshot())
 
             return result
 
         except Exception as e:
             logger.error(f"Click failed: {e}")
-            return ToolResult(error=str(e))
+            return ContentResult(error=str(e))
 
-    async def type_text(
+    async def write(
         self,
         text: str,
         hold_keys: list[str] | None = None,
         take_screenshot: bool = True,
-    ) -> ToolResult:
+    ) -> ContentResult:
         """Type text in the browser."""
         try:
             page = await self._ensure_page()
@@ -133,53 +133,41 @@ class BrowserExecutor(BaseExecutor):
                 for key in hold_keys:
                     await page.keyboard.up(key)
 
-            logger.info(f"Typed text: {text[:50]}...")
+            logger.debug(f"Typed text: {text[:50]}...")
 
-            result = ToolResult(output=f"Typed: {text}")
+            result = ContentResult(output=f"Typed: {text}")
             if take_screenshot:
-                result = result + ToolResult(base64_image=await self.screenshot())
+                result = result + ContentResult(base64_image=await self.screenshot())
 
             return result
 
         except Exception as e:
             logger.error(f"Type failed: {e}")
-            return ToolResult(error=str(e))
+            return ContentResult(error=str(e))
 
-    async def key(
+    async def press(
         self,
         keys: list[str],
-        hold_keys: list[str] | None = None,
         take_screenshot: bool = True,
-    ) -> ToolResult:
+    ) -> ContentResult:
         """Press keyboard keys in the browser."""
         try:
             page = await self._ensure_page()
 
-            # Handle modifier keys
-            if hold_keys:
-                for key in hold_keys:
-                    await page.keyboard.down(key)
+            # Press the keys as a combination (at the same time)
+            await page.keyboard.press("+".join(keys))
 
-            # Press the keys
-            for key in keys:
-                await page.keyboard.press(key)
+            logger.debug(f"Pressed keys: {keys}")
 
-            # Release modifier keys
-            if hold_keys:
-                for key in hold_keys:
-                    await page.keyboard.up(key)
-
-            logger.info(f"Pressed keys: {keys}")
-
-            result = ToolResult(output=f"Pressed: {', '.join(keys)}")
+            result = ContentResult(output=f"Pressed: {', '.join(keys)}")
             if take_screenshot:
-                result = result + ToolResult(base64_image=await self.screenshot())
+                result = result + ContentResult(base64_image=await self.screenshot())
 
             return result
 
         except Exception as e:
             logger.error(f"Key press failed: {e}")
-            return ToolResult(error=str(e))
+            return ContentResult(error=str(e))
 
     async def scroll(
         self,
@@ -188,7 +176,7 @@ class BrowserExecutor(BaseExecutor):
         scroll_x: int | None = None,
         scroll_y: int | None = None,
         take_screenshot: bool = True,
-    ) -> ToolResult:
+    ) -> ContentResult:
         """Scroll in the browser viewport."""
         try:
             page = await self._ensure_page()
@@ -207,44 +195,44 @@ class BrowserExecutor(BaseExecutor):
             delta_y = scroll_y or 0
             await page.mouse.wheel(delta_x, delta_y)
 
-            logger.info(f"Scrolled at ({x}, {y}) by ({delta_x}, {delta_y})")
+            logger.debug(f"Scrolled at ({x}, {y}) by ({delta_x}, {delta_y})")
 
-            result = ToolResult(output=f"Scrolled by ({delta_x}, {delta_y})")
+            result = ContentResult(output=f"Scrolled by ({delta_x}, {delta_y})")
             if take_screenshot:
-                result = result + ToolResult(base64_image=await self.screenshot())
+                result = result + ContentResult(base64_image=await self.screenshot())
 
             return result
 
         except Exception as e:
             logger.error(f"Scroll failed: {e}")
-            return ToolResult(error=str(e))
+            return ContentResult(error=str(e))
 
     async def move(
         self,
         x: int | None = None,
         y: int | None = None,
         take_screenshot: bool = True,
-    ) -> ToolResult:
+    ) -> ContentResult:
         """Move mouse to coordinates in the browser."""
         try:
             page = await self._ensure_page()
 
             if x is None or y is None:
-                return ToolResult(error="Coordinates required for move")
+                return ContentResult(error="Coordinates required for move")
 
             await page.mouse.move(x, y)
 
-            logger.info(f"Moved mouse to ({x}, {y})")
+            logger.debug(f"Moved mouse to ({x}, {y})")
 
-            result = ToolResult(output=f"Moved to ({x}, {y})")
+            result = ContentResult(output=f"Moved to ({x}, {y})")
             if take_screenshot:
-                result = result + ToolResult(base64_image=await self.screenshot())
+                result = result + ContentResult(base64_image=await self.screenshot())
 
             return result
 
         except Exception as e:
             logger.error(f"Move failed: {e}")
-            return ToolResult(error=str(e))
+            return ContentResult(error=str(e))
 
     async def drag(
         self,
@@ -252,13 +240,13 @@ class BrowserExecutor(BaseExecutor):
         button: Literal["left", "right", "middle"] = "left",
         hold_keys: list[str] | None = None,
         take_screenshot: bool = True,
-    ) -> ToolResult:
+    ) -> ContentResult:
         """Drag along a path in the browser."""
         try:
             page = await self._ensure_page()
 
             if not path or len(path) < 2:
-                return ToolResult(error="Path must have at least 2 points")
+                return ContentResult(error="Path must have at least 2 points")
 
             # Handle modifier keys
             if hold_keys:
@@ -282,14 +270,14 @@ class BrowserExecutor(BaseExecutor):
                 for key in hold_keys:
                     await page.keyboard.up(key)
 
-            logger.info(f"Dragged from {path[0]} through {len(path)} points")
+            logger.debug(f"Dragged from {path[0]} through {len(path)} points")
 
-            result = ToolResult(output=f"Dragged through {len(path)} points")
+            result = ContentResult(output=f"Dragged through {len(path)} points")
             if take_screenshot:
-                result = result + ToolResult(base64_image=await self.screenshot())
+                result = result + ContentResult(base64_image=await self.screenshot())
 
             return result
 
         except Exception as e:
             logger.error(f"Drag failed: {e}")
-            return ToolResult(error=str(e))
+            return ContentResult(error=str(e))
