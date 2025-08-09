@@ -86,33 +86,10 @@ class BaseTool(ABC):
             server.add_tool(my_tool.mcp)
         """
         if not hasattr(self, "_mcp_tool"):
-            import inspect
-
             from fastmcp.tools import FunctionTool
 
-            # Create a wrapper function without **kwargs for FastMCP compatibility
-            async def _tool_wrapper(**params: Any) -> Any:
-                return await self(**params)
-
-            # Copy metadata from the original __call__ method
-            _tool_wrapper.__name__ = self.name
-            _tool_wrapper.__doc__ = self.description or self.__doc__
-
-            # Get the signature of __call__ but filter out **kwargs
-            sig = inspect.signature(self.__call__)
-            params_list = []
-            for name, param in sig.parameters.items():
-                if param.kind not in (
-                    inspect.Parameter.VAR_POSITIONAL,
-                    inspect.Parameter.VAR_KEYWORD,
-                ):
-                    params_list.append(param)
-
-            # Create new signature without **kwargs
-            _tool_wrapper.__signature__ = inspect.Signature(params_list)
-
             self._mcp_tool = FunctionTool.from_function(
-                _tool_wrapper,
+                self,
                 name=self.name,
                 title=self.title,
                 description=self.description,
