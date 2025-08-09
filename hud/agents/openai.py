@@ -18,6 +18,7 @@ from openai.types.responses import (
 from hud.agent import MCPAgent
 from hud.settings import settings
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult, Trace
+from ..tools.computer.settings import computer_settings
 
 if TYPE_CHECKING:
     from hud.datasets import TaskConfig
@@ -38,8 +39,8 @@ class OpenAIMCPAgent(MCPAgent):
         model_client: AsyncOpenAI | None = None,
         model: str = "computer-use-preview",
         environment: Literal["windows", "mac", "linux", "browser"] = "linux",
-        display_width: int = 1024,
-        display_height: int = 768,
+        display_width: int = computer_settings.OPENAI_COMPUTER_WIDTH,
+        display_height: int = computer_settings.OPENAI_COMPUTER_HEIGHT,
         **kwargs: Any,
     ) -> None:
         """
