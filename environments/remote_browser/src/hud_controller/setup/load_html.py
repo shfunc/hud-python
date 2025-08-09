@@ -1,58 +1,43 @@
 """Setup function to load custom HTML content."""
 
 import logging
-from typing import Any
-from hud.tools import BaseSetup, SetupResult
+from fastmcp import Context
+from hud.tools.types import SetupResult
 from . import setup
 
 logger = logging.getLogger(__name__)
 
 
-@setup("load_html_content", "Load custom HTML content directly into the browser")
-class LoadHtmlContentSetup(BaseSetup):
-    """Setup function to load custom HTML content directly into the browser."""
+@setup.tool("load_html_content")
+async def load_html_content(ctx: Context, html: str):
+    """Load custom HTML content directly into the browser.
 
-    async def __call__(self, context: Any, html: str, **kwargs) -> SetupResult:
-        """Load custom HTML content into the browser.
+    Args:
+        html: HTML content to load
 
-        Args:
-            context: Browser context with playwright_tool
-            html: HTML content to load
-            **kwargs: Additional arguments
+    Returns:
+        Setup result with status
+    """
+    logger.info("Loading custom HTML content into browser")
 
-        Returns:
-            Status dictionary
-        """
-        logger.info("Starting load_html_content setup")
+    # Get the playwright tool from the environment
+    playwright_tool = setup.env
+    if not playwright_tool or not hasattr(playwright_tool, "page") or not playwright_tool.page:
+        logger.error("No browser page available")
+        return SetupResult(content="No browser page available", isError=True)
 
-        if not html:
-            logger.error("No HTML content provided")
-            return {"status": "error", "message": "No HTML content provided for load_html_content"}
+    try:
+        # Create a data URL with the HTML content
+        data_url = f"data:text/html,{html}"
 
-        # Get playwright tool from context
-        if not context or not hasattr(context, "page") or not context.page:
-            logger.error("No browser page available")
-            return {"status": "error", "message": "No browser page available"}
+        # Navigate to the data URL
+        await playwright_tool.page.goto(data_url)
+        logger.info("Successfully loaded custom HTML content")
 
-        page = context.page
-
-        try:
-            logger.info("Setting custom HTML content")
-
-            # Set the page content directly
-            await page.set_content(html, wait_until="domcontentloaded", timeout=10000)
-
-            # Wait a short time for rendering and scripts to initialize
-            await page.wait_for_timeout(1000)
-
-            logger.info("HTML content loaded successfully")
-
-            return {
-                "status": "success",
-                "message": "HTML content loaded",
-                "content_length": len(html),
-            }
-
-        except Exception as e:
-            logger.error(f"Error loading HTML content: {str(e)}")
-            return {"status": "error", "message": f"Failed to load HTML content: {str(e)}"}
+        return SetupResult(
+            content="Custom HTML content loaded",
+            info={"html_length": len(html), "current_url": playwright_tool.page.url},
+        )
+    except Exception as e:
+        logger.error(f"Failed to load HTML content: {e}")
+        return SetupResult(content=f"Failed to load HTML content: {str(e)}", isError=True)

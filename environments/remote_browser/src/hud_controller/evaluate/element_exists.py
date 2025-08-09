@@ -1,60 +1,59 @@
 """Element exists evaluator for remote browser environment."""
 
 import logging
-from typing import Any
-from hud.tools import BaseEvaluator, EvaluationResult
-from . import evaluator
+from fastmcp import Context
+from hud.tools.types import EvaluationResult
+from . import evaluate
 
 logger = logging.getLogger(__name__)
 
 
-@evaluator("element_exists", "Check if an element exists on the page")
-class ElementExistsEvaluator(BaseEvaluator):
-    """Evaluator to check if an element exists."""
+@evaluate.tool("element_exists")
+async def element_exists(ctx: Context, selector: str):
+    """Check if an element exists on the page.
 
-    async def __call__(self, context: Any, selector: str, **kwargs) -> EvaluationResult:
-        """Check if an element exists on the page.
+    Args:
+        selector: CSS selector for the element
 
-        Args:
-            context: Browser context with playwright_tool
-            selector: CSS selector for the element
-            **kwargs: Additional arguments
+    Returns:
+        Evaluation result
+    """
+    logger.info(f"Checking if element exists: {selector}")
 
-        Returns:
-            Evaluation result
-        """
-        logger.info(f"Checking if element exists: {selector}")
+    # Get the playwright tool from the environment
+    playwright_tool = evaluate.env
+    if not playwright_tool or not hasattr(playwright_tool, "page") or not playwright_tool.page:
+        logger.error("No browser page available")
+        return EvaluationResult(
+            reward=0.0, done=False, content="No browser page available", info={"success": False}
+        )
 
-        # Context IS the playwright tool
-        if not context or not hasattr(context, "page") or not context.page:
-            logger.error("No browser page available")
-            return {
-                "reward": 0.0,
-                "done": False,
-                "info": {"error": "No browser page available"},
-            }
+    try:
+        # Check if element exists
+        element = await playwright_tool.page.query_selector(selector)
 
-        try:
-            element = await context.page.query_selector(selector)
-            exists = element is not None
+        if element:
+            logger.info(f"✅ Element found: {selector}")
+            return EvaluationResult(
+                reward=1.0,
+                done=True,
+                content=f"Element found: {selector}",
+                info={"success": True, "selector": selector},
+            )
+        else:
+            logger.info(f"❌ Element not found: {selector}")
+            return EvaluationResult(
+                reward=0.0,
+                done=False,
+                content=f"Element not found: {selector}",
+                info={"success": False, "selector": selector},
+            )
 
-            if exists:
-                logger.info(f"✅ Element found: {selector}")
-            else:
-                logger.info(f"❌ Element not found: {selector}")
-
-            return {
-                "reward": 1.0 if exists else 0.0,
-                "done": exists,
-                "info": {
-                    "selector": selector,
-                    "exists": exists,
-                },
-            }
-        except Exception as e:
-            logger.error(f"Error checking element: {e}")
-            return {
-                "reward": 0.0,
-                "done": False,
-                "info": {"error": str(e)},
-            }
+    except Exception as e:
+        logger.error(f"Error checking element: {e}")
+        return EvaluationResult(
+            reward=0.0,
+            done=False,
+            content=f"Error checking element: {str(e)}",
+            info={"success": False, "error": str(e)},
+        )

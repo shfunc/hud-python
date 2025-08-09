@@ -1,14 +1,12 @@
-"""Evaluators module for remote browser environment."""
+"""Evaluation layer for remote browser environment."""
 
-from hud.tools import EvaluateTool
+from __future__ import annotations
 
-# Create the evaluate tool instance
-evaluate_tool = EvaluateTool(name="evaluate", description="Evaluate the browser state")
+from hud.tools.base import BaseHub
 
-# Create decorator for registering to this tool
-evaluator = evaluate_tool.register
+evaluate = BaseHub("evaluate")
 
-# Import all evaluator modules to trigger registration
+# Import all evaluator functions to register them
 from . import (
     url_match,
     page_contains,
@@ -23,4 +21,4 @@ from . import (
     sheets_cell_values,
 )
 
-__all__ = ["evaluate_tool", "evaluator"]
+__all__ = ["evaluate"]

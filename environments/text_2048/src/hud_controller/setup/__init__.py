@@ -1,16 +1,16 @@
-"""Setup module for 2048 environment."""
+"""Setup layer for 2048 environment.
 
-from hud.tools import SetupTool
+This module exposes:
+- ``setup_hub`` – the BaseHub instance for setup operations
+"""
 
-# Create the setup tool instance
-setup_tool = SetupTool(
-    name="setup", title="Game Setup", description="Initialize or reset the 2048 game"
-)
+from __future__ import annotations
 
-# Create decorator for registering to this tool
-setup = setup_tool.register
+from hud.tools.base import BaseHub
 
-# Import registry to trigger registration
-from . import registry
+setup = BaseHub("setup")
 
-__all__ = ["setup_tool"]
+# Import all setup functions to register them
+from . import board
+
+__all__ = ["setup"]

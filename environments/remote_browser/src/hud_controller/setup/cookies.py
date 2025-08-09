@@ -1,92 +1,67 @@
 """Cookie setup functions for remote browser environment."""
 
 import logging
-from typing import Any, List, Dict
-from hud.tools import BaseSetup, SetupResult
+from typing import List, Dict, Any
+from fastmcp import Context
+from hud.tools.types import SetupResult
 from . import setup
 
 logger = logging.getLogger(__name__)
 
 
-@setup("set_cookies", "Set cookies in the browser")
-class SetCookiesSetup(BaseSetup):
-    """Setup function to set cookies."""
+@setup.tool("set_cookies")
+async def set_cookies(ctx: Context, cookies: List[Dict[str, Any]]):
+    """Set cookies in the browser.
 
-    async def __call__(self, context: Any, cookies: List[Dict[str, Any]], **kwargs) -> SetupResult:
-        """Set cookies in the browser context.
+    Args:
+        cookies: List of cookie dictionaries with name, value, and optional properties
 
-        Args:
-            context: Browser context with playwright_tool
-            cookies: List of cookie dictionaries with name, value, and optional properties
-            **kwargs: Additional arguments
+    Returns:
+        Setup result with status
+    """
+    logger.info(f"Setting {len(cookies)} cookies")
 
-        Returns:
-            Setup result dictionary
-        """
-        logger.info(f"Setting {len(cookies)} cookies")
+    # Get the playwright tool from the environment
+    playwright_tool = setup.env
+    if not playwright_tool or not hasattr(playwright_tool, "page") or not playwright_tool.page:
+        logger.error("No browser page available")
+        return SetupResult(content="No browser page available", isError=True)
 
-        # Get the playwright tool from context
-        if not context or not hasattr(context, "page") or not context.page:
-            logger.error("No browser page available")
-            return {
-                "status": "error",
-                "message": "No browser page available",
-            }
+    try:
+        # Add cookies to the context
+        await playwright_tool.page.context.add_cookies(cookies)
 
-        try:
-            # Add cookies to the context
-            await context.page.context.add_cookies(cookies)
-
-            logger.info(f"Successfully set {len(cookies)} cookies")
-            return {
-                "status": "success",
-                "message": f"Set {len(cookies)} cookies",
-                "cookies_set": [c.get("name") for c in cookies],
-            }
-        except Exception as e:
-            logger.error(f"Failed to set cookies: {e}")
-            return {
-                "status": "error",
-                "message": f"Failed to set cookies: {str(e)}",
-            }
+        logger.info(f"Successfully set {len(cookies)} cookies")
+        return SetupResult(
+            content=f"Set {len(cookies)} cookies",
+            info={"cookies_set": [c.get("name") for c in cookies]},
+        )
+    except Exception as e:
+        logger.error(f"Failed to set cookies: {e}")
+        return SetupResult(content=f"Failed to set cookies: {str(e)}", isError=True)
 
 
-@setup("clear_cookies", "Clear all cookies from the browser")
-class ClearCookiesSetup(BaseSetup):
-    """Setup function to clear all cookies."""
+@setup.tool("clear_cookies")
+async def clear_cookies(ctx: Context):
+    """Clear all cookies from the browser.
 
-    async def __call__(self, context: Any, **kwargs) -> SetupResult:
-        """Clear all cookies from the browser context.
+    Returns:
+        Setup result with status
+    """
+    logger.info("Clearing all cookies")
 
-        Args:
-            context: Browser context with playwright_tool
-            **kwargs: Additional arguments
+    # Get the playwright tool from the environment
+    playwright_tool = setup.env
+    if not playwright_tool or not hasattr(playwright_tool, "page") or not playwright_tool.page:
+        logger.error("No browser page available")
+        return SetupResult(content="No browser page available", isError=True)
 
-        Returns:
-            Setup result dictionary
-        """
-        logger.info("Clearing all cookies")
+    try:
+        # Clear all cookies
+        await playwright_tool.page.context.clear_cookies()
 
-        # Get the playwright tool from context
-        if not context or not hasattr(context, "page") or not context.page:
-            logger.error("No browser page available")
-            return {
-                "status": "error",
-                "message": "No browser page available",
-            }
-
-        try:
-            # Clear all cookies
-            await context.page.context.clear_cookies()
-
-            logger.info("Successfully cleared all cookies")
-            return {
-                "status": "success",
-                "message": "Cleared all cookies",
-            }
-        except Exception as e:
-            logger.error(f"Failed to clear cookies: {e}")
-            return {
-                "status": "error",
-                "message": f"Failed to clear cookies: {str(e)}",
-            }
+        logger.info("Successfully cleared all cookies")
+        return SetupResult(content="Cleared all cookies")
+    except Exception as e:
+        logger.error(f"Failed to clear cookies: {e}")
+        return SetupResult(content=f"Failed to clear cookies: {str(e)}", isError=True)

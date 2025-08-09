@@ -5,7 +5,8 @@ import os
 import sys
 from typing import TYPE_CHECKING, Any
 
-from .base import BaseTool, ToolError, ToolResult
+from .base import BaseTool
+from .types import ContentResult, ToolError
 
 if TYPE_CHECKING:
     from mcp.types import ContentBlock
@@ -56,13 +57,13 @@ class _BashSession:
             return
         self._process.terminate()
 
-    async def run(self, command: str) -> ToolResult:
+    async def run(self, command: str) -> ContentResult:
         """Execute a command in the bash shell."""
         if not self._started:
             raise ToolError("Session has not started.")
         if self._process.returncode is not None:
             await asyncio.sleep(0)
-            return ToolResult(
+            return ContentResult(
                 system="tool must be restarted",
                 error=f"bash has exited with returncode {self._process.returncode}",
             )
@@ -105,7 +106,7 @@ class _BashSession:
         except TimeoutError:
             error = ""
 
-        return ToolResult(output=output, error=error)
+        return ContentResult(output=output, error=error)
 
 
 class BashTool(BaseTool):
@@ -122,7 +123,7 @@ class BashTool(BaseTool):
                      a new session will be created on first use.
         """
         super().__init__(
-            context=session,
+            env=session,
             name="bash",
             title="Bash Shell",
             description="Execute bash commands in a persistent shell session",
@@ -131,12 +132,12 @@ class BashTool(BaseTool):
     @property
     def session(self) -> _BashSession | None:
         """Get the current bash session (alias for context)."""
-        return self.context
+        return self.env
 
     @session.setter
     def session(self, value: _BashSession | None) -> None:
         """Set the bash session (alias for context)."""
-        self.context = value
+        self.env = value
 
     async def __call__(
         self, command: str | None = None, restart: bool = False, **kwargs: Any
@@ -147,7 +148,7 @@ class BashTool(BaseTool):
             self.session = _BashSession()
             await self.session.start()
 
-            return self._to_content_blocks(ToolResult(system="Bash session restarted."))
+            return ContentResult(output="Bash session restarted.").to_content_blocks()
 
         if self.session is None:
             self.session = _BashSession()
@@ -155,6 +156,6 @@ class BashTool(BaseTool):
 
         if command is not None:
             result = await self.session.run(command)
-            return self._to_content_blocks(result)
+            return result.to_content_blocks()
 
         raise ToolError("No command provided.")

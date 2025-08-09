@@ -10,7 +10,8 @@ from mcp import ErrorData, McpError
 from mcp.types import INVALID_PARAMS, ContentBlock
 from pydantic import Field
 
-from hud.tools.base import BaseTool, ToolResult
+from .base import BaseTool
+from .types import ContentResult
 
 if TYPE_CHECKING:
     from playwright.async_api import Browser, BrowserContext, Page
@@ -29,7 +30,7 @@ class PlaywrightTool(BaseTool):
             cdp_url: Optional Chrome DevTools Protocol URL for connecting to existing browser
         """
         super().__init__(
-            context=page,
+            env=page,
             name="playwright",
             title="Playwright Browser",
             description="Web automation tool using Playwright",
@@ -41,16 +42,14 @@ class PlaywrightTool(BaseTool):
         self._browser_context: BrowserContext | None = None
 
     @property
-    def page(self) -> Page:
-        """Get the current page (alias for context), raising an error if not initialized."""
-        if self.context is None:
-            raise RuntimeError("Browser page is not initialized. Call ensure_browser_launched().")
-        return self.context
+    def page(self) -> Page | None:
+        """Get the current page."""
+        return self.env
 
     @page.setter
     def page(self, value: Page | None) -> None:
-        """Set the page (alias for context)."""
-        self.context = value
+        """Set the page."""
+        self.env = value
 
     async def __call__(
         self,
@@ -133,16 +132,16 @@ class PlaywrightTool(BaseTool):
             # Convert dict result to ToolResult
             if isinstance(result, dict):
                 if result.get("success"):
-                    tool_result = ToolResult(output=result.get("message", ""))
+                    tool_result = ContentResult(output=result.get("message", ""))
                 else:
-                    tool_result = ToolResult(error=result.get("error", "Unknown error"))
-            elif isinstance(result, ToolResult):
+                    tool_result = ContentResult(error=result.get("error", "Unknown error"))
+            elif isinstance(result, ContentResult):
                 tool_result = result
             else:
-                tool_result = ToolResult(output=str(result))
+                tool_result = ContentResult(output=str(result))
 
             # Convert result to content blocks
-            return self._to_content_blocks(tool_result)
+            return tool_result.to_content_blocks()
 
         except McpError:
             raise
@@ -267,7 +266,7 @@ class PlaywrightTool(BaseTool):
                 "message": f"Failed to navigate to {url}: {e}",
             }
 
-    async def screenshot(self) -> ToolResult:
+    async def screenshot(self) -> ContentResult:
         """Take a screenshot of the current page.
 
         Returns:
@@ -281,10 +280,10 @@ class PlaywrightTool(BaseTool):
             import base64
 
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
-            return ToolResult(base64_image=screenshot_b64)
+            return ContentResult(base64_image=screenshot_b64)
         except Exception as e:
             logger.error("Screenshot failed: %s", e)
-            return ToolResult(error=f"Failed to take screenshot: {e}")
+            return ContentResult(error=f"Failed to take screenshot: {e}")
 
     async def click(
         self,
@@ -304,9 +303,7 @@ class PlaywrightTool(BaseTool):
         await self._ensure_browser()
 
         try:
-            await self.page.click(
-                selector, button=button, count=count, wait_for_navigation=wait_for_navigation
-            )
+            await self.page.click(selector, button=button, click_count=count)
             return {"success": True, "message": f"Clicked element: {selector}"}
         except Exception as e:
             logger.error("Click failed: %s", e)
@@ -399,5 +396,5 @@ class PlaywrightTool(BaseTool):
 
         self._browser = None
         self._browser_context = None
-        self._page = None
+        self.env = None  # Clear the page
         self._playwright = None
