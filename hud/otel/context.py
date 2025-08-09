@@ -120,11 +120,11 @@ async def _update_task_status_async(
             json=data,
             api_key=settings.api_key,
         )
-        logger.debug(f"Updated task {task_run_id} status to {status}")
+        logger.debug("Updated task %s status to %s", task_run_id, status)
     except Exception as e:
         # Suppress warnings about interpreter shutdown
         if "interpreter shutdown" not in str(e):
-            logger.warning(f"Failed to update task status: {e}")
+            logger.warning("Failed to update task status: %s", e)
 
 
 def _fire_and_forget_status_update(
@@ -163,11 +163,11 @@ def _update_task_status_sync(
             json=data,
             api_key=settings.api_key,
         )
-        logger.debug(f"Updated task {task_run_id} status to {status}")
+        logger.debug("Updated task %s status to %s", task_run_id, status)
     except Exception as e:
         # Suppress warnings about interpreter shutdown
         if "interpreter shutdown" not in str(e):
-            logger.warning(f"Failed to update task status: {e}")
+            logger.warning("Failed to update task status: %s", e)
 
 
 def _print_trace_url(task_run_id: str) -> None:

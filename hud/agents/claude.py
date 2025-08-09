@@ -24,6 +24,7 @@ import mcp.types as types
 from hud.agent import MCPAgent
 from hud.settings import settings
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult
+
 from ..tools.computer.settings import computer_settings
 
 logger = logging.getLogger(__name__)

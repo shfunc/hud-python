@@ -1,13 +1,12 @@
-"""Human Union Data SDK.
+"""hud-python.
 
-The HUD SDK provides tools for building, evaluating, and deploying AI agents.
+tools for building, evaluating, and training AI agents.
 """
 
 from __future__ import annotations
 
 import logging
 
-# Import telemetry functions directly for clean access
 from .telemetry import clear_trace, create_job, get_trace, job, trace
 
 __all__ = [
@@ -18,13 +17,11 @@ __all__ = [
     "trace",
 ]
 
-# Version will be added by setuptools_scm
 try:
     from .version import __version__
 except ImportError:
     __version__ = "unknown"
 
-# Configure HUD SDK logging based on settings
 from .settings import settings
 
 hud_logger = logging.getLogger("hud")
@@ -42,9 +39,8 @@ if settings.hud_logging:
         hud_logger.addHandler(handler)
         hud_logger.propagate = False
 
-# Apply client-side patches for known issues
 try:
-    from .agent_patches import apply_all_patches
+    from .utils.agent_patches import apply_all_patches
 
     apply_all_patches()
 except Exception as e:

@@ -109,7 +109,7 @@ def configure_telemetry(
 
             otlp_exporter = OTLPSpanExporter(**otlp_config)
             provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
-            logger.info(f"OTLP exporter enabled - endpoint: {otlp_endpoint or 'localhost:4317'}")
+            logger.info("OTLP exporter enabled - endpoint: %s", otlp_endpoint or 'localhost:4317')
         except ImportError:
             logger.warning(
                 "OTLP export requested but opentelemetry-exporter-otlp-proto-grpc not installed. "

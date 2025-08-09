@@ -7,25 +7,30 @@ This example showcases SheetBench-specific features:
 - Thinking/reasoning display
 - Computer tool usage
 - Model-specific parameters
+- Task execution with timing and results
 
-SheetBench
+Prerequisites:
+- pip install hud-python
+- Set HUD_API_KEY environment variable
 """
 
 import asyncio
 import hud
-from hud.mcp import ClaudeMCPAgent
-from hud.mcp.client import MCPClient
+from hud.agents.claude import ClaudeMCPAgent
+from hud.clients import MCPClient
 from datasets import load_dataset
 from hud.datasets import to_taskconfigs
 
 
 async def main():
     # Load the dataset
-    dataset = load_dataset("hud-evals/sheetbench-taskconfigs")
-    with hud.trace("Claude Agent Demo"):
-        tsx = to_taskconfigs(dataset["train"])
-        task = tsx[0]
+    print("📊 Loading SheetBench dataset...")
+    dataset = load_dataset("hud-evals/sheetbench-taskconfigs", split="train")
 
+    with hud.trace("SheetBench Agent"):
+        task = to_taskconfigs(dataset)[0]
+
+        # Create client and agent
         client = MCPClient(mcp_config=task.mcp_config)
         agent = ClaudeMCPAgent(
             mcp_client=client,
@@ -40,6 +45,7 @@ async def main():
             print(result.reward)
 
         finally:
+            print("\n🔚 Closing client...")
             await client.close()
 
     print("\n✨ SheetBench agent demo complete!")

@@ -159,12 +159,12 @@ def extract_span_attributes(
                             logger.debug("No method/params found, storing raw data")
                             result_attrs["mcp_request"] = input_data
                     except Exception as e:
-                        logger.debug(f"Failed to parse request as MCP type: {e}")
+                        logger.debug("Failed to parse request as MCP type: %s", e)
                         # Fallback: store the raw data
                         result_attrs["mcp_request"] = input_data
                         logger.debug("Stored raw data as fallback")
             except Exception as e:
-                logger.debug(f"Failed to parse request JSON: {e}")
+                logger.debug("Failed to parse request JSON: %s", e)
 
         logger.debug(
             f"Processing MCP span with output_str: {output_str[:100] if output_str else None}..."
@@ -172,7 +172,7 @@ def extract_span_attributes(
         if output_str:
             try:
                 output_data = json.loads(output_str) if isinstance(output_str, str) else output_str
-                logger.debug(f"Parsed output_data type: {type(output_data)}")
+                logger.debug("Parsed output_data type: %s", type(output_data))
                 if isinstance(output_data, dict):
                     # Check for error first
                     if "error" in output_data:
@@ -191,12 +191,12 @@ def extract_span_attributes(
                             if getattr(server_result.root, "isError", False):
                                 result_attrs["mcp_error"] = True
                         except Exception as e:
-                            logger.debug(f"Failed to parse result as MCP type: {e}")
+                            logger.debug("Failed to parse result as MCP type: %s", e)
                             # Fallback: store the raw data
                             result_attrs["mcp_result"] = output_data
                             logger.debug("Stored raw result data as fallback")
             except Exception as e:
-                logger.debug(f"Failed to parse result JSON: {e}")
+                logger.debug("Failed to parse result JSON: %s", e)
 
     # Don't include the verbose attributes or ones we've already processed
     exclude_keys = {

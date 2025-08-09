@@ -30,13 +30,13 @@ class AgentMCPClient(Protocol):
 
 ## Available Implementations
 
-### 1. MCPUseHUDClient (Default)
+### 1. MCPUseHUDClient
 - Based on the `mcp_use` library
 - Supports multiple concurrent server connections
 - Battle-tested and stable
 - Good for complex multi-server setups
 
-### 2. FastMCPHUDClient
+### 2. FastMCPHUDClient (Default)
 - Based on the `fastmcp` library
 - Modern, clean API with better error handling
 - Supports various transports (HTTP, WebSocket, stdio, in-memory)
@@ -86,20 +86,6 @@ agent = ClaudeMCPAgent(
 result = await agent.run("Your task here")
 ```
 
-## Choosing a Client
-
-### Use MCPUseHUDClient when:
-- You need proven stability
-- Working with multiple MCP servers
-- Migrating existing code
-- Need specific mcp_use features
-
-### Use FastMCPHUDClient when:
-- Starting a new project
-- Want modern API features
-- Need better error handling
-- Want structured data support
-- Using in-memory servers for testing
 
 ## Adding New Clients
 
@@ -117,24 +103,3 @@ To add a new client implementation:
    - Telemetry fetching
    - Verbose logging
    - Common HUD features
-
-## Backward Compatibility
-
-For backward compatibility, `hud.client.MCPClient` imports the default client:
-
-```python
-# Old code continues to work
-from hud.client import MCPClient
-```
-
-This imports `MCPUseHUDClient` by default. To change the default, modify `hud/clients/__init__.py`.
-
-## Future Extensions
-
-The protocol-based design allows for:
-- Mock clients for testing
-- Remote clients (gRPC, REST)
-- Cached/offline clients
-- Client decorators (retry, logging, metrics)
-
-All without changing agent code!
