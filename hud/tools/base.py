@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, cast
 
-from fastmcp import Context, FastMCP
+from fastmcp import FastMCP
 
 from hud.tools.types import ContentBlock, EvaluationResult, SetupResult
 
@@ -82,14 +82,34 @@ class BaseTool(ABC):
     def mcp(self) -> FunctionTool:
         """Get this tool as a FastMCP FunctionTool (cached).
 
-        This allows even cleaner registration:
+        This allows clean registration:
             server.add_tool(my_tool.mcp)
         """
         if not hasattr(self, "_mcp_tool"):
+            import inspect
+
             from fastmcp.tools import FunctionTool
+            
+            # Create a wrapper function without **kwargs for FastMCP compatibility
+            async def _tool_wrapper(**params: Any) -> Any:
+                return await self(**params)
+            
+            # Copy metadata from the original __call__ method
+            _tool_wrapper.__name__ = self.name
+            _tool_wrapper.__doc__ = self.description or self.__doc__
+            
+            # Get the signature of __call__ but filter out **kwargs
+            sig = inspect.signature(self.__call__)
+            params_list = []
+            for name, param in sig.parameters.items():
+                if param.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+                    params_list.append(param)
+            
+            # Create new signature without **kwargs
+            _tool_wrapper.__signature__ = inspect.Signature(params_list)
 
             self._mcp_tool = FunctionTool.from_function(
-                self,
+                _tool_wrapper,
                 name=self.name,
                 title=self.title,
                 description=self.description,
@@ -138,10 +158,10 @@ class BaseHub(FastMCP):
         dispatcher_desc = description or f"Call internal '{name}' functions"
 
         # Register dispatcher manually with FunctionTool
-        async def _dispatch( # noqa: ANN202
+        async def _dispatch(  # noqa: ANN202
             function: str,
             args: dict | None = None,
-            ctx=None,
+            ctx=None,  # noqa: ANN001
         ):
             """Gateway to hidden tools.
 
@@ -159,6 +179,7 @@ class BaseHub(FastMCP):
             return await self._tool_manager.call_tool(self._prefix_fn(function), args or {})
 
         from fastmcp.tools.tool import FunctionTool
+
         dispatcher_tool = FunctionTool.from_function(
             _dispatch,
             name=name,
@@ -178,9 +199,10 @@ class BaseHub(FastMCP):
             ]
 
         from fastmcp.resources import Resource
+
         catalogue_resource = Resource.from_function(
             _functions_catalogue,
-            uri=f"{name}://functions",
+            uri=f"file:///{name}/functions",
             name=f"{name} Functions Catalogue",
             description=f"List of internal functions available in {name}",
             mime_type="application/json",

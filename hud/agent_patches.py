@@ -1,4 +1,5 @@
 """Client-side patches for handling known server issues gracefully."""
+
 from __future__ import annotations
 
 import logging

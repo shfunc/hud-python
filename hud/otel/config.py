@@ -94,7 +94,7 @@ def configure_telemetry(
         exporter = HudSpanExporter(base_url=settings.base_url, api_key=settings.api_key)
         provider.add_span_processor(BatchSpanProcessor(exporter))
     else:
-        logger.info("Telemetry disabled via settings – spans will not be exported")
+        logger.info("Telemetry disabled via settings, spans will not be exported")
 
     # OTLP exporter (optional - for standard OTel viewers)
     if enable_otlp:

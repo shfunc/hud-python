@@ -7,12 +7,14 @@ The actual OpenTelemetry implementation is in hud.otel.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from hud.otel import configure_telemetry
 from hud.otel import trace as OtelTrace
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 __all__ = ["trace"]
 

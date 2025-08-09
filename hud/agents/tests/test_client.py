@@ -9,6 +9,7 @@ from mcp import types
 from pydantic import AnyUrl
 
 from hud.clients.mcp_use import MCPUseHUDClient as MCPClient
+from hud.types import MCPToolResult
 
 
 class TestMCPClient:
@@ -25,7 +26,7 @@ class TestMCPClient:
         mock_instance.get_all_active_sessions = MagicMock(return_value={})
 
         # Patch MCPUseClient class used by MCP-use backend
-        with patch("mcp_use.client.MCPClient") as mock_class:
+        with patch("hud.clients.mcp_use.MCPUseClient") as mock_class:
             mock_class.from_dict = MagicMock(return_value=mock_instance)
             yield mock_instance
 
@@ -40,7 +41,8 @@ class TestMCPClient:
             }
         }
 
-        with patch("mcp_use.client.MCPClient") as mock_use_client:
+        with patch("hud.clients.mcp_use.MCPUseClient") as mock_use_client:
+            mock_use_client.from_dict.return_value = MagicMock()
             client = MCPClient(mcp_config=mcp_config, verbose=True)
 
             assert client.verbose is True
@@ -164,11 +166,16 @@ class TestMCPClient:
         mock_session.connector.client_session.list_tools = mock_list_tools
 
         # Mock tool execution
-        mock_result = types.CallToolResult(
+        mock_mcp_result = MCPToolResult(
             content=[types.TextContent(type="text", text="Result: 42")], isError=False
         )
 
-        mock_session.connector.client_session.call_tool = AsyncMock(return_value=mock_result)
+        # The session returns CallToolResult, but the client should return MCPToolResult
+        mock_call_result = types.CallToolResult(
+            content=[types.TextContent(type="text", text="Result: 42")], isError=False
+        )
+
+        mock_session.connector.client_session.call_tool = AsyncMock(return_value=mock_call_result)
 
         mock_mcp_use_client.create_all_sessions = AsyncMock(return_value={"test": mock_session})
 
@@ -177,7 +184,9 @@ class TestMCPClient:
         # Call the tool
         result = await client.call_tool("calculator", {"operation": "add", "a": 20, "b": 22})
 
-        assert result == mock_result
+        assert isinstance(result, MCPToolResult)
+        assert result.content[0].text == "Result: 42"  # type: ignore
+        assert result.isError is False
         mock_session.connector.client_session.call_tool.assert_called_once_with(
             name="calculator", arguments={"operation": "add", "a": 20, "b": 22}
         )

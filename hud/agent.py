@@ -520,6 +520,103 @@ class MCPAgent(ABC):
                 results.append(self._format_error_result(str(e)))
         return results
 
+    def process_setup_results(self, results: MCPToolResult | list[MCPToolResult]) -> dict[str, Any]:
+        """Process setup tool results into a standardized format.
+        
+        Args:
+            results: Single result or list of results from setup tools
+            
+        Returns:
+            Dictionary with either "setup" key (for success) or "error" key (for failures)
+        """
+        if not isinstance(results, list):
+            results = [results]
+            
+        # Check for errors
+        for result in results:
+            if result.isError:
+                error_text = ""
+                if result.content:
+                    for content in result.content:
+                        if hasattr(content, "text"):
+                            error_text = content.text
+                            break
+                return {"error": f"Setup failed: {error_text}"}
+        
+        # Extract text content from successful results
+        setup_texts = []
+        for result in results:
+            if result.content:
+                for content in result.content:
+                    if hasattr(content, "text"):
+                        setup_texts.append(content.text)
+                        
+        # Return single item if only one result, otherwise return list
+        if len(setup_texts) == 1:
+            return {"setup": setup_texts[0]}
+        return {"setup": setup_texts}
+    
+    def process_eval_results(self, results: MCPToolResult | list[MCPToolResult]) -> dict[str, Any]:
+        """Process evaluation tool results into a standardized format.
+        
+        Args:
+            results: Single result or list of results from evaluation tools
+            
+        Returns:
+            Dictionary with either "success" key (for boolean results) or "error" key (for failures)
+        """
+        if not isinstance(results, list):
+            results = [results]
+            
+        # Check for errors
+        for result in results:
+            if result.isError:
+                error_text = ""
+                if result.content:
+                    for content in result.content:
+                        if hasattr(content, "text"):
+                            error_text = content.text
+                            break
+                return {"error": f"Evaluation failed: {error_text}"}
+        
+        # Extract boolean values from text content
+        success_values = []
+        for result in results:
+            if result.content:
+                for content in result.content:
+                    if hasattr(content, "text"):
+                        text = content.text.lower()
+                        if text == "true":
+                            success_values.append(True)
+                        elif text == "false":
+                            success_values.append(False)
+                        
+        # Return single item if only one result, otherwise return list
+        if len(success_values) == 1:
+            return {"success": success_values[0]}
+        return {"success": success_values}
+    
+    def get_tools_by_server(self) -> dict[str, list[Any]]:
+        """Get tools grouped by their server of origin.
+        
+        Returns:
+            Dictionary mapping server names to lists of tools
+        """
+        # Try to get active sessions from the client
+        sessions = {}
+        if hasattr(self.mcp_client, 'get_all_active_sessions'):
+            sessions = self.mcp_client.get_all_active_sessions()
+        
+        # If no sessions, return all tools under "unknown"
+        if not sessions:
+            return {"unknown": self._available_tools}
+        
+        # Group tools by server
+        # Note: This is a simplified implementation since we can't easily
+        # determine which server each tool comes from without async context
+        # In a real implementation, you'd need to query each session
+        return {"unknown": self._available_tools}
+
 
 def _find_reward(result: MCPToolResult) -> float:
     """Find the reward in the result.

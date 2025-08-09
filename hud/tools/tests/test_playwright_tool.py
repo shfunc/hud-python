@@ -73,7 +73,7 @@ class TestPlaywrightTool:
 
             assert blocks is not None
             assert any(isinstance(b, TextContent) for b in blocks)
-            mock_page.click.assert_called_once_with("button#submit")
+            mock_page.click.assert_called_once_with("button#submit", button="left", click_count=1)
 
     @pytest.mark.asyncio
     async def test_playwright_tool_type_with_mocked_browser(self):

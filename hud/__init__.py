@@ -32,7 +32,7 @@ hud_logger.setLevel(logging.INFO)
 
 if settings.hud_logging:
     import sys
-    
+
     root_logger = logging.getLogger()
     if not root_logger.handlers and not hud_logger.handlers:
         stream = sys.stderr if settings.log_stream.lower() == "stderr" else sys.stdout

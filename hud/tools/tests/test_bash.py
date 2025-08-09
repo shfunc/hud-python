@@ -137,7 +137,7 @@ class TestBashTool:
         with pytest.raises(ToolError) as exc_info:
             await tool()
 
-        assert "no command provided" in str(exc_info.value)
+        assert str(exc_info.value) == "No command provided."
 
     @pytest.mark.asyncio
     async def test_call_with_existing_session(self):

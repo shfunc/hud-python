@@ -32,6 +32,9 @@ class MockMCPAgent(MCPAgent):
             mcp_client = MagicMock()
             mcp_client.get_all_active_sessions = MagicMock(return_value={})
             mcp_client.get_available_tools = MagicMock(return_value=[])
+            # Make async methods into AsyncMock
+            mcp_client.initialize = AsyncMock()
+            mcp_client.list_tools = AsyncMock(return_value=[])
         super().__init__(mcp_client=mcp_client, **kwargs)
         self.executor = BaseExecutor()  # Use simulated executor
         self._messages = []
@@ -158,6 +161,18 @@ class TestBaseMCPAgent:
 
         mock_session.connector.client_session.list_tools = mock_list_tools
 
+        # Set up the mcp_client to return the mock session
+        agent.mcp_client.get_all_active_sessions.return_value = {"test_session": mock_session}
+
+        # Mock the list_tools method on mcp_client to return the tools
+        agent.mcp_client.list_tools = AsyncMock(
+            return_value=[
+                types.Tool(name="tool1", description="Tool 1", inputSchema={"type": "object"}),
+                types.Tool(name="tool2", description="Tool 2", inputSchema={"type": "object"}),
+                types.Tool(name="setup", description="Setup tool", inputSchema={"type": "object"}),
+            ]
+        )
+
         assert agent.mcp_client is not None
 
         await agent.initialize()
@@ -195,6 +210,16 @@ class TestBaseMCPAgent:
         mock_session.connector.client_session.list_tools = mock_list_tools
 
         assert agent.mcp_client is not None
+
+        # Mock the list_tools method on mcp_client to return the tools
+        agent.mcp_client.list_tools = AsyncMock(
+            return_value=[
+                types.Tool(name="tool1", description="Tool 1", inputSchema={"type": "object"}),
+                types.Tool(name="tool2", description="Tool 2", inputSchema={"type": "object"}),
+                types.Tool(name="tool3", description="Tool 3", inputSchema={"type": "object"}),
+                types.Tool(name="setup", description="Setup", inputSchema={"type": "object"}),
+            ]
+        )
 
         await agent.initialize()
 
@@ -240,6 +265,13 @@ class TestBaseMCPAgent:
 
         # Mock the client's call_tool method directly
         agent.mcp_client.call_tool = AsyncMock(return_value=mock_result)
+
+        # Mock the list_tools method to return the test tool
+        agent.mcp_client.list_tools = AsyncMock(
+            return_value=[
+                types.Tool(name="test_tool", description="Test", inputSchema={"type": "object"})
+            ]
+        )
 
         await agent.initialize()
 
@@ -393,6 +425,15 @@ class TestBaseMCPAgent:
 
         # Mock the client's call_tool method directly
         agent.mcp_client.call_tool = AsyncMock(return_value=mock_result)
+
+        # Mock the list_tools method to return the screenshot tool
+        agent.mcp_client.list_tools = AsyncMock(
+            return_value=[
+                types.Tool(
+                    name="screenshot", description="Screenshot", inputSchema={"type": "object"}
+                )
+            ]
+        )
 
         await agent.initialize()
 

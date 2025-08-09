@@ -18,7 +18,7 @@ class HudEnrichmentProcessor(SpanProcessor):
     """
 
     def __init__(self) -> None:
-        # No state – everything comes from context vars
+        # No state, everything comes from context vars
         super().__init__()
 
     # --- callback hooks -------------------------------------------------
@@ -38,7 +38,7 @@ class HudEnrichmentProcessor(SpanProcessor):
             logger.debug("HudEnrichmentProcessor.on_start error: %s", exc, exc_info=False)
 
     def on_end(self, span: ReadableSpan) -> None:
-        # Nothing to do – enrichment is on_start only
+        # Nothing to do enrichment is on_start only
         pass
 
     # Required to fully implement abstract base, but we don't batch spans

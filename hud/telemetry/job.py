@@ -19,7 +19,7 @@ from hud.settings import settings
 from hud.utils.async_utils import fire_and_forget
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Generator
 
 logger = logging.getLogger(__name__)
 
@@ -55,8 +55,8 @@ class Job:
                     },
                     api_key=settings.api_key,
                 )
-            except Exception:
-                pass  # Best effort
+            except Exception as e:
+                logger.warning("Failed to update job status: %s", e)
 
     def update_status_sync(self, status: str) -> None:
         """Synchronously update job status on the server."""
@@ -74,8 +74,8 @@ class Job:
                     },
                     api_key=settings.api_key,
                 )
-            except Exception:
-                pass  # Best effort
+            except Exception as e:
+                logger.warning("Failed to update job status: %s", e)
 
     def __repr__(self) -> str:
         return f"Job(id={self.id!r}, name={self.name!r}, status={self.status!r})"
@@ -91,7 +91,9 @@ def get_current_job() -> Job | None:
 
 
 @contextmanager
-def job(name: str, metadata: dict[str, Any] | None = None, job_id: str | None = None):
+def job(
+    name: str, metadata: dict[str, Any] | None = None, job_id: str | None = None
+) -> Generator[Job, None, None]:
     """Context manager for job tracking.
 
     Groups related tasks together under a single job for tracking and organization.
@@ -160,7 +162,7 @@ def create_job(name: str, metadata: dict[str, Any] | None = None) -> Job:
     return Job(job_id, name, metadata)
 
 
-def job_decorator(name: str | None = None, **metadata):
+def job_decorator(name: str | None = None, **metadata: Any) -> Callable:
     """Decorator for functions that should be tracked as jobs.
 
     Args:
@@ -179,7 +181,7 @@ def job_decorator(name: str | None = None, **metadata):
         job_name = name or func.__name__
 
         @wraps(func)
-        async def async_wrapper(*args, **kwargs):
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
             with job(job_name, metadata) as job_obj:
                 # Store job ID in function for access
                 func._current_job_id = job_obj.id
@@ -189,7 +191,7 @@ def job_decorator(name: str | None = None, **metadata):
                     delattr(func, "_current_job_id")
 
         @wraps(func)
-        def sync_wrapper(*args, **kwargs):
+        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
             with job(job_name, metadata) as job_obj:
                 # Store job ID in function for access
                 func._current_job_id = job_obj.id

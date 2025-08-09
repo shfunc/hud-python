@@ -184,7 +184,7 @@ def install_mcp_instrumentation(provider) -> None:
         McpInstrumentor().instrument(tracer_provider=provider)
         logger.debug("MCP instrumentation installed with fastmcp compatibility patch")
     except ImportError:
-        logger.debug("opentelemetry-instrumentation-mcp not available – skipping")
+        logger.debug("opentelemetry-instrumentation-mcp not available, kipping")
     except Exception as exc:
         logger.warning("Failed to install MCP instrumentation: %s", exc)
 

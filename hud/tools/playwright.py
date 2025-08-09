@@ -42,16 +42,14 @@ class PlaywrightTool(BaseTool):
         self._browser_context: BrowserContext | None = None
 
     @property
-    def page(self) -> Page:
-        """Get the current page (alias for context), raising an error if not initialized."""
-        if self.context is None:
-            raise RuntimeError("Browser page is not initialized. Call ensure_browser_launched().")
-        return self.context
+    def page(self) -> Page | None:
+        """Get the current page."""
+        return self.env
 
     @page.setter
     def page(self, value: Page | None) -> None:
-        """Set the page (alias for context)."""
-        self.context = value
+        """Set the page."""
+        self.env = value
 
     async def __call__(
         self,
@@ -398,5 +396,5 @@ class PlaywrightTool(BaseTool):
 
         self._browser = None
         self._browser_context = None
-        self._page = None
+        self.env = None  # Clear the page
         self._playwright = None

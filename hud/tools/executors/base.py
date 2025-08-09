@@ -4,7 +4,6 @@ import asyncio
 import logging
 from typing import Literal, TypeAlias
 
-from hud.tools.computer.settings import computer_settings
 from hud.tools.types import ContentResult
 
 logger = logging.getLogger(__name__)
@@ -29,7 +28,12 @@ class BaseExecutor:
         Args:
             display_num: X display number (for Linux/X11 systems)
         """
-        self.display_num = display_num or computer_settings.DISPLAY_NUM
+        if display_num is None:
+            from hud.tools.computer.settings import computer_settings
+
+            self.display_num = computer_settings.DISPLAY_NUM
+        else:
+            self.display_num = display_num
         self._screenshot_delay = 0.5
         logger.info("BaseExecutor initialized")
 

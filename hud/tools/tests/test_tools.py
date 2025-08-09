@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 import sys
 
 import pytest
@@ -146,23 +145,3 @@ async def test_computer_tool_screenshot():
     assert len(blocks) > 0
     # Either ImageContent or TextContent is valid
     assert all(isinstance(b, (ImageContent | TextContent)) for b in blocks)
-
-
-def test_register_instance_tool_signature():
-    """Helper should expose same user-facing parameters (no *args/**kwargs)."""
-
-    class Dummy:
-        async def __call__(self, *, x: int, y: str) -> str:
-            return f"{x}-{y}"
-
-    from mcp.server.fastmcp import FastMCP
-
-    mcp = FastMCP("test")
-    # register_instance_tool was removed from the codebase
-    pytest.skip("register_instance_tool was removed from the codebase")
-    return  # Skip the rest of the test
-    fn = None  # register_instance_tool(mcp, "dummy", Dummy())
-    sig = inspect.signature(fn)
-    params = list(sig.parameters.values())
-
-    assert [p.name for p in params] == ["x", "y"], "*args/**kwargs should be stripped"

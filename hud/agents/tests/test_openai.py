@@ -23,7 +23,7 @@ class TestOpenAIMCPAgent:
     @pytest.fixture
     def mock_openai(self):
         """Create a mock OpenAI client."""
-        with patch("hud.mcp.openai.AsyncOpenAI") as mock:
+        with patch("hud.agents.openai.AsyncOpenAI") as mock:
             client = AsyncMock()
             mock.return_value = client
             yield client

@@ -148,7 +148,7 @@ class BashTool(BaseTool):
             self.session = _BashSession()
             await self.session.start()
 
-            return ContentResult(system="Bash session restarted.").to_content_blocks()
+            return ContentResult(output="Bash session restarted.").to_content_blocks()
 
         if self.session is None:
             self.session = _BashSession()

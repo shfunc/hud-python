@@ -276,9 +276,7 @@ def _span_to_dict(span: ReadableSpan) -> dict[str, Any]:
     )
     parent = getattr(span, "parent", None)
     parent_id_hex = (
-        format(parent.span_id, "016x")
-        if parent and hasattr(parent, "span_id")
-        else None
+        format(parent.span_id, "016x") if parent and hasattr(parent, "span_id") else None
     )
     start_ns = span.start_time or 0
     end_ns = span.end_time or start_ns
@@ -349,7 +347,7 @@ class HudSpanExporter(SpanExporter):
                 url = f"{self._base_url}/v2/task_runs/{run_id}/telemetry-upload"
                 telemetry_spans = [_span_to_dict(s) for s in span_batch]
                 payload = {
-                    "metadata": {},  # reserved – can be filled later
+                    "metadata": {},  # reserved, can be filled later
                     "telemetry": telemetry_spans,
                 }
 
@@ -368,9 +366,9 @@ class HudSpanExporter(SpanExporter):
         return SpanExportResult.SUCCESS
 
     def shutdown(self) -> None:  # type: ignore[override]
-        # Nothing to cleanup – httpx handled inside make_request_sync
+        # Nothing to cleanup, httpx handled inside make_request_sync
         pass
 
     def force_flush(self, timeout_millis: int | None = None) -> bool:  # type: ignore[override]
-        # Synchronous export – nothing buffered here
+        # Synchronous export, nothing buffered here
         return True

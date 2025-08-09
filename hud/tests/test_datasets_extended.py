@@ -72,8 +72,8 @@ class TestTaskConfigExtended:
         os.environ["EMPTY_VAR"] = ""
 
         try:
-            # Mock get_current_task_run_id
-            with patch("hud.datasets.get_current_task_run_id", return_value="run-789"):
+            # Mock get_current_task_run_id at the module level it's used
+            with patch("hud.otel.get_current_task_run_id", return_value="run-789"):
                 task = TaskConfig(
                     prompt="Complex env test",
                     mcp_config={
@@ -170,7 +170,7 @@ class TestDatasetOperations:
 
     def test_save_taskconfigs_empty_list(self):
         """Test saving empty task list."""
-        with patch("hud.datasets.Dataset") as MockDataset:
+        with patch("datasets.Dataset") as MockDataset:
             mock_instance = MagicMock()
             MockDataset.from_list.return_value = mock_instance
 
@@ -196,10 +196,14 @@ class TestRunDatasetExtended:
     @pytest.mark.asyncio
     async def test_run_dataset_empty(self):
         """Test running empty dataset."""
-        with patch("hud.datasets.MCPClient"), patch("hud.datasets.hud") as mock_hud:
-            mock_job = MagicMock()
-            mock_job.id = "job-empty"
-            mock_hud.job.return_value.__enter__.return_value = mock_job
+        with (
+            patch("hud.client.MCPClient"),
+            patch("hud.job") as mock_job_func,
+            patch("hud.trace") as mock_trace,
+        ):
+            mock_job_obj = MagicMock()
+            mock_job_obj.id = "job-empty"
+            mock_job_func.return_value.__enter__.return_value = mock_job_obj
 
             # Create a mock agent class with proper type
             from hud.agent import MCPAgent
@@ -213,7 +217,7 @@ class TestRunDatasetExtended:
             )
 
             assert results == []
-            mock_hud.trace.assert_not_called()
+            mock_trace.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_run_dataset_with_metadata(self):
@@ -241,12 +245,15 @@ class TestRunDatasetExtended:
             "config": {"temperature": 0.7},
         }
 
-        with patch("hud.datasets.MCPClient") as MockClient:
-            with patch("hud.datasets.hud") as mock_hud:
+        with (
+            patch("hud.client.MCPClient") as MockClient,
+            patch("hud.job") as mock_job_func,
+            patch("hud.trace") as mock_trace,
+        ):
                 mock_job = MagicMock()
                 mock_job.id = "job-meta"
-                mock_hud.job.return_value.__enter__.return_value = mock_job
-                mock_hud.trace.return_value.__enter__.return_value = "trace-id"
+                mock_job_func.return_value.__enter__.return_value = mock_job
+                mock_trace.return_value.__enter__.return_value = "trace-id"
 
                 mock_client = AsyncMock()
                 MockClient.return_value = mock_client
@@ -268,7 +275,7 @@ class TestRunDatasetExtended:
                     "agent_config": {"model": "test-model"},
                 }
 
-                mock_hud.job.assert_called_once_with("metadata_run", metadata=expected_metadata)
+                mock_job_func.assert_called_once_with("metadata_run", metadata=expected_metadata)
 
     @pytest.mark.asyncio
     async def test_run_dataset_exception_handling(self):
@@ -300,23 +307,26 @@ class TestRunDatasetExtended:
 
         tasks = [TaskConfig(prompt=f"Task {i}", mcp_config={"url": f"test{i}"}) for i in range(3)]
 
-        with patch("hud.datasets.MCPClient") as MockClient:
-            with patch("hud.datasets.hud") as mock_hud:
-                mock_job = MagicMock()
-                mock_job.id = "job-error"
-                mock_hud.job.return_value.__enter__.return_value = mock_job
-                mock_hud.trace.return_value.__enter__.return_value = "trace-id"
+        with (
+            patch("hud.client.MCPClient") as MockClient,
+            patch("hud.job") as mock_job_func,
+            patch("hud.trace") as mock_trace,
+        ):
+            mock_job = MagicMock()
+            mock_job.id = "job-error"
+            mock_job_func.return_value.__enter__.return_value = mock_job
+            mock_trace.return_value.__enter__.return_value = "trace-id"
 
-                mock_client = AsyncMock()
-                MockClient.return_value = mock_client
+            mock_client = AsyncMock()
+            MockClient.return_value = mock_client
 
-                # Should complete without raising
-                results = await run_dataset("error_run", tasks, mock_agent_class)  # type: ignore
+            # Should complete without raising
+            results = await run_dataset("error_run", tasks, mock_agent_class)  # type: ignore
 
-                # First and third should succeed
-                assert results[0] == {"result": "success-1"}
-                assert results[2] == {"result": "success-3"}
-                # Second result depends on implementation details
+            # First and third should succeed
+            assert results[0] == {"result": "success-1"}
+            assert results[2] == {"result": "success-3"}
+            # Second result depends on implementation details
 
     @pytest.mark.asyncio
     async def test_run_dataset_client_cleanup(self):
@@ -345,47 +355,56 @@ class TestRunDatasetExtended:
             client_instances.append(client)
             return client
 
-        with patch("hud.datasets.MCPClient", side_effect=create_client):
-            with patch("hud.datasets.hud") as mock_hud:
-                mock_job = MagicMock()
-                mock_job.id = "job-cleanup"
-                mock_hud.job.return_value.__enter__.return_value = mock_job
-                mock_hud.trace.return_value.__enter__.return_value = "trace-id"
+        with (
+            patch("hud.client.MCPClient", side_effect=create_client),
+            patch("hud.job") as mock_job_func,
+            patch("hud.trace") as mock_trace,
+        ):
+            mock_job = MagicMock()
+            mock_job.id = "job-cleanup"
+            mock_job_func.return_value.__enter__.return_value = mock_job
+            mock_trace.return_value.__enter__.return_value = "trace-id"
 
-                await run_dataset("cleanup_run", tasks, mock_agent_class)  # type: ignore
+            await run_dataset("cleanup_run", tasks, mock_agent_class)  # type: ignore
 
-                # Verify all clients were created and closed
-                assert len(client_instances) == 3
-                for client in client_instances:
-                    client.close.assert_called_once()
+            # Verify all clients were created and closed
+            assert len(client_instances) == 3
+            for client in client_instances:
+                client.close.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_run_dataset_no_mcp_config_warning(self):
         """Test warning when task has no mcp_config."""
-        # Create a mock task with no mcp_config
-        mock_task = MagicMock()
-        mock_task.mcp_config = None
+        # Create a mock task that returns None for mcp_config to trigger the warning
+        from hud.datasets import TaskConfig
+
+        # Create a task with valid config but mock it to return None
+        task = TaskConfig(prompt="Test task", mcp_config={"dummy": "config"})
 
         from hud.agent import MCPAgent
 
         mock_agent_class = type("MockAgent", (MCPAgent,), {})
 
-        with patch("hud.datasets.to_taskconfigs", return_value=[mock_task]):
-            with patch("hud.datasets.hud") as mock_hud:
-                with patch("hud.datasets.logger") as mock_logger:
-                    mock_job = MagicMock()
-                    mock_job.id = "job-no-config"
-                    mock_hud.job.return_value.__enter__.return_value = mock_job
-                    mock_hud.trace.return_value.__enter__.return_value = "trace-id"
+        with (
+            patch("hud.job") as mock_job_func,
+            patch("hud.trace") as mock_trace,
+            patch("hud.datasets.logger") as mock_logger,
+        ):
+            mock_job = MagicMock()
+            mock_job.id = "job-no-config"
+            mock_job_func.return_value.__enter__.return_value = mock_job
+            mock_trace.return_value.__enter__.return_value = "trace-id"
 
-                    results = await run_dataset(
-                        "no_config_run",
-                        [],  # Will be converted by to_taskconfigs
-                        mock_agent_class,  # type: ignore
-                    )
+            # Mock the task's mcp_config to be None/falsy after validation
+            with patch.object(task, "mcp_config", None):
+                results = await run_dataset(
+                    "no_config_run",
+                    [task],  # Pass the task directly
+                    mock_agent_class,  # type: ignore
+                )
 
-                    # Should log warning
-                    mock_logger.warning.assert_called_with("Task %d has no mcp_config defined", 0)
+                # Should log warning
+                mock_logger.warning.assert_called_with("Task %d has no mcp_config defined", 0)
 
-                    # Result should be None
-                    assert results == [None]
+                # Result should be None
+                assert results == [None]
