@@ -73,7 +73,7 @@ class TestBaseExecutor:
     async def test_type_basic(self):
         """Test basic typing."""
         executor = BaseExecutor()
-        result = await executor.type("Hello World", take_screenshot=False)
+        result = await executor.write("Hello World", take_screenshot=False)
 
         assert isinstance(result, ContentResult)
         assert result.output == "[SIMULATED] Type 'Hello World'"
@@ -82,7 +82,7 @@ class TestBaseExecutor:
     async def test_type_with_enter(self):
         """Test typing with enter."""
         executor = BaseExecutor()
-        result = await executor.type("Hello", enter_after=True, take_screenshot=False)
+        result = await executor.write("Hello", enter_after=True, take_screenshot=False)
 
         assert isinstance(result, ContentResult)
         assert result.output == "[SIMULATED] Type 'Hello' followed by Enter"
@@ -332,7 +332,7 @@ class TestBaseExecutor:
 
         # Test actions with screenshots
         result1 = await executor.click(10, 20, take_screenshot=True)
-        result2 = await executor.type("test", take_screenshot=True)
+        result2 = await executor.write("test", take_screenshot=True)
 
         assert result1.base64_image == screenshot1
         assert result2.base64_image == screenshot1

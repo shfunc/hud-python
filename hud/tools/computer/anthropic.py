@@ -230,7 +230,7 @@ class AnthropicComputerTool(HudComputerTool):
 
         elif action == "type":
             if text:
-                result = await self.executor.type(text=text)
+                result = await self.executor.write(text=text)
             else:
                 raise McpError(ErrorData(code=INVALID_PARAMS, message="text is required for type"))
 

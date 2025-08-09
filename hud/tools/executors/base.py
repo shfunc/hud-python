@@ -67,7 +67,7 @@ class BaseExecutor:
         screenshot = await self.screenshot() if take_screenshot else None
         return ContentResult(output=msg, base64_image=screenshot)
 
-    async def type(
+    async def write(
         self, text: str, enter_after: bool = False, delay: int = 12, take_screenshot: bool = True
     ) -> ContentResult:
         """

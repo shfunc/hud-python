@@ -260,7 +260,7 @@ class XDOExecutor(BaseExecutor):
 
         return result
 
-    async def type(
+    async def write(
         self, text: str, enter_after: bool = False, delay: int = 12, take_screenshot: bool = True
     ) -> ContentResult:
         """Type text with specified delay between keystrokes."""

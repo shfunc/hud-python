@@ -286,7 +286,7 @@ class HudComputerTool(BaseTool):
             elif action == "type":
                 if text is None:
                     raise ToolError("text parameter is required for type")
-                result = await self.executor.type(text=text, enter_after=enter_after or False)
+                result = await self.executor.write(text=text, enter_after=enter_after or False)
 
             elif action == "scroll":
                 # Scale coordinates from client space to screen space

@@ -182,7 +182,7 @@ class OpenAIComputerTool(HudComputerTool):
         elif type == "type":
             if text is None:
                 raise McpError(ErrorData(code=INVALID_PARAMS, message="text is required for type"))
-            result = await self.executor.type(text=text, enter_after=False)
+            result = await self.executor.write(text=text, enter_after=False)
 
         elif type == "wait":
             wait_time = ms or 1000  # Default to 1 second

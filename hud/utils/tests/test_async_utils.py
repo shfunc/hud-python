@@ -68,7 +68,7 @@ class TestFireAndForget:
         async def failing_coro():
             raise ValueError("Thread exception")
 
-        with caplog.at_level(logging.DEBUG):
+        with caplog.at_level(logging.DEBUG, logger="hud.utils.async_utils"):
             fire_and_forget(failing_coro(), description="thread fail")
 
             # Give thread time to execute
@@ -76,9 +76,10 @@ class TestFireAndForget:
 
             time.sleep(0.5)
 
-            # Check that error was logged
+            # Check that error was logged with correct format
             assert any(
-                "Error in threaded thread fail" in record.message for record in caplog.records
+                "Error in threaded thread fail:" in record.message and "Thread exception" in record.message 
+                for record in caplog.records
             )
 
     def test_fire_and_forget_interpreter_shutdown(self, caplog):
@@ -118,12 +119,13 @@ class TestFireAndForget:
             with patch("threading.Thread") as mock_thread:
                 mock_thread.side_effect = RuntimeError("Some other error")
 
-                with caplog.at_level(logging.DEBUG):
+                with caplog.at_level(logging.DEBUG, logger="hud.utils.async_utils"):
                     fire_and_forget(test_coro(), description="error test")
 
-                    # This error should be logged
+                    # This error should be logged with correct format
                     assert any(
-                        "Could not error test" in record.message for record in caplog.records
+                        "Could not error test - no event loop available:" in record.message 
+                        for record in caplog.records
                     )
 
     @pytest.mark.asyncio

@@ -237,7 +237,7 @@ class PyAutoGUIExecutor(BaseExecutor):
         except Exception as e:
             return ContentResult(error=str(e))
 
-    async def type(
+    async def write(
         self, text: str, enter_after: bool = False, delay: int = 12, take_screenshot: bool = True
     ) -> ContentResult:
         """Type text with specified delay between keystrokes."""
