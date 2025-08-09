@@ -17,7 +17,8 @@ Prerequisites:
 import asyncio
 import hud
 from hud.datasets import TaskConfig
-from hud.mcp import ClaudeMCPAgent, MCPClient
+from hud.agents import ClaudeMCPAgent
+from hud.clients import MCPClient
 
 
 async def main():

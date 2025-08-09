@@ -74,20 +74,20 @@ class BaseHUDClient(ABC):
         if self._initialized:
             return
 
-        logger.info("Initializing MCP client...")
+        logger.debug("Initializing MCP client...")
 
         # Subclasses implement connection
         await self._connect()
 
         # Discover tools
         self._tools = await self.list_tools()
-        logger.info("Discovered %d tools", len(self._tools))
+        logger.debug("Client discovered %d tools", len(self._tools))
 
         # Common HUD behavior - fetch telemetry
         await self._fetch_telemetry()
 
         self._initialized = True
-        logger.info("Client initialization complete")
+        logger.info("Client initialized with %d tools", len(self._tools))
 
     @abstractmethod
     async def _connect(self) -> None:
@@ -110,10 +110,10 @@ class BaseHUDClient(ABC):
                 if "status" in telemetry_data:
                     logger.info("   📊 Status: %s", telemetry_data["status"])
                 if "services" in telemetry_data:
-                    logger.info("   📋 Services:")
+                    logger.debug("   📋 Services:")
                     for service, status in telemetry_data["services"].items():
                         status_icon = "✅" if status == "running" else "❌"
-                        logger.info("      %s %s: %s", status_icon, service, status)
+                        logger.debug("      %s %s: %s", status_icon, service, status)
 
                 if self.verbose:
                     logger.debug("Full telemetry data:\n%s", json.dumps(telemetry_data, indent=2))

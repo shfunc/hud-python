@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from opentelemetry import baggage
 from opentelemetry.sdk.trace import ReadableSpan, Span, SpanProcessor
@@ -22,7 +23,7 @@ class HudEnrichmentProcessor(SpanProcessor):
         super().__init__()
 
     # --- callback hooks -------------------------------------------------
-    def on_start(self, span: Span, parent_context) -> None:  # type: ignore[override]
+    def on_start(self, span: Span, parent_context: Any) -> None:  # type: ignore[override]
         try:
             # Get task_run_id
             run_id: str | None = get_current_task_run_id()

@@ -373,7 +373,7 @@ class MCPAgent(ABC):
 
         Returns:
             Trace with reward, done, content fields and trace steps
-        """
+        """  # noqa: E501
         final_response = None
         error = None
 

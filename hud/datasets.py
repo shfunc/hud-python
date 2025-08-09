@@ -8,13 +8,13 @@ import logging
 from string import Template
 from typing import TYPE_CHECKING, Any, cast
 
-from datasets import Dataset
+from datasets import Dataset, DatasetDict, IterableDataset, IterableDatasetDict
 from pydantic import BaseModel, Field, field_validator
 
 from .types import MCPToolCall
 
 if TYPE_CHECKING:
-    from datasets import Dataset
+    from datasets import Dataset, DatasetDict, IterableDataset, IterableDatasetDict
 
     from hud.agent import MCPAgent
 
@@ -47,6 +47,18 @@ class TaskConfig(BaseModel):
     setup_tool: MCPToolCall | list[MCPToolCall] | None = None
     evaluate_tool: MCPToolCall | list[MCPToolCall] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("setup_tool", "evaluate_tool", mode="before")
+    @classmethod
+    def convert_dict_to_tool_call(cls, v: Any) -> Any:
+        """Convert dict to MCPToolCall instance."""
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return MCPToolCall(**v)
+        if isinstance(v, list):
+            return [MCPToolCall(**item) if isinstance(item, dict) else item for item in v]
+        return v
 
     @field_validator("mcp_config", mode="before")
     @classmethod
@@ -90,7 +102,9 @@ class TaskConfig(BaseModel):
         return substitute_in_value(v)
 
 
-def to_taskconfigs(dataset: Dataset) -> list[TaskConfig]:
+def to_taskconfigs(
+    dataset: DatasetDict | Dataset | IterableDatasetDict | IterableDataset,
+) -> list[TaskConfig]:
     """
     Convert a HuggingFace dataset to TaskConfig objects.
 

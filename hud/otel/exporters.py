@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Custom OpenTelemetry exporter that sends spans to the existing HUD telemetry
 HTTP endpoint (/v2/task_runs/<id>/telemetry-upload).
 
@@ -10,6 +8,8 @@ implemented.
 This exporter is *synchronous* (derives from :class:`SpanExporter`).  We rely on
 ``hud.server.make_request_sync`` which already contains retry & auth logic.
 """
+
+from __future__ import annotations
 
 import contextlib
 import json
@@ -125,19 +125,25 @@ def extract_span_attributes(
     )
 
     logger.debug(
-        f"Category: {result_attrs.get('category')}, has input: {bool(input_str)}, has output: {bool(output_str)}"
+        "Category: %s, has input: %s, has output: %s",
+        result_attrs.get("category"),
+        bool(input_str),
+        bool(output_str),
     )
 
     # Try to parse as MCP types (only for MCP spans)
     if result_attrs["category"] == "mcp":
         logger.debug(
-            f"Processing MCP span with input_str: {input_str[:100] if input_str else None}..."
+            "Processing MCP span with input_str: %s...",
+            input_str[:100] if input_str else None,
         )
         if input_str:
             try:
                 input_data = json.loads(input_str) if isinstance(input_str, str) else input_str
                 logger.debug(
-                    f"Parsed input_data type: {type(input_data)}, has method: {'method' in input_data if isinstance(input_data, dict) else False}"
+                    "Parsed input_data type: %s, has method: %s",
+                    type(input_data),
+                    "method" in input_data if isinstance(input_data, dict) else False,
                 )
                 if isinstance(input_data, dict):
                     # Create a ClientRequest and extract its root
@@ -146,33 +152,36 @@ def extract_span_attributes(
                         if "method" in input_data and "params" in input_data:
                             # This is already in the correct format
                             logger.debug(
-                                f"Attempting to validate ClientRequest with method: {input_data.get('method')}"
+                                "Attempting to validate ClientRequest with method: %s",
+                                input_data.get("method"),
                             )
                             client_request = ClientRequest.model_validate(input_data)
                             # Store the root of the RootModel, which is the actual request
                             result_attrs["mcp_request"] = client_request.root
                             logger.debug(
-                                f"Successfully parsed ClientRequest: {type(client_request.root).__name__}"
+                                "Successfully parsed ClientRequest: %s",
+                                type(client_request.root).__name__,
                             )
                         else:
                             # If it's just params, we can't create a proper request
                             logger.debug("No method/params found, storing raw data")
                             result_attrs["mcp_request"] = input_data
                     except Exception as e:
-                        logger.debug(f"Failed to parse request as MCP type: {e}")
+                        logger.debug("Failed to parse request as MCP type: %s", e)
                         # Fallback: store the raw data
                         result_attrs["mcp_request"] = input_data
                         logger.debug("Stored raw data as fallback")
             except Exception as e:
-                logger.debug(f"Failed to parse request JSON: {e}")
+                logger.debug("Failed to parse request JSON: %s", e)
 
         logger.debug(
-            f"Processing MCP span with output_str: {output_str[:100] if output_str else None}..."
+            "Processing MCP span with output_str: %s...",
+            output_str[:100] if output_str else None,
         )
         if output_str:
             try:
                 output_data = json.loads(output_str) if isinstance(output_str, str) else output_str
-                logger.debug(f"Parsed output_data type: {type(output_data)}")
+                logger.debug("Parsed output_data type: %s", type(output_data))
                 if isinstance(output_data, dict):
                     # Check for error first
                     if "error" in output_data:
@@ -185,18 +194,19 @@ def extract_span_attributes(
                             # Store the root of the RootModel, which is the actual result
                             result_attrs["mcp_result"] = server_result.root
                             logger.debug(
-                                f"Successfully parsed ServerResult: {type(server_result.root).__name__}"
+                                "Successfully parsed ServerResult: %s",
+                                type(server_result.root).__name__,
                             )
                             # Check for isError in the result
                             if getattr(server_result.root, "isError", False):
                                 result_attrs["mcp_error"] = True
                         except Exception as e:
-                            logger.debug(f"Failed to parse result as MCP type: {e}")
+                            logger.debug("Failed to parse result as MCP type: %s", e)
                             # Fallback: store the raw data
                             result_attrs["mcp_result"] = output_data
                             logger.debug("Stored raw result data as fallback")
             except Exception as e:
-                logger.debug(f"Failed to parse result JSON: {e}")
+                logger.debug("Failed to parse result JSON: %s", e)
 
     # Don't include the verbose attributes or ones we've already processed
     exclude_keys = {
@@ -220,12 +230,14 @@ def extract_span_attributes(
     }
 
     # Add any extra attributes
-    for key, value in attrs.items():
-        if key not in exclude_keys:
-            result_attrs[key] = value
+    result_attrs = {key: value for key, value in attrs.items() if key not in exclude_keys}
 
     logger.debug(
-        f"Final result_attrs before creating HudSpanAttributes: mcp_request={result_attrs.get('mcp_request')}, mcp_result={result_attrs.get('mcp_result')}"
+        """Final result_attrs before creating HudSpanAttributes:
+        mcp_request=%s,
+        mcp_result=%s""",
+        result_attrs.get("mcp_request"),
+        result_attrs.get("mcp_result"),
     )
     return HudSpanAttributes(**result_attrs)
 
@@ -263,7 +275,7 @@ def _span_to_dict(span: ReadableSpan) -> dict[str, Any]:
     try:
         typed_attrs.span_kind = span.kind.name  # type: ignore[attr-defined]
     except Exception:
-        pass
+        logger.warning("Failed to set span kind attribute")
 
     # Build typed span
     # Guard context/parent/timestamps
@@ -297,14 +309,13 @@ def _span_to_dict(span: ReadableSpan) -> dict[str, Any]:
     # Add error information if present
     if span.events:
         exceptions = []
-        for event in span.events:
-            if event.name == "exception":
-                exceptions.append(
-                    {
-                        "timestamp": _ts_ns_to_iso(event.timestamp),
-                        "attributes": dict(event.attributes or {}),
-                    }
-                )
+        exceptions = [
+            {
+                "timestamp": _ts_ns_to_iso(event.timestamp),
+                "attributes": dict(event.attributes or {}),
+            }
+            for event in span.events
+        ]
         if exceptions:
             typed_span.exceptions = exceptions
 
