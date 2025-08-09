@@ -86,19 +86,19 @@ async def initialize_environment(session=None, progress_token=None):
     # Mount hubs
     logger.info(f"Mounting setup hub: {setup_hub}")
     logger.info(f"Setup hub tools before mount: {hasattr(setup_hub, '_tool_manager')}")
-    
+
     # Check what tools are in the hub before mounting
-    if hasattr(setup_hub, '_tool_manager'):
+    if hasattr(setup_hub, "_tool_manager"):
         logger.info(f"Setup hub tools: {list(setup_hub._tool_manager._tools.keys())}")
-    
+
     mcp.mount(setup_hub)
-    
+
     logger.info(f"Mounting evaluate hub: {evaluate_hub}")
-    if hasattr(evaluate_hub, '_tool_manager'):
+    if hasattr(evaluate_hub, "_tool_manager"):
         logger.info(f"Evaluate hub tools: {list(evaluate_hub._tool_manager._tools.keys())}")
-    
+
     mcp.mount(evaluate_hub)
-    
+
     # Check what tools are available after mounting
     logger.info(f"Main server tools after mounting: {list(mcp._tool_manager._tools.keys())}")
 
@@ -107,7 +107,7 @@ async def initialize_environment(session=None, progress_token=None):
             progress_token=progress_token,
             progress=100,
             total=100,
-            message="2048 environment ready!",
+            message="2048 environment ready",
         )
 
     logger.info("2048 environment ready")

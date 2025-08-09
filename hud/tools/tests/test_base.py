@@ -1,22 +1,19 @@
 """Tests for base tool classes."""
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastmcp import FastMCP
-from mcp.types import TextContent
+from mcp.types import ContentBlock, TextContent
 
 from hud.tools.base import _INTERNAL_PREFIX, BaseHub, BaseTool
-
-if TYPE_CHECKING:
-    from hud.tools.types import ContentBlock
 
 
 class MockTool(BaseTool):
     """Mock tool for testing."""
 
-    async def __call__(self, param1: Any = None, param2: Any = None) -> list["ContentBlock"]:
+    async def __call__(self, param1: Any = None, param2: Any = None) -> list[ContentBlock]:
         """Execute the mock tool."""
         kwargs = {"param1": param1, "param2": param2}
         return [TextContent(type="text", text=f"Mock result: {kwargs}")]
@@ -31,7 +28,7 @@ class TestBaseTool:
         class TestTool(BaseTool):
             """A test tool."""
 
-            async def __call__(self, **kwargs: Any) -> list["ContentBlock"]:
+            async def __call__(self, **kwargs: Any) -> list[ContentBlock]:
                 return []
 
         tool = TestTool()
@@ -63,7 +60,7 @@ class TestBaseTool:
         """Test BaseTool with no docstring."""
 
         class NoDocTool(BaseTool):
-            async def __call__(self, **kwargs: Any) -> list["ContentBlock"]:
+            async def __call__(self, **kwargs: Any) -> list[ContentBlock]:
                 return []
 
         tool = NoDocTool()

@@ -31,13 +31,13 @@ class MoveTool(BaseTool):
             direction: The direction to move ('up', 'down', 'left', 'right')
         """
         if self.env is None:
-            return [TextContent(text="❌ Game not initialized. Run setup first.", type="text")]
+            return [TextContent(text="ERROR: Game not initialized. Run setup first.", type="text")]
 
         direction = direction.lower()
         if direction not in ["up", "down", "left", "right"]:
             return [
                 TextContent(
-                    text=f"❌ Invalid direction: {direction}. Use: up, down, left, right",
+                    text=f"ERROR: Invalid direction: {direction}. Use: up, down, left, right",
                     type="text",
                 )
             ]
@@ -48,7 +48,7 @@ class MoveTool(BaseTool):
         if not moved:
             return [
                 TextContent(
-                    text=f"❌ Cannot move {direction} - no valid moves in that direction",
+                    text=f"ERROR: Cannot move {direction} - no valid moves in that direction",
                     type="text",
                 )
             ]
@@ -58,11 +58,11 @@ class MoveTool(BaseTool):
 
         # Format response
         board_str = self.env.get_board_ascii()
-        text = f"✅ Moved {direction}\n"
+        text = f"SUCCESS: Moved {direction}\n"
         text += f"Score: {state['score']} | Moves: {state['moves']}\n"
         text += f"{board_str}"
 
         if state["game_over"]:
-            text += "\n🎮 GAME OVER!"
+            text += "\nGAME OVER!"
 
         return [TextContent(text=text, type="text")]

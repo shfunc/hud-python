@@ -2,15 +2,8 @@
 """
 SheetBench Agent Example
 
-This example showcases SheetBench-specific features:
-- Initial screenshot capture
-- Thinking/reasoning display
-- Computer tool usage
-- Model-specific parameters
-- Task execution with timing and results
-
 Prerequisites:
-- pip install hud-python
+- uv add hud-python
 - Set HUD_API_KEY environment variable
 """
 
@@ -25,7 +18,7 @@ from hud.datasets import to_taskconfigs
 async def main():
     # Load the dataset
     print("📊 Loading SheetBench dataset...")
-    dataset = load_dataset("hud-evals/sheetbench-taskconfigs", split="train")
+    dataset = load_dataset("hud-evals/SheetBench-50", split="train")
 
     with hud.trace("SheetBench Agent"):
         task = to_taskconfigs(dataset)[0]
@@ -47,8 +40,6 @@ async def main():
         finally:
             print("\n🔚 Closing client...")
             await client.close()
-
-    print("\n✨ SheetBench agent demo complete!")
 
 
 if __name__ == "__main__":
