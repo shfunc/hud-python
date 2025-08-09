@@ -169,10 +169,10 @@ class Game2048:
         """Get the current game state as a dictionary"""
         return {
             "board": self.board.tolist(),
-            "score": self.score,
-            "moves": self.moves_made,
-            "game_over": self.game_over,
-            "won": 2048 in self.board,
+            "score": int(self.score),
+            "moves": int(self.moves_made),
+            "game_over": bool(self.game_over),
+            "won": bool(2048 in self.board),
             "highest_tile": int(self.board.max()),
         }
 

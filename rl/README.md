@@ -22,7 +22,7 @@ uv sync
 then you can simply use Verifiers CLI
 
 ```bash
-vf-install hud-vf-gym -p .
+vf-install hud-vf-gym -p . 
 ```
 
 to install the environment from the cloned repo.
@@ -101,114 +101,149 @@ trainer.train()
 
 ## Configuration
 
-### Environment Configuration (`configs/default.yaml`)
+### Environment Configuration
 
-The main configuration file controls various aspects of the environment:
+HUD VF Gym uses a config-driven architecture where each environment defines its tools, mappings, and behavior through YAML configuration files.
 
-#### System Prompt
-Defines the instructions given to the agent, including available tools and usage guidelines.
+#### Available Configurations
+
+- `configs/default.yaml` - Browser/computer interaction environment
+- `configs/2048.yaml` - 2048 game environment
+
+#### Configuration Structure
+
+##### System Prompt
+Defines the instructions and available tools presented to the agent:
 
 ```yaml
 system_prompt: |
-  You are an AI assistant that can interact with computer interfaces.
+  You are an AI assistant that can interact with [environment description]...
   
-  Screen Information:
-  - Resolution: 1280x800 pixels
+  You have access to the following tools:
+  - tool_name: Description
+    Usage: <tool>tool_name(args)</tool>
   ...
 ```
 
-#### Default Settings that are also Verifiers **kwargs
-```yaml
-defaults:
-  max_turns: 30  # Maximum number of turns per task
-```
-
-#### Action Mappings
-Maps agent action names defined in the system prompt to MCP computer tool format.
+##### Action Mappings
+The core of the config-driven architecture. Maps agent-facing tools to underlying MCP tools:
 
 ```yaml
 action_mappings:
+  # Agent calls screenshot(), maps to computer tool
   screenshot:
-    action: "screenshot"
+    _parser:
+      positional: []  # No arguments expected
+    _tool: "computer"  # MCP tool to call
+    action: "screenshot"  # Parameter for computer tool
   
+  # Agent calls click(x, y), maps to computer tool  
   click:
+    _parser:
+      positional: ["x", "y"]  # Positional argument names
+    _tool: "computer"
     action: "click"
     x:
-      from_arg: "x"
+      from_arg: "x"  # Map from parsed argument
     y:
       from_arg: "y"
   
-  type:
-    action: "type"
-    text:
-      from_arg: "text"
-      default: ""
-  
+  # Agent calls key("ctrl+a"), maps to computer tool with transform
   key:
+    _parser:
+      positional: ["key"]
+    _tool: "computer"
     action: "press"
     keys:
       from_arg: "key"
-      transform: "split_plus"  # Transforms "ctrl+a" to ["ctrl", "a"]
-  
-  scroll:
-    action: "scroll"
-    # ... scroll configuration
-  
-  wait:
-    action: "wait"
-    time:
-      from_arg: "seconds"
-      transform: "seconds_to_ms"  # Converts seconds to milliseconds
+      transform: "lambda x: x.split('+')"  # Split into key array
 ```
 
-#### Parser Configuration
-Controls XML parsing and action validation:
+Key fields:
+- `_parser.positional`: Defines expected positional arguments
+- `_tool`: Specifies which MCP tool to call (required)
+- `action`: For computer tool, specifies the action parameter
+- `transform`: Lambda string for argument transformation
+- `static`: Static value instead of from argument
+- `from_arg`: Maps from parsed argument name
+
+##### Transforms
+Transforms are defined as lambda strings evaluated in a safe context:
+
+```yaml
+# Simple transforms
+transform: "lambda x: x.upper()"
+transform: "lambda x: int(x * 1000)"
+
+# Context-aware transforms (access other arguments)
+transform: "lambda d, ctx: ctx.get('amount', 3) if d == 'right' else -ctx.get('amount', 3)"
+use_context: true
+```
+
+#### Parser and Rubric Configuration
 
 ```yaml
 parser:
   xml_weight: 0.6    # Weight for XML format validation
   action_weight: 0.4  # Weight for action syntax validation
-```
 
-#### Rubric Configuration
-Defines reward function weights:
-
-```yaml
 rubric:
   weights:
-    task_completion: 0.75      # Primary task completion from HUD evaluation
-    tool_execution: 0.05       # Successful tool execution rate
+    task_completion: 0.8       # Primary task completion
+    tool_execution: 0.1        # Successful tool execution rate
     format_compliance: 0.1     # XML format and action syntax
-    screenshot_behavior: 0.05  # Taking screenshot first
-    thinking_quality: 0.05     # Concise, quality thinking
 ```
 
-## Available Tools
+## Environment Examples
 
-Agents interact with the environment through the system prompt, which defines available actions. These actions are mapped to the MCP computer tool provided by HUD.
+### Browser/Computer Environment (default.yaml)
 
-### Computer Tool Actions
-The following actions are defined in the system prompt and mapped to the HUD Computer Tool:
+Provides tools for interacting with computer interfaces:
 
-- **`screenshot()`** - Capture the current screen (maps to `computer` tool with `action: "screenshot"`)
-- **`click(x, y)`** - Click at coordinates (maps to `computer` tool with `action: "click"`)
-- **`type("text")`** - Type text at cursor position (maps to `computer` tool with `action: "type"`)
-- **`key("key")`** - Press a key or combination (maps to `computer` tool with `action: "press"`)
-  - Examples: `key("enter")`, `key("ctrl+a")`, `key("escape")`
-- **`scroll("direction", amount)`** - Scroll the screen (maps to `computer` tool with `action: "scroll"`)
-  - Direction: "up" or "down"
-- **`wait(seconds)`** - Wait for specified time (maps to `computer` tool with `action: "wait"`)
-- **`done()`** - Signal task completion (special action, not sent to MCP)
+```yaml
+# Agent-facing tools (defined in system prompt)
+screenshot()           → MCP: computer(action="screenshot")
+click(100, 200)       → MCP: computer(action="click", x=100, y=200)
+type("hello")         → MCP: computer(action="type", text="hello")
+key("ctrl+a")         → MCP: computer(action="press", keys=["ctrl", "a"])
+scroll("down", 3)     → MCP: computer(action="scroll", scroll_y=3, ...)
+wait(2.5)             → MCP: computer(action="wait", time=2500)
+done()                → Task completion signal
+```
+
+### 2048 Game Environment (2048.yaml)
+
+Provides directional movement tools for the game:
+
+```yaml
+# Agent-facing tools (defined in system prompt)
+left()   → MCP: move(direction="left")
+right()  → MCP: move(direction="right")
+up()     → MCP: move(direction="up")
+down()   → MCP: move(direction="down")
+done()   → Task completion signal
+```
+
+The configuration maps each directional tool to the same underlying `move` MCP tool:
+
+```yaml
+action_mappings:
+  left:
+    _parser:
+      positional: []  # No arguments
+    _tool: "move"     # MCP tool
+    direction:
+      static: "left"  # Static direction value
+```
 
 ### Tool Format
-Agents must use XML format for tool calls as specified in the system prompt:
+
+All environments use the same XML format for tool calls:
 
 ```xml
-<think>First, I need to see the current screen</think>
-<tool>screenshot()</tool>
+<think>Reasoning about the task...</think>
+<tool>tool_name(arguments)</tool>
 ```
-
-The action mappings in `configs/default.yaml` translate these agent actions to the MCP computer tool format that HUD expects.
 
 ## Dataset Format
 
@@ -227,13 +262,13 @@ HUD Gym uses HuggingFace datasets with hud.TaskConfig format:
 
 ## Reward Functions
 
-The rubric system combines multiple reward functions:
+The base rubric system combines three core reward functions:
 
-1. **Task Completion** (75%) - Primary reward from HUD evaluation tool
-2. **Tool Execution** (5%) - Success rate of tool calls
+1. **Task Completion** (80%) - Primary reward from HUD evaluation tool
+2. **Tool Execution** (10%) - Success rate of tool calls
 3. **Format Compliance** (10%) - Proper XML format and action syntax
-4. **Screenshot Behavior** (5%) - Taking screenshot as first action
-5. **Thinking Quality** (5%) - Quality of reasoning in `<think>` tags
+
+Note: The base rubric (`HUDBaseRubric`) contains only generic components for extensibility. Environment-specific behaviors (like screenshot requirements or thinking quality) can be added by extending the base rubric class.
 
 ## Custom Environments
 
@@ -265,30 +300,54 @@ uv run pre-commit run --all-files
 vf-eval --env hud_vf_gym --num-tasks 1 --model gpt-4o-mini
 ```
 
-### Adding New Actions
+### Creating New Environments
 
-To add new computer tool actions:
+To create a new environment:
 
-1. Update the system prompt to describe the new action to agents
+1. **Create a config file** (`configs/my_env.yaml`):
+```yaml
+system_prompt: |
+  Instructions for the agent...
+  
+  You have access to these tools:
+  - my_tool(arg): Description
+    Usage: <tool>my_tool("value")</tool>
 
-2. Add action mapping in `configs/default.yaml` to map to HUD Computer Tool:
+action_mappings:
+  my_tool:
+    _parser:
+      positional: ["arg"]  # Expected arguments
+    _tool: "mcp_tool_name"  # MCP tool to call
+    param_name:
+      from_arg: "arg"
+      transform: "lambda x: x.upper()"  # Optional transform
+```
+
+2. **Use the config**:
+```bash
+vf-eval hud_vf_gym \
+    --env-args '{"config_path": "configs/my_env.yaml"}' \
+    --model gpt-4o-mini
+```
+
+### Adding New Tools to Existing Environments
+
+1. **Update the system prompt** to describe the tool to agents
+
+2. **Add action mapping**:
 ```yaml
 action_mappings:
-  new_action:
-    action: "computer_tool_action"  # The actual MCP computer tool action
-    param:
-      from_arg: "agent_param"        # Map agent's parameter
-      transform: "optional_transform" # Optional transformation
+  new_tool:
+    _parser:
+      positional: ["arg1", "arg2"]  # Define positional arguments
+    _tool: "target_mcp_tool"  # Required: which MCP tool to call
+    # Map arguments with optional transforms
+    param1:
+      from_arg: "arg1"
+    param2:
+      from_arg: "arg2"
+      transform: "lambda x: x * 2"
 ```
-
-3. Update parser in `parsers.py` to parse the new action syntax:
-```python
-elif action_name == "new_action":
-    # Parse new action arguments from agent's call
-    return {"name": "new_action", "arguments": {...}}
-```
-
-Note: All actions ultimately map to the MCP `computer` tool with different action parameters.
 
 ### Creating Datasets
 

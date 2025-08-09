@@ -1,0 +1,23 @@
+FROM python:3.11-slim
+
+# For live reload
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /app
+
+# Install git for dependency installation
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
+COPY hud /hud-python/hud
+COPY pyproject.toml /hud-python/
+COPY LICENSE /hud-python/
+COPY README.md /hud-python/
+
+COPY environments/text_2048/pyproject.toml ./
+COPY environments/text_2048/src/ ./src/
+
+RUN pip install --no-cache-dir -e /hud-python && \
+    pip install --no-cache-dir -e .
+
+CMD ["python", "-m", "hud_controller.server"]
