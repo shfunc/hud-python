@@ -96,7 +96,6 @@ class TestDeprecatedDecorator:
         class OldClass:
             """Original class docstring."""
 
-
         assert OldClass.__doc__ is not None
         assert "**DEPRECATED**" in OldClass.__doc__
         assert "Use NewClass" in OldClass.__doc__

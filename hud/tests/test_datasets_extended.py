@@ -250,32 +250,32 @@ class TestRunDatasetExtended:
             patch("hud.job") as mock_job_func,
             patch("hud.trace") as mock_trace,
         ):
-                mock_job = MagicMock()
-                mock_job.id = "job-meta"
-                mock_job_func.return_value.__enter__.return_value = mock_job
-                mock_trace.return_value.__enter__.return_value = "trace-id"
+            mock_job = MagicMock()
+            mock_job.id = "job-meta"
+            mock_job_func.return_value.__enter__.return_value = mock_job
+            mock_trace.return_value.__enter__.return_value = "trace-id"
 
-                mock_client = AsyncMock()
-                MockClient.return_value = mock_client
+            mock_client = AsyncMock()
+            MockClient.return_value = mock_client
 
-                await run_dataset(
-                    "metadata_run",
-                    tasks,
-                    mock_agent_class,  # type: ignore
-                    {"model": "test-model"},
-                    metadata=custom_metadata,
-                )
+            await run_dataset(
+                "metadata_run",
+                tasks,
+                mock_agent_class,  # type: ignore
+                {"model": "test-model"},
+                metadata=custom_metadata,
+            )
 
-                # Verify job was created with merged metadata
-                expected_metadata = {
-                    "experiment_id": "exp-123",
-                    "tags": ["test", "v2"],
-                    "config": {"temperature": 0.7},
-                    "agent_class": "MockAgent",
-                    "agent_config": {"model": "test-model"},
-                }
+            # Verify job was created with merged metadata
+            expected_metadata = {
+                "experiment_id": "exp-123",
+                "tags": ["test", "v2"],
+                "config": {"temperature": 0.7},
+                "agent_class": "MockAgent",
+                "agent_config": {"model": "test-model"},
+            }
 
-                mock_job_func.assert_called_once_with("metadata_run", metadata=expected_metadata)
+            mock_job_func.assert_called_once_with("metadata_run", metadata=expected_metadata)
 
     @pytest.mark.asyncio
     async def test_run_dataset_exception_handling(self):

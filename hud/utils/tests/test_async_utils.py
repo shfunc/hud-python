@@ -78,7 +78,8 @@ class TestFireAndForget:
 
             # Check that error was logged with correct format
             assert any(
-                "Error in threaded thread fail:" in record.message and "Thread exception" in record.message 
+                "Error in threaded thread fail:" in record.message
+                and "Thread exception" in record.message
                 for record in caplog.records
             )
 
@@ -124,7 +125,7 @@ class TestFireAndForget:
 
                     # This error should be logged with correct format
                     assert any(
-                        "Could not error test - no event loop available:" in record.message 
+                        "Could not error test - no event loop available:" in record.message
                         for record in caplog.records
                     )
 

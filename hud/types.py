@@ -53,9 +53,9 @@ class AgentResponse(BaseModel):
         if self.content:
             response += f"Content: {self.content}\n"
         if self.tool_calls:
-            response += f"Tool Calls: {
+            response += f"""Tool Calls: {
                 ', '.join([f'{tc.name}: {tc.arguments}' for tc in self.tool_calls])
-            }\n"
+            }"""
         return response
 
 
