@@ -15,11 +15,20 @@ COPY LICENSE /hud-python/
 COPY README.md /hud-python/
 COPY environments/text_2048/pyproject.toml ./
 
-# Install dependencies (this layer will be cached if dependencies don't change)
+# Copy the minimal hud package structure needed for installation
+# This includes __init__.py and py.typed which are required by hatchling
+COPY hud/__init__.py /hud-python/hud/
+COPY hud/py.typed /hud-python/hud/
+
+# Create minimal package structure for text_2048 installation
+RUN mkdir -p ./src/hud_controller && \
+    echo "# Placeholder for package installation" > ./src/hud_controller/__init__.py
+
+# Install dependencies and packages (this layer will be cached if dependencies don't change)
 RUN pip install --no-cache-dir -e /hud-python && \
     pip install --no-cache-dir -e .
 
-# Copy source code last (changes most frequently)
+# Copy the rest of the source code last (changes most frequently)
 COPY hud /hud-python/hud
 COPY environments/text_2048/src/ ./src/
 
