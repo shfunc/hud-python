@@ -19,6 +19,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Suppress MCP server logs
+logging.getLogger("mcp.server.lowlevel.server").setLevel(logging.WARNING)
+
 # Global game instance (initialized during startup)
 game = None
 

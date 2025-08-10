@@ -9,15 +9,18 @@ WORKDIR /app
 # Install git for dependency installation
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
-COPY hud /hud-python/hud
+# Copy only dependency files first for better caching
 COPY pyproject.toml /hud-python/
 COPY LICENSE /hud-python/
 COPY README.md /hud-python/
-
 COPY environments/text_2048/pyproject.toml ./
-COPY environments/text_2048/src/ ./src/
 
+# Install dependencies (this layer will be cached if dependencies don't change)
 RUN pip install --no-cache-dir -e /hud-python && \
     pip install --no-cache-dir -e .
+
+# Copy source code last (changes most frequently)
+COPY hud /hud-python/hud
+COPY environments/text_2048/src/ ./src/
 
 CMD ["python", "-m", "hud_controller.server"]

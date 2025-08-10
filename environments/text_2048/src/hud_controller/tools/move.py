@@ -59,7 +59,6 @@ class MoveTool(BaseTool):
         # Format response
         board_str = self.env.get_board_ascii()
         text = f"SUCCESS: Moved {direction}\n"
-        text += f"Score: {state['score']} | Moves: {state['moves']}\n"
         text += f"{board_str}"
 
         if state["game_over"]:
