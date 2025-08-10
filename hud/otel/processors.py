@@ -6,7 +6,7 @@ from typing import Any
 from opentelemetry import baggage
 from opentelemetry.sdk.trace import ReadableSpan, Span, SpanProcessor
 
-from .context import get_current_task_run_id
+# Removed import of get_current_task_run_id - now using baggage directly
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +25,10 @@ class HudEnrichmentProcessor(SpanProcessor):
     # --- callback hooks -------------------------------------------------
     def on_start(self, span: Span, parent_context: Any) -> None:  # type: ignore[override]
         try:
-            # Get task_run_id
-            run_id: str | None = get_current_task_run_id()
+            # Get task_run_id from baggage in parent context
+            run_id = baggage.get_baggage("hud.task_run_id", context=parent_context)
             if run_id and span.is_recording():
-                span.set_attribute("hud.task_run_id", run_id)
+                span.set_attribute("hud.task_run_id", str(run_id))
 
             # Get job_id from baggage if available
             job_id = baggage.get_baggage("hud.job_id", context=parent_context)

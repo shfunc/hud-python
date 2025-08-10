@@ -230,7 +230,9 @@ def extract_span_attributes(
     }
 
     # Add any extra attributes
-    result_attrs = {key: value for key, value in attrs.items() if key not in exclude_keys}
+    for key, value in attrs.items():
+        if key not in exclude_keys:
+            result_attrs[key] = value
 
     logger.debug(
         """Final result_attrs before creating HudSpanAttributes:
