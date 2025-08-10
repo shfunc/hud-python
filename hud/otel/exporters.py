@@ -232,7 +232,7 @@ def extract_span_attributes(
     # Add any extra attributes
     for key, value in attrs.items():
         if key not in exclude_keys:
-            result_attrs[key] = value
+            result_attrs[key] = value  # noqa: PERF403
 
     logger.debug(
         """Final result_attrs before creating HudSpanAttributes:

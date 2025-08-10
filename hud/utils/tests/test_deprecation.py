@@ -19,9 +19,11 @@ class TestDeprecatedDecorator:
         def old_function():
             return "result"
 
+        # Capture warnings and logs
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            with caplog.at_level(logging.WARNING):
+            # Capture logs from deprecation module
+            with caplog.at_level(logging.WARNING, logger="hud.utils.deprecation"):
                 result = old_function()
 
         # Check function still works
@@ -73,9 +75,11 @@ class TestDeprecatedDecorator:
             def __init__(self, value: int):
                 self.value = value
 
+        # Capture warnings and logs
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            with caplog.at_level(logging.WARNING):
+            # Capture logs from deprecation module
+            with caplog.at_level(logging.WARNING, logger="hud.utils.deprecation"):
                 obj = OldClass(42)
 
         # Check class still works
@@ -175,9 +179,11 @@ class TestEmitDeprecationWarning:
     def test_emit_basic_warning(self, caplog):
         """Test basic deprecation warning emission."""
 
+        # Capture warnings and logs
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            with caplog.at_level(logging.WARNING):
+            # Capture logs from deprecation module
+            with caplog.at_level(logging.WARNING, logger="hud.utils.deprecation"):
                 emit_deprecation_warning("This is deprecated")
 
         # Check warning

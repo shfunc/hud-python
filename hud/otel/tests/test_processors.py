@@ -20,9 +20,14 @@ class TestHudEnrichmentProcessor:
         span.set_attribute = MagicMock()
         span.is_recording.return_value = True
 
-        # Mock context with run ID
-        with patch("hud.otel.processors.get_current_task_run_id", return_value="test-run-123"):
-            processor.on_start(span, parent_context=None)
+        # Mock baggage to return run ID
+        parent_context = {}
+        with patch("hud.otel.processors.baggage.get_baggage") as mock_get_baggage:
+            # Return run ID for task_run_id, None for job_id
+            mock_get_baggage.side_effect = (
+                lambda key, context: "test-run-123" if key == "hud.task_run_id" else None
+            )
+            processor.on_start(span, parent_context)
 
         # Verify attribute was set
         span.set_attribute.assert_called_with("hud.task_run_id", "test-run-123")
@@ -37,11 +42,12 @@ class TestHudEnrichmentProcessor:
         span.set_attribute = MagicMock()
         span.is_recording.return_value = True
 
-        # Mock context without run ID
-        with patch("hud.otel.processors.get_current_task_run_id", return_value=None):
-            processor.on_start(span, parent_context=None)
+        # Mock baggage to return None
+        parent_context = {}
+        with patch("hud.otel.processors.baggage.get_baggage", return_value=None):
+            processor.on_start(span, parent_context)
 
-        # Verify no task run ID attribute was set
+        # Verify no attributes were set
         span.set_attribute.assert_not_called()
 
     def test_on_end(self):
@@ -81,11 +87,13 @@ class TestHudEnrichmentProcessor:
         span.is_recording.return_value = True
 
         # Mock baggage with job ID
-        with (
-            patch("hud.otel.processors.baggage.get_baggage", return_value="job-123"),
-            patch("hud.otel.processors.get_current_task_run_id", return_value=None),
-        ):
-            processor.on_start(span, parent_context=None)
+        parent_context = {}
+        with patch("hud.otel.processors.baggage.get_baggage") as mock_get_baggage:
+            # Return None for task_run_id, job-123 for job_id
+            mock_get_baggage.side_effect = (
+                lambda key, context: "job-123" if key == "hud.job_id" else None
+            )
+            processor.on_start(span, parent_context)
 
         # Verify job ID attribute was set
         span.set_attribute.assert_called_with("hud.job_id", "job-123")
@@ -115,10 +123,10 @@ class TestHudEnrichmentProcessor:
 
         parent_context = {}
 
-        # Patch logger and other dependencies to force an exception
+        # Patch logger and baggage to force an exception when setting attribute
         with (
             patch("hud.otel.processors.logger") as mock_logger,
-            patch("hud.otel.processors.get_current_task_run_id", return_value="test-id"),
+            patch("hud.otel.processors.baggage.get_baggage", return_value="test-id"),
         ):
             # Should not raise, exception should be caught
             processor.on_start(mock_span, parent_context)
@@ -129,8 +137,8 @@ class TestHudEnrichmentProcessor:
             assert "HudEnrichmentProcessor.on_start error" in args[0]
             assert "Attribute error" in str(args[1])
 
-    def test_on_start_with_get_current_task_run_id_exception(self):
-        """Test exception handling when get_current_task_run_id fails."""
+    def test_on_start_with_baggage_get_exception(self):
+        """Test exception handling when baggage.get_baggage fails for task_run_id."""
         processor = HudEnrichmentProcessor()
 
         mock_span = MagicMock()
@@ -138,10 +146,10 @@ class TestHudEnrichmentProcessor:
 
         parent_context = {}
 
-        # Make get_current_task_run_id raise an exception
+        # Make baggage.get_baggage raise an exception for task_run_id
         with (
             patch(
-                "hud.otel.processors.get_current_task_run_id",
+                "hud.otel.processors.baggage.get_baggage",
                 side_effect=ValueError("Context error"),
             ),
             patch("hud.otel.processors.logger") as mock_logger,

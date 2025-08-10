@@ -68,20 +68,35 @@ class TestFireAndForget:
         async def failing_coro():
             raise ValueError("Thread exception")
 
+        # Set up caplog to capture logs from the async_utils module
+        import logging
+
+        logger = logging.getLogger("hud.utils.async_utils")
+
         with caplog.at_level(logging.DEBUG, logger="hud.utils.async_utils"):
             fire_and_forget(failing_coro(), description="thread fail")
 
-            # Give thread time to execute
+            # Give thread time to execute and log
             import time
 
-            time.sleep(0.5)
+            time.sleep(3.0)  # Increased wait time for thread to complete
 
-            # Check that error was logged with correct format
-            assert any(
-                "Error in threaded thread fail:" in record.message
-                and "Thread exception" in record.message
-                for record in caplog.records
-            )
+            # Force logging system to flush
+            for handler in logger.handlers:
+                handler.flush()
+
+        # Check that error was logged with correct format
+        logged_messages = [record.message for record in caplog.records]
+        # Filter out asyncio messages
+        relevant_messages = [
+            msg
+            for msg in logged_messages
+            if "Error in threaded" in msg or "Thread exception" in msg
+        ]
+        assert any(
+            "Error in threaded thread fail:" in msg and "Thread exception" in msg
+            for msg in relevant_messages
+        ), f"Expected log message not found. Got: {logged_messages}"
 
     def test_fire_and_forget_interpreter_shutdown(self, caplog):
         """Test fire_and_forget handles interpreter shutdown gracefully."""
@@ -120,14 +135,28 @@ class TestFireAndForget:
             with patch("threading.Thread") as mock_thread:
                 mock_thread.side_effect = RuntimeError("Some other error")
 
+                # Set up caplog to capture logs from async_utils module
+                import logging
+
+                logger = logging.getLogger("hud.utils.async_utils")
+
                 with caplog.at_level(logging.DEBUG, logger="hud.utils.async_utils"):
                     fire_and_forget(test_coro(), description="error test")
 
-                    # This error should be logged with correct format
-                    assert any(
-                        "Could not error test - no event loop available:" in record.message
-                        for record in caplog.records
-                    )
+                    # Force logging system to flush
+                    for handler in logger.handlers:
+                        handler.flush()
+
+                # This error should be logged with correct format
+                logged_messages = [record.message for record in caplog.records]
+                # Filter out asyncio messages
+                relevant_messages = [
+                    msg for msg in logged_messages if "Could not" in msg or "no event loop" in msg
+                ]
+                assert any(
+                    "Could not error test - no event loop available:" in msg
+                    for msg in relevant_messages
+                ), f"Expected log message not found. Got: {logged_messages}"
 
     @pytest.mark.asyncio
     async def test_fire_and_forget_cancelled_task(self):

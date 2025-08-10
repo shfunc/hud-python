@@ -295,7 +295,7 @@ class MCPAgent(ABC):
             Trace with reward from evaluation
         """
         prompt_result = None
-        
+
         try:
             # Setup phase
             if task.setup_tool is not None:
@@ -335,7 +335,6 @@ class MCPAgent(ABC):
                 last_result = None
                 for tool in eval_tools:
                     last_result = await self.call_tool(tool)
-                logger.info("Last result: %s", last_result)
 
                 # Extract reward and content from evaluation
                 if last_result:
@@ -346,13 +345,15 @@ class MCPAgent(ABC):
                     prompt_result.reward = reward
                     if eval_content:
                         prompt_result.content = eval_content
-                    
+
             except Exception as e:
                 logger.error("Evaluation phase failed: %s", e)
                 # Continue with the prompt result even if evaluation failed
 
-        return prompt_result if prompt_result else Trace(
-            reward=0.0, done=True, content="No result available", isError=True
+        return (
+            prompt_result
+            if prompt_result
+            else Trace(reward=0.0, done=True, content="No result available", isError=True)
         )
 
     def _format_error_result(self, error_message: str) -> MCPToolResult:
