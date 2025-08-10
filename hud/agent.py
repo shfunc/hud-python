@@ -294,6 +294,8 @@ class MCPAgent(ABC):
         Returns:
             Trace with reward from evaluation
         """
+        prompt_result = None
+
         try:
             # Setup phase
             if task.setup_tool is not None:
@@ -314,12 +316,15 @@ class MCPAgent(ABC):
             # Execute the task prompt
             prompt_result = await self.run_prompt(task.prompt, max_steps=max_steps)
 
-            # If prompt failed, return early
-            if prompt_result.isError:
-                return prompt_result
+        except Exception as e:
+            logger.error("Task execution failed: %s", e)
+            # Create an error result but don't return yet - we still want to evaluate
+            prompt_result = Trace(reward=0.0, done=True, content=str(e), isError=True)
+            prompt_result.populate_from_context()
 
-            # Evaluate phase
-            if task.evaluate_tool is not None:
+        # Always evaluate if we have a prompt result and evaluate tool
+        if prompt_result is not None and task.evaluate_tool is not None:
+            try:
                 logger.info("Evaluating tool phase: %s", task.evaluate_tool)
                 eval_tools = (
                     task.evaluate_tool
@@ -336,24 +341,20 @@ class MCPAgent(ABC):
                     reward = _find_reward(last_result)
                     eval_content = _find_content(last_result)
 
-                    result = Trace(
-                        reward=reward,
-                        done=True,
-                        content=eval_content or prompt_result.content,
-                        isError=False,
-                    )
-                    # Copy trace steps from prompt_result if available
-                    result.trace = prompt_result.trace
-                    return result
+                    # Update the prompt result with evaluation reward
+                    prompt_result.reward = reward
+                    if eval_content:
+                        prompt_result.content = eval_content
 
-            # No evaluation, return prompt result
-            return prompt_result
+            except Exception as e:
+                logger.error("Evaluation phase failed: %s", e)
+                # Continue with the prompt result even if evaluation failed
 
-        except Exception as e:
-            logger.error("Task execution failed: %s", e)
-            error_trace = Trace(reward=0.0, done=True, content=str(e), isError=True)
-            error_trace.populate_from_context()
-            return error_trace
+        return (
+            prompt_result
+            if prompt_result
+            else Trace(reward=0.0, done=True, content="No result available", isError=True)
+        )
 
     def _format_error_result(self, error_message: str) -> MCPToolResult:
         return MCPToolResult(

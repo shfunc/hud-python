@@ -1,7 +1,7 @@
 """Setup layer for 2048 environment.
 
 This module exposes:
-- ``setup_hub`` – the BaseHub instance for setup operations
+- ``setup_hub``, the BaseHub instance for setup operations
 """
 
 from __future__ import annotations

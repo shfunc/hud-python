@@ -68,20 +68,27 @@ class TestFireAndForget:
         async def failing_coro():
             raise ValueError("Thread exception")
 
-        with caplog.at_level(logging.DEBUG, logger="hud.utils.async_utils"):
+        # Patch the logger to capture the debug call
+        from unittest.mock import patch
+        import logging
+        
+        with patch("hud.utils.async_utils.logger") as mock_logger:
             fire_and_forget(failing_coro(), description="thread fail")
 
-            # Give thread time to execute
+            # Give thread time to execute and log
             import time
-
-            time.sleep(0.5)
+            time.sleep(0.5)  # Wait for thread to complete
 
             # Check that error was logged with correct format
+            mock_logger.debug.assert_called()
+            # Get the actual call arguments
+            calls = mock_logger.debug.call_args_list
             assert any(
-                "Error in threaded thread fail:" in record.message
-                and "Thread exception" in record.message
-                for record in caplog.records
-            )
+                call[0][0] == "Error in threaded %s: %s" and 
+                call[0][1] == "thread fail" and
+                "Thread exception" in str(call[0][2])
+                for call in calls
+            ), f"Expected log message not found in calls: {calls}"
 
     def test_fire_and_forget_interpreter_shutdown(self, caplog):
         """Test fire_and_forget handles interpreter shutdown gracefully."""
@@ -120,13 +127,15 @@ class TestFireAndForget:
             with patch("threading.Thread") as mock_thread:
                 mock_thread.side_effect = RuntimeError("Some other error")
 
-                with caplog.at_level(logging.DEBUG, logger="hud.utils.async_utils"):
+                # Patch the logger to capture the debug call
+                with patch("hud.utils.async_utils.logger") as mock_logger:
                     fire_and_forget(test_coro(), description="error test")
 
-                    # This error should be logged with correct format
-                    assert any(
-                        "Could not error test - no event loop available:" in record.message
-                        for record in caplog.records
+                    # Check that error was logged with correct format
+                    mock_logger.debug.assert_called_once_with(
+                        "Could not %s - no event loop available: %s",
+                        "error test",
+                        mock_thread.side_effect
                     )
 
     @pytest.mark.asyncio

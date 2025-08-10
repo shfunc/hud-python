@@ -59,7 +59,7 @@ class TestPyAutoGUIExecutor:
         executor = PyAutoGUIExecutor()
 
         with patch("pyautogui.typewrite") as mock_type:
-            result = await executor.type("Hello world")
+            result = await executor.write("Hello world")
 
             assert isinstance(result, ContentResult)
             assert result.output and "Typed" in result.output
