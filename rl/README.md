@@ -32,18 +32,21 @@ to install the environment from the cloned repo.
 Use the Verifiers CLI to run evaluations:
 
 ```bash
-# Basic evaluation with default Gmail taskset
-vf-eval hud_vf_gym --model gpt-4o-mini --num-examples 5
-
-# Specify custom taskset (Huggingface Dataset for HUD tasks)
+# Basic evaluation (both taskset and config_path are required)
 vf-eval hud_vf_gym \
     --model gpt-4o-mini \
-    --env-args '{"taskset": "hud-evals/gmail-taskset"}' \
+    --env-args '{"taskset": "hud-evals/gmail-taskset", "config_path": "./configs/default.yaml"}' \
+    --num-examples 5
+
+# Use 2048 game config
+vf-eval hud_vf_gym \
+    --model gpt-4o-mini \
+    --env-args '{"taskset": "hud-evals/2048-taskset", "config_path": "./configs/2048.yaml"}' \
     --num-examples 10
 
-# Use a custom config
+# Use a custom config with custom taskset
 vf-eval hud_vf_gym \
-    --env-args '{"config_path": "custom_config.yaml"}' \
+    --env-args '{"taskset": "your-org/your-taskset", "config_path": "custom_config.yaml"}' \
     --model gpt-4o-mini \
     --num-examples 5 \
     --rollouts-per-example 3
@@ -55,6 +58,7 @@ These might not work right now
 # Save evaluation results locally
 vf-eval hud_vf_gym \
     --model gpt-4o-mini \
+    --env-args '{"taskset": "hud-evals/gmail-taskset", "config_path": "./configs/default.yaml"}' \
     --num-examples 20 \
     --save-dataset \
     --save-path "./eval_results"
@@ -62,7 +66,7 @@ vf-eval hud_vf_gym \
 # Save to HuggingFace Hub
 vf-eval hud_vf_gym \
     --model gpt-4o-mini \
-    --env-args '{"taskset": "hud-evals/gmail-taskset", "num_tasks": 50}' \
+    --env-args '{"taskset": "hud-evals/gmail-taskset", "config_path": "./configs/default.yaml", "num_tasks": 50}' \
     --num-examples 50 \
     --save-to-hf-hub \
     --hf-hub-dataset-name "your-org/gmail-eval-results"
@@ -76,8 +80,11 @@ HUD Gym supports training with the GRPO (Group Relative Policy Optimization) tra
 from verifiers.trainers import GRPOTrainer, GRPOConfig
 from hud_vf_gym import load_environment
 
-# Load environment
-env = load_environment(taskset="hud-evals/gmail-taskset")
+# Load environment (both taskset and config_path are required)
+env = load_environment(
+    taskset="hud-evals/gmail-taskset",
+    config_path="./configs/default.yaml"
+)
 
 # Configure training
 config = GRPOConfig(
@@ -107,8 +114,12 @@ HUD VF Gym uses a config-driven architecture where each environment defines its 
 
 #### Available Configurations
 
-- `configs/default.yaml` - Browser/computer interaction environment
-- `configs/2048.yaml` - 2048 game environment
+The configuration files are now included in the hud-python/rl package:
+
+- `./configs/default.yaml` - Browser/computer interaction environment
+- `./configs/2048.yaml` - 2048 game environment
+
+Note: `config_path` is now required when creating environments. There is no default fallback.
 
 #### Configuration Structure
 
@@ -326,7 +337,7 @@ action_mappings:
 2. **Use the config**:
 ```bash
 vf-eval hud_vf_gym \
-    --env-args '{"config_path": "configs/my_env.yaml"}' \
+    --env-args '{"taskset": "your-org/your-taskset", "config_path": "configs/my_env.yaml"}' \
     --model gpt-4o-mini
 ```
 
