@@ -90,4 +90,4 @@ rubric:
 
 # Logging configuration
 logging:
-  level: "DEBUG"
+  level: "INFO"
