@@ -4,20 +4,17 @@
 
 ## Installation
 
-```bash
-# 1. Clone hud-vf-gym
-cd rl
-git clone -b v1 https://github.com/hud-evals/hud_vf_gym.git
+You can directly install hud-vf-gym in this workspace `hud/rl`
 
-# 2. Install hud-vf-gym in the environment
-uv add --editable ./hud_vf_gym
-```
-
-Note: we use this [fork](https://github.com/jdchawla29/verifiers.git) for multimodal support. Make sure your verifiers installation points to that.
 ```bash
-uv add "verifiers @ git+https://github.com/jdchawla29/verifiers"
+# Clone hud-vf-gym
+git clone https://github.com/hud-evals/hud_vf_gym.git
+
+# Install dependencies (we recommend using uv for managing python envs)
 uv sync
 ```
+
+Note: We use this [fork](https://github.com/jdchawla29/verifiers.git) of verifiers for multimodal support.
 
 then you can simply use Verifiers CLI
 
@@ -27,6 +24,8 @@ vf-install hud-vf-gym -p .
 
 to install the environment from the cloned repo.
 
+
+
 ## Running Evaluations
 
 Use the Verifiers CLI to run evaluations:
@@ -34,20 +33,20 @@ Use the Verifiers CLI to run evaluations:
 ```bash
 # Basic evaluation (both taskset and config_path are required)
 vf-eval hud_vf_gym \
-    --model gpt-4o-mini \
+    --model gpt-4.1-mini \
     --env-args '{"taskset": "hud-evals/gmail-taskset", "config_path": "./configs/default.yaml"}' \
     --num-examples 5
 
 # Use 2048 game config
 vf-eval hud_vf_gym \
-    --model gpt-4o-mini \
+    --model gpt-4.1-mini \
     --env-args '{"taskset": "hud-evals/2048-taskset", "config_path": "./configs/2048.yaml"}' \
     --num-examples 10
 
 # Use a custom config with custom taskset
 vf-eval hud_vf_gym \
     --env-args '{"taskset": "your-org/your-taskset", "config_path": "custom_config.yaml"}' \
-    --model gpt-4o-mini \
+    --model gpt-4.1-mini \
     --num-examples 5 \
     --rollouts-per-example 3
 ```
