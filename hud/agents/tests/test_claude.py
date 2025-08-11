@@ -158,130 +158,138 @@ class TestClaudeMCPAgent:
     @pytest.mark.asyncio
     async def test_get_model_response(self, mock_mcp_client, mock_anthropic):
         """Test getting model response from Claude API."""
-        agent = ClaudeMCPAgent(mcp_client=mock_mcp_client, model_client=mock_anthropic)
+        # Disable telemetry for this test to avoid backend configuration issues
+        with patch("hud.settings.settings.telemetry_enabled", False):
+            agent = ClaudeMCPAgent(mcp_client=mock_mcp_client, model_client=mock_anthropic)
 
-        # Mock the API response
-        mock_response = MagicMock()
+            # Mock the API response
+            mock_response = MagicMock()
 
-        # Create text block
-        text_block = MagicMock()
-        text_block.type = "text"
-        text_block.text = "Hello!"
+            # Create text block
+            text_block = MagicMock()
+            text_block.type = "text"
+            text_block.text = "Hello!"
 
-        # Create tool use block
-        tool_block = MagicMock()
-        tool_block.type = "tool_use"
-        tool_block.id = "tool_123"
-        tool_block.name = "test_tool"
-        tool_block.input = {"param": "value"}
+            # Create tool use block
+            tool_block = MagicMock()
+            tool_block.type = "tool_use"
+            tool_block.id = "tool_123"
+            tool_block.name = "test_tool"
+            tool_block.input = {"param": "value"}
 
-        mock_response.content = [text_block, tool_block]
-        mock_response.usage = MagicMock(input_tokens=10, output_tokens=20)
-        mock_anthropic.beta.messages.create = AsyncMock(return_value=mock_response)
+            mock_response.content = [text_block, tool_block]
+            mock_response.usage = MagicMock(input_tokens=10, output_tokens=20)
+            mock_anthropic.beta.messages.create = AsyncMock(return_value=mock_response)
 
-        messages = [
-            cast("BetaMessageParam", {"role": "user", "content": [{"type": "text", "text": "Hi"}]})
-        ]
-        response = await agent.get_model_response(messages)
+            messages = [
+                cast("BetaMessageParam", {"role": "user", "content": [{"type": "text", "text": "Hi"}]})
+            ]
+            response = await agent.get_model_response(messages)
 
-        assert response.content == "Hello!"
-        assert len(response.tool_calls) == 1
-        assert response.tool_calls[0].name == "test_tool"
-        assert response.tool_calls[0].arguments == {"param": "value"}
-        # The test was checking for Claude-specific attributes that aren't part of ModelResponse
-        # These would need to be accessed from the original Claude response if needed
+            assert response.content == "Hello!"
+            assert len(response.tool_calls) == 1
+            assert response.tool_calls[0].name == "test_tool"
+            assert response.tool_calls[0].arguments == {"param": "value"}
+            # The test was checking for Claude-specific attributes that aren't part of ModelResponse
+            # These would need to be accessed from the original Claude response if needed
 
-        # Verify API was called correctly
-        mock_anthropic.beta.messages.create.assert_called_once()
+            # Verify API was called correctly
+            mock_anthropic.beta.messages.create.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_get_model_response_text_only(self, mock_mcp_client, mock_anthropic):
         """Test getting text-only response."""
-        agent = ClaudeMCPAgent(mcp_client=mock_mcp_client, model_client=mock_anthropic)
+        # Disable telemetry for this test to avoid backend configuration issues
+        with patch("hud.settings.settings.telemetry_enabled", False):
+            agent = ClaudeMCPAgent(mcp_client=mock_mcp_client, model_client=mock_anthropic)
 
-        mock_response = MagicMock()
-        # Create text block
-        text_block = MagicMock()
-        text_block.type = "text"
-        text_block.text = "Just text"
-        mock_response.content = [text_block]
-        mock_response.usage = MagicMock(input_tokens=5, output_tokens=10)
-        mock_anthropic.beta.messages.create = AsyncMock(return_value=mock_response)
+            mock_response = MagicMock()
+            # Create text block
+            text_block = MagicMock()
+            text_block.type = "text"
+            text_block.text = "Just text"
+            mock_response.content = [text_block]
+            mock_response.usage = MagicMock(input_tokens=5, output_tokens=10)
+            mock_anthropic.beta.messages.create = AsyncMock(return_value=mock_response)
 
-        messages = [
-            cast("BetaMessageParam", {"role": "user", "content": [{"type": "text", "text": "Hi"}]})
-        ]
-        response = await agent.get_model_response(messages)
+            messages = [
+                cast("BetaMessageParam", {"role": "user", "content": [{"type": "text", "text": "Hi"}]})
+            ]
+            response = await agent.get_model_response(messages)
 
-        assert response.content == "Just text"
-        assert response.tool_calls == []
+            assert response.content == "Just text"
+            assert response.tool_calls == []
 
     @pytest.mark.asyncio
     async def test_get_model_response_error(self, mock_mcp_client, mock_anthropic):
         """Test handling API errors."""
-        agent = ClaudeMCPAgent(mcp_client=mock_mcp_client, model_client=mock_anthropic)
+        # Disable telemetry for this test to avoid backend configuration issues
+        with patch("hud.settings.settings.telemetry_enabled", False):
+            agent = ClaudeMCPAgent(mcp_client=mock_mcp_client, model_client=mock_anthropic)
 
-        # Mock API error
-        mock_anthropic.beta.messages.create = AsyncMock(
-            side_effect=BadRequestError(
-                message="Invalid request",
-                response=MagicMock(status_code=400),
-                body={"error": {"message": "Invalid request"}},
+            # Mock API error
+            mock_anthropic.beta.messages.create = AsyncMock(
+                side_effect=BadRequestError(
+                    message="Invalid request",
+                    response=MagicMock(status_code=400),
+                    body={"error": {"message": "Invalid request"}},
+                )
             )
-        )
 
-        messages = [{"role": "user", "content": [{"type": "text", "text": "Hi"}]}]
+            messages = [{"role": "user", "content": [{"type": "text", "text": "Hi"}]}]
 
-        with pytest.raises(BadRequestError):
-            await agent.get_model_response(messages)  # type: ignore
+            with pytest.raises(BadRequestError):
+                await agent.get_model_response(messages)  # type: ignore
 
     @pytest.mark.asyncio
     async def test_run_with_tools(self, mock_mcp_client, mock_anthropic):
         """Test running agent with tool usage."""
-        agent = ClaudeMCPAgent(mcp_client=mock_mcp_client, model_client=mock_anthropic)
+        # Disable telemetry for this test to avoid backend configuration issues
+        with patch("hud.settings.settings.telemetry_enabled", False):
+            agent = ClaudeMCPAgent(mcp_client=mock_mcp_client, model_client=mock_anthropic)
 
-        # Mock tool availability
-        agent._available_tools = [
-            types.Tool(name="calculator", description="Calculator", inputSchema={"type": "object"})
-        ]
-        agent._tool_map = {
-            "calculator": types.Tool(
-                name="calculator", description="Calculator", inputSchema={"type": "object"}
+            # Mock tool availability
+            agent._available_tools = [
+                types.Tool(name="calculator", description="Calculator", inputSchema={"type": "object"})
+            ]
+            agent._tool_map = {
+                "calculator": types.Tool(
+                    name="calculator", description="Calculator", inputSchema={"type": "object"}
+                )
+            }
+
+            # Mock initial response with tool use
+            initial_response = MagicMock()
+            # Create tool use block
+            tool_block = MagicMock()
+            tool_block.type = "tool_use"
+            tool_block.id = "calc_123"
+            tool_block.name = "calculator"
+            tool_block.input = {"operation": "add", "a": 2, "b": 3}
+            initial_response.content = [tool_block]
+            initial_response.usage = MagicMock(input_tokens=10, output_tokens=15)
+
+            # Mock follow-up response
+            final_response = MagicMock()
+            text_block = MagicMock()
+            text_block.type = "text"
+            text_block.text = "2 + 3 = 5"
+            final_response.content = [text_block]
+            final_response.usage = MagicMock(input_tokens=20, output_tokens=10)
+
+            mock_anthropic.beta.messages.create = AsyncMock(
+                side_effect=[initial_response, final_response]
             )
-        }
 
-        # Mock initial response with tool use
-        initial_response = MagicMock()
-        # Create tool use block
-        tool_block = MagicMock()
-        tool_block.type = "tool_use"
-        tool_block.id = "calc_123"
-        tool_block.name = "calculator"
-        tool_block.input = {"operation": "add", "a": 2, "b": 3}
-        initial_response.content = [tool_block]
-        initial_response.usage = MagicMock(input_tokens=10, output_tokens=15)
-
-        # Mock follow-up response
-        final_response = MagicMock()
-        text_block = MagicMock()
-        text_block.type = "text"
-        text_block.text = "2 + 3 = 5"
-        final_response.content = [text_block]
-        final_response.usage = MagicMock(input_tokens=20, output_tokens=10)
-
-        mock_anthropic.beta.messages.create = AsyncMock(
-            side_effect=[initial_response, final_response]
-        )
-
-        # Mock tool execution
-        agent.mcp_client.call_tool = AsyncMock(
-            return_value=types.CallToolResult(
-                content=[types.TextContent(type="text", text="5")], isError=False
+            # Mock tool execution
+            agent.mcp_client.call_tool = AsyncMock(
+                return_value=types.CallToolResult(
+                    content=[types.TextContent(type="text", text="5")], isError=False
+                )
             )
-        )
 
-        # Use a string prompt instead of a task
-        result = await agent.run("What is 2 + 3?")
+            # Use a string prompt instead of a task
+            result = await agent.run("What is 2 + 3?")
 
-        assert result.content == "2 + 3 = 5"
-        assert result.done is True
+            assert result.content == "2 + 3 = 5"
+            assert result.done is True
