@@ -17,17 +17,17 @@ The entire flow is wrapped in hud.trace() to provide RUN_ID context.
 import asyncio
 import hud
 from hud.datasets import TaskConfig
-from hud.mcp import ClaudeMCPAgent
-from hud.mcp.client import MCPClient
+from hud.agents import ClaudeMCPAgent
+from hud.clients import MCPClient
 
 
 async def main():
     # Wrap everything in trace to provide RUN_ID for the task
     with hud.trace("Agent Lifecycle Demo"):
         # Define a complete task with setup and evaluation
-        task = TaskConfig(
-            prompt="Create a new todo item with the title 'Buy groceries' and description 'Milk, eggs, bread'",
-            mcp_config={
+        task_dict = {
+            "prompt": "Create a new todo item with the title 'Buy groceries' and description 'Milk, eggs, bread'",
+            "mcp_config": {
                 "hud": {
                     "url": "https://mcp.hud.so/v3/mcp",
                     "headers": {
@@ -37,9 +37,10 @@ async def main():
                     },
                 }
             },
-            setup_tool={"name": "setup", "arguments": {"name": "todo_creation_test"}},
-            evaluate_tool={"name": "evaluate", "arguments": {"name": "todo_creation_test"}},
-        )
+            "setup_tool": {"name": "setup", "arguments": {"name": "todo_creation_test"}},
+            "evaluate_tool": {"name": "evaluate", "arguments": {"name": "todo_creation_test"}},
+        }
+        task = TaskConfig(**task_dict)
 
         # Create MCP client with resolved config
         client = MCPClient(mcp_config=task.mcp_config)
@@ -60,10 +61,7 @@ async def main():
             # Phase 2: Run setup tool
             print("📋 Running setup...")
             setup_result = await agent.call_tool(task.setup_tool)
-            if setup_result.isError:
-                print(f"❌ Setup failed: {setup_result.content}")
-                return
-            print(f"✅ Setup complete")
+            print("✅ Setup complete")
 
             # Phase 3: Run agent loop
             print(f"\n🤖 Running task: {task.prompt}")
@@ -121,7 +119,7 @@ async def main():
                 print(f"✅ Evaluation complete - Reward: {reward}")
 
             # Summary
-            print(f"\n📈 Summary:")
+            print("\n📈 Summary:")
             print(f"   Total steps: {steps}")
             print(f"   Task completed: {done}")
 

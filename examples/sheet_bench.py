@@ -9,7 +9,7 @@ Prerequisites:
 
 import asyncio
 import hud
-from hud.agents.claude import ClaudeMCPAgent
+from hud.agents import ClaudeMCPAgent
 from hud.clients import MCPClient
 from datasets import load_dataset
 from hud.datasets import to_taskconfigs

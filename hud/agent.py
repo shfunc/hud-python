@@ -189,6 +189,21 @@ class MCPAgent(ABC):
             logger.debug("Tool '%s' completed successfully", tool_name)
 
         return result
+        
+    async def execute_tools(self, tool_calls: MCPToolCall | list[MCPToolCall]) -> list[MCPToolResult]:
+        """Execute a list of tools with error handling."""
+        if isinstance(tool_calls, MCPToolCall):
+            tool_calls = [tool_calls]
+
+        results: list[MCPToolResult] = []
+        for tool_call in tool_calls:
+            try:
+                logger.info("Calling tool: %s", tool_call)
+                results.append(await self.call_tool(tool_call))
+            except Exception as e:
+                logger.error("Tool execution failed: %s", e)
+                results.append(self._format_error_result(str(e)))
+        return results
 
     def has_computer_tools(self) -> bool:
         """Check if any computer control tools are available."""
@@ -302,18 +317,9 @@ class MCPAgent(ABC):
             # Setup phase
             if task.setup_tool is not None:
                 logger.info("Setting up tool phase: %s", task.setup_tool)
-                setup_tools = (
-                    task.setup_tool if isinstance(task.setup_tool, list) else [task.setup_tool]
-                )
-
-                for tool in setup_tools:
-                    result = await self.call_tool(tool)
-                    if result.isError:
-                        error_msg = ""
-                        for content in result.content:
-                            if isinstance(content, types.TextContent):
-                                error_msg += content.text
-                        raise RuntimeError(f"{error_msg}")
+                results = await self.execute_tools(task.setup_tool)
+                if any(result.isError for result in results):
+                    raise RuntimeError(f"{results}")
 
             # Execute the task prompt
             prompt_result = await self.run_prompt(task.prompt, max_steps=max_steps)
@@ -328,20 +334,15 @@ class MCPAgent(ABC):
         if prompt_result is not None and task.evaluate_tool is not None:
             try:
                 logger.info("Evaluating tool phase: %s", task.evaluate_tool)
-                eval_tools = (
-                    task.evaluate_tool
-                    if isinstance(task.evaluate_tool, list)
-                    else [task.evaluate_tool]
-                )
+                results = await self.execute_tools(task.evaluate_tool)
 
-                last_result = None
-                for tool in eval_tools:
-                    last_result = await self.call_tool(tool)
+                if any(result.isError for result in results):
+                    raise RuntimeError(f"{results}")
 
                 # Extract reward and content from evaluation
-                if last_result:
-                    reward = _find_reward(last_result)
-                    eval_content = _find_content(last_result)
+                if results:
+                    reward = _find_reward(results[0])
+                    eval_content = _find_content(results[0])
 
                     # Update the prompt result with evaluation reward
                     prompt_result.reward = reward
@@ -410,7 +411,7 @@ class MCPAgent(ABC):
 
                     # 2. Execute tools
                     tool_calls = response.tool_calls
-                    tool_results = await self.execute_tools(tool_calls=tool_calls)
+                    tool_results = await self.execute_tools(tool_calls)
 
                     # 3. Format tool results and add to messages
                     tool_messages = await self.format_tool_results(tool_calls, tool_results)
@@ -505,31 +506,6 @@ class MCPAgent(ABC):
             Formatted user message
         """
         return {"role": "user", "content": text}
-
-    @hud.instrument(
-        span_type="agent",
-        record_args=True,
-        record_result=False,  # Results can be large
-    )
-    async def execute_tools(self, *, tool_calls: list[MCPToolCall]) -> list[MCPToolResult]:
-        """
-        Execute a list of tool calls.
-
-        Args:
-            tool_calls: List of tool calls to execute
-
-        Returns:
-            List of tool results
-        """
-        results: list[MCPToolResult] = []
-        for tool_call in tool_calls:
-            try:
-                logger.info("Calling tool: %s", tool_call)
-                results.append(await self.call_tool(tool_call))
-            except Exception as e:
-                logger.error("Tool execution failed: %s", e)
-                results.append(self._format_error_result(str(e)))
-        return results
 
 
 def _find_reward(result: MCPToolResult) -> float:

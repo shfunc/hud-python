@@ -14,23 +14,20 @@ multi-step reasoning tasks.
 
 import asyncio
 import hud
-from hud.mcp import ClaudeMCPAgent
-from hud.mcp.client import MCPClient
-from datasets import load_dataset
+from hud.agents import ClaudeMCPAgent
+from hud.clients import MCPClient
+from hud.settings import settings
 
 
 async def main():
-    # Load the dataset
-    dataset = load_dataset("hud-evals/sheetbench-taskconfigs")
-
-    with hud.trace("Claude Agent Demo"):
+    with hud.trace("Claude Agent Demo") as run_id:
         mcp_config = {
             "hud": {
                 "url": "https://mcp.hud.so/v3/mcp",
                 "headers": {
-                    "Authorization": "Bearer ${HUD_API_KEY}",
+                    "Authorization": f"Bearer {settings.api_key}",
                     "Mcp-Image": "hudpython/hud-remote-browser:latest",
-                    "Run-Id": "${RUN_ID}",
+                    "Run-Id": run_id,
                 },
             }
         }
@@ -44,14 +41,14 @@ async def main():
             initial_screenshot=True,
         )
 
-        try:
-            print("🤖 Claude Agent Example")
-            print("=" * 50)
+        await client.initialize()
 
-            # Complex multi-step task that benefits from Claude's reasoning
-            task = """
+        try:
+            initial_url = "https://httpbin.org/forms/post"
+
+            prompt = f"""
             Please help me test a web form:
-            1. Navigate to https://httpbin.org/forms/post
+            1. Navigate to {initial_url}
             2. Fill in the customer name as "Claude Test"
             3. Enter the telephone as "555-0123"
             4. Type "Testing form submission with Claude" in the comments
@@ -65,29 +62,14 @@ async def main():
             print(f"📋 Task: Multi-step form interaction")
             print(f"🚀 Running Claude agent...\n")
 
+            await client.call_tool(
+                "setup", {"name": "navigate_to_url", "arguments": {"url": initial_url}}
+            )
+
             # Run the task
-            result = await agent.run(task, max_steps=15)
+            result = await agent.run(prompt, max_steps=15)
 
-            # Claude-specific: Access thinking/reasoning if available
-            if hasattr(result, "messages"):
-                for msg in result.messages:
-                    if hasattr(msg, "content") and isinstance(msg.content, str):
-                        if "thinking:" in msg.content.lower():
-                            print(f"\n💭 Claude's reasoning: {msg.content}")
-
-            print(f"\n✅ Task completed!")
-            print(f"   Success: {result.done}")
-            print(f"   Total steps: {len(result.tool_calls)}")
-
-            # Show tool usage summary
-            tool_summary = {}
-            for call in result.tool_calls:
-                tool_name = call.name
-                tool_summary[tool_name] = tool_summary.get(tool_name, 0) + 1
-
-            print(f"\n📊 Tool usage:")
-            for tool, count in tool_summary.items():
-                print(f"   - {tool}: {count} calls")
+            print(result)
 
         finally:
             await client.close()
