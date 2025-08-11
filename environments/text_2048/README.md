@@ -52,8 +52,8 @@ The agent will play 2048 and try to reach a target tile using the available tool
 ## Available Tools
 
 - **move** - Slide tiles: `move(direction="up|down|left|right")`
-- **setup** - Initialize game: `setup(function="game_2048", args={"board_size": 4})`
-- **evaluate** - Check progress: `evaluate(function="max_number|efficiency")`
+- **setup** - Initialize game: `setup(name="board", arguments={"board_size": 4})`
+- **evaluate** - Check progress: `evaluate(name="max_number|efficiency")`
 
 ## Development Mode
 

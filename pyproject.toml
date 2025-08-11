@@ -15,7 +15,7 @@ dependencies = [
     "pydantic-settings>=2,<3",
     # MCP dependencies
     "fastmcp>=2.11.2",
-    "mcp>=1.12.2",
+    "mcp @ git+https://github.com/hud-evals/mcp-python-sdk.git",
     "mcp-use @ git+https://github.com/hud-evals/mcp-use.git",
     "pathspec>=0.12.1",
     "wrapt>=1.14.0",
@@ -33,6 +33,9 @@ dependencies = [
     # Common utilities
     "dotenv>=0.9.9",
     "datasets>=2.14.0",
+    # CLI dependencies
+    "typer>=0.9.0",
+    "rich>=13.0.0",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -47,6 +50,9 @@ classifiers = [
 "Homepage" = "https://github.com/hud-evals/hud-python"
 "Bug Tracker" = "https://github.com/hud-evals/hud-python/issues"
 "Documentation" = "https://docs.hud.so"
+
+[project.scripts]
+hud = "hud.cli:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -128,6 +134,7 @@ lint.extend-select = [
 lint.ignore = [
     "ANN401", # Allow Any.
     "W293",   # Ignore blank line contains whitespace
+    "PLC0415", # Allow function-local imports.
 ]
 
 [tool.ruff.lint.extend-per-file-ignores]
