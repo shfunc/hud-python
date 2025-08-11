@@ -280,30 +280,42 @@ class TestRunDatasetExtended:
     @pytest.mark.asyncio
     async def test_run_dataset_exception_handling(self):
         """Test exception handling during task execution."""
-        from hud.agent import MCPAgent
+        # Track execution
+        executed_tasks = []
 
-        mock_agent_instance = AsyncMock()
+        # Create mock agent instances with proper run behavior
+        mock_agents = []
+        for i in range(3):
+            agent = AsyncMock()
+            if i == 1:  # Second task should fail
+                agent.run.side_effect = RuntimeError("Task 2 failed")
+            else:
+                agent.run.return_value = {"result": f"success-{i + 1}"}
+            mock_agents.append(agent)
 
-        mock_agent_class = type(
-            "MockAgent",
-            (MCPAgent,),
-            {
-                "__init__": lambda self, **kwargs: None,
-                "__new__": lambda cls, **kwargs: mock_agent_instance,
-            },
-        )
+        # Create a mock agent class that returns our prepared instances
+        agent_creation_count = 0
 
-        # Make second task fail
-        call_count = 0
+        def create_mock_agent(**kwargs):
+            nonlocal agent_creation_count
+            agent = mock_agents[agent_creation_count]
+            agent_creation_count += 1
 
-        async def mock_run(task):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 2:
-                raise RuntimeError("Task 2 failed")
-            return {"result": f"success-{call_count}"}
+            # Track when run is called
+            original_run = agent.run
 
-        mock_agent_instance.run.side_effect = mock_run
+            async def tracked_run(*args, **kwargs):
+                executed_tasks.append(agent_creation_count - 1)
+                return await original_run(*args, **kwargs)
+
+            agent.run = tracked_run
+
+            return agent
+
+        # Mock the agent class itself
+        mock_agent_class = MagicMock()
+        mock_agent_class.side_effect = create_mock_agent
+        mock_agent_class.__name__ = "MockAgent"
 
         tasks = [TaskConfig(prompt=f"Task {i}", mcp_config={"url": f"test{i}"}) for i in range(3)]
 
@@ -323,10 +335,15 @@ class TestRunDatasetExtended:
             # Should complete without raising
             results = await run_dataset("error_run", tasks, mock_agent_class)  # type: ignore
 
+            # All tasks should be attempted
+            assert len(executed_tasks) == 3
+            assert executed_tasks == [0, 1, 2]
+
             # First and third should succeed
             assert results[0] == {"result": "success-1"}
             assert results[2] == {"result": "success-3"}
-            # Second result depends on implementation details
+            # Second result should be None due to exception
+            assert results[1] is None
 
     @pytest.mark.asyncio
     async def test_run_dataset_client_cleanup(self):

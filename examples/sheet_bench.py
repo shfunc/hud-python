@@ -52,14 +52,14 @@ async def run_sheetbench_dataset():
     # Load the dataset
     print("📊 Loading SheetBench dataset...")
     dataset = load_dataset("hud-evals/SheetBench-50", split="train")
-    
+
     # Define agent configuration
     agent_config = {
         "model": "claude-sonnet-4-20250514",
         "allowed_tools": ["anthropic_computer"],
         "initial_screenshot": True,
     }
-    
+
     # Run the dataset
     print("🚀 Running SheetBench dataset evaluation...")
     results = await run_dataset(
@@ -72,9 +72,9 @@ async def run_sheetbench_dataset():
             "dataset": "SheetBench-50",
             "split": "train",
         },
-        max_steps=100,
+        max_steps=150,
     )
-    
+
     # Process results
     print("\n📈 Results Summary:")
     rewards = [r.reward for r in results if r is not None]
@@ -86,14 +86,14 @@ async def run_sheetbench_dataset():
         print(f"  Max reward: {max(rewards):.2f}")
     else:
         print("  No successful tasks completed.")
-    
+
     return results
 
 
 async def main():
     """Main entry point - choose which function to run."""
     import sys
-    
+
     if len(sys.argv) > 1 and sys.argv[1] == "dataset":
         # Run the entire dataset
         await run_sheetbench_dataset()

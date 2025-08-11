@@ -624,6 +624,7 @@ class TestMCPAgentExtended:
         assert isinstance(result, Trace)
         assert result.isError
         # Error content is the string representation of the MCPToolResult list
+        assert result.content is not None
         assert "Setup failed" in result.content
         assert "MCPToolResult" in result.content
 
