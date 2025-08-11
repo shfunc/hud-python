@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any
 
 import mcp.types as types
 
+import hud
+
 from .types import AgentResponse, MCPToolCall, MCPToolResult, Trace
 
 if TYPE_CHECKING:
@@ -463,6 +465,9 @@ class MCPAgent(ABC):
         """
         Get response from the model including any tool calls.
 
+        NOTE: Subclasses should decorate this method with:
+            @hud.instrument(span_type="agent", record_args=False, record_result=True)
+
         Args:
             messages: Current conversation messages
 
@@ -501,6 +506,11 @@ class MCPAgent(ABC):
         """
         return {"role": "user", "content": text}
 
+    @hud.instrument(
+        span_type="agent",
+        record_args=True,
+        record_result=False,  # Results can be large
+    )
     async def execute_tools(self, *, tool_calls: list[MCPToolCall]) -> list[MCPToolResult]:
         """
         Execute a list of tool calls.

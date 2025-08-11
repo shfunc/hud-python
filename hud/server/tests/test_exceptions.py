@@ -87,7 +87,7 @@ class TestHudRequestError:
 
     def test_str_method(self):
         """Test string representation of HudRequestError."""
-        error = HudRequestError("Test error message", 404, {"extra": "data"})
+        error = HudRequestError("Test error message", 404, '{"extra": "data"}')
 
         error_str = str(error)
         assert "Test error message" in error_str

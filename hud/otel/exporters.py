@@ -79,33 +79,17 @@ def extract_span_attributes(
     # Note: The input attrs might already have "category" set
     existing_category = attrs.get("category")
 
-    if existing_category == "mcp":
-        result_attrs["category"] = "mcp"
-    elif existing_category == "agent":
+    if existing_category:
+        # Use the explicit category if provided
+        result_attrs["category"] = existing_category
+    elif span_name and span_name.startswith("agent."):
+        # Legacy support for spans named "agent.*"
         result_attrs["category"] = "agent"
-    elif (
-        "agent_request" in attrs
-        or "agent_response" in attrs
-        or (span_name and span_name.startswith("agent."))
-    ):
-        result_attrs["category"] = "agent"  # TraceStep expects category field
     else:
         result_attrs["category"] = "mcp"  # Default to MCP
 
-    # Process agent attributes if it's an agent span
-    if result_attrs["category"] == "agent":
-        if "agent_request" in attrs:
-            agent_req = attrs["agent_request"]
-            if isinstance(agent_req, str):
-                with contextlib.suppress(json.JSONDecodeError):
-                    agent_req = json.loads(agent_req)
-            result_attrs["agent_request"] = agent_req
-        if "agent_response" in attrs:
-            agent_resp = attrs["agent_response"]
-            if isinstance(agent_resp, str):
-                with contextlib.suppress(json.JSONDecodeError):
-                    agent_resp = json.loads(agent_resp)
-            result_attrs["agent_response"] = agent_resp
+    # No special processing needed for different categories
+    # The backend will handle them based on the category field
 
     # Add method_name and request_id for MCP spans
     if result_attrs["category"] == "mcp":
@@ -131,82 +115,64 @@ def extract_span_attributes(
         bool(output_str),
     )
 
-    # Try to parse as MCP types (only for MCP spans)
-    if result_attrs["category"] == "mcp":
-        logger.debug(
-            "Processing MCP span with input_str: %s...",
-            input_str[:100] if input_str else None,
-        )
-        if input_str:
-            try:
-                input_data = json.loads(input_str) if isinstance(input_str, str) else input_str
-                logger.debug(
-                    "Parsed input_data type: %s, has method: %s",
-                    type(input_data),
-                    "method" in input_data if isinstance(input_data, dict) else False,
-                )
-                if isinstance(input_data, dict):
-                    # Create a ClientRequest and extract its root
-                    try:
-                        # ClientRequest expects the full request structure with method
-                        if "method" in input_data and "params" in input_data:
-                            # This is already in the correct format
-                            logger.debug(
-                                "Attempting to validate ClientRequest with method: %s",
-                                input_data.get("method"),
-                            )
-                            client_request = ClientRequest.model_validate(input_data)
-                            # Store the root of the RootModel, which is the actual request
-                            result_attrs["mcp_request"] = client_request.root
-                            logger.debug(
-                                "Successfully parsed ClientRequest: %s",
-                                type(client_request.root).__name__,
-                            )
-                        else:
-                            # If it's just params, we can't create a proper request
-                            logger.debug("No method/params found, storing raw data")
-                            result_attrs["mcp_request"] = input_data
-                    except Exception as e:
-                        logger.debug("Failed to parse request as MCP type: %s", e)
-                        # Fallback: store the raw data
-                        result_attrs["mcp_request"] = input_data
-                        logger.debug("Stored raw data as fallback")
-            except Exception as e:
-                logger.debug("Failed to parse request JSON: %s", e)
+    # Check for direct request/result attributes first
+    if "request" in attrs and not result_attrs.get("request"):
+        req = attrs["request"]
+        if isinstance(req, str):
+            with contextlib.suppress(json.JSONDecodeError):
+                req = json.loads(req)
+        result_attrs["request"] = req
 
-        logger.debug(
-            "Processing MCP span with output_str: %s...",
-            output_str[:100] if output_str else None,
-        )
-        if output_str:
-            try:
-                output_data = json.loads(output_str) if isinstance(output_str, str) else output_str
-                logger.debug("Parsed output_data type: %s", type(output_data))
-                if isinstance(output_data, dict):
-                    # Check for error first
-                    if "error" in output_data:
-                        result_attrs["mcp_error"] = True
+    if "result" in attrs and not result_attrs.get("result"):
+        res = attrs["result"]
+        if isinstance(res, str):
+            with contextlib.suppress(json.JSONDecodeError):
+                res = json.loads(res)
+        result_attrs["result"] = res
+
+    # Process input/output from MCP instrumentation
+    if input_str and not result_attrs.get("request"):
+        try:
+            input_data = json.loads(input_str) if isinstance(input_str, str) else input_str
+
+            # For MCP category, try to parse as ClientRequest to extract the root
+            if result_attrs["category"] == "mcp" and isinstance(input_data, dict):
+                try:
+                    if "method" in input_data and "params" in input_data:
+                        client_request = ClientRequest.model_validate(input_data)
+                        result_attrs["request"] = client_request.root
                     else:
-                        # Create a ServerResult and extract its root
-                        try:
-                            logger.debug("Attempting to validate ServerResult")
-                            server_result = ServerResult.model_validate(output_data)
-                            # Store the root of the RootModel, which is the actual result
-                            result_attrs["mcp_result"] = server_result.root
-                            logger.debug(
-                                "Successfully parsed ServerResult: %s",
-                                type(server_result.root).__name__,
-                            )
-                            # Check for isError in the result
-                            if getattr(server_result.root, "isError", False):
-                                result_attrs["mcp_error"] = True
-                        except Exception as e:
-                            logger.debug("Failed to parse result as MCP type: %s", e)
-                            # Fallback: store the raw data
-                            result_attrs["mcp_result"] = output_data
-                            logger.debug("Stored raw result data as fallback")
-            except Exception as e:
-                logger.debug("Failed to parse result JSON: %s", e)
+                        result_attrs["request"] = input_data
+                except Exception:
+                    result_attrs["request"] = input_data
+            else:
+                # For all other categories, just store the data
+                result_attrs["request"] = input_data
+        except Exception as e:
+            logger.debug("Failed to parse request JSON: %s", e)
+
+    if output_str and not result_attrs.get("result"):
+        try:
+            output_data = json.loads(output_str) if isinstance(output_str, str) else output_str
+
+            # For MCP category, try to parse as ServerResult to extract the root
+            if result_attrs["category"] == "mcp" and isinstance(output_data, dict):
+                # Check for error
+                if "error" in output_data:
+                    result_attrs["mcp_error"] = True
+                try:
+                    server_result = ServerResult.model_validate(output_data)
+                    result_attrs["result"] = server_result.root
+                    # Check for isError in the result
+                    if getattr(server_result.root, "isError", False):
+                        result_attrs["mcp_error"] = True
+                except Exception:
+                    result_attrs["result"] = output_data
+            else:
+                # For all other categories, just store the data
+                result_attrs["result"] = output_data
+        except Exception as e:
+            logger.debug("Failed to parse result JSON: %s", e)
 
     # Don't include the verbose attributes or ones we've already processed
     exclude_keys = {
@@ -221,12 +187,11 @@ def extract_span_attributes(
         "semconv_ai.traceloop.entity.output",
         "traceloop.entity.input",  # Also exclude non-prefixed versions
         "traceloop.entity.output",
-        "agent_request",
-        "agent_response",
-        "agent.provider",
-        "agent.model",
         "mcp_request",  # Exclude to prevent overwriting parsed values
         "mcp_result",  # Exclude to prevent overwriting parsed values
+        "request",  # Exclude to prevent overwriting parsed values
+        "result",  # Exclude to prevent overwriting parsed values
+        "category",  # Already handled above
     }
 
     # Add any extra attributes
@@ -236,10 +201,10 @@ def extract_span_attributes(
 
     logger.debug(
         """Final result_attrs before creating HudSpanAttributes:
-        mcp_request=%s,
-        mcp_result=%s""",
-        result_attrs.get("mcp_request"),
-        result_attrs.get("mcp_result"),
+        request=%s,
+        result=%s""",
+        result_attrs.get("request"),
+        result_attrs.get("result"),
     )
     return HudSpanAttributes(**result_attrs)
 

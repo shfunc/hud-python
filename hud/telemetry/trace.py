@@ -58,8 +58,17 @@ def trace(
     # Ensure telemetry is configured
     configure_telemetry()
 
-    # Always auto-generate a task_run_id
-    task_run_id = str(uuid.uuid4())
+    # Only generate task_run_id if using HUD backend
+    # For custom OTLP backends, we don't need it
+    from hud.settings import get_settings
+
+    settings = get_settings()
+
+    if settings.telemetry_enabled and settings.api_key:
+        task_run_id = str(uuid.uuid4())
+    else:
+        # Use a placeholder for custom backends
+        task_run_id = "custom-otlp-trace"
 
     # Delegate to OpenTelemetry implementation
     with OtelTrace(

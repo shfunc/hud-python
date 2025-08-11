@@ -245,6 +245,8 @@ class PlaywrightTool(BaseTool):
             Dict with navigation result
         """
         await self._ensure_browser()
+        if self.page is None:
+            raise RuntimeError("Page not initialized after _ensure_browser")
 
         logger.info("Navigating to %s", url)
         try:
@@ -273,6 +275,8 @@ class PlaywrightTool(BaseTool):
             ToolResult with base64_image
         """
         await self._ensure_browser()
+        if self.page is None:
+            raise RuntimeError("Page not initialized after _ensure_browser")
 
         try:
             # Always return base64 encoded screenshot as ToolResult
@@ -301,6 +305,8 @@ class PlaywrightTool(BaseTool):
             Dict with click result
         """
         await self._ensure_browser()
+        if self.page is None:
+            raise RuntimeError("Page not initialized after _ensure_browser")
 
         try:
             await self.page.click(selector, button=button, click_count=count)
@@ -324,6 +330,8 @@ class PlaywrightTool(BaseTool):
             Dict with type result
         """
         await self._ensure_browser()
+        if self.page is None:
+            raise RuntimeError("Page not initialized after _ensure_browser")
 
         try:
             await self.page.fill(selector, text)
@@ -343,6 +351,8 @@ class PlaywrightTool(BaseTool):
             Dict with page info
         """
         await self._ensure_browser()
+        if self.page is None:
+            raise RuntimeError("Page not initialized after _ensure_browser")
 
         try:
             url = self.page.url
@@ -367,6 +377,8 @@ class PlaywrightTool(BaseTool):
             Dict with wait result
         """
         await self._ensure_browser()
+        if self.page is None:
+            raise RuntimeError("Page not initialized after _ensure_browser")
 
         try:
             await self.page.wait_for_selector(selector, timeout=30000)

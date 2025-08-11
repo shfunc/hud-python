@@ -11,6 +11,8 @@ from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from mcp_use.adapters.langchain_adapter import LangChainAdapter
 
+import hud
+
 if TYPE_CHECKING:
     from langchain.schema.language_model import BaseLanguageModel
     from langchain_core.tools import BaseTool
@@ -91,6 +93,11 @@ class LangChainMCPAgent(MCPAgent):
 
         return messages
 
+    @hud.instrument(
+        span_type="agent",
+        record_args=False,  # Messages can be large
+        record_result=True,
+    )
     async def get_model_response(self, messages: list[BaseMessage]) -> AgentResponse:
         """Get response from LangChain model including any tool calls."""
         # Get LangChain tools (created lazily)

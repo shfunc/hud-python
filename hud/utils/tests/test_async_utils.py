@@ -70,13 +70,13 @@ class TestFireAndForget:
 
         # Patch the logger to capture the debug call
         from unittest.mock import patch
-        import logging
-        
+
         with patch("hud.utils.async_utils.logger") as mock_logger:
             fire_and_forget(failing_coro(), description="thread fail")
 
             # Give thread time to execute and log
             import time
+
             time.sleep(0.5)  # Wait for thread to complete
 
             # Check that error was logged with correct format
@@ -84,9 +84,9 @@ class TestFireAndForget:
             # Get the actual call arguments
             calls = mock_logger.debug.call_args_list
             assert any(
-                call[0][0] == "Error in threaded %s: %s" and 
-                call[0][1] == "thread fail" and
-                "Thread exception" in str(call[0][2])
+                call[0][0] == "Error in threaded %s: %s"
+                and call[0][1] == "thread fail"
+                and "Thread exception" in str(call[0][2])
                 for call in calls
             ), f"Expected log message not found in calls: {calls}"
 
@@ -135,7 +135,7 @@ class TestFireAndForget:
                     mock_logger.debug.assert_called_once_with(
                         "Could not %s - no event loop available: %s",
                         "error test",
-                        mock_thread.side_effect
+                        mock_thread.side_effect,
                     )
 
     @pytest.mark.asyncio

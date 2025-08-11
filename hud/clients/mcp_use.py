@@ -46,6 +46,19 @@ class MCPUseHUDClient(BaseHUDClient):
             self._sessions = await self._mcp_client.create_all_sessions()
             logger.info("Created %d MCP sessions", len(self._sessions))
 
+            # Configure validation for all sessions based on client setting
+            from mcp.client.session import ValidationOptions
+
+            for session in self._sessions.values():
+                if (
+                    hasattr(session, "connector")
+                    and hasattr(session.connector, "client_session")
+                    and session.connector.client_session is not None
+                ):
+                    session.connector.client_session._validation_options = ValidationOptions(
+                        strict_output_validation=self.strict_validation
+                    )
+
             # Log session details in verbose mode
             if self.verbose and self._sessions:
                 for name, session in self._sessions.items():

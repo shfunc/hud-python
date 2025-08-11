@@ -183,6 +183,10 @@ def _update_task_status_sync(
 
 def _print_trace_url(task_run_id: str) -> None:
     """Print the trace URL in a colorful box."""
+    # Only print HUD URL if HUD telemetry is enabled and has API key
+    if not (settings.telemetry_enabled and settings.api_key):
+        return
+
     url = f"https://app.hud.so/trace/{task_run_id}"
     header = "🚀 See your agent live at:"
 
@@ -218,6 +222,10 @@ def _print_trace_url(task_run_id: str) -> None:
 
 def _print_trace_complete_url(task_run_id: str, error_occurred: bool = False) -> None:
     """Print the trace completion URL with appropriate messaging."""
+    # Only print HUD URL if HUD telemetry is enabled and has API key
+    if not (settings.telemetry_enabled and settings.api_key):
+        return
+
     url = f"https://app.hud.so/trace/{task_run_id}"
 
     # ANSI color codes
@@ -291,8 +299,8 @@ class trace:
         )
         self._span = self._span_manager.__enter__()
 
-        # Update task status to running if root
-        if self.is_root:
+        # Update task status to running if root (only for HUD backend)
+        if self.is_root and settings.telemetry_enabled and settings.api_key:
             _fire_and_forget_status_update(
                 self.task_run_id, "running", job_id=self.job_id, trace_name=self.span_name
             )
@@ -309,8 +317,8 @@ class trace:
         exc_tb: TracebackType | None,
     ) -> None:
         """Exit the trace context."""
-        # Update task status if root
-        if self.is_root:
+        # Update task status if root (only for HUD backend)
+        if self.is_root and settings.telemetry_enabled and settings.api_key:
             if exc_type is not None:
                 # Use synchronous update to ensure it completes before process exit
                 _update_task_status_sync(
@@ -331,7 +339,7 @@ class trace:
                 _print_trace_complete_url(self.task_run_id, error_occurred=False)
 
         # End the span
-        if self._span and hasattr(self, "_span_manager"):
+        if self._span and self._span_manager is not None:
             if exc_type is not None and exc_val is not None:
                 self._span.record_exception(exc_val)
                 self._span.set_status(Status(StatusCode.ERROR, str(exc_val)))

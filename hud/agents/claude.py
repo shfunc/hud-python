@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 from anthropic import AsyncAnthropic, BadRequestError
 
+import hud
+
 if TYPE_CHECKING:
     from anthropic.types.beta import (
         BetaCacheControlEphemeralParam,
@@ -130,6 +132,11 @@ class ClaudeMCPAgent(MCPAgent):
             )
         ]
 
+    @hud.instrument(
+        span_type="agent",
+        record_args=False,  # Messages can be large
+        record_result=True,
+    )
     async def get_model_response(self, messages: list[BetaMessageParam]) -> AgentResponse:
         """Get response from Claude including any tool calls."""
         # Get Claude tools
@@ -165,7 +172,7 @@ class ClaudeMCPAgent(MCPAgent):
                     logger.warning("Prompt too long, truncating message history")
                     # Keep first message and last 20 messages
                     if len(current_messages) > 21:
-                        current_messages = [current_messages[0]] + current_messages[-20:]
+                        current_messages = [current_messages[0], *current_messages[-20:]]
                     else:
                         raise
                 else:

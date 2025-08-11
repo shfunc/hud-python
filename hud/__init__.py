@@ -7,12 +7,13 @@ from __future__ import annotations
 
 import logging
 
-from .telemetry import clear_trace, create_job, get_trace, job, trace
+from .telemetry import clear_trace, create_job, get_trace, instrument, job, trace
 
 __all__ = [
     "clear_trace",
     "create_job",
     "get_trace",
+    "instrument",
     "job",
     "trace",
 ]
@@ -38,10 +39,3 @@ if settings.hud_logging:
         handler.setFormatter(formatter)
         hud_logger.addHandler(handler)
         hud_logger.propagate = False
-
-try:
-    from .utils.agent_patches import apply_all_patches
-
-    apply_all_patches()
-except Exception as e:
-    logging.getLogger(__name__).debug("Failed to apply agent patches: %s", e)

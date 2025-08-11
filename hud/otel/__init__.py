@@ -15,18 +15,16 @@ Internal Components:
 from __future__ import annotations
 
 from .collector import enable_trace_collection
-from .config import configure_telemetry, shutdown_telemetry
+from .config import configure_telemetry, is_telemetry_configured, shutdown_telemetry
 from .context import get_current_task_run_id, is_root_trace, span_context, trace
 
 __all__ = [
-    # Configuration
     "configure_telemetry",
-    # Collection
     "enable_trace_collection",
     "get_current_task_run_id",
     "is_root_trace",
+    "is_telemetry_configured",
     "shutdown_telemetry",
     "span_context",
-    # Context management
     "trace",
 ]

@@ -15,6 +15,7 @@ from openai.types.responses import (
     ToolParam,
 )
 
+import hud
 from hud.agent import MCPAgent
 from hud.settings import settings
 from hud.tools.computer.settings import computer_settings
@@ -118,6 +119,11 @@ class OpenAIMCPAgent(MCPAgent):
         # Just return a list with the prompt and screenshot
         return [{"prompt": prompt, "screenshot": screenshot}]
 
+    @hud.instrument(
+        span_type="agent",
+        record_args=False,  # Messages can be large
+        record_result=True,
+    )
     async def get_model_response(self, messages: list[Any]) -> AgentResponse:
         """Get response from OpenAI including any tool calls."""
         # OpenAI's API is stateful, so we handle messages differently

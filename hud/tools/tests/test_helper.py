@@ -97,7 +97,7 @@ class TestMCPInitializeWrapper:
             params.meta.progressToken = "test_token"
 
             mock_responder.request.root = types.InitializeRequest(
-                id="test", method="initialize", params=params
+                method="initialize", params=params
             )
 
             # Should raise the exception when calling the patched method
@@ -115,7 +115,7 @@ class TestMCPInitializeWrapper:
         """Test decorator called directly with a function."""
 
         async def my_init(session=None, progress_token=None):
-            return "initialized"
+            return None
 
         # Apply decorator directly
         decorated = mcp_intialize_wrapper(my_init)
@@ -179,6 +179,7 @@ class TestMCPInitializeWrapper:
 
         # Call without progress token
         mock_session = MagicMock(spec=ServerSession)
+        assert _init_function is not None
         await _init_function(session=mock_session, progress_token=None)
 
         assert init_called
@@ -189,11 +190,11 @@ class TestMCPInitializeWrapper:
 
         @mcp_intialize_wrapper
         async def first_init(session=None, progress_token=None):
-            return "first"
+            return None
 
         @mcp_intialize_wrapper
         async def second_init(session=None, progress_token=None):
-            return "second"
+            return None
 
         from hud.tools.helper.server_initialization import _init_function
 

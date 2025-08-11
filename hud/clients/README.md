@@ -103,3 +103,41 @@ To add a new client implementation:
    - Telemetry fetching
    - Verbose logging
    - Common HUD features
+
+## Tool Output Validation
+
+Both client implementations support tool output validation through the MCP protocol:
+
+```python
+# Enable strict validation
+client = MCPClient(mcp_config, strict_validation=True)
+
+# With strict validation:
+# - Tools must return structured content if they define an output schema
+# - Content must match the schema or an error is raised
+# - Helps catch tool implementation issues early
+
+# Default behavior (lenient validation):
+client = MCPClient(mcp_config, strict_validation=False)  # Default
+
+# With lenient validation:
+# - Schema violations are logged as warnings
+# - Execution continues even if output doesn't match schema
+# - Better for development and debugging
+```
+
+### Example with Validation
+
+```python
+from hud.clients import MCPClient
+
+# Create client with strict validation
+client = MCPClient(mcp_config, strict_validation=True)
+
+try:
+    # If tool has output schema but returns invalid data,
+    # this will raise a RuntimeError
+    result = await client.call_tool("some_tool", {"arg": "value"})
+except RuntimeError as e:
+    print(f"Validation error: {e}")
+```

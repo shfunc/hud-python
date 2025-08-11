@@ -50,11 +50,11 @@ def get_trace(task_run_id: str) -> Trace | None:
 
             # Replay or analyze individual steps
             for step in trace.trace:
-                if step.agent_response:
-                    print(f"Agent: {step.agent_response.get('content')}")
-                if step.mcp_request:
-                    print(f"MCP: {step.mcp_request.method}")
-    """
+                if step.category == "agent" and step.result:
+                    print(f"Agent: {step.result.get('content') if isinstance(step.result, dict) else step.result}")
+                if step.category == "mcp" and step.request:
+                    print(f"MCP: {step.request.method if hasattr(step.request, 'method') else step.request}")
+    """  # noqa: E501
     return _get_trace(task_run_id)
 
 
