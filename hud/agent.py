@@ -9,8 +9,6 @@ from typing import TYPE_CHECKING, Any
 
 import mcp.types as types
 
-import hud
-
 from .types import AgentResponse, MCPToolCall, MCPToolResult, Trace
 
 if TYPE_CHECKING:
@@ -189,8 +187,10 @@ class MCPAgent(ABC):
             logger.debug("Tool '%s' completed successfully", tool_name)
 
         return result
-        
-    async def execute_tools(self, tool_calls: MCPToolCall | list[MCPToolCall]) -> list[MCPToolResult]:
+
+    async def execute_tools(
+        self, tool_calls: MCPToolCall | list[MCPToolCall]
+    ) -> list[MCPToolResult]:
         """Execute a list of tools with error handling."""
         if isinstance(tool_calls, MCPToolCall):
             tool_calls = [tool_calls]

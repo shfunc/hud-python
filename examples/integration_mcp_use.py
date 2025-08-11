@@ -23,7 +23,6 @@ async def main():
     print("🤖 MCP-Use Agent Example")
     print("=" * 50)
 
-
     llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
     print("✅ Using GPT-4")
 
