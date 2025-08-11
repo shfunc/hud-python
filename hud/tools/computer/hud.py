@@ -199,6 +199,14 @@ class HudComputerTool(BaseTool):
             image_data = base64.b64decode(screenshot_base64)
             image = Image.open(BytesIO(image_data))
 
+            logger.info(
+                "Resizing screenshot from %s x %s to %s x %s",
+                image.width,
+                image.height,
+                self.width,
+                self.height,
+            )
+
             # Resize to exact target dimensions
             resized = image.resize((self.width, self.height), Image.Resampling.LANCZOS)
 
