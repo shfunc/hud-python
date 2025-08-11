@@ -171,35 +171,35 @@ class BrowserEnvironmentContext:
         """Execute a setup operation using the setup tool.
 
         Args:
-            setup_spec: Setup specification with 'function' and 'args'
+            setup_spec: Setup specification with 'name' and 'arguments'
 
         Returns:
             Setup result dictionary
         """
         from .setup import setup_tool
 
-        function = setup_spec.get("function")
-        args = setup_spec.get("args", {})
+        name = setup_spec.get("name")
+        arguments = setup_spec.get("arguments", {})
 
         # Call the setup tool directly
-        return await setup_tool(function, args, None, None, self)
+        return await setup_tool(name, arguments, None, None, self)
 
     async def execute_evaluation(self, eval_spec: dict) -> dict:
         """Execute an evaluation operation using the evaluate tool.
 
         Args:
-            eval_spec: Evaluation specification with 'function' and 'args'
+            eval_spec: Evaluation specification with 'name' and 'arguments'
 
         Returns:
             Evaluation result dictionary
         """
         from .evaluators import evaluate_tool
 
-        function = eval_spec.get("function")
-        args = eval_spec.get("args", {})
+        name = eval_spec.get("name")
+        arguments = eval_spec.get("arguments", {})
 
         # Call the evaluate tool directly
-        return await evaluate_tool(function, args, None, None, self)
+        return await evaluate_tool(name, arguments, None, None, self)
 
     # === Utility Methods ===
 

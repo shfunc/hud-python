@@ -159,11 +159,12 @@ class TestBaseHub:
 
         # Call dispatcher
         result = await hub._tool_manager.call_tool(
-            "dispatcher_test", {"function": "internal_func", "args": {"value": 42}}
+            "dispatcher_test", {"name": "internal_func", "arguments": {"value": 42}}
         )
 
         # ToolResult has content attribute
         assert len(result.content) == 1
+        assert isinstance(result.content[0], TextContent)
         assert result.content[0].text == "Internal: 42"
 
     @pytest.mark.asyncio
@@ -188,7 +189,11 @@ class TestBaseHub:
 
         # Call the resource
         resource = resources[catalogue_uri]
-        funcs = await resource.fn()
+        content = await resource.read()
+        # The resource returns JSON content, parse it
+        import json
+
+        funcs = json.loads(content)
 
         assert sorted(funcs) == ["func1", "func2"]
 

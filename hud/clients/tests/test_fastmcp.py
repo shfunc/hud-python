@@ -6,6 +6,7 @@ from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 from mcp import types
+from pydantic.networks import AnyUrl
 
 from hud.clients.fastmcp import FastMCPHUDClient
 from hud.types import MCPToolResult
@@ -156,7 +157,9 @@ class TestFastMCPHUDClient:
         # Create proper resource contents that ReadResourceResult expects
         mock_contents = [
             types.TextResourceContents(
-                uri="file:///test", mimeType="text/plain", text="resource content"
+                uri=AnyUrl("file:///test"),
+                mimeType="text/plain",
+                text="resource content",
             )
         ]
 

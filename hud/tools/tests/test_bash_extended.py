@@ -86,7 +86,7 @@ class TestBashSessionExtended:
             result = await session.run("echo test")
 
             assert result.system == "tool must be restarted"
-            assert "bash has exited with returncode 1" in result.error
+            assert result.error == "bash has exited with returncode 1"
             mock_sleep.assert_called_once_with(0)
 
     @pytest.mark.asyncio

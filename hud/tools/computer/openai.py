@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from mcp import ErrorData, McpError
 from mcp.types import INTERNAL_ERROR, INVALID_PARAMS, ContentBlock, TextContent
@@ -12,6 +12,9 @@ from hud.tools.computer.settings import computer_settings
 from hud.tools.types import ContentResult
 
 from .hud import HudComputerTool
+
+if TYPE_CHECKING:
+    from hud.tools.executors.base import BaseExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +53,10 @@ class OpenAIComputerTool(HudComputerTool):
 
     def __init__(
         self,
+        # Define within environment based on platform
+        executor: BaseExecutor | None = None,
+        platform_type: Literal["auto", "xdo", "pyautogui"] = "auto",
+        display_num: int | None = None,
         # Overrides for what dimensions the agent thinks it operates in
         width: int = computer_settings.OPENAI_COMPUTER_WIDTH,
         height: int = computer_settings.OPENAI_COMPUTER_HEIGHT,
@@ -71,6 +78,9 @@ class OpenAIComputerTool(HudComputerTool):
             description: Tool description (auto-generated from docstring if not provided)
         """
         super().__init__(
+            executor=executor,
+            platform_type=platform_type,
+            display_num=display_num,
             width=width,
             height=height,
             rescale_images=rescale_images,

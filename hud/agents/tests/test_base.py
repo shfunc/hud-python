@@ -32,9 +32,7 @@ class MockMCPAgent(MCPAgent):
         if mcp_client is None:
             # Create a mock client if none provided
             mcp_client = MagicMock()
-            mcp_client.get_all_active_sessions = MagicMock(return_value={})
             mcp_client.get_available_tools = MagicMock(return_value=[])
-            # Make async methods into AsyncMock
             mcp_client.initialize = AsyncMock()
             mcp_client.list_tools = AsyncMock(return_value=[])
         super().__init__(mcp_client=mcp_client, **kwargs)
@@ -157,9 +155,6 @@ class TestBaseMCPAgent:
             )
 
         mock_session.connector.client_session.list_tools = mock_list_tools
-
-        # Set up the mcp_client to return the mock session
-        agent.mcp_client.get_all_active_sessions.return_value = {"test_session": mock_session}
 
         # Mock the list_tools method on mcp_client to return the tools
         agent.mcp_client.list_tools = AsyncMock(
@@ -562,8 +557,8 @@ class TestMCPAgentExtended:
             id="test_task",
             prompt="Click the button",
             mcp_config={"test_server": {"url": "http://localhost:8080"}},
-            setup_tool={"name": "navigate", "arguments": {"url": "https://example.com"}},
-            evaluate_tool={"name": "check_result", "arguments": {}},
+            setup_tool={"name": "navigate", "arguments": {"url": "https://example.com"}},  # type: ignore[arg-type]
+            evaluate_tool={"name": "check_result", "arguments": {}},  # type: ignore[arg-type]
         )
 
         # Set up responses
@@ -613,7 +608,7 @@ class TestMCPAgentExtended:
             id="test_task",
             prompt="Do something",
             mcp_config={"test_server": {"url": "http://localhost:8080"}},
-            setup_tool={"name": "bad_setup", "arguments": {}},
+            setup_tool={"name": "bad_setup", "arguments": {}},  # type: ignore[arg-type]
         )
 
         # Mock setup tool to fail
@@ -628,7 +623,10 @@ class TestMCPAgentExtended:
 
         assert isinstance(result, Trace)
         assert result.isError
+        # Error content is the string representation of the MCPToolResult list
+        assert result.content is not None
         assert "Setup failed" in result.content
+        assert "MCPToolResult" in result.content
 
     @pytest.mark.asyncio
     async def test_run_with_multiple_setup_tools(self, agent_with_tools):
@@ -639,8 +637,8 @@ class TestMCPAgentExtended:
             prompt="Test multiple setup",
             mcp_config={"test_server": {"url": "http://localhost:8080"}},
             setup_tool=[
-                {"name": "setup1", "arguments": {}},
-                {"name": "setup2", "arguments": {}},
+                MCPToolCall(name="setup1", arguments={}),
+                MCPToolCall(name="setup2", arguments={}),
             ],
         )
 
@@ -873,8 +871,8 @@ class TestMCPAgentExtended:
             prompt="Test evaluation",
             mcp_config={"test_server": {"url": "http://localhost:8080"}},
             evaluate_tool=[
-                {"name": "eval1", "arguments": {}},
-                {"name": "eval2", "arguments": {"reward": True}},
+                MCPToolCall(name="eval1", arguments={}),
+                MCPToolCall(name="eval2", arguments={"reward": True}),
             ],
         )
 
@@ -886,7 +884,7 @@ class TestMCPAgentExtended:
             or MCPToolResult(
                 content=[types.TextContent(type="text", text=f"{name} result")],
                 isError=False,
-                structuredContent={"reward": 0.5} if name == "eval2" else None,
+                structuredContent={"reward": 0.5} if name == "eval1" else {"reward": 1.0},
             )
         )
 
@@ -894,7 +892,7 @@ class TestMCPAgentExtended:
 
         assert "eval1" in eval_results
         assert "eval2" in eval_results
-        assert result.reward == 0.5  # From eval2
+        assert result.reward == 0.5  # From eval1 (first evaluation tool)
 
     @pytest.mark.asyncio
     async def test_trace_population_on_error(self, agent_with_tools):
@@ -904,7 +902,7 @@ class TestMCPAgentExtended:
             id="test_task",
             prompt="Test error",
             mcp_config={"test_server": {"url": "http://localhost:8080"}},
-            setup_tool={"name": "failing_setup", "arguments": {}},
+            setup_tool={"name": "failing_setup", "arguments": {}},  # type: ignore[arg-type]
         )
 
         # Make setup fail with exception
@@ -913,5 +911,7 @@ class TestMCPAgentExtended:
         result = await agent_with_tools.run(task)
 
         assert result.isError
+        # Error content is the string representation of the MCPToolResult list
         assert "Setup explosion" in result.content
+        assert "MCPToolResult" in result.content
         assert result.done

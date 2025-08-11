@@ -329,7 +329,7 @@ class BaseExecutor:
         self, text: str, delay: int = 12, take_screenshot: bool = True
     ) -> ContentResult:
         """Alias for type() to maintain compatibility."""
-        return await self.type(
+        return await self.write(
             text, enter_after=False, delay=delay, take_screenshot=take_screenshot
         )
 

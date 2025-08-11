@@ -48,6 +48,18 @@ class FastMCPHUDClient(BaseHUDClient):
         if self._stack is None:
             self._stack = AsyncExitStack()
             await self._stack.enter_async_context(self._client)
+
+            # Configure validation for output schemas based on client setting
+            from mcp.client.session import ValidationOptions
+
+            if (
+                hasattr(self._client, "_session_state")
+                and self._client._session_state.session is not None
+            ):
+                self._client._session_state.session._validation_options = ValidationOptions(
+                    strict_output_validation=self.strict_validation
+                )
+
             logger.info("FastMCP client connected")
 
     async def list_tools(self) -> list[types.Tool]:

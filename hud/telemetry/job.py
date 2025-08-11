@@ -115,7 +115,7 @@ def job(
     global _current_job
 
     if not job_id:
-        job_id = f"job-{uuid.uuid4().hex[:12]}"
+        job_id = str(uuid.uuid4())
 
     job_obj = Job(job_id, name, metadata)
 
@@ -158,7 +158,7 @@ def create_job(name: str, metadata: dict[str, Any] | None = None) -> Job:
         finally:
             await job.update_status("completed")
     """
-    job_id = f"job-{uuid.uuid4().hex[:12]}"
+    job_id = str(uuid.uuid4())
     return Job(job_id, name, metadata)
 
 

@@ -60,22 +60,18 @@ class AgentResponse(BaseModel):
 
 
 class TraceStep(BaseModel):
-    """Canonical data for a single agent/MCP span (shared with telemetry)."""
+    """Canonical data for a single span (shared with telemetry)."""
 
     # HUD identifiers
     task_run_id: str | None = Field(default=None)
     job_id: str | None = Field(default=None)
 
-    # Span category
-    category: Literal["mcp", "agent"] = Field(default="mcp")
+    # Span category - can be any string, but "mcp" and "agent" are privileged on the platform
+    category: Literal["mcp", "agent"] | str = Field(default="mcp")  # noqa: PYI051
 
-    # === MCP fields ===
-    mcp_request: Any | None = None  # ClientRequest
-    mcp_result: Any | None = None  # ServerResult
-
-    # === Agent fields ===
-    agent_request: dict[str, Any] | None = None
-    agent_response: dict[str, Any] | None = None
+    # Generic I/O fields - works for any category
+    request: Any | None = None
+    result: Any | None = None
 
     # Generic span info
     type: str = Field(default="CLIENT")

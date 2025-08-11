@@ -164,8 +164,9 @@ async def run_dataset(
     dataset: Dataset | list[TaskConfig],
     agent_class: type[MCPAgent],
     agent_config: dict[str, Any] | None = None,
-    max_concurrent: int = 5,
+    max_concurrent: int = 50,
     metadata: dict[str, Any] | None = None,
+    max_steps: int = 40,
 ) -> list[Any]:
     """
     Run all tasks in a dataset with automatic job tracking.
@@ -217,17 +218,17 @@ async def run_dataset(
         sem = asyncio.Semaphore(max_concurrent)
         results: list[Any | None] = [None] * len(tasks)
 
-        async def _worker(index: int, task: TaskConfig) -> None:
+        async def _worker(index: int, task: TaskConfig, max_steps: int = 40) -> None:
             async with sem:
                 # Create trace for this task
-                with hud.trace(f"task_{index}", job_id=job_obj.id):
+                with hud.trace(f"Task {index}", job_id=job_obj.id):
                     # Create fresh MCP client per task
                     if task.mcp_config:
                         client = MCPClient(mcp_config=task.mcp_config)
                         agent = agent_class(mcp_client=client, **(agent_config or {}))
 
                         try:
-                            results[index] = await agent.run(task)
+                            results[index] = await agent.run(task, max_steps=max_steps)
                         finally:
                             await client.close()
                     else:
@@ -236,7 +237,7 @@ async def run_dataset(
 
         # Execute all tasks
         await asyncio.gather(
-            *[_worker(i, task) for i, task in enumerate(tasks)],
+            *[_worker(i, task, max_steps=max_steps) for i, task in enumerate(tasks)],
             return_exceptions=True,  # Don't fail entire batch on one error
         )
 

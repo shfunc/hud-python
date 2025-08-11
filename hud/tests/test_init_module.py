@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from unittest.mock import ANY, MagicMock, patch
+from unittest.mock import patch
 
 from hud import hud_logger
 
@@ -80,33 +80,12 @@ class TestInitModule:
                 # Check that handler was added with stderr
                 assert len(hud_logger.handlers) > 0
                 handler = hud_logger.handlers[0]
+                assert isinstance(handler, logging.StreamHandler)
                 assert handler.stream == sys.stderr
             finally:
                 # Restore original handlers
                 root_logger.handlers = original_handlers
                 hud_logger.handlers.clear()
-
-    def test_agent_patches_exception(self):
-        """Test that exceptions in agent patches are handled gracefully."""
-        with (
-            patch(
-                "hud.utils.agent_patches.apply_all_patches",
-                side_effect=Exception("Patch failed"),
-            ),
-            patch("logging.getLogger") as mock_logger,
-        ):
-            mock_debug = MagicMock()
-            mock_logger.return_value.debug = mock_debug
-
-            # Re-import to trigger the exception
-            import importlib
-
-            import hud
-
-            importlib.reload(hud)
-
-            # Check that debug message was logged
-            mock_debug.assert_called_with("Failed to apply agent patches: %s", ANY)
 
     def test_logger_level(self):
         """Test that hud logger is set to INFO level."""
@@ -120,6 +99,7 @@ class TestInitModule:
             "clear_trace",
             "create_job",
             "get_trace",
+            "instrument",
             "job",
             "trace",
         ]

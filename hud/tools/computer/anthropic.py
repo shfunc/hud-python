@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from mcp import ErrorData, McpError
 from mcp.types import INTERNAL_ERROR, INVALID_PARAMS, ContentBlock
@@ -15,6 +15,8 @@ from .settings import computer_settings
 
 if TYPE_CHECKING:
     from anthropic.types.beta import BetaToolComputerUse20250124Param
+
+    from hud.tools.executors.base import BaseExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +69,10 @@ class AnthropicComputerTool(HudComputerTool):
 
     def __init__(
         self,
+        # Define within environment based on platform
+        executor: BaseExecutor | None = None,
+        platform_type: Literal["auto", "xdo", "pyautogui"] = "auto",
+        display_num: int | None = None,
         # Overrides for what dimensions the agent thinks it operates in
         width: int = computer_settings.ANTHROPIC_COMPUTER_WIDTH,
         height: int = computer_settings.ANTHROPIC_COMPUTER_HEIGHT,
@@ -89,6 +95,9 @@ class AnthropicComputerTool(HudComputerTool):
             description: Tool description (auto-generated from docstring if not provided)
         """
         super().__init__(
+            executor=executor,
+            platform_type=platform_type,
+            display_num=display_num,
             width=width,
             height=height,
             rescale_images=rescale_images,
@@ -239,7 +248,14 @@ class AnthropicComputerTool(HudComputerTool):
                 # Anthropic sends single key or combo like "ctrl+a"
                 # Map to CLA standard key format
                 mapped_key = self._map_anthropic_key_to_cla(text)
-                result = await self.executor.press(keys=[mapped_key])
+
+                # Split key combination into list of keys
+                if "+" in mapped_key:
+                    keys_list = [k.strip() for k in mapped_key.split("+")]
+                else:
+                    keys_list = [mapped_key]
+
+                result = await self.executor.press(keys=keys_list)
             else:
                 raise McpError(ErrorData(code=INVALID_PARAMS, message="text is required for key"))
 
@@ -260,17 +276,23 @@ class AnthropicComputerTool(HudComputerTool):
                     )
                 )
 
+            # Convert scroll amount from "clicks" to pixels
+            # Anthropic's scroll_amount represents wheel clicks, not pixels
+            # Standard conversion: 1 wheel click ≈ 100 pixels (3 lines of text)
+            PIXELS_PER_WHEEL_CLICK = 100
+            pixel_amount = scroll_amount * PIXELS_PER_WHEEL_CLICK
+
             # Convert direction to scroll amounts
             scroll_x = None
             scroll_y = None
             if scroll_direction == "down":
-                scroll_y = scroll_amount
+                scroll_y = pixel_amount
             elif scroll_direction == "up":
-                scroll_y = -scroll_amount
+                scroll_y = -pixel_amount
             elif scroll_direction == "right":
-                scroll_x = scroll_amount
+                scroll_x = pixel_amount
             elif scroll_direction == "left":
-                scroll_x = -scroll_amount
+                scroll_x = -pixel_amount
 
             if coord_tuple and len(coord_tuple) >= 2:
                 scaled_x, scaled_y = self._scale_coordinates(coord_tuple[0], coord_tuple[1])

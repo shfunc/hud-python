@@ -122,7 +122,7 @@ class TestHudComputerToolExtended:
     async def test_invalid_platform_type(self):
         """Test invalid platform type raises ValueError."""
         with pytest.raises(ValueError, match="Invalid platform_type"):
-            HudComputerTool(platform_type="invalid_platform")
+            HudComputerTool(platform_type="invalid_platform")  # type: ignore[arg-type]
 
     @pytest.mark.asyncio
     async def test_coordinate_scaling(self, base_executor):
@@ -316,8 +316,8 @@ class TestHudComputerToolExtended:
         with patch(
             "hud.tools.executors.pyautogui.PyAutoGUIExecutor.is_available", return_value=False
         ):
-            tool = HudComputerTool(display_num=":1")
-            assert tool.display_num == ":1"
+            tool = HudComputerTool(display_num=1)
+            assert tool.display_num == 1
 
     @pytest.mark.asyncio
     async def test_coordinate_none_values(self, base_executor):

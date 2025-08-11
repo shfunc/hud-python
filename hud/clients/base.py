@@ -39,16 +39,23 @@ class AgentMCPClient(Protocol):
 class BaseHUDClient(ABC):
     """Base class with common HUD functionality."""
 
-    def __init__(self, mcp_config: dict[str, dict[str, Any]], verbose: bool = False) -> None:
+    def __init__(
+        self,
+        mcp_config: dict[str, dict[str, Any]],
+        verbose: bool = False,
+        strict_validation: bool = False,
+    ) -> None:
         """
         Initialize base client.
 
         Args:
             mcp_config: MCP server configuration dict
             verbose: Enable verbose logging
+            strict_validation: Enable strict tool output validation
         """
         self.mcp_config = mcp_config
         self.verbose = verbose
+        self.strict_validation = strict_validation
         self._telemetry_data: dict[str, Any] = {}
         self._initialized = False
         self._tools: list[types.Tool] = []
@@ -154,3 +161,86 @@ class BaseHUDClient(ABC):
     async def call_tool(self, name: str, arguments: dict[str, Any] | None = None) -> MCPToolResult:
         """Execute a tool by name."""
         raise NotImplementedError
+
+    async def get_hub_tools(self, hub_name: str) -> list[str]:
+        """Get all subtools for a specific hub (setup/evaluate).
+
+        Args:
+            hub_name: Name of the hub (e.g., "setup", "evaluate")
+
+        Returns:
+            List of available function names for the hub
+        """
+        try:
+            # Read the hub's functions catalogue resource
+            result = await self._read_resource_internal(f"file:///{hub_name}/functions")
+            if result and result.contents:
+                # Parse the JSON list of function names
+                import json
+
+                functions = json.loads(result.contents[0].text)  # type: ignore
+                return functions
+        except Exception as e:
+            if self.verbose:
+                logger.debug("Could not read hub functions for '%s': %s", hub_name, e)
+        return []
+
+    async def analyze_environment(self) -> dict[str, Any]:
+        """Complete analysis of the MCP environment.
+
+        Returns:
+            Dictionary containing:
+            - tools: All tools with full schemas
+            - hub_tools: Hub structures with subtools
+            - telemetry: Telemetry resources and data
+            - resources: All available resources
+            - metadata: Environment metadata
+        """
+        analysis: dict[str, Any] = {
+            "tools": [],
+            "hub_tools": {},
+            "telemetry": self._telemetry_data,
+            "resources": [],
+            "metadata": {
+                "servers": list(self.mcp_config.keys()),
+                "initialized": self._initialized,
+            },
+        }
+
+        # Get all tools with schemas
+        tools = await self.list_tools()
+        for tool in tools:
+            tool_info = {
+                "name": tool.name,
+                "description": tool.description,
+                "input_schema": tool.inputSchema,
+            }
+            analysis["tools"].append(tool_info)
+
+            # Check if this is a hub tool (like setup, evaluate)
+            if (
+                tool.description
+                and "internal" in tool.description.lower()
+                and "functions" in tool.description.lower()
+            ):
+                # This is likely a hub dispatcher tool
+                hub_functions = await self.get_hub_tools(tool.name)
+                if hub_functions:
+                    analysis["hub_tools"][tool.name] = hub_functions
+
+        # Get all resources
+        try:
+            resources = await self.list_resources()
+            for resource in resources:
+                resource_info = {
+                    "uri": str(resource.uri),
+                    "name": resource.name,
+                    "description": resource.description,
+                    "mime_type": getattr(resource, "mimeType", None),
+                }
+                analysis["resources"].append(resource_info)
+        except Exception as e:
+            if self.verbose:
+                logger.debug("Could not list resources: %s", e)
+
+        return analysis

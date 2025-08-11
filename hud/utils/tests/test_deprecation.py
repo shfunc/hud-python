@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import warnings
 from typing import Any
 
@@ -19,7 +18,7 @@ class TestDeprecatedDecorator:
         def old_function():
             return "result"
 
-        # Capture warnings 
+        # Capture warnings
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             result = old_function()
@@ -32,7 +31,7 @@ class TestDeprecatedDecorator:
         assert issubclass(w[0].category, DeprecationWarning)
         assert "old_function is deprecated" in str(w[0].message)
         assert "This is old" in str(w[0].message)
-        
+
         # Note: logging check removed as HUD logger doesn't propagate to caplog
 
     def test_deprecated_function_full_params(self):
@@ -84,7 +83,7 @@ class TestDeprecatedDecorator:
         assert len(w) == 1
         assert "OldClass is deprecated" in str(w[0].message)
         assert "This class is old" in str(w[0].message)
-        
+
         # Note: logging check removed as HUD logger doesn't propagate to caplog
 
     def test_deprecated_class_with_docstring(self):
@@ -182,7 +181,7 @@ class TestEmitDeprecationWarning:
         assert len(w) == 1
         assert issubclass(w[0].category, DeprecationWarning)
         assert str(w[0].message) == "This is deprecated"
-        
+
         # Note: logging check removed as HUD logger doesn't propagate to caplog
 
     def test_emit_custom_category(self):

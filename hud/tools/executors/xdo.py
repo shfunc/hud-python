@@ -116,7 +116,7 @@ class XDOExecutor(BaseExecutor):
             import subprocess
 
             # Try without display prefix if DISPLAY is already set
-            result = subprocess.run(  # noqa: S603
+            result = subprocess.run(
                 ["xdotool", "getdisplaygeometry"],  # noqa: S607
                 capture_output=True,
                 timeout=2,
@@ -348,6 +348,10 @@ class XDOExecutor(BaseExecutor):
         # Convert scroll amounts to xdotool format
         scroll_button_map = {"up": 4, "down": 5, "left": 6, "right": 7}
 
+        # Convert pixels to wheel clicks
+        # Standard conversion: 1 wheel click ≈ 100 pixels
+        PIXELS_PER_WHEEL_CLICK = 100
+
         # Hold keys if specified
         await self._hold_keys_context(hold_keys)
 
@@ -355,26 +359,28 @@ class XDOExecutor(BaseExecutor):
             # Handle vertical scroll
             if scroll_y and scroll_y != 0:
                 direction = "down" if scroll_y > 0 else "up"
-                amount = abs(scroll_y)
+                # Convert pixels to clicks
+                clicks = max(1, abs(scroll_y) // PIXELS_PER_WHEEL_CLICK)
                 button = scroll_button_map.get(direction, 5)
 
                 if x is not None and y is not None:
-                    cmd = f"mousemove {x} {y} click --repeat {amount} {button}"
+                    cmd = f"mousemove {x} {y} click --repeat {clicks} {button}"
                 else:
-                    cmd = f"click --repeat {amount} {button}"
+                    cmd = f"click --repeat {clicks} {button}"
 
                 result = await self.execute(cmd, take_screenshot=take_screenshot)
 
             # Handle horizontal scroll
             elif scroll_x and scroll_x != 0:
                 direction = "right" if scroll_x > 0 else "left"
-                amount = abs(scroll_x)
+                # Convert pixels to clicks
+                clicks = max(1, abs(scroll_x) // PIXELS_PER_WHEEL_CLICK)
                 button = scroll_button_map.get(direction, 7)
 
                 if x is not None and y is not None:
-                    cmd = f"mousemove {x} {y} click --repeat {amount} {button}"
+                    cmd = f"mousemove {x} {y} click --repeat {clicks} {button}"
                 else:
-                    cmd = f"click --repeat {amount} {button}"
+                    cmd = f"click --repeat {clicks} {button}"
 
                 result = await self.execute(cmd, take_screenshot=take_screenshot)
 

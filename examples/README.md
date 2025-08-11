@@ -4,42 +4,32 @@ These examples show **modern v3 patterns** for building, running and evaluating 
 
 ---
 
-## 1 · Quick Start
+## Quick navigation
 
+| Example | Level | Purpose |
+|---------|-------|---------|
+| 00_minimal_fastmcp.py | Beginner | Server **and** stdio-client in one file (sum two numbers) |
+| 01_hello_2048.py | Beginner | Launch `text_2048` environment (Docker) + Claude agent |
+| task_with_setup_eval.py | Beginner | Manual call of `setup` / `evaluate` without LLM |
+| 02_agent_lifecycle.py | Intermediate | Save / resume runs, HUD trace & telemetry |
+| 03_cloud_vs_local.py | Intermediate | Run the same image locally vs remotely on HUD |
+| mcp_use_agent.py | Intermediate | Using the HTTP `mcp_use` client |
+| playwright_screenshot.py | Intermediate | Capture a browser screenshot via `remote_browser` |
+| rl/hud_vf_gym/ | Advanced | Reinforcement-learning loop with value-function gym |
+| sheet_bench*.py | Advanced | Google-sheet style benchmark via remote browser |
+| claude_agent.py / openai_agent.py | Quickstart | Direct chat agents (no environment) |
+
+_Notebooks_: exploratory notebooks are optional and live next to the scripts.
+
+Run an example:
 ```bash
-# Install core SDK (+extras for examples)
-pip install "hud-python[examples]"
-
-# Set your cloud key (skip for local-only)
-export HUD_API_KEY=your_api_key
-
-# Build the 2048 game image
-docker build -t hud-text-2048 environments/text_2048
-
-# Run the tiniest demo
-python 01_hello_2048.py
+python examples/00_minimal_fastmcp.py
 ```
 
 ---
-
-## 2 · What You’ll Find
-
-| File / Notebook | What it Proves | Notes |
-|-----------------|----------------|-------|
-| **01_hello_2048.py** | Local Docker game + agent | Simple 2048 game with text interface.
-| **02_agent_lifecycle.py** | *Full* task lifecycle <br>setup → agent loop → evaluate | Wrapped in `hud.trace()` – generates RUN_ID.
-| **03_cloud_vs_local.py** | Same agent, two deployments | Compare HUD cloud vs local Docker.
-| **claude_agent.py** | Claude-3.7, screenshots & reasoning | Uses *anthropic_computer* tool.
-| **openai_agent.py** | GPT-4o with function calling | Uses *openai_computer* tool.
-| **mcp_use_agent.py** | Provider-agnostic via LangChain | Works with any LLM key you have.
-| **task_with_setup_eval.py** | Visual todo / Wikipedia tasks | See the browser at `http://localhost:8080/vnc.html`.
-| **resources_exploration.py** | List `setup://`, `evaluate://`, etc. | Discover what an MCP server can do.
-| **agent_lifecycle_exploration.ipynb** | Step-through debug of an agent | Inspect messages, tool calls, screenshots.
-| **dataset_evaluation_pipeline.ipynb** | Run a HF dataset end-to-end | Auto-traced; outputs CSV + MD report.
-
 ---
 
-## 3 · Prerequisites
+## 2 · Prerequisites
 
 | Requirement | Why |
 |-------------|-----|
@@ -49,7 +39,7 @@ python 01_hello_2048.py
 
 ---
 
-## 4 · Running Visual Examples
+## 3 · Running Visual Examples
 
 ```bash
 # Build the browser image once
@@ -62,7 +52,7 @@ python task_with_setup_eval.py
 
 ---
 
-## 5 · Pattern Cheat-Sheet
+## 4 · Pattern Cheat-Sheet
 
 ```python
 from hud.telemetry import trace
@@ -78,6 +68,12 @@ with trace("My Demo"):
 ```
 
 *️⃣  Every example follows this structure – once you understand it, you can mix-and-match components to build your own flows.
+
+---
+
+## 5 · Alternative Tracing Backends
+
+Want to use Jaeger or another OpenTelemetry backend instead of HUD's? See `custom_otel_backend.py` for a simple example that sends `hud.trace()` spans to Jaeger.
 
 ---
 
