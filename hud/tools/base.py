@@ -139,24 +139,24 @@ class BaseHub(FastMCP):
 
         # Register dispatcher manually with FunctionTool
         async def _dispatch(  # noqa: ANN202
-            function: str,
-            args: dict | None = None,
+            name: str,
+            arguments: dict | None = None,
             ctx=None,  # noqa: ANN001
         ):
             """Gateway to hidden tools.
 
             Parameters
             ----------
-            function : str
+            name : str
                 Internal function name *without* prefix.
-            args : dict | None
+            arguments : dict | None
                 Arguments forwarded to the internal tool.
             ctx : Context
                 Injected by FastMCP; can be the custom subclass.
             """
 
             # Use the tool manager to call internal tools
-            return await self._tool_manager.call_tool(self._prefix_fn(function), args or {})
+            return await self._tool_manager.call_tool(self._prefix_fn(name), arguments or {})
 
         from fastmcp.tools.tool import FunctionTool
 
