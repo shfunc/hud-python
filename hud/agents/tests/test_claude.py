@@ -182,7 +182,10 @@ class TestClaudeMCPAgent:
             mock_anthropic.beta.messages.create = AsyncMock(return_value=mock_response)
 
             messages = [
-                cast("BetaMessageParam", {"role": "user", "content": [{"type": "text", "text": "Hi"}]})
+                cast(
+                    "BetaMessageParam",
+                    {"role": "user", "content": [{"type": "text", "text": "Hi"}]},
+                )
             ]
             response = await agent.get_model_response(messages)
 
@@ -213,7 +216,10 @@ class TestClaudeMCPAgent:
             mock_anthropic.beta.messages.create = AsyncMock(return_value=mock_response)
 
             messages = [
-                cast("BetaMessageParam", {"role": "user", "content": [{"type": "text", "text": "Hi"}]})
+                cast(
+                    "BetaMessageParam",
+                    {"role": "user", "content": [{"type": "text", "text": "Hi"}]},
+                )
             ]
             response = await agent.get_model_response(messages)
 
@@ -250,7 +256,9 @@ class TestClaudeMCPAgent:
 
             # Mock tool availability
             agent._available_tools = [
-                types.Tool(name="calculator", description="Calculator", inputSchema={"type": "object"})
+                types.Tool(
+                    name="calculator", description="Calculator", inputSchema={"type": "object"}
+                )
             ]
             agent._tool_map = {
                 "calculator": types.Tool(
