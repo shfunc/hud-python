@@ -275,17 +275,23 @@ class AnthropicComputerTool(HudComputerTool):
                     )
                 )
 
+            # Convert scroll amount from "clicks" to pixels
+            # Anthropic's scroll_amount represents wheel clicks, not pixels
+            # Standard conversion: 1 wheel click ≈ 100 pixels (3 lines of text)
+            PIXELS_PER_WHEEL_CLICK = 100
+            pixel_amount = scroll_amount * PIXELS_PER_WHEEL_CLICK
+
             # Convert direction to scroll amounts
             scroll_x = None
             scroll_y = None
             if scroll_direction == "down":
-                scroll_y = scroll_amount
+                scroll_y = pixel_amount
             elif scroll_direction == "up":
-                scroll_y = -scroll_amount
+                scroll_y = -pixel_amount
             elif scroll_direction == "right":
-                scroll_x = scroll_amount
+                scroll_x = pixel_amount
             elif scroll_direction == "left":
-                scroll_x = -scroll_amount
+                scroll_x = -pixel_amount
 
             if coord_tuple and len(coord_tuple) >= 2:
                 scaled_x, scaled_y = self._scale_coordinates(coord_tuple[0], coord_tuple[1])
