@@ -247,7 +247,14 @@ class AnthropicComputerTool(HudComputerTool):
                 # Anthropic sends single key or combo like "ctrl+a"
                 # Map to CLA standard key format
                 mapped_key = self._map_anthropic_key_to_cla(text)
-                result = await self.executor.press(keys=[mapped_key])
+                
+                # Split key combination into list of keys
+                if "+" in mapped_key:
+                    keys_list = [k.strip() for k in mapped_key.split("+")]
+                else:
+                    keys_list = [mapped_key]
+                
+                result = await self.executor.press(keys=keys_list)
             else:
                 raise McpError(ErrorData(code=INVALID_PARAMS, message="text is required for key"))
 
