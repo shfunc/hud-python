@@ -180,3 +180,16 @@ Learn more:
 - rl/ – RL via hud-vf-gym + Verifiers
 
 Install: `pip install hud-python`  •  Issues/feedback welcome.
+
+
+[MIT License](LICENSE)
+
+```bibtex
+@software{hud2025agentevalplatform,
+  author = {HUD and Jay Ram and Lorenss Martinsons and Parth Patel and Oskars Putans and Govind Pimpale and Mayank Singamreddy and Nguyen Nhat Minh},
+  title = {{HUD: An Evaluation Platform for Agents}},
+  date = {2025-04},
+  url = {https://github.com/hud-evals/hud-python},
+  langid = {en}
+}
+```
