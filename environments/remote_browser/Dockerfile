@@ -15,6 +15,9 @@ RUN uv pip install --python /opt/venv -e .
 # Create directories for logs and data
 RUN mkdir -p /app/logs /app/data
 
+ENV DISPLAY_WIDTH=1448
+ENV DISPLAY_HEIGHT=944
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 # Note: Environment variables for browser providers should be set at runtime:

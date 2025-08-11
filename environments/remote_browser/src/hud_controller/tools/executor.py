@@ -96,8 +96,11 @@ class BrowserExecutor(BaseExecutor):
 
     def _map_key(self, key: str) -> str:
         """Map a key name to Playwright format."""
+        key = key.strip()
         key_lower = key.lower()
-        return PLAYWRIGHT_KEY_MAP.get(key_lower, key)
+        mapped = PLAYWRIGHT_KEY_MAP.get(key_lower, key)
+        logger.debug(f"Mapping key '{key}' -> '{mapped}'")
+        return mapped
 
     async def _ensure_page(self):
         """Ensure browser and page are available."""
@@ -226,6 +229,7 @@ class BrowserExecutor(BaseExecutor):
 
             # Map keys to Playwright format
             mapped_keys = [self._map_key(key) for key in keys]
+            logger.info(f"Mapped keys: {mapped_keys}")
 
             # Press the keys as a combination (at the same time)
             key_combination = "+".join(mapped_keys)
@@ -233,7 +237,7 @@ class BrowserExecutor(BaseExecutor):
 
             logger.debug(f"Pressed keys: {keys} (mapped to: {mapped_keys})")
 
-            result = ContentResult(output=f"Pressed: {', '.join(keys)}")
+            result = ContentResult(output=f"Pressed: {', '.join(mapped_keys)}")
             if take_screenshot:
                 result = result + ContentResult(base64_image=await self.screenshot())
 

@@ -52,7 +52,7 @@ def trace(
             pass
 
         # Or with job_id:
-        with hud.trace("My Task", job_id="job-123") as task_run_id:
+        with hud.trace("My Task", job_id="550e8400-e29b-41d4-a716-446655440000") as task_run_id:
             pass
     """
     # Ensure telemetry is configured
