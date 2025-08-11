@@ -217,7 +217,7 @@ async def initialize_environment(session=None, progress_token=None):
 
         # Create and register computer tools
         computer_tools = create_computer_tools(browser_executor)
-        for tool_name, tool_instance in computer_tools.items():
+        for _, tool_instance in computer_tools.items():
             mcp.add_tool(tool_instance.mcp)
         await send_progress(80, f"Registered {len(computer_tools)} computer tools")
 

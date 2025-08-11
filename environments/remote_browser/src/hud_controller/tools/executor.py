@@ -9,6 +9,67 @@ from hud.tools.types import ContentResult
 
 logger = logging.getLogger(__name__)
 
+# Mapping from common key names to Playwright key names
+PLAYWRIGHT_KEY_MAP = {
+    # Control keys
+    "ctrl": "Control",
+    "control": "Control",
+    "alt": "Alt",
+    "shift": "Shift",
+    "meta": "Meta",
+    "cmd": "Meta",  # macOS Command key
+    "command": "Meta",
+    "win": "Meta",  # Windows key
+    "windows": "Meta",
+    
+    # Navigation keys
+    "enter": "Enter",
+    "return": "Enter",
+    "tab": "Tab",
+    "backspace": "Backspace",
+    "delete": "Delete",
+    "del": "Delete",
+    "escape": "Escape",
+    "esc": "Escape",
+    "space": "Space",
+    
+    # Arrow keys
+    "up": "ArrowUp",
+    "down": "ArrowDown",
+    "left": "ArrowLeft",
+    "right": "ArrowRight",
+    
+    # Page navigation
+    "pageup": "PageUp",
+    "pagedown": "PageDown",
+    "home": "Home",
+    "end": "End",
+    
+    # Function keys
+    "f1": "F1",
+    "f2": "F2",
+    "f3": "F3",
+    "f4": "F4",
+    "f5": "F5",
+    "f6": "F6",
+    "f7": "F7",
+    "f8": "F8",
+    "f9": "F9",
+    "f10": "F10",
+    "f11": "F11",
+    "f12": "F12",
+    
+    # Other keys
+    "insert": "Insert",
+    "ins": "Insert",
+    "pause": "Pause",
+    "capslock": "CapsLock",
+    "numlock": "NumLock",
+    "scrolllock": "ScrollLock",
+    "printscreen": "PrintScreen",
+    "contextmenu": "ContextMenu",
+}
+
 
 class BrowserExecutor(BaseExecutor):
     """
@@ -32,6 +93,11 @@ class BrowserExecutor(BaseExecutor):
         super().__init__(display_num)
         self.playwright_tool = playwright_tool
         logger.info("BrowserExecutor initialized with Playwright backend")
+
+    def _map_key(self, key: str) -> str:
+        """Map a key name to Playwright format."""
+        key_lower = key.lower()
+        return PLAYWRIGHT_KEY_MAP.get(key_lower, key)
 
     async def _ensure_page(self):
         """Ensure browser and page are available."""
@@ -71,7 +137,8 @@ class BrowserExecutor(BaseExecutor):
             # Handle modifier keys
             if hold_keys:
                 for key in hold_keys:
-                    await page.keyboard.down(key)
+                    mapped_key = self._map_key(key)
+                    await page.keyboard.down(mapped_key)
 
             # Map button names
             button_map = {
@@ -96,7 +163,8 @@ class BrowserExecutor(BaseExecutor):
             # Release modifier keys
             if hold_keys:
                 for key in hold_keys:
-                    await page.keyboard.up(key)
+                    mapped_key = self._map_key(key)
+                    await page.keyboard.up(mapped_key)
 
             logger.debug(f"Clicked at ({x}, {y}) with button {button}")
 
@@ -123,7 +191,8 @@ class BrowserExecutor(BaseExecutor):
             # Handle modifier keys
             if hold_keys:
                 for key in hold_keys:
-                    await page.keyboard.down(key)
+                    mapped_key = self._map_key(key)
+                    await page.keyboard.down(mapped_key)
 
             # Type the text
             await page.keyboard.type(text)
@@ -131,7 +200,8 @@ class BrowserExecutor(BaseExecutor):
             # Release modifier keys
             if hold_keys:
                 for key in hold_keys:
-                    await page.keyboard.up(key)
+                    mapped_key = self._map_key(key)
+                    await page.keyboard.up(mapped_key)
 
             logger.debug(f"Typed text: {text[:50]}...")
 
@@ -154,10 +224,14 @@ class BrowserExecutor(BaseExecutor):
         try:
             page = await self._ensure_page()
 
-            # Press the keys as a combination (at the same time)
-            await page.keyboard.press("+".join(keys))
+            # Map keys to Playwright format
+            mapped_keys = [self._map_key(key) for key in keys]
 
-            logger.debug(f"Pressed keys: {keys}")
+            # Press the keys as a combination (at the same time)
+            key_combination = "+".join(mapped_keys)
+            await page.keyboard.press(key_combination)
+
+            logger.debug(f"Pressed keys: {keys} (mapped to: {mapped_keys})")
 
             result = ContentResult(output=f"Pressed: {', '.join(keys)}")
             if take_screenshot:
@@ -251,7 +325,8 @@ class BrowserExecutor(BaseExecutor):
             # Handle modifier keys
             if hold_keys:
                 for key in hold_keys:
-                    await page.keyboard.down(key)
+                    mapped_key = self._map_key(key)
+                    await page.keyboard.down(mapped_key)
 
             # Start drag
             start_x, start_y = path[0]
@@ -268,7 +343,8 @@ class BrowserExecutor(BaseExecutor):
             # Release modifier keys
             if hold_keys:
                 for key in hold_keys:
-                    await page.keyboard.up(key)
+                    mapped_key = self._map_key(key)
+                    await page.keyboard.up(mapped_key)
 
             logger.debug(f"Dragged from {path[0]} through {len(path)} points")
 
