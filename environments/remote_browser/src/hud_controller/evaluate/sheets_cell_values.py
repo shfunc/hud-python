@@ -1,5 +1,6 @@
 """Evaluator to check if specific cells in a Google Sheet have expected values."""
 
+import asyncio
 import logging
 from typing import Dict, Any, List, Union
 from fastmcp import Context
@@ -50,6 +51,7 @@ async def sheets_cell_values(
         )
 
     page = playwright_tool.page
+    context = page.context
 
     # Verify we're on a Google Sheets page
     current_url = page.url
@@ -87,38 +89,155 @@ async def sheets_cell_values(
             info={"message": "No cell values to check"},
         )
 
-    # Get all the cell values from the sheet
-    try:
-        logger.info("Attempting to extract cell values from the page...")
+    # Try to navigate to the ANSWER sheet tab with retries
+    logger.info("=== ANSWER Sheet Navigation ===")
+    max_attempts = 3
+    answer_navigation_successful = False
 
-        # JavaScript to get all cell values
-        js_code = """
-        () => {
-            const cells = {};
-            const elements = document.querySelectorAll('[id^="waffle-grid-container"] [dir="ltr"]');
-            
-            elements.forEach(el => {
-                const id = el.id;
-                if (id && id.includes('-')) {
-                    const parts = id.split('-');
-                    const cellRef = parts[parts.length - 1];
-                    if (cellRef && /^[A-Z]+[0-9]+$/.test(cellRef)) {
-                        const spans = el.querySelectorAll('span');
-                        let value = '';
-                        if (spans.length > 0) {
-                            value = Array.from(spans).map(s => s.textContent || '').join('');
-                        }
-                        cells[cellRef] = value;
-                    }
-                }
-            });
-            
-            return cells;
-        }
-        """
-        sheet_cells = await page.evaluate(js_code)
-        logger.info(f"Found {len(sheet_cells)} cells in the sheet")
-        logger.info(f"Sheet cells: {sheet_cells}")
+    for attempt in range(1, max_attempts + 1):
+        try:
+            logger.info(
+                f"Attempt {attempt}/{max_attempts}: Attempting to find and navigate to ANSWER sheet tab..."
+            )
+
+            # Look for the ANSWER sheet tab using the selector
+            answer_tab_selector = 'span.docs-sheet-tab-name:has-text("ANSWER")'
+            logger.info(f"Searching for ANSWER tab with selector: {answer_tab_selector}")
+
+            # Check if the ANSWER tab exists
+            answer_tab_exists = await page.locator(answer_tab_selector).count() > 0
+            logger.info(
+                f"ANSWER tab search result (attempt {attempt}): {'Found' if answer_tab_exists else 'Not found'}"
+            )
+
+            if answer_tab_exists:
+                logger.info(f"✅ Found ANSWER sheet tab on attempt {attempt}, clicking on it...")
+                await page.locator(answer_tab_selector).click()
+                logger.info("Clicked on ANSWER tab, waiting for sheet to switch...")
+
+                # Wait a bit for the sheet to switch
+                await page.wait_for_timeout(1000)
+                logger.info(f"✅ Successfully navigated to ANSWER sheet on attempt {attempt}")
+                answer_navigation_successful = True
+                break
+            else:
+                logger.warning(f"⚠️ ANSWER sheet tab not found on attempt {attempt}")
+
+                if attempt < max_attempts:
+                    logger.info(f"Waiting 500ms before retry {attempt + 1}...")
+                    await page.wait_for_timeout(500)
+
+        except Exception as nav_error:
+            logger.error(
+                f"❌ Error navigating to ANSWER sheet on attempt {attempt}: {str(nav_error)}"
+            )
+
+            if attempt < max_attempts:
+                logger.info(f"Waiting 500ms before retry {attempt + 1}...")
+                await page.wait_for_timeout(500)
+
+    if not answer_navigation_successful:
+        logger.warning(
+            f"⚠️ Failed to navigate to ANSWER sheet after {max_attempts} attempts, proceeding with current sheet"
+        )
+
+    # Wait for 5 seconds to allow the sheet to load
+    await asyncio.sleep(5)
+
+    # Extract sheet content using clipboard method
+    try:
+        logger.info("=== File Content Extraction ===")
+
+        # Grant clipboard permissions
+        try:
+            await context.grant_permissions(["clipboard-read", "clipboard-write"])
+            logger.info("Granted clipboard read-write permissions")
+        except Exception as perm_error:
+            logger.warning(f"Failed to grant permissions: {str(perm_error)}")
+
+        logger.info("Extracting page contents")
+
+        # Clear any selection and focus on the sheet
+        await page.keyboard.press("Escape")
+
+        # Click on the sheet body to ensure focus
+        await page.locator("body").click(force=True)
+
+        # Click on the sheet container
+        await page.click(".fixed4-inner-container")
+
+        logger.info("Selecting all content with Ctrl+A")
+
+        # Select all content
+        await page.keyboard.press("Control+A")
+
+        # Copy to clipboard
+        await page.keyboard.press("Control+C")
+
+        # Get clipboard content
+        clipboard_content = await page.evaluate("() => navigator.clipboard.readText()")
+        logger.info(f"Successfully extracted {len(clipboard_content)} characters from file")
+
+        # Parse the clipboard content to extract cell values
+        # Split content into rows (by newlines)
+        rows = clipboard_content.rstrip("\n").split("\n")
+        logger.info(f"Split file content into {len(rows)} rows")
+
+        # Show first few rows for debugging
+        if len(rows) > 0:
+            logger.info("First few rows of content:")
+            for i, row in enumerate(rows[:3]):
+                row_preview = row.replace("\t", " | ")[:100]
+                logger.info(f"  Row {i + 1}: '{row_preview}{'...' if len(row) > 100 else ''}'")
+            if len(rows) > 3:
+                logger.info(f"  ... and {len(rows) - 3} more rows")
+
+        logger.info("=== Cell Reference Parsing ===")
+
+        # Parse cell references to get row and column indices
+        actual_values = {}
+        for cell_ref, expected_value in cell_values.items():
+            logger.info(f"Processing cell reference: '{cell_ref}' -> expected: '{expected_value}'")
+
+            # Extract row and column from cell reference (e.g., "A1" -> row=0, col=0)
+            if len(cell_ref) < 2 or not cell_ref[0].isalpha() or not cell_ref[1:].isdigit():
+                logger.error(
+                    f"❌ Invalid cell reference format: '{cell_ref}' (expected format: A1, B2, etc.)"
+                )
+                actual_values[cell_ref] = None
+                continue
+
+            col_letter = cell_ref[0].upper()
+            row_num = int(cell_ref[1:]) - 1  # Convert to 0-indexed
+            col_num = ord(col_letter) - ord("A")  # Convert A->0, B->1, etc.
+
+            logger.info(
+                f"  Parsed '{cell_ref}' -> row={row_num + 1} (0-indexed: {row_num}), col={col_letter} (0-indexed: {col_num})"
+            )
+
+            # Check if the row exists in our parsed content
+            if row_num < len(rows):
+                logger.info(f"  Row {row_num + 1} exists in content")
+                # Split the row into cells (by tabs)
+                cells = rows[row_num].split("\t")
+                logger.info(f"  Row {row_num + 1} has {len(cells)} columns")
+
+                # Check if the column exists in this row
+                if col_num < len(cells):
+                    actual_values[cell_ref] = cells[col_num]
+                    logger.info(f"  ✅ Found value for {cell_ref}: '{actual_values[cell_ref]}'")
+                else:
+                    logger.warning(
+                        f"  ❌ Column {col_letter} (index {col_num}) not found in row {row_num + 1} (has {len(cells)} columns)"
+                    )
+                    actual_values[cell_ref] = ""
+            else:
+                logger.warning(
+                    f"  ❌ Row {row_num + 1} not found in content (has {len(rows)} rows)"
+                )
+                actual_values[cell_ref] = ""
+
+        logger.info("=== Cell Value Comparison ===")
 
         # Check each expected cell value
         total_cells = len(cell_values)
@@ -126,14 +245,20 @@ async def sheets_cell_values(
         mismatches = []
 
         for cell_ref, expected_value in cell_values.items():
-            actual_value = sheet_cells.get(cell_ref, "")
-            logger.info(
-                f"Checking {cell_ref}: expected='{expected_value}', actual='{actual_value}'"
-            )
+            actual_value = actual_values.get(cell_ref, "")
+            logger.info(f"Comparing cell {cell_ref}:")
+            logger.info(f"  Expected: '{expected_value}' (type: {type(expected_value)})")
+            logger.info(f"  Actual:   '{actual_value}' (type: {type(actual_value)})")
 
-            if str(actual_value).strip() == str(expected_value).strip():
+            if actual_value is None:
+                mismatch_msg = f"Cell {cell_ref} not found"
+                mismatches.append({"cell": cell_ref, "expected": expected_value, "actual": ""})
+                logger.info(f"  ❌ {mismatch_msg}")
+            elif str(actual_value).strip() == str(expected_value).strip():
                 matching_cells += 1
-                logger.info(f"✓ {cell_ref} matches")
+                logger.info(
+                    f"  ✅ MATCH: '{str(actual_value).strip()}' == '{str(expected_value).strip()}'"
+                )
             else:
                 mismatches.append(
                     {
@@ -142,20 +267,24 @@ async def sheets_cell_values(
                         "actual": actual_value,
                     }
                 )
-                logger.warning(
-                    f"✗ {cell_ref} mismatch: expected '{expected_value}', got '{actual_value}'"
+                logger.info(
+                    f"  ❌ VALUE MISMATCH: '{str(actual_value).strip()}' != '{str(expected_value).strip()}'"
                 )
 
         # Calculate reward
-        if partial_rewarding:
-            reward = matching_cells / total_cells if total_cells > 0 else 0.0
+        if partial_rewarding and total_cells > 0:
+            reward = matching_cells / total_cells
+            logger.info(f"✅ Partial rewarding: {matching_cells}/{total_cells} = {reward}")
+        elif matching_cells == total_cells:
+            reward = 1.0
+            logger.info("✅ ALL cells match expected values!")
         else:
-            reward = 1.0 if matching_cells == total_cells else 0.0
+            reward = 0.0
+            logger.info("❌ NOT all cells match expected values")
+            logger.info(f"Mismatches: {mismatches}")
 
         success = matching_cells == total_cells
-        logger.info(
-            f"Evaluation result: {matching_cells}/{total_cells} cells match, reward={reward}"
-        )
+        logger.info(f"Final reward: {reward}")
 
         # Build content message
         if success:

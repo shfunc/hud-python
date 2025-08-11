@@ -8,7 +8,6 @@ from mcp import ErrorData, McpError
 from mcp.types import INTERNAL_ERROR, INVALID_PARAMS, ContentBlock
 from pydantic import Field
 
-from hud.tools.executors.base import BaseExecutor
 from hud.tools.types import ContentResult
 
 from .hud import HudComputerTool
@@ -16,6 +15,8 @@ from .settings import computer_settings
 
 if TYPE_CHECKING:
     from anthropic.types.beta import BetaToolComputerUse20250124Param
+
+    from hud.tools.executors.base import BaseExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -247,13 +248,13 @@ class AnthropicComputerTool(HudComputerTool):
                 # Anthropic sends single key or combo like "ctrl+a"
                 # Map to CLA standard key format
                 mapped_key = self._map_anthropic_key_to_cla(text)
-                
+
                 # Split key combination into list of keys
                 if "+" in mapped_key:
                     keys_list = [k.strip() for k in mapped_key.split("+")]
                 else:
                     keys_list = [mapped_key]
-                
+
                 result = await self.executor.press(keys=keys_list)
             else:
                 raise McpError(ErrorData(code=INVALID_PARAMS, message="text is required for key"))

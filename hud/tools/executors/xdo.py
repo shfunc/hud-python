@@ -347,7 +347,7 @@ class XDOExecutor(BaseExecutor):
         """Scroll at specified position."""
         # Convert scroll amounts to xdotool format
         scroll_button_map = {"up": 4, "down": 5, "left": 6, "right": 7}
-        
+
         # Convert pixels to wheel clicks
         # Standard conversion: 1 wheel click ≈ 100 pixels
         PIXELS_PER_WHEEL_CLICK = 100

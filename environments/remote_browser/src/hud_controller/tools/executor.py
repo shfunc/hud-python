@@ -21,7 +21,6 @@ PLAYWRIGHT_KEY_MAP = {
     "command": "Meta",
     "win": "Meta",  # Windows key
     "windows": "Meta",
-    
     # Navigation keys
     "enter": "Enter",
     "return": "Enter",
@@ -32,19 +31,16 @@ PLAYWRIGHT_KEY_MAP = {
     "escape": "Escape",
     "esc": "Escape",
     "space": "Space",
-    
     # Arrow keys
     "up": "ArrowUp",
     "down": "ArrowDown",
     "left": "ArrowLeft",
     "right": "ArrowRight",
-    
     # Page navigation
     "pageup": "PageUp",
     "pagedown": "PageDown",
     "home": "Home",
     "end": "End",
-    
     # Function keys
     "f1": "F1",
     "f2": "F2",
@@ -58,7 +54,6 @@ PLAYWRIGHT_KEY_MAP = {
     "f10": "F10",
     "f11": "F11",
     "f12": "F12",
-    
     # Other keys
     "insert": "Insert",
     "ins": "Insert",

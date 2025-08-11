@@ -2,17 +2,19 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from mcp import ErrorData, McpError
 from mcp.types import INTERNAL_ERROR, INVALID_PARAMS, ContentBlock, TextContent
 from pydantic import Field
 
 from hud.tools.computer.settings import computer_settings
-from hud.tools.executors.base import BaseExecutor
 from hud.tools.types import ContentResult
 
 from .hud import HudComputerTool
+
+if TYPE_CHECKING:
+    from hud.tools.executors.base import BaseExecutor
 
 logger = logging.getLogger(__name__)
 
