@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from mcp import ErrorData, McpError
 from mcp.types import INTERNAL_ERROR, INVALID_PARAMS, ContentBlock
 from pydantic import Field
 
+from hud.tools.executors.base import BaseExecutor
 from hud.tools.types import ContentResult
 
 from .hud import HudComputerTool
@@ -67,6 +68,10 @@ class AnthropicComputerTool(HudComputerTool):
 
     def __init__(
         self,
+        # Define within environment based on platform
+        executor: BaseExecutor | None = None,
+        platform_type: Literal["auto", "xdo", "pyautogui"] = "auto",
+        display_num: int | None = None,
         # Overrides for what dimensions the agent thinks it operates in
         width: int = computer_settings.ANTHROPIC_COMPUTER_WIDTH,
         height: int = computer_settings.ANTHROPIC_COMPUTER_HEIGHT,
@@ -89,6 +94,9 @@ class AnthropicComputerTool(HudComputerTool):
             description: Tool description (auto-generated from docstring if not provided)
         """
         super().__init__(
+            executor=executor,
+            platform_type=platform_type,
+            display_num=display_num,
             width=width,
             height=height,
             rescale_images=rescale_images,
