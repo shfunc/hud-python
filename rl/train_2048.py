@@ -1,0 +1,47 @@
+import verifiers as vf
+from hud_vf_gym import load_environment
+
+vf_env = load_environment(
+    taskset="hud-evals/2048-taskset",  # HuggingFace dataset
+    config_path="./configs/2048.yaml",
+    num_tasks=1
+)
+
+# Model configuration
+model_name = "Qwen/Qwen2.5-3B-Instruct"
+run_name = "2048-grpo_" + model_name.split("/")[-1].lower()
+
+# Load model and tokenizer
+model, tokenizer = vf.get_model_and_tokenizer(model_name)
+
+# Get default GRPO training arguments
+training_args = vf.grpo_defaults(run_name=run_name)
+training_args.gradient_accumulation_steps = 2
+
+training_args.per_device_train_batch_size = 8
+training_args.num_generations = 16
+training_args.max_tokens = 1024
+training_args.max_seq_len = 2048
+training_args.max_prompt_length = 2048
+training_args.learning_rate = 1e-6
+
+training_args.max_steps = 2
+training_args.save_strategy = "steps"
+training_args.save_steps = 10
+training_args.logging_steps = 1
+
+training_args.mask_env_responses = True
+
+# Create GRPO trainer with LoRA
+trainer = vf.GRPOTrainer(
+    model=model,
+    processing_class=tokenizer,
+    env=vf_env,
+    args=training_args,
+    peft_config=vf.lora_defaults(),
+)
+
+# Start training
+print(f"Starting training for {run_name}")
+print(f"Dataset size: {len(vf_env.dataset)}")
+trainer.train()

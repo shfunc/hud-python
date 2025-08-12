@@ -40,3 +40,7 @@ TODO.md
 CLAUDE.md
 
 *.csv
+
+# RL
+wandb/
+outputs/

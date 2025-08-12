@@ -1,7 +1,7 @@
 [
   {
     "id": "2048_target_128",
-    "prompt": "Play 2048 and reach the 128 tile. Combine tiles strategically to achieve this goal.",
+    "prompt": "You are playing 2048 and your goal is to reach the 128 tile. Combine tiles strategically to achieve this goal.",
     "mcp_config": {
       "local": {
         "command": "docker",
@@ -40,7 +40,7 @@
   },
   {
     "id": "2048_target_256",
-    "prompt": "Play 2048 and reach the 256 tile. Combine tiles strategically to achieve this goal.",
+    "prompt": "You are playing 2048 and your goal is to reach the 256 tile. Combine tiles strategically to achieve this goal.",
     "mcp_config": {
       "local": {
         "command": "docker",
@@ -79,7 +79,7 @@
   },
   {
     "id": "2048_target_512",
-    "prompt": "Play 2048 and reach the 512 tile. Combine tiles strategically to achieve this goal.",
+    "prompt": "You are playing 2048 and your goal is to reach the 512 tile. Combine tiles strategically to achieve this goal.",
     "mcp_config": {
       "local": {
         "command": "docker",
@@ -118,7 +118,7 @@
   },
   {
     "id": "2048_target_1024",
-    "prompt": "Play 2048 and reach the 1024 tile. Combine tiles strategically to achieve this goal.",
+    "prompt": "You are playing 2048 and your goal is to reach the 1024 tile. Combine tiles strategically to achieve this goal.",
     "mcp_config": {
       "local": {
         "command": "docker",
@@ -157,7 +157,7 @@
   },
   {
     "id": "2048_target_2048",
-    "prompt": "Play 2048 and reach the 2048 tile. Combine tiles strategically to achieve this goal.",
+    "prompt": "You are playing 2048 and your goal is to reach the 2048 tile. Combine tiles strategically to achieve this goal.",
     "mcp_config": {
       "local": {
         "command": "docker",
@@ -196,7 +196,7 @@
   },
   {
     "id": "2048_target_4096",
-    "prompt": "Play 2048 and reach the 4096 tile. Combine tiles strategically to achieve this goal.",
+    "prompt": "You are playing 2048 and your goal is to reach the 4096 tile. Combine tiles strategically to achieve this goal.",
     "mcp_config": {
       "local": {
         "command": "docker",
@@ -235,7 +235,7 @@
   },
   {
     "id": "2048_efficiency_10",
-    "prompt": "Play 2048 efficiently, maintaining at least 10.0 points per move.",
+    "prompt": "You are playing 2048. Your goal is to play efficiently, maintaining at least 10.0 points per move.",
     "mcp_config": {
       "local": {
         "command": "docker",
@@ -274,7 +274,7 @@
   },
   {
     "id": "2048_efficiency_15",
-    "prompt": "Play 2048 efficiently, maintaining at least 15.0 points per move.",
+    "prompt": "You are playing 2048. Your goal is to play efficiently, maintaining at least 15.0 points per move.",
     "mcp_config": {
       "local": {
         "command": "docker",
@@ -313,7 +313,7 @@
   },
   {
     "id": "2048_efficiency_20",
-    "prompt": "Play 2048 efficiently, maintaining at least 18.0 points per move.",
+    "prompt": "You are playing 2048. Your goal is to play efficiently, maintaining at least 18.0 points per move.",
     "mcp_config": {
       "local": {
         "command": "docker",
@@ -352,7 +352,7 @@
   },
   {
     "id": "2048_3x3_target_256",
-    "prompt": "Play 2048 on a 3x3 board and reach the 256 tile.",
+    "prompt": "You are playing 2048 on a 3x3 board and your goal is to reach the 256 tile. Combine tiles strategically to achieve this goal.",
     "mcp_config": {
       "local": {
         "command": "docker",
@@ -391,7 +391,7 @@
   },
   {
     "id": "2048_5x5_target_4096",
-    "prompt": "Play 2048 on a 5x5 board and reach the 4096 tile.",
+    "prompt": "You are playing 2048 on a 5x5 board and your goal is to reach the 4096 tile. Combine tiles strategically to achieve this goal.",
     "mcp_config": {
       "local": {
         "command": "docker",
@@ -430,7 +430,7 @@
   },
   {
     "id": "2048_6x6_target_8192",
-    "prompt": "Play 2048 on a 6x6 board and reach the 8192 tile.",
+    "prompt": "You are playing 2048 on a 6x6 board and your goal is to reach the 8192 tile. Combine tiles strategically to achieve this goal.",
     "mcp_config": {
       "local": {
         "command": "docker",
@@ -469,7 +469,7 @@
   },
   {
     "id": "2048_highscore_4x4",
-    "prompt": "Play 2048 and achieve the highest tile possible. Don't stop at 2048!",
+    "prompt": "You are playing 2048 and your goal is to achieve the highest tile possible. Don't stop at 2048!",
     "mcp_config": {
       "local": {
         "command": "docker",
@@ -508,7 +508,7 @@
   },
   {
     "id": "2048_highscore_5x5",
-    "prompt": "Play 2048 on a 5x5 board and achieve the highest tile possible.",
+    "prompt": "You are playing 2048 on a 5x5 board and your goal is to achieve the highest tile possible. Combine tiles strategically to achieve this goal.",
     "mcp_config": {
       "local": {
         "command": "docker",
