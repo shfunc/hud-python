@@ -14,8 +14,8 @@ import asyncio
 import argparse
 import os
 import hud
-from hud.mcp import ClaudeMCPAgent
-from hud.mcp.client import MCPClient
+from hud.agents import ClaudeMCPAgent
+from hud.clients import MCPClient
 from hud.settings import settings
 from hud.datasets import TaskConfig
 

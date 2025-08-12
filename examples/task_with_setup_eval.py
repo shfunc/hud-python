@@ -18,8 +18,8 @@ This pattern is essential for:
 import asyncio
 import hud
 from hud.datasets import TaskConfig
-from hud.mcp import ClaudeMCPAgent
-from hud.mcp.client import MCPClient
+from hud.agents import ClaudeMCPAgent
+from hud.clients import MCPClient
 
 
 async def main():

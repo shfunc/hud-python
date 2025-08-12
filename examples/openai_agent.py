@@ -13,8 +13,8 @@ OpenAI models excel at function calling and structured reasoning.
 
 import asyncio
 import hud
-from hud.mcp import OpenAIMCPAgent
-from hud.mcp.client import MCPClient
+from hud.agents import OpenAIMCPAgent
+from hud.clients import MCPClient
 
 
 async def main():

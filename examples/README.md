@@ -57,8 +57,8 @@ python task_with_setup_eval.py
 ```python
 from hud.telemetry import trace
 from hud.datasets import TaskConfig
-from hud.mcp.client import MCPClient
-from hud.mcp import ClaudeMCPAgent
+from hud.clients import MCPClient
+from hud.agents import ClaudeMCPAgent
 
 with trace("My Demo"):
     task = TaskConfig(...)
