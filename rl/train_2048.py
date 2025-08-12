@@ -1,4 +1,4 @@
-'''
+"""
 Training Script for 2048 (2 GPUs)
 Terminal 1 - Start vLLM server:
   CUDA_VISIBLE_DEVICES=0 vf-vllm \
@@ -8,7 +8,8 @@ Terminal 1 - Start vLLM server:
 
   Terminal 2 - Run training:
   CUDA_VISIBLE_DEVICES=1 python train_2048.py
-'''
+"""
+from __future__ import annotations
 
 import verifiers as vf
 from hud_vf_gym import load_environment
@@ -54,6 +55,6 @@ trainer = vf.GRPOTrainer(
 )
 
 # Start training
-print(f"Starting training for {run_name}")
-print(f"Dataset size: {len(vf_env.dataset)}")
+print(f"Starting training for {run_name}")  # noqa: T201
+print(f"Dataset size: {len(vf_env.dataset)}")  # noqa: T201
 trainer.train()
