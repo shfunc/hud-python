@@ -1,3 +1,15 @@
+'''
+Training Script for 2048 (2 GPUs)
+Terminal 1 - Start vLLM server:
+  CUDA_VISIBLE_DEVICES=0 vf-vllm \
+      --model Qwen/Qwen2.5-3B-Instruct \
+      --enforce-eager \
+      --disable-log-requests
+
+  Terminal 2 - Run training:
+  CUDA_VISIBLE_DEVICES=1 python train_2048.py
+'''
+
 import verifiers as vf
 from hud_vf_gym import load_environment
 

@@ -105,6 +105,8 @@ trainer = GRPOTrainer(
 trainer.train()
 ```
 
+To train the 2048 agent on 2 A100 GPUs, use `train_2048.py` with one GPU for inference and one for training (see script header for setup commands).
+
 ## Configuration
 
 ### Environment Configuration
@@ -134,6 +136,18 @@ system_prompt: |
     Usage: <tool>tool_name(args)</tool>
   ...
 ```
+
+##### Thinking Mode
+Controls whether agents should use reasoning tags:
+
+```yaml
+parser:
+  use_thinking: true   # Enable/disable <think> tag parsing (default: true)
+  xml_weight: 0.6      # Weight for XML format validation
+  action_weight: 0.4   # Weight for action syntax validation
+```
+
+When `use_thinking: false`, agents should output only tool calls without thinking tags (useful for production or when reasoning isn't needed).
 
 ##### Action Mappings
 The core of the config-driven architecture. Maps agent-facing tools to underlying MCP tools:
@@ -392,15 +406,6 @@ dataset.push_to_hub("your-org/your-dataset")
 2. **XML parsing failures**: Check that agents use proper `<tool>` and `<think>` tags
 3. **MCP connection issues**: Verify MCP configuration in dataset
 4. **Low rewards**: Review rubric weights and ensure evaluation tool returns grades
-
-### Debug Mode
-
-Enable detailed logging:
-
-```yaml
-logging:
-  level: "DEBUG"
-```
 
 ## License
 
