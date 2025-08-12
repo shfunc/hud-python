@@ -25,7 +25,7 @@ training_args.max_seq_len = 2048
 training_args.max_prompt_length = 2048
 training_args.learning_rate = 1e-6
 
-training_args.max_steps = 2
+training_args.max_steps = 100
 training_args.save_strategy = "steps"
 training_args.save_steps = 10
 training_args.logging_steps = 1
