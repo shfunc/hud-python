@@ -9,7 +9,7 @@ system_prompt: |
 
 # Default settings
 defaults:
-  max_turns: 5
+  max_turns: 100
 
 # Action mappings for 2048 game tools
 # Each direction is exposed as a separate tool to the agent
@@ -52,6 +52,6 @@ parser:
 # Rubric configuration for 2048
 rubric:
   weights:
-    task_completion: 0.7       # Primary score from evaluation (max tile achieved)
-    tool_execution: 0.1       # Successful move execution rate
-    format_compliance: 0.2     # XML format and action syntax
+    task_completion: 0.8       # Primary focus on reaching target tile
+    tool_execution: 0.05      # Minimal - moves usually valid
+    format_compliance: 0.15   # Some weight for correct XML format
