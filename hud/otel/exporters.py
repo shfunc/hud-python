@@ -338,7 +338,7 @@ class HudSpanExporter(SpanExporter):
                     "metadata": metadata,
                     "telemetry": telemetry_spans,
                 }
-                
+
                 # Only include step_count if we found any steps
                 if step_count > 0:
                     payload["step_count"] = step_count

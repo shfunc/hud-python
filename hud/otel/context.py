@@ -78,33 +78,33 @@ def get_current_step_count() -> int:
             return int(step_count)
         except ValueError:
             pass
-    
+
     # Fallback to contextvars
     return current_step_count.get()
 
 
 def increment_step_count() -> int:
     """Increment the current step count and update baggage.
-    
+
     Returns:
         The new step count after incrementing
     """
     # Get current count
     current = get_current_step_count()
     new_count = current + 1
-    
+
     # Update contextvar
     current_step_count.set(new_count)
-    
+
     # Update baggage for propagation
     ctx = baggage.set_baggage(STEP_COUNT_KEY, str(new_count))
     context.attach(ctx)
-    
+
     # Update current span if one exists
     span = otel_trace.get_current_span()
     if span and span.is_recording():
         span.set_attribute("hud.step_count", new_count)
-    
+
     return new_count
 
 
@@ -162,10 +162,10 @@ async def _update_task_status_async(
         # Add trace name to metadata
         if trace_name:
             data["metadata"] = {"trace_name": trace_name}
-            
+
         if task_id:
             data["task_id"] = task_id
-            
+
         # Include current step count as a top-level field
         step_count = get_current_step_count()
         data["step_count"] = step_count
@@ -220,10 +220,10 @@ def _update_task_status_sync(
         # Add trace name to metadata
         if trace_name:
             data["metadata"] = {"trace_name": trace_name}
-            
+
         if task_id:
             data["task_id"] = task_id
-            
+
         # Include current step count as a top-level field
         step_count = get_current_step_count()
         data["step_count"] = step_count

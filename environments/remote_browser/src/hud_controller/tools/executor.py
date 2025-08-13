@@ -38,7 +38,12 @@ PLAYWRIGHT_KEY_MAP = {
     "right": "ArrowRight",
     # Page navigation
     "pageup": "PageUp",
+    "page_up": "PageUp",  # Support underscore variant
     "pagedown": "PageDown",
+    "page_down": "PageDown",  # Support underscore variant
+    "next": "PageDown",  # Common alias for page down
+    "previous": "PageUp",  # Common alias for page up
+    "prev": "PageUp",  # Short alias for page up
     "home": "Home",
     "end": "End",
     # Function keys

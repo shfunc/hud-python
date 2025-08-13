@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import os
-from typing import cast
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -13,7 +12,6 @@ from hud.datasets import (
     TaskConfig,
     run_dataset,
     save_taskconfigs,
-    to_taskconfigs,
 )
 from hud.types import MCPToolCall
 
@@ -125,49 +123,6 @@ class TestTaskConfigExtended:
 class TestDatasetOperations:
     """Test dataset conversion and operations."""
 
-    def test_to_taskconfigs_with_nulls(self):
-        """Test handling of null/missing fields in dataset."""
-        from datasets import Dataset
-
-        mock_dataset_data = [
-            {
-                "prompt": "Minimal task",
-                "mcp_config": json.dumps({"basic": True}),
-                # All optional fields missing
-            },
-            {
-                "id": None,  # Explicit None
-                "prompt": "Task with nulls",
-                "mcp_config": json.dumps({"test": True}),
-                "metadata": None,
-                "setup_tool": None,
-                "evaluate_tool": None,
-            },
-        ]
-
-        mock_dataset = Dataset.from_list(mock_dataset_data)
-        tasks = to_taskconfigs(mock_dataset)
-
-        assert len(tasks) == 2
-        assert tasks[0].id is None
-        assert tasks[0].metadata == {}
-        assert tasks[0].setup_tool is None
-        assert tasks[0].evaluate_tool is None
-
-        # Second task should handle None values properly
-        assert tasks[1].id is None
-        assert tasks[1].metadata == {}
-
-    def test_to_taskconfigs_invalid_json(self):
-        """Test error handling for invalid JSON in dataset."""
-        from datasets import Dataset
-
-        mock_dataset_data = [{"prompt": "Bad JSON task", "mcp_config": "not-valid-json"}]
-        mock_dataset = Dataset.from_list(mock_dataset_data)
-
-        with pytest.raises(json.JSONDecodeError):
-            to_taskconfigs(mock_dataset)
-
     def test_save_taskconfigs_empty_list(self):
         """Test saving empty task list."""
         with patch("datasets.Dataset") as MockDataset:
@@ -237,7 +192,7 @@ class TestRunDatasetExtended:
             },
         )
 
-        tasks = [TaskConfig(prompt="Task 1", mcp_config={"url": "test1"})]
+        tasks = [{"prompt": "Task 1", "mcp_config": {"url": "test1"}}]
 
         custom_metadata = {
             "experiment_id": "exp-123",
@@ -317,7 +272,7 @@ class TestRunDatasetExtended:
         mock_agent_class.side_effect = create_mock_agent
         mock_agent_class.__name__ = "MockAgent"
 
-        tasks = [TaskConfig(prompt=f"Task {i}", mcp_config={"url": f"test{i}"}) for i in range(3)]
+        tasks = [{"prompt": f"Task {i}", "mcp_config": {"url": f"test{i}"}} for i in range(3)]
 
         with (
             patch("hud.client.MCPClient") as MockClient,
@@ -362,7 +317,7 @@ class TestRunDatasetExtended:
             },
         )
 
-        tasks = [TaskConfig(prompt=f"Task {i}", mcp_config={"url": f"test{i}"}) for i in range(3)]
+        tasks = [{"prompt": f"Task {i}", "mcp_config": {"url": f"test{i}"}} for i in range(3)]
 
         # Track client instances
         client_instances = []
@@ -393,10 +348,12 @@ class TestRunDatasetExtended:
     async def test_run_dataset_no_mcp_config_warning(self):
         """Test warning when task has no mcp_config."""
         # Create a mock task that returns None for mcp_config to trigger the warning
-        from hud.datasets import TaskConfig
 
         # Create a task with valid config but mock it to return None
-        task = TaskConfig(prompt="Test task", mcp_config={"dummy": "config"})
+        task: dict[str, Any] = {
+            "prompt": "Test task",
+            "mcp_config": {"dummy": "config"},
+        }
 
         from hud.agent import MCPAgent
 

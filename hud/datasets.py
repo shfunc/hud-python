@@ -8,14 +8,12 @@ import logging
 from string import Template
 from typing import TYPE_CHECKING, Any, cast
 
-from datasets import Dataset, DatasetDict, IterableDataset, IterableDatasetDict, load_dataset
+from datasets import Dataset, load_dataset
 from pydantic import BaseModel, Field, field_validator
 
 from .types import MCPToolCall
 
 if TYPE_CHECKING:
-    from datasets import Dataset, DatasetDict, IterableDataset, IterableDatasetDict
-
     from hud.agent import MCPAgent
 
 logger = logging.getLogger("hud.datasets")
@@ -65,14 +63,14 @@ class TaskConfig(BaseModel):
         """Convert dict to MCPToolCall instance, parsing JSON strings first."""
         if v is None:
             return None
-        
+
         # Parse JSON string if needed
         if isinstance(v, str):
             try:
                 v = json.loads(v)
             except json.JSONDecodeError as e:
                 raise ValueError(f"Invalid JSON string: {e}") from e
-        
+
         if isinstance(v, dict):
             return MCPToolCall(**v)
         if isinstance(v, list):
@@ -136,7 +134,7 @@ async def run_dataset(
 
     Args:
         name: Name for the job
-        dataset: HuggingFace dataset identifier (e.g. "hud-evals/SheetBench-50"), 
+        dataset: HuggingFace dataset identifier (e.g. "hud-evals/SheetBench-50"),
                 Dataset object, OR list of TaskConfig objects
         agent_class: Agent class to instantiate (e.g., ClaudeMCPAgent)
         agent_config: Configuration for agent (model, etc.)
@@ -175,17 +173,17 @@ async def run_dataset(
     if isinstance(dataset, str):
         logger.info("Loading dataset %s from HuggingFace...", dataset)
         dataset_link = dataset
-        dataset = load_dataset(dataset, split=split)
+        dataset = cast("Dataset", load_dataset(dataset, split=split))
 
     # Create job context
     job_metadata = metadata or {}
     job_metadata["agent_class"] = agent_class.__name__
     if agent_config:
         job_metadata["agent_config"] = agent_config
-    
+
     # Extract dataset verification info if available
     if isinstance(dataset, Dataset) and not dataset_link:
-        general_info = list(dataset.info.__dict__["download_checksums"].keys())[0].split("/")
+        general_info = next(iter(dataset.info.__dict__["download_checksums"].keys())).split("/")
         project = general_info[3]
         dataset_name = general_info[4].split("@")[0]
         dataset_link = f"{project}/{dataset_name}"
@@ -195,14 +193,14 @@ async def run_dataset(
         sem = asyncio.Semaphore(max_concurrent)
         results: list[Any | None] = [None] * len(dataset)
 
-        async def _worker(index: int, task_dict: dict[str, Any], max_steps: int = 40) -> None:
+        async def _worker(index: int, task_dict: Any, max_steps: int = 40) -> None:
             async with sem:
                 # Create trace for this task
                 task_name = task_dict.get("prompt") or f"Task {index}"
                 with hud.trace(task_name, job_id=job_obj.id, task_id=task_dict.get("id")):
                     # Convert dict to TaskConfig here, at trace level
                     task = TaskConfig(**task_dict)
-                    
+
                     # Create fresh MCP client per task
                     if task.mcp_config:
                         client = MCPClient(mcp_config=task.mcp_config)
@@ -223,7 +221,6 @@ async def run_dataset(
         )
 
     return results
-
 
 
 def save_taskconfigs(taskconfigs: list[dict[str, Any]], repo_id: str, **kwargs: Any) -> None:

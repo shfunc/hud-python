@@ -38,33 +38,33 @@ class FastMCPHUDClient(BaseHUDClient):
 
         # Create custom transport with retry support for HTTP servers
         transport = self._create_transport_with_retry(mcp_config)
-        
+
         # Create FastMCP client with the custom transport
         client_info = Implementation(name="hud-python", version="3.0.3")
         self._client = FastMCPClient(transport, client_info=client_info)
         self._stack: AsyncExitStack | None = None
-    
+
     def _create_transport_with_retry(self, mcp_config: dict[str, dict[str, Any]]) -> Any:
         """Create transport with retry support for HTTP-based servers."""
         from fastmcp.client.transports import StreamableHttpTransport
 
         from hud.clients.utils.retry_transport import create_retry_httpx_client
-        
+
         # If single server with HTTP URL, create transport directly with retry
         if len(mcp_config) == 1:
             _, server_config = next(iter(mcp_config.items()))
             url = server_config.get("url", "")
-            
+
             if url.startswith("http") and not url.endswith("/sse"):
                 headers = server_config.get("headers", {})
-                
+
                 logger.debug("Enabling retry mechanism for HTTP transport to %s", url)
                 return StreamableHttpTransport(
                     url=url,
                     headers=headers,
                     httpx_client_factory=create_retry_httpx_client,
                 )
-        
+
         # For all other cases, use standard config (no retry)
         return {"mcpServers": mcp_config}
 
@@ -131,7 +131,7 @@ class FastMCPHUDClient(BaseHUDClient):
         try:
             # Close the FastMCP client - this calls transport.close()
             await self._client.close()
-            
+
             # CRITICAL: Cancel any lingering transport tasks to ensure subprocess termination
             # FastMCP's StdioTransport creates asyncio tasks that can outlive the client
             # We need to handle nested transport structures (MCPConfigTransport -> StdioTransport)
@@ -140,7 +140,7 @@ class FastMCPHUDClient(BaseHUDClient):
                 # If it's an MCPConfigTransport with a nested transport
                 if hasattr(transport, "transport"):
                     transport = transport.transport
-                
+
                 # Now check if it's a StdioTransport with a _connect_task
                 if (
                     hasattr(transport, "_connect_task")
@@ -155,7 +155,7 @@ class FastMCPHUDClient(BaseHUDClient):
                         logger.debug("Transport task cancelled successfully")
                     except Exception as e:
                         logger.debug("Error canceling transport task: %s", e)
-                    
+
         except Exception as e:
             logger.debug("Error while closing FastMCP client transport: %s", e)
 

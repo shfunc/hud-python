@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, Any
 
 from hud.server import make_request, make_request_sync
 from hud.settings import settings
-from hud.utils.async_utils import fire_and_forget
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
@@ -27,7 +26,13 @@ logger = logging.getLogger(__name__)
 class Job:
     """A job represents a collection of related tasks."""
 
-    def __init__(self, job_id: str, name: str, metadata: dict[str, Any] | None = None, dataset_link: str | None = None) -> None:
+    def __init__(
+        self,
+        job_id: str,
+        name: str,
+        metadata: dict[str, Any] | None = None,
+        dataset_link: str | None = None,
+    ) -> None:
         self.id = job_id
         self.name = name
         self.metadata = metadata or {}
@@ -52,7 +57,7 @@ class Job:
                 }
                 if self.dataset_link:
                     payload["dataset_link"] = self.dataset_link
-                    
+
                 await make_request(
                     method="POST",
                     url=f"{settings.base_url}/v2/jobs/{self.id}/status",
@@ -74,7 +79,7 @@ class Job:
                 }
                 if self.dataset_link:
                     payload["dataset_link"] = self.dataset_link
-                    
+
                 make_request_sync(
                     method="POST",
                     url=f"{settings.base_url}/v2/jobs/{self.id}/status",
@@ -92,6 +97,71 @@ class Job:
 _current_job: Job | None = None
 
 
+def _print_job_url(job_id: str, job_name: str) -> None:
+    """Print the job URL in a colorful box."""
+    # Only print HUD URL if HUD telemetry is enabled and has API key
+    if not (settings.telemetry_enabled and settings.api_key):
+        return
+
+    url = f"https://app.hud.so/jobs/{job_id}"
+    header = f"🚀 Job '{job_name}' started:"
+
+    # ANSI color codes
+    DIM = "\033[90m"  # Dim/Gray for border
+    GOLD = "\033[33m"  # Gold/Yellow for URL
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+
+    # Calculate box width based on the longest line
+    box_width = max(len(url), len(header)) + 6
+
+    # Box drawing characters
+    top_border = "╔" + "═" * (box_width - 2) + "╗"
+    bottom_border = "╚" + "═" * (box_width - 2) + "╝"
+    divider = "╟" + "─" * (box_width - 2) + "╢"
+
+    # Center the content
+    header_padding = (box_width - len(header) - 2) // 2
+    url_padding = (box_width - len(url) - 2) // 2
+
+    # Print the box
+    print(f"\n{DIM}{top_border}{RESET}")  # noqa: T201
+    print(  # noqa: T201
+        f"{DIM}║{RESET}{' ' * header_padding}{header}{' ' * (box_width - len(header) - header_padding - 3)}{DIM}║{RESET}"  # noqa: E501
+    )
+    print(f"{DIM}{divider}{RESET}")  # noqa: T201
+    print(  # noqa: T201
+        f"{DIM}║{RESET}{' ' * url_padding}{BOLD}{GOLD}{url}{RESET}{' ' * (box_width - len(url) - url_padding - 2)}{DIM}║{RESET}"  # noqa: E501
+    )
+    print(f"{DIM}{bottom_border}{RESET}\n")  # noqa: T201
+
+
+def _print_job_complete_url(job_id: str, job_name: str, error_occurred: bool = False) -> None:
+    """Print the job completion URL with appropriate messaging."""
+    # Only print HUD URL if HUD telemetry is enabled and has API key
+    if not (settings.telemetry_enabled and settings.api_key):
+        return
+
+    url = f"https://app.hud.so/jobs/{job_id}"
+
+    # ANSI color codes
+    GREEN = "\033[92m"
+    RED = "\033[91m"
+    GOLD = "\033[33m"
+    RESET = "\033[0m"
+    DIM = "\033[2m"
+    BOLD = "\033[1m"
+
+    if error_occurred:
+        print(  # noqa: T201
+            f"\n{RED}✗ Job '{job_name}' failed!{RESET} {DIM}View details at:{RESET} {BOLD}{GOLD}{url}{RESET}\n"  # noqa: E501
+        )
+    else:
+        print(  # noqa: T201
+            f"\n{GREEN}✓ Job '{job_name}' complete!{RESET} {DIM}View all results at:{RESET} {BOLD}{GOLD}{url}{RESET}\n"  # noqa: E501
+        )
+
+
 def get_current_job() -> Job | None:
     """Get the currently active job, if any."""
     return _current_job
@@ -99,7 +169,10 @@ def get_current_job() -> Job | None:
 
 @contextmanager
 def job(
-    name: str, metadata: dict[str, Any] | None = None, job_id: str | None = None, dataset_link: str | None = None
+    name: str,
+    metadata: dict[str, Any] | None = None,
+    job_id: str | None = None,
+    dataset_link: str | None = None,
 ) -> Generator[Job, None, None]:
     """Context manager for job tracking.
 
@@ -134,18 +207,26 @@ def job(
     try:
         # Update status to running synchronously to ensure job is registered before tasks start
         job_obj.update_status_sync("running")
+        # Print the nice job URL box
+        _print_job_url(job_obj.id, job_obj.name)
         yield job_obj
         # Update status to completed synchronously to ensure it completes before process exit
         job_obj.update_status_sync("completed")
+        # Print job completion message
+        _print_job_complete_url(job_obj.id, job_obj.name, error_occurred=False)
     except Exception:
         # Update status to failed synchronously to ensure it completes before process exit
         job_obj.update_status_sync("failed")
+        # Print job failure message
+        _print_job_complete_url(job_obj.id, job_obj.name, error_occurred=True)
         raise
     finally:
         _current_job = old_job
 
 
-def create_job(name: str, metadata: dict[str, Any] | None = None, dataset_link: str | None = None) -> Job:
+def create_job(
+    name: str, metadata: dict[str, Any] | None = None, dataset_link: str | None = None
+) -> Job:
     """Create a job without using context manager.
 
     Useful when you need explicit control over job lifecycle.

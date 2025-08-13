@@ -10,9 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 @evaluate.tool("sheet_contains")
-async def sheet_contains(
-    ctx: Context, args: Union[str, List[str]], partial_rewarding: bool = True
-):
+async def sheet_contains(ctx: Context, args: Union[str, List[str]], partial_rewarding: bool = True):
     """Check if a Google Sheet contains specific text by copying content to clipboard.
 
     Args:

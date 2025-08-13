@@ -9,6 +9,7 @@ Terminal 1 - Start vLLM server:
   Terminal 2 - Run training:
   CUDA_VISIBLE_DEVICES=1 python train_2048.py
 """
+
 from __future__ import annotations
 
 import verifiers as vf

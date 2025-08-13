@@ -6,7 +6,6 @@ import asyncio
 import json
 import sys
 from pathlib import Path  # noqa: TC003
-import click
 
 import typer
 from rich.console import Console
@@ -39,7 +38,7 @@ console = Console()
 def analyze(
     params: list[str] = typer.Argument(  # type: ignore[arg-type]  # noqa: B008
         ...,  # Required positional arguments
-        help="Docker image followed by optional Docker run arguments (e.g., 'hud-image:latest -e KEY=value')",
+        help="Docker image followed by optional Docker run arguments (e.g., 'hud-image:latest -e KEY=value')",  # noqa: E501
     ),
     config: Path = typer.Option(  # noqa: B008
         None,
@@ -93,7 +92,7 @@ def analyze(
     elif params:
         image, *docker_args = params
         # Build Docker command from image and args
-        docker_cmd = ["docker", "run", "--rm", "-i"] + docker_args + [image]
+        docker_cmd = ["docker", "run", "--rm", "-i", *docker_args, image]
         asyncio.run(analyze_environment(docker_cmd, output_format, verbose))
     else:
         console.print("[red]Error: Must specify either a Docker image, --config, or --cursor[/red]")
@@ -109,7 +108,7 @@ def analyze(
 def debug(
     params: list[str] = typer.Argument(  # type: ignore[arg-type]  # noqa: B008
         ...,
-        help="Docker image followed by optional Docker run arguments (e.g., 'hud-image:latest -e KEY=value')",
+        help="Docker image followed by optional Docker run arguments (e.g., 'hud-image:latest -e KEY=value')",  # noqa: E501
     ),
     config: Path = typer.Option(  # noqa: B008
         None,
@@ -165,7 +164,7 @@ def debug(
     elif params:
         image, *docker_args = params
         # Build Docker command
-        command = ["docker", "run", "--rm", "-i"] + docker_args + [image]
+        command = ["docker", "run", "--rm", "-i", *docker_args, image]
     else:
         console.print("[red]Error: Must specify either a Docker image, --config, or --cursor[/red]")
         console.print("\nExamples:")

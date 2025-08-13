@@ -61,42 +61,39 @@ class HudEnrichmentProcessor(SpanProcessor):
         """Determine if this span represents a tool call that should increment step count."""
         # Check span attributes
         attrs = span.attributes or {}
-        
+
         # Look for MCP tool call indicators
         # Option 1: Direct category attribute
         if attrs.get("category") == "mcp":
             # Check for tool name in various places
             tool_name = None
-            
+
             # Try method name - check multiple possible locations
             method_name = (
-                attrs.get("method_name") or  # Direct attribute
-                attrs.get("mcp.method.name") or
-                attrs.get("semconv_ai.mcp.method_name")
+                attrs.get("method_name")  # Direct attribute
+                or attrs.get("mcp.method.name")
+                or attrs.get("semconv_ai.mcp.method_name")
             )
             if method_name == "tools/call":
                 # For tools/call, the actual tool name might be in the request
                 request = attrs.get("request")
                 if request and isinstance(request, dict):
                     tool_name = request.get("name")
-            
+
             # Check if it's a lifecycle tool
             if tool_name and tool_name not in LIFECYCLE_TOOLS:
                 return True
-                
+
         # Option 2: Check span name pattern (e.g., "tool_name.mcp")
         span_name = span.name
         if span_name and span_name.endswith(".mcp"):
             tool_name = span_name[:-4]  # Remove .mcp suffix
-            if (
-                tool_name not in LIFECYCLE_TOOLS
-                and (
-                    attrs.get("mcp.method.name") == "tools/call"
-                    or attrs.get("semconv_ai.mcp.method_name") == "tools/call"
-                )
+            if tool_name not in LIFECYCLE_TOOLS and (
+                attrs.get("mcp.method.name") == "tools/call"
+                or attrs.get("semconv_ai.mcp.method_name") == "tools/call"
             ):
                 return True
-        
+
         return False
 
     def on_end(self, span: ReadableSpan) -> None:

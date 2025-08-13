@@ -44,7 +44,7 @@ _cleanup_in_progress = False
 async def lifespan(app: FastMCP):
     """FastMCP lifespan manager - handles startup and cleanup."""
     global browser_provider, playwright_tool, browser_executor, _cleanup_in_progress
-    
+
     try:
         yield {}  # Nothing to initialize at startup
     finally:
@@ -52,10 +52,10 @@ async def lifespan(app: FastMCP):
         if _cleanup_in_progress:
             logger.info("Cleanup already in progress, skipping")
             return
-            
+
         _cleanup_in_progress = True
         logger.info("🔧 Lifespan cleanup started")
-        
+
         try:
             # Only close the browser through the provider - this is what actually terminates the remote session
             # The playwright tool just has a connection to the remote browser, it doesn't need separate cleanup
@@ -70,7 +70,7 @@ async def lifespan(app: FastMCP):
                     logger.error(f"Error closing browser provider: {e}")
             else:
                 logger.info("No browser provider to close")
-                
+
             logger.info("✅ Lifespan cleanup finished")
         except Exception as e:
             logger.error(f"Error during lifespan cleanup: {e}")
@@ -289,7 +289,6 @@ async def initialize_environment(session=None, progress_token=None):
                 message=f"Initialization failed: {str(e)}",
             )
         raise
-
 
 
 if __name__ == "__main__":

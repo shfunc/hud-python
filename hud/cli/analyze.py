@@ -60,16 +60,17 @@ async def analyze_environment(docker_cmd: list[str], output_format: str, verbose
 
         except Exception as e:
             progress.update(task, description=f"[red]✗ Failed: {e}[/red]")
-            
+
             # On Windows, Docker stderr might not propagate properly
             import platform
+
             if platform.system() == "Windows" and "docker" in docker_cmd[0].lower():
                 console.print("\n[yellow]💡 Tip: Docker logs may not show on Windows.[/yellow]")
                 console.print(f"[yellow]   Try: hud debug {' '.join(docker_cmd[3:])}[/yellow]")
                 console.print("[yellow]   This will show more detailed error information.[/yellow]")
             elif verbose:
                 console.print("\n[dim]For more details, try running with 'hud debug'[/dim]")
-            
+
             return
         finally:
             await client.close()

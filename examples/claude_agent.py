@@ -25,7 +25,7 @@ async def main():
         # hud analyze <IMAGE_NAME>
         # e.g. hud analyze hudpython/hud-remote-browser:latest
         # you'll get a report about its capabilities (tools, resources, etc.)
-        
+
         mcp_config = {
             "hud": {
                 "url": "https://mcp.hud.so/v3/mcp",
