@@ -21,6 +21,11 @@ from hud.settings import settings
 
 async def main():
     with hud.trace("Claude Agent Demo") as run_id:
+        # For any environment, you can run :
+        # hud analyze <IMAGE_NAME>
+        # e.g. hud analyze hudpython/hud-remote-browser:latest
+        # you'll get a report about its capabilities (tools, resources, etc.)
+        
         mcp_config = {
             "hud": {
                 "url": "https://mcp.hud.so/v3/mcp",

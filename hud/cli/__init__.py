@@ -6,6 +6,7 @@ import asyncio
 import json
 import sys
 from pathlib import Path  # noqa: TC003
+import click
 
 import typer
 from rich.console import Console
@@ -39,9 +40,11 @@ def analyze(
         None,
         help="Docker image to analyze (e.g., 'hud-text-2048:latest')",
     ),
-    docker_args: list[str] = typer.Argument(  # noqa: B008
+    docker_args: list[str] = typer.Argument(  # type: ignore[arg-type]  # noqa: B008
         None,
         help="Additional Docker run arguments (e.g., '-e', 'KEY=value', '-p', '8080:8080')",
+        type=click.UNPROCESSED,  # Allow option-like values without needing '--'
+        nargs=-1,
     ),
     config: Path = typer.Option(  # noqa: B008
         None,
@@ -111,9 +114,11 @@ def debug(
         None,
         help="Docker image to debug (e.g., 'hud-text-2048:latest')",
     ),
-    docker_args: list[str] = typer.Argument(  # noqa: B008
+    docker_args: list[str] = typer.Argument(  # type: ignore[arg-type]  # noqa: B008
         None,
         help="Additional Docker run arguments (e.g., '-e', 'KEY=value', '-p', '8080:8080')",
+        type=click.UNPROCESSED,  # Allow option-like values without needing '--'
+        nargs=-1,
     ),
     config: Path = typer.Option(  # noqa: B008
         None,
