@@ -103,6 +103,7 @@ async def _update_task_status_async(
     job_id: str | None = None,
     error_message: str | None = None,
     trace_name: str | None = None,
+    task_id: str | None = None,
 ) -> None:
     """Async task status update."""
     if not settings.telemetry_enabled:
@@ -118,6 +119,8 @@ async def _update_task_status_async(
         # Add trace name to metadata
         if trace_name:
             data["metadata"] = {"trace_name": trace_name}
+        if task_id:
+            data["task_id"] = task_id
 
         await make_request(
             method="POST",
@@ -138,10 +141,11 @@ def _fire_and_forget_status_update(
     job_id: str | None = None,
     error_message: str | None = None,
     trace_name: str | None = None,
+    task_id: str | None = None,
 ) -> None:
     """Fire and forget status update - works in any context including Jupyter."""
     fire_and_forget(
-        _update_task_status_async(task_run_id, status, job_id, error_message, trace_name),
+        _update_task_status_async(task_run_id, status, job_id, error_message, trace_name, task_id),
         f"update task {task_run_id} status to {status}",
     )
 
@@ -152,6 +156,7 @@ def _update_task_status_sync(
     job_id: str | None = None,
     error_message: str | None = None,
     trace_name: str | None = None,
+    task_id: str | None = None,
 ) -> None:
     """Synchronous task status update."""
     if not settings.telemetry_enabled:
@@ -167,6 +172,8 @@ def _update_task_status_sync(
         # Add trace name to metadata
         if trace_name:
             data["metadata"] = {"trace_name": trace_name}
+        if task_id:
+            data["task_id"] = task_id
 
         make_request_sync(
             method="POST",
@@ -257,9 +264,11 @@ class trace:
         span_name: str = "hud.task",
         attributes: dict[str, Any] | None = None,
         job_id: str | None = None,
+        task_id: str | None = None,
     ) -> None:
         self.task_run_id = task_run_id
         self.job_id = job_id
+        self.task_id = task_id
         self.is_root = is_root
         self.span_name = span_name
         self.attributes = attributes or {}
@@ -280,6 +289,8 @@ class trace:
         ctx = baggage.set_baggage(IS_ROOT_TRACE_KEY, str(self.is_root), context=ctx)
         if self.job_id:
             ctx = baggage.set_baggage("hud.job_id", self.job_id, context=ctx)
+        if self.task_id:
+            ctx = baggage.set_baggage("hud.task_id", self.task_id, context=ctx)
         self._otel_token = context.attach(ctx)
 
         # Start a span as current
@@ -291,6 +302,8 @@ class trace:
         }
         if self.job_id:
             span_attrs["hud.job_id"] = self.job_id
+        if self.task_id:
+            span_attrs["hud.task_id"] = self.task_id
 
         # Use start_as_current_span context manager
         self._span_manager = tracer.start_as_current_span(
@@ -302,7 +315,11 @@ class trace:
         # Update task status to running if root (only for HUD backend)
         if self.is_root and settings.telemetry_enabled and settings.api_key:
             _fire_and_forget_status_update(
-                self.task_run_id, "running", job_id=self.job_id, trace_name=self.span_name
+                self.task_run_id,
+                "running",
+                job_id=self.job_id,
+                trace_name=self.span_name,
+                task_id=self.task_id,
             )
             # Print the nice trace URL box
             _print_trace_url(self.task_run_id)
@@ -327,13 +344,18 @@ class trace:
                     job_id=self.job_id,
                     error_message=str(exc_val),
                     trace_name=self.span_name,
+                    task_id=self.task_id,
                 )
                 # Print error completion message
                 _print_trace_complete_url(self.task_run_id, error_occurred=True)
             else:
                 # Use synchronous update to ensure it completes before process exit
                 _update_task_status_sync(
-                    self.task_run_id, "completed", job_id=self.job_id, trace_name=self.span_name
+                    self.task_run_id,
+                    "completed",
+                    job_id=self.job_id,
+                    trace_name=self.span_name,
+                    task_id=self.task_id,
                 )
                 # Print success completion message
                 _print_trace_complete_url(self.task_run_id, error_occurred=False)

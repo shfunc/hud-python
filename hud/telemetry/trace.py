@@ -26,6 +26,7 @@ def trace(
     root: bool = True,
     attrs: dict[str, Any] | None = None,
     job_id: str | None = None,
+    task_id: str | None = None,
 ) -> Generator[str, None, None]:
     """Start a HUD trace context.
 
@@ -72,6 +73,11 @@ def trace(
 
     # Delegate to OpenTelemetry implementation
     with OtelTrace(
-        task_run_id, is_root=root, span_name=name, attributes=attrs or {}, job_id=job_id
+        task_run_id,
+        is_root=root,
+        span_name=name,
+        attributes=attrs or {},
+        job_id=job_id,
+        task_id=task_id,
     ) as run_id:
         yield run_id
