@@ -198,7 +198,8 @@ async def run_dataset(
         async def _worker(index: int, task_dict: dict[str, Any], max_steps: int = 40) -> None:
             async with sem:
                 # Create trace for this task
-                with hud.trace(f"Task {index}", job_id=job_obj.id, task_id=task_dict.get("id")):
+                task_name = task_dict.get("prompt") or f"Task {index}"
+                with hud.trace(task_name, job_id=job_obj.id, task_id=task_dict.get("id")):
                     # Convert dict to TaskConfig here, at trace level
                     task = TaskConfig(**task_dict)
                     

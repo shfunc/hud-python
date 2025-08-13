@@ -34,17 +34,12 @@ app = typer.Typer(
 console = Console()
 
 
-@app.command()
+# Capture IMAGE and any following Docker args as a single variadic argument list.
+@app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
 def analyze(
-    image: str = typer.Argument(
-        None,
-        help="Docker image to analyze (e.g., 'hud-text-2048:latest')",
-    ),
-    docker_args: list[str] = typer.Argument(  # type: ignore[arg-type]  # noqa: B008
-        None,
-        help="Additional Docker run arguments (e.g., '-e', 'KEY=value', '-p', '8080:8080')",
-        type=click.UNPROCESSED,  # Allow option-like values without needing '--'
-        nargs=-1,
+    params: list[str] = typer.Argument(  # type: ignore[arg-type]  # noqa: B008
+        ...,  # Required positional arguments
+        help="Docker image followed by optional Docker run arguments (e.g., 'hud-image:latest -e KEY=value')",
     ),
     config: Path = typer.Option(  # noqa: B008
         None,
@@ -95,9 +90,10 @@ def analyze(
             "local": {"command": command[0], "args": command[1:] if len(command) > 1 else []}
         }
         asyncio.run(analyze_environment_from_mcp_config(mcp_config, output_format, verbose))
-    elif image:
+    elif params:
+        image, *docker_args = params
         # Build Docker command from image and args
-        docker_cmd = ["docker", "run", "--rm", "-i"] + (docker_args or []) + [image]
+        docker_cmd = ["docker", "run", "--rm", "-i"] + docker_args + [image]
         asyncio.run(analyze_environment(docker_cmd, output_format, verbose))
     else:
         console.print("[red]Error: Must specify either a Docker image, --config, or --cursor[/red]")
@@ -108,17 +104,12 @@ def analyze(
         raise typer.Exit(1)
 
 
-@app.command()
+# Same variadic approach for debug.
+@app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
 def debug(
-    image: str = typer.Argument(
-        None,
-        help="Docker image to debug (e.g., 'hud-text-2048:latest')",
-    ),
-    docker_args: list[str] = typer.Argument(  # type: ignore[arg-type]  # noqa: B008
-        None,
-        help="Additional Docker run arguments (e.g., '-e', 'KEY=value', '-p', '8080:8080')",
-        type=click.UNPROCESSED,  # Allow option-like values without needing '--'
-        nargs=-1,
+    params: list[str] = typer.Argument(  # type: ignore[arg-type]  # noqa: B008
+        ...,
+        help="Docker image followed by optional Docker run arguments (e.g., 'hud-image:latest -e KEY=value')",
     ),
     config: Path = typer.Option(  # noqa: B008
         None,
@@ -171,9 +162,10 @@ def debug(
         if error or command is None:
             console.print(f"[red]❌ {error or 'Failed to parse cursor config'}[/red]")
             raise typer.Exit(1)
-    elif image:
+    elif params:
+        image, *docker_args = params
         # Build Docker command
-        command = ["docker", "run", "--rm", "-i"] + (docker_args or []) + [image]
+        command = ["docker", "run", "--rm", "-i"] + docker_args + [image]
     else:
         console.print("[red]Error: Must specify either a Docker image, --config, or --cursor[/red]")
         console.print("\nExamples:")

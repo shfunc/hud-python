@@ -221,6 +221,7 @@ async def debug_mcp_stdio(command: list[str], logger: CaptureLogger, max_phase: 
     # Phase 3: Tool Discovery
     logger.phase(3, "MCP Tool Discovery Test")
 
+    client = None
     try:
         # Create MCP config for the command
         mcp_config = {
@@ -282,14 +283,12 @@ async def debug_mcp_stdio(command: list[str], logger: CaptureLogger, max_phase: 
    - @mcp.tool() decorator is used on functions
    - Tools are registered before mcp.run()
    - No import errors preventing tool registration""")
-            await client.close()
             logger.progress_bar(phases_completed, total_phases)
             return phases_completed
 
         # Check if we should stop here
         if phases_completed >= max_phase:
             logger.info(f"Stopping at phase {max_phase} as requested")
-            await client.close()
             logger.progress_bar(phases_completed, total_phases)
             return phases_completed
 
@@ -326,7 +325,6 @@ async def debug_mcp_stdio(command: list[str], logger: CaptureLogger, max_phase: 
         # Check if we should stop here
         if phases_completed >= max_phase:
             logger.info(f"Stopping at phase {max_phase} as requested")
-            await client.close()
             logger.progress_bar(phases_completed, total_phases)
             return phases_completed
 
@@ -368,12 +366,17 @@ async def debug_mcp_stdio(command: list[str], logger: CaptureLogger, max_phase: 
                 except Exception as e:
                     logger.error(f"Failed to close client: {e}")
 
-        await client.close()
-
     except Exception as e:
         logger.error(f"Tool discovery failed: {e}")
         logger.progress_bar(phases_completed, total_phases)
         return phases_completed
+    finally:
+        # Ensure client is closed even on exceptions
+        if client:
+            try:
+                await client.close()
+            except Exception:
+                logger.error("Failed to close client")
 
     logger.progress_bar(phases_completed, total_phases)
     return phases_completed
