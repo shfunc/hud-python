@@ -122,7 +122,7 @@ def create_retry_httpx_client(
 
     Args:
         headers: Optional headers to include with all requests
-        timeout: Request timeout (defaults to 30s)
+        timeout: Request timeout (defaults to 600s)
         auth: Optional authentication handler
         max_retries: Maximum retry attempts (default: 3)
         retry_status_codes: Status codes to retry (default: {502, 503, 504})
@@ -131,14 +131,14 @@ def create_retry_httpx_client(
         Configured httpx.AsyncClient with retry transport
     """
     if timeout is None:
-        timeout = httpx.Timeout(30.0)
+        timeout = httpx.Timeout(600.0)  # 10 minutes
 
     # Use higher connection limits for concurrent operations
     # These match HUD server's configuration for consistency
     limits = httpx.Limits(
         max_connections=1000,
         max_keepalive_connections=1000,
-        keepalive_expiry=10.0,
+        keepalive_expiry=20.0,
     )
 
     # Create our custom retry transport
