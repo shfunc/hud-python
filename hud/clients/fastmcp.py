@@ -97,12 +97,19 @@ class FastMCPHUDClient(BaseHUDClient):
             return None
 
     async def close(self) -> None:
-        """Close the client connection."""
+        """Close the client connection, ensuring the underlying transport is terminated."""
+        # First close any active async context stack (this triggers client.__aexit__()).
         if self._stack:
             await self._stack.aclose()
             self._stack = None
-            self._initialized = False
-            logger.info("FastMCP client closed")
+
+        try:
+            await self._client.close()
+        except Exception as e:
+            logger.debug("Error while closing FastMCP client transport: %s", e)
+
+        self._initialized = False
+        logger.info("FastMCP client closed")
 
     async def __aenter__(self: Any) -> Any:
         """Async context manager entry."""
