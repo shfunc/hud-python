@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import AsyncExitStack
 from typing import TYPE_CHECKING, Any
@@ -104,7 +105,33 @@ class FastMCPHUDClient(BaseHUDClient):
             self._stack = None
 
         try:
+            # Close the FastMCP client - this calls transport.close()
             await self._client.close()
+            
+            # CRITICAL: Cancel any lingering transport tasks to ensure subprocess termination
+            # FastMCP's StdioTransport creates asyncio tasks that can outlive the client
+            # We need to handle nested transport structures (MCPConfigTransport -> StdioTransport)
+            transport = getattr(self._client, "transport", None)
+            if transport:
+                # If it's an MCPConfigTransport with a nested transport
+                if hasattr(transport, "transport"):
+                    transport = transport.transport
+                
+                # Now check if it's a StdioTransport with a _connect_task
+                if (
+                    hasattr(transport, "_connect_task")
+                    and transport._connect_task
+                    and not transport._connect_task.done()
+                ):
+                    logger.debug("Canceling lingering StdioTransport connect task")
+                    transport._connect_task.cancel()
+                    try:
+                        await transport._connect_task
+                    except asyncio.CancelledError:
+                        logger.debug("Transport task cancelled successfully")
+                    except Exception as e:
+                        logger.debug("Error canceling transport task: %s", e)
+                    
         except Exception as e:
             logger.debug("Error while closing FastMCP client transport: %s", e)
 
