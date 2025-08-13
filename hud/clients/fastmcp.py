@@ -25,7 +25,7 @@ class FastMCPHUDClient(BaseHUDClient):
 
     def __init__(self, mcp_config: dict[str, dict[str, Any]], **kwargs: Any) -> None:
         """
-        Initialize FastMCP client.
+        Initialize FastMCP client with retry support for HTTP transports.
 
         Args:
             mcp_config: MCP server configuration dict
@@ -33,16 +33,40 @@ class FastMCPHUDClient(BaseHUDClient):
         """
         super().__init__(mcp_config, **kwargs)
 
-        # Convert to FastMCP config format
-        config = {"mcpServers": mcp_config}
-
-        # Create FastMCP client
+        # Import here to avoid circular imports
         from mcp.types import Implementation
 
+        # Create custom transport with retry support for HTTP servers
+        transport = self._create_transport_with_retry(mcp_config)
+        
+        # Create FastMCP client with the custom transport
         client_info = Implementation(name="hud-python", version="3.0.3")
-
-        self._client = FastMCPClient(config, client_info=client_info)
+        self._client = FastMCPClient(transport, client_info=client_info)
         self._stack: AsyncExitStack | None = None
+    
+    def _create_transport_with_retry(self, mcp_config: dict[str, dict[str, Any]]) -> Any:
+        """Create transport with retry support for HTTP-based servers."""
+        from fastmcp.client.transports import StreamableHttpTransport
+
+        from hud.clients.utils.retry_transport import create_retry_httpx_client
+        
+        # If single server with HTTP URL, create transport directly with retry
+        if len(mcp_config) == 1:
+            _, server_config = next(iter(mcp_config.items()))
+            url = server_config.get("url", "")
+            
+            if url.startswith("http") and not url.endswith("/sse"):
+                headers = server_config.get("headers", {})
+                
+                logger.info("Enabling retry mechanism for HTTP transport to %s", url)
+                return StreamableHttpTransport(
+                    url=url,
+                    headers=headers,
+                    httpx_client_factory=create_retry_httpx_client,
+                )
+        
+        # For all other cases, use standard config (no retry)
+        return {"mcpServers": mcp_config}
 
     async def _connect(self) -> None:
         """Enter FastMCP context to establish connection."""
