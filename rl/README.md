@@ -1,4 +1,17 @@
-# HUD environments for Reinforcement Learning through Verifiers
+# HUD environments for Reinforcement Learning
+
+## Options
+
+- **Art**: [Art](https://github.com/willccbb/art) is an RL library for training and evaluating agents in various environments. You can use Art to build, train, and benchmark RL agents, and it can be integrated with custom environments such as those provided in this repository.
+
+- **Verifiers**: The primary supported option here. Use the [hud-vf-gym](https://github.com/hud-evals/hud_vf_gym) module to access CUA environments built with HUD MCP for RL agent training and evaluation. See below for installation and usage instructions.
+
+For both options we support running evaluations for a baseline assesment, and then RL training on this dataset!
+
+# Art
+
+
+# Verifiers
 
 [hud-vf-gym](https://github.com/hud-evals/hud_vf_gym) module exposes CUA environments built with HUD MCP for training and evaluating RL agents using the [Verifiers](https://github.com/willccbb/verifiers) framework. It provides a standardized interface for agents to interact with computer interfaces through tool calls.
 
@@ -12,37 +25,36 @@ git clone https://github.com/hud-evals/hud_vf_gym.git
 
 # Install dependencies (we recommend using uv for managing python envs)
 uv sync
+
+# Activate venv
+source .venv/bin/activate
 ```
 
 Note: We use this [fork](https://github.com/jdchawla29/verifiers.git) of verifiers for multimodal support.
 
-then you can simply use Verifiers CLI
-
-```bash
-vf-install hud-vf-gym -p . 
-```
-
-to install the environment from the cloned repo.
-
-
-
 ## Running Evaluations
 
-Use the Verifiers CLI to run evaluations:
+Use the Verifiers CLI to run evaluations such as hud-evals/2048-taskset.
+
+For this, build the base docker image locally:
 
 ```bash
-# Basic evaluation (both taskset and config_path are required)
-vf-eval hud_vf_gym \
-    --model gpt-4.1-mini \
-    --env-args '{"taskset": "hud-evals/gmail-taskset", "config_path": "./configs/default.yaml"}' \
-    --num-examples 5
+export OPENAI_API_KEY="YOUR_API_KEY"
+export HUD_API_KEY="YOUR_API_KEY"
+cd environments/text_2048/
+docker build -t hud-text-2048 .
+```
 
-# Use 2048 game config
+This will load in the taskset and run the VF gym via the config at ./configs/2048.yaml:
+```bash
 vf-eval hud_vf_gym \
     --model gpt-4.1-mini \
     --env-args '{"taskset": "hud-evals/2048-taskset", "config_path": "./configs/2048.yaml"}' \
     --num-examples 10
+```
 
+Or use a custom config with a custom taskset:
+```bash
 # Use a custom config with custom taskset
 vf-eval hud_vf_gym \
     --env-args '{"taskset": "your-org/your-taskset", "config_path": "custom_config.yaml"}' \
@@ -51,13 +63,13 @@ vf-eval hud_vf_gym \
     --rollouts-per-example 3
 ```
 
-These might not work right now
+Additional options for saving out the results:
 
 ```bash
 # Save evaluation results locally
 vf-eval hud_vf_gym \
     --model gpt-4o-mini \
-    --env-args '{"taskset": "hud-evals/gmail-taskset", "config_path": "./configs/default.yaml"}' \
+    --env-args '{"taskset": "hud-evals/2048-taskset", "config_path": "./configs/2048.yaml"}' \
     --num-examples 20 \
     --save-dataset \
     --save-path "./eval_results"
@@ -65,8 +77,8 @@ vf-eval hud_vf_gym \
 # Save to HuggingFace Hub
 vf-eval hud_vf_gym \
     --model gpt-4o-mini \
-    --env-args '{"taskset": "hud-evals/gmail-taskset", "config_path": "./configs/default.yaml", "num_tasks": 50}' \
-    --num-examples 50 \
+    --env-args '{"taskset": "hud-evals/2048-taskset", "config_path": "./configs/2048.yaml"}' \
+    --num-examples 20 \
     --save-to-hf-hub \
     --hf-hub-dataset-name "your-org/gmail-eval-results"
 ```
@@ -75,6 +87,13 @@ vf-eval hud_vf_gym \
 
 HUD Gym supports training with the GRPO (Group Relative Policy Optimization) trainer:
 
+Either just run:
+
+```bash
+python train_2048.py
+```
+
+Or configure your own training:
 ```python
 from verifiers.trainers import GRPOTrainer, GRPOConfig
 from hud_vf_gym import load_environment

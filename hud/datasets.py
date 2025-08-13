@@ -8,7 +8,7 @@ import logging
 from string import Template
 from typing import TYPE_CHECKING, Any, cast
 
-from datasets import Dataset, DatasetDict, IterableDataset, IterableDatasetDict
+from datasets import Dataset, DatasetDict, IterableDataset, IterableDatasetDict, load_dataset
 from pydantic import BaseModel, Field, field_validator
 
 from .types import MCPToolCall
@@ -48,12 +48,31 @@ class TaskConfig(BaseModel):
     evaluate_tool: MCPToolCall | list[MCPToolCall] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+    @field_validator("mcp_config", "metadata", mode="before")
+    @classmethod
+    def parse_json_strings(cls, v: Any) -> Any:
+        """Parse JSON strings into dictionaries."""
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid JSON string: {e}") from e
+        return v
+
     @field_validator("setup_tool", "evaluate_tool", mode="before")
     @classmethod
     def convert_dict_to_tool_call(cls, v: Any) -> Any:
-        """Convert dict to MCPToolCall instance."""
+        """Convert dict to MCPToolCall instance, parsing JSON strings first."""
         if v is None:
             return None
+        
+        # Parse JSON string if needed
+        if isinstance(v, str):
+            try:
+                v = json.loads(v)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid JSON string: {e}") from e
+        
         if isinstance(v, dict):
             return MCPToolCall(**v)
         if isinstance(v, list):
@@ -102,126 +121,87 @@ class TaskConfig(BaseModel):
         return substitute_in_value(v)
 
 
-def to_taskconfigs(
-    dataset: DatasetDict | Dataset | IterableDatasetDict | IterableDataset,
-) -> list[TaskConfig]:
-    """
-    Convert a HuggingFace dataset to TaskConfig objects.
-
-    The dataset should have complex fields (mcp_config, setup_tool, etc.)
-    stored as JSON strings to avoid null value pollution.
-
-    Environment variables are resolved during TaskConfig instantiation.
-
-    Args:
-        dataset: HuggingFace Dataset with JSON string fields
-
-    Returns:
-        List of TaskConfig objects with env vars resolved
-
-    Example:
-        >>> from datasets import load_dataset
-        >>> dataset = load_dataset("hud-evals/browser-taskconfigs", split="train")
-        >>> tasks = to_taskconfigs(dataset)
-        >>> tasks[0].mcp_config  # Env vars like ${HUD_API_KEY} are resolved
-    """
-    try:
-        tasks = []
-        for row in dataset:
-            # Cast row to dict for type checker
-            row = cast("dict[str, Any]", row)
-            # Build TaskConfig dict, parsing JSON string fields
-            tc_dict: dict[str, Any] = {
-                "prompt": row["prompt"],
-                "mcp_config": json.loads(row["mcp_config"]),
-            }
-
-            # Optional fields
-            if row.get("id"):
-                tc_dict["id"] = row["id"]
-
-            if row.get("metadata"):
-                tc_dict["metadata"] = json.loads(row["metadata"])
-
-            if row.get("setup_tool"):
-                tc_dict["setup_tool"] = json.loads(row["setup_tool"])
-
-            if row.get("evaluate_tool"):
-                tc_dict["evaluate_tool"] = json.loads(row["evaluate_tool"])
-
-            # Create TaskConfig (triggers env var resolution)
-            tasks.append(TaskConfig(**tc_dict))
-
-        return tasks
-    except TypeError as e:
-        raise ValueError("Dataset must be a train or test HF split") from e
-    except Exception as e:
-        raise e
-
-
 async def run_dataset(
     name: str,
-    dataset: Dataset | list[TaskConfig],
+    dataset: str | Dataset | list[dict[str, Any]],
     agent_class: type[MCPAgent],
     agent_config: dict[str, Any] | None = None,
     max_concurrent: int = 50,
     metadata: dict[str, Any] | None = None,
     max_steps: int = 40,
+    split: str = "train",
 ) -> list[Any]:
     """
     Run all tasks in a dataset with automatic job tracking.
 
     Args:
         name: Name for the job
-        dataset: HuggingFace Dataset with task data OR list of TaskConfig objects
+        dataset: HuggingFace dataset identifier (e.g. "hud-evals/SheetBench-50"), 
+                Dataset object, OR list of TaskConfig objects
         agent_class: Agent class to instantiate (e.g., ClaudeMCPAgent)
         agent_config: Configuration for agent (model, etc.)
         max_concurrent: Maximum parallel task execution
         metadata: Optional metadata for the job
+        max_steps: Maximum steps per task
+        split: Dataset split to use when loading from string (default: "train")
 
     Returns:
         List of results from agent.run() in dataset order
 
     Example:
-        >>> from datasets import load_dataset
         >>> from hud.mcp import ClaudeMCPAgent
-        >>> # Option 1: From HuggingFace dataset with JSON string fields
-        >>> dataset = load_dataset("hud-evals/browser-taskconfigs", split="train")
-        >>> tasks = to_taskconfigs(dataset)
+        >>> # Option 1: From dataset string identifier
         >>> results = await run_dataset(
-        ...     "browser_eval",
-        ...     tasks,
+        ...     "SheetBench Eval",
+        ...     "hud-evals/SheetBench-50",
         ...     ClaudeMCPAgent,
         ...     {"model": "claude-3-5-sonnet-20241022"},
-        ...     max_concurrent=3,
         ... )
-        >>> # Option 2: Direct from loaded dataset
+        >>> # Option 2: From HuggingFace dataset object
         >>> from datasets import load_dataset
         >>> dataset = load_dataset("hud-evals/browser-taskconfigs", split="train")
         >>> results = await run_dataset("my_eval", dataset, ClaudeMCPAgent)
+        >>> # Option 3: From list of dicts
+        >>> tasks = [{"prompt": "...", "mcp_config": {...}, ...}, ...]
+        >>> results = await run_dataset("browser_eval", tasks, ClaudeMCPAgent)
     """
     # Import here to avoid circular imports
     import hud
     from hud.client import MCPClient
 
-    # Convert dataset to TaskConfigs if needed
-    tasks = dataset if isinstance(dataset, list) else to_taskconfigs(dataset)
+    dataset_link = None
+
+    # Load dataset from string if needed
+    if isinstance(dataset, str):
+        logger.info("Loading dataset %s from HuggingFace...", dataset)
+        dataset_link = dataset
+        dataset = load_dataset(dataset, split=split)
 
     # Create job context
     job_metadata = metadata or {}
     job_metadata["agent_class"] = agent_class.__name__
     if agent_config:
         job_metadata["agent_config"] = agent_config
+    
+    # Extract dataset verification info if available
+    if isinstance(dataset, Dataset) and not dataset_link:
+        general_info = list(dataset.info.__dict__["download_checksums"].keys())[0].split("/")
+        project = general_info[3]
+        dataset_name = general_info[4].split("@")[0]
+        dataset_link = f"{project}/{dataset_name}"
 
-    with hud.job(name, metadata=job_metadata) as job_obj:
+    with hud.job(name, metadata=job_metadata, dataset_link=dataset_link) as job_obj:
         # Run tasks with semaphore for concurrency control
         sem = asyncio.Semaphore(max_concurrent)
-        results: list[Any | None] = [None] * len(tasks)
+        results: list[Any | None] = [None] * len(dataset)
 
-        async def _worker(index: int, task: TaskConfig, max_steps: int = 40) -> None:
+        async def _worker(index: int, task_dict: dict[str, Any], max_steps: int = 40) -> None:
             async with sem:
                 # Create trace for this task
                 with hud.trace(f"Task {index}", job_id=job_obj.id):
+                    # Convert dict to TaskConfig here, at trace level
+                    task = TaskConfig(**task_dict)
+                    
                     # Create fresh MCP client per task
                     if task.mcp_config:
                         client = MCPClient(mcp_config=task.mcp_config)
@@ -237,11 +217,12 @@ async def run_dataset(
 
         # Execute all tasks
         await asyncio.gather(
-            *[_worker(i, task, max_steps=max_steps) for i, task in enumerate(tasks)],
+            *[_worker(i, task, max_steps=max_steps) for i, task in enumerate(dataset)],
             return_exceptions=True,  # Don't fail entire batch on one error
         )
 
     return results
+
 
 
 def save_taskconfigs(taskconfigs: list[dict[str, Any]], repo_id: str, **kwargs: Any) -> None:

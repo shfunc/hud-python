@@ -16,7 +16,7 @@ import hud
 from hud.agents import ClaudeMCPAgent
 from hud.clients import MCPClient
 from datasets import load_dataset
-from hud.datasets import to_taskconfigs, run_dataset
+from hud.datasets import run_dataset, TaskConfig
 
 
 async def run_single_task():
@@ -26,7 +26,7 @@ async def run_single_task():
     dataset = load_dataset("hud-evals/SheetBench-50", split="train")
 
     with hud.trace("SheetBench Agent"):
-        task = to_taskconfigs(dataset)[0]
+        task = TaskConfig(**dataset[0])
 
         # Create client and agent
         client = MCPClient(mcp_config=task.mcp_config)

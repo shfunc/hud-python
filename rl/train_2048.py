@@ -17,7 +17,7 @@ from hud_vf_gym import load_environment
 vf_env = load_environment(
     taskset="hud-evals/2048-taskset",  # HuggingFace dataset
     config_path="./configs/2048.yaml",
-    num_tasks=1
+    num_tasks=1,
 )
 
 # Model configuration

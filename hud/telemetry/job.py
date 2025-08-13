@@ -27,10 +27,11 @@ logger = logging.getLogger(__name__)
 class Job:
     """A job represents a collection of related tasks."""
 
-    def __init__(self, job_id: str, name: str, metadata: dict[str, Any] | None = None) -> None:
+    def __init__(self, job_id: str, name: str, metadata: dict[str, Any] | None = None, dataset_link: str | None = None) -> None:
         self.id = job_id
         self.name = name
         self.metadata = metadata or {}
+        self.dataset_link = dataset_link
         self.status = "created"
         self.created_at = datetime.now(UTC)
         self.tasks: list[str] = []
@@ -44,15 +45,18 @@ class Job:
         self.status = status
         if settings.telemetry_enabled:
             try:
+                payload = {
+                    "name": self.name,
+                    "status": status,
+                    "metadata": self.metadata,
+                }
+                if self.dataset_link:
+                    payload["dataset_link"] = self.dataset_link
+                    
                 await make_request(
                     method="POST",
                     url=f"{settings.base_url}/v2/jobs/{self.id}/status",
-                    json={
-                        "name": self.name,
-                        "status": status,
-                        "metadata": self.metadata,
-                        "task_count": len(self.tasks),
-                    },
+                    json=payload,
                     api_key=settings.api_key,
                 )
             except Exception as e:
@@ -63,15 +67,18 @@ class Job:
         self.status = status
         if settings.telemetry_enabled:
             try:
+                payload = {
+                    "name": self.name,
+                    "status": status,
+                    "metadata": self.metadata,
+                }
+                if self.dataset_link:
+                    payload["dataset_link"] = self.dataset_link
+                    
                 make_request_sync(
                     method="POST",
                     url=f"{settings.base_url}/v2/jobs/{self.id}/status",
-                    json={
-                        "name": self.name,
-                        "status": status,
-                        "metadata": self.metadata,
-                        "task_count": len(self.tasks),
-                    },
+                    json=payload,
                     api_key=settings.api_key,
                 )
             except Exception as e:
@@ -92,7 +99,7 @@ def get_current_job() -> Job | None:
 
 @contextmanager
 def job(
-    name: str, metadata: dict[str, Any] | None = None, job_id: str | None = None
+    name: str, metadata: dict[str, Any] | None = None, job_id: str | None = None, dataset_link: str | None = None
 ) -> Generator[Job, None, None]:
     """Context manager for job tracking.
 
@@ -102,6 +109,7 @@ def job(
         name: Human-readable job name
         metadata: Optional metadata dictionary
         job_id: Optional job ID (auto-generated if not provided)
+        dataset_link: Optional HuggingFace dataset identifier (e.g. "hud-evals/SheetBench-50")
 
     Yields:
         Job: The job object
@@ -117,7 +125,7 @@ def job(
     if not job_id:
         job_id = str(uuid.uuid4())
 
-    job_obj = Job(job_id, name, metadata)
+    job_obj = Job(job_id, name, metadata, dataset_link)
 
     # Set as current job
     old_job = _current_job
@@ -137,7 +145,7 @@ def job(
         _current_job = old_job
 
 
-def create_job(name: str, metadata: dict[str, Any] | None = None) -> Job:
+def create_job(name: str, metadata: dict[str, Any] | None = None, dataset_link: str | None = None) -> Job:
     """Create a job without using context manager.
 
     Useful when you need explicit control over job lifecycle.
@@ -145,6 +153,7 @@ def create_job(name: str, metadata: dict[str, Any] | None = None) -> Job:
     Args:
         name: Human-readable job name
         metadata: Optional metadata dictionary
+        dataset_link: Optional HuggingFace dataset identifier (e.g. "hud-evals/SheetBench-50")
 
     Returns:
         Job: The created job object
@@ -159,7 +168,7 @@ def create_job(name: str, metadata: dict[str, Any] | None = None) -> Job:
             await job.update_status("completed")
     """
     job_id = str(uuid.uuid4())
-    return Job(job_id, name, metadata)
+    return Job(job_id, name, metadata, dataset_link)
 
 
 def job_decorator(name: str | None = None, **metadata: Any) -> Callable:

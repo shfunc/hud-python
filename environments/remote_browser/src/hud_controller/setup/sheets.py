@@ -179,11 +179,11 @@ async def sheets_from_xlsx(
         if playwright_tool and hasattr(playwright_tool, "page") and playwright_tool.page:
             page = playwright_tool.page
             logger.info(f"Navigating to sheet: {sheet_url}")
-            await page.goto(sheet_url, wait_until="domcontentloaded", timeout=15000)
+            await page.goto(sheet_url, wait_until="domcontentloaded", timeout=45000)
 
             # Wait for sheet to load
             try:
-                await page.wait_for_selector(".grid-container", timeout=10000)
+                await page.wait_for_selector(".grid-container", timeout=20000)
                 logger.info("Sheet loaded successfully")
             except:
                 logger.warning("Timeout waiting for sheet to fully load")
@@ -273,11 +273,11 @@ async def sheets_from_bytes(
         if playwright_tool and hasattr(playwright_tool, "page") and playwright_tool.page:
             page = playwright_tool.page
             logger.info(f"Navigating to sheet: {sheet_url}")
-            await page.goto(sheet_url, wait_until="domcontentloaded", timeout=15000)
+            await page.goto(sheet_url, wait_until="domcontentloaded", timeout=45000)
 
             # Wait for sheet to load
             try:
-                await page.wait_for_selector(".grid-container", timeout=10000)
+                await page.wait_for_selector(".grid-container", timeout=20000)
                 logger.info("Sheet loaded successfully")
             except:
                 logger.warning("Timeout waiting for sheet to fully load")

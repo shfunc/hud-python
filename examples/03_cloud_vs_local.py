@@ -57,10 +57,9 @@ async def run_cloud_example():
         task = TaskConfig(**task)
         print(task)
 
-        client = MCPClient(mcp_config=task.mcp_config, verbose=True)
+        client = MCPClient(mcp_config=task.mcp_config)
         await client.initialize()
 
-        print(client.get_available_tools())
         agent = ClaudeMCPAgent(
             mcp_client=client,
             model="claude-3-7-sonnet-20250219",
@@ -111,7 +110,7 @@ async def run_local_example():
             print("   View browser at: http://localhost:8080/vnc.html")
 
             result = await agent.run("Navigate to example.com and take a screenshot", max_steps=3)
-            print(f"✅ Local task completed: {result.success}")
+            print(f"✅ Local task completed: {result.reward}")
 
         finally:
             await client.close()
