@@ -198,11 +198,19 @@ async def debug_mcp_stdio(command: list[str], logger: CaptureLogger, max_phase: 
 
             logger.progress_bar(phases_completed, total_phases)
             proc.terminate()
-            proc.wait(timeout=5)
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
             return phases_completed
 
         proc.terminate()
-        proc.wait(timeout=5)
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
 
         # Check if we should stop here
         if phases_completed >= max_phase:

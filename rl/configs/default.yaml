@@ -118,6 +118,7 @@ action_mappings:
 
 # Parser configuration
 parser:
+  use_thinking: true
   xml_weight: 0.6    # Weight for XML format validation
   action_weight: 0.4  # Weight for action syntax validation
 
