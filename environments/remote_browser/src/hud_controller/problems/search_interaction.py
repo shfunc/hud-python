@@ -15,5 +15,5 @@ class GoogleSearchProblem:
         """Verify Google search page loaded."""
         return {
             "name": "page_contains",
-            "arguments": {"search_terms": ["Google", "Search"], "partial_rewarding": False},
+            "arguments": {"search_terms": ["Google", "Search"], "partial_rewarding": True},
         }

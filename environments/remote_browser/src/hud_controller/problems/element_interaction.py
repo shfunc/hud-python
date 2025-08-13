@@ -36,6 +36,6 @@ class ButtonClickTestProblem:
             "name": "page_contains",
             "arguments": {
                 "search_terms": ["Button Click Test", "Click Me"],
-                "partial_rewarding": False,
+                "partial_rewarding": True,
             },
         }

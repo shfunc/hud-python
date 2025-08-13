@@ -4,9 +4,8 @@ import asyncio
 import sys
 import logging
 import os
-import signal
-import atexit
 import json
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Optional, TypedDict
 
@@ -41,6 +40,47 @@ browser_executor: Optional[BrowserExecutor] = None
 _cleanup_in_progress = False
 
 
+@asynccontextmanager
+async def lifespan(app: FastMCP):
+    """FastMCP lifespan manager - handles startup and cleanup."""
+    global browser_provider, playwright_tool, browser_executor, _cleanup_in_progress
+    
+    try:
+        yield {}  # Nothing to initialize at startup
+    finally:
+        # This runs when the server shuts down
+        if _cleanup_in_progress:
+            logger.info("Cleanup already in progress, skipping")
+            return
+            
+        _cleanup_in_progress = True
+        logger.info("🔧 Lifespan cleanup started")
+        
+        try:
+            # Only close the browser through the provider - this is what actually terminates the remote session
+            # The playwright tool just has a connection to the remote browser, it doesn't need separate cleanup
+            if browser_provider:
+                try:
+                    logger.info("Closing browser provider session...")
+                    await asyncio.wait_for(browser_provider.close(), timeout=10.0)
+                    logger.info("Browser provider closed successfully")
+                except asyncio.TimeoutError:
+                    logger.error("Timeout closing browser provider (10s exceeded)")
+                except Exception as e:
+                    logger.error(f"Error closing browser provider: {e}")
+            else:
+                logger.info("No browser provider to close")
+                
+            logger.info("✅ Lifespan cleanup finished")
+        except Exception as e:
+            logger.error(f"Error during lifespan cleanup: {e}")
+        finally:
+            _cleanup_in_progress = False
+            browser_provider = None
+            playwright_tool = None
+            browser_executor = None
+
+
 # Create FastMCP instance
 mcp = FastMCP(
     name="HUD Remote Browser Environment",
@@ -54,6 +94,7 @@ mcp = FastMCP(
     - playwright tools: Browser automation (navigate, click, type, etc.)
     - computer tools: Control browser as if it were a desktop application
     """,
+    lifespan=lifespan,
 )
 
 
@@ -249,55 +290,6 @@ async def initialize_environment(session=None, progress_token=None):
             )
         raise
 
-
-async def cleanup_browser():
-    """Clean up browser resources."""
-    global browser_provider, playwright_tool, browser_executor, _cleanup_in_progress
-
-    if _cleanup_in_progress:
-        logger.info("Cleanup already in progress, skipping")
-        return
-
-    _cleanup_in_progress = True
-    logger.info("Starting browser cleanup...")
-
-    try:
-        # Only close the browser through the provider
-        if browser_provider:
-            try:
-                logger.info("Closing browser provider session...")
-                await asyncio.wait_for(browser_provider.close(), timeout=10.0)
-                logger.info("Browser provider closed successfully")
-            except asyncio.TimeoutError:
-                logger.error("Timeout closing browser provider (10s exceeded)")
-            except Exception as e:
-                logger.error(f"Error closing browser provider: {e}")
-        else:
-            logger.info("No browser provider to close")
-
-        logger.info("Browser cleanup completed")
-    except Exception as e:
-        logger.error(f"Error during cleanup: {e}")
-    finally:
-        _cleanup_in_progress = False
-        browser_provider = None
-        playwright_tool = None
-        browser_executor = None
-
-
-def handle_signal(signum, frame):
-    """Handle termination signals."""
-    logger.info(f"Received signal {signum}, initiating cleanup...")
-    asyncio.create_task(cleanup_browser())
-    sys.exit(0)
-
-
-# Register signal handlers
-signal.signal(signal.SIGINT, handle_signal)
-signal.signal(signal.SIGTERM, handle_signal)
-
-# Register cleanup on exit
-atexit.register(lambda: asyncio.run(cleanup_browser()))
 
 
 if __name__ == "__main__":

@@ -32,10 +32,14 @@ current_task_run_id: contextvars.ContextVar[str | None] = contextvars.ContextVar
 is_root_trace_var: contextvars.ContextVar[bool] = contextvars.ContextVar(
     "is_root_trace", default=False
 )
+current_step_count: contextvars.ContextVar[int] = contextvars.ContextVar(
+    "current_step_count", default=0
+)
 
 # Keys for OpenTelemetry baggage
 TASK_RUN_ID_KEY = "hud.task_run_id"
 IS_ROOT_TRACE_KEY = "hud.is_root_trace"
+STEP_COUNT_KEY = "hud.step_count"
 
 
 def set_current_task_run_id(task_run_id: str | None) -> contextvars.Token:
@@ -63,6 +67,45 @@ def is_root_trace() -> bool:
 
     # Fallback to contextvars
     return is_root_trace_var.get()
+
+
+def get_current_step_count() -> int:
+    """Get current step count from either contextvars or OTel baggage."""
+    # First try OTel baggage
+    step_count = baggage.get_baggage(STEP_COUNT_KEY)
+    if step_count and isinstance(step_count, str):
+        try:
+            return int(step_count)
+        except ValueError:
+            pass
+    
+    # Fallback to contextvars
+    return current_step_count.get()
+
+
+def increment_step_count() -> int:
+    """Increment the current step count and update baggage.
+    
+    Returns:
+        The new step count after incrementing
+    """
+    # Get current count
+    current = get_current_step_count()
+    new_count = current + 1
+    
+    # Update contextvar
+    current_step_count.set(new_count)
+    
+    # Update baggage for propagation
+    ctx = baggage.set_baggage(STEP_COUNT_KEY, str(new_count))
+    context.attach(ctx)
+    
+    # Update current span if one exists
+    span = otel_trace.get_current_span()
+    if span and span.is_recording():
+        span.set_attribute("hud.step_count", new_count)
+    
+    return new_count
 
 
 @contextmanager
@@ -119,8 +162,13 @@ async def _update_task_status_async(
         # Add trace name to metadata
         if trace_name:
             data["metadata"] = {"trace_name": trace_name}
+            
         if task_id:
             data["task_id"] = task_id
+            
+        # Include current step count as a top-level field
+        step_count = get_current_step_count()
+        data["step_count"] = step_count
 
         await make_request(
             method="POST",
@@ -172,8 +220,13 @@ def _update_task_status_sync(
         # Add trace name to metadata
         if trace_name:
             data["metadata"] = {"trace_name": trace_name}
+            
         if task_id:
             data["task_id"] = task_id
+            
+        # Include current step count as a top-level field
+        step_count = get_current_step_count()
+        data["step_count"] = step_count
 
         make_request_sync(
             method="POST",

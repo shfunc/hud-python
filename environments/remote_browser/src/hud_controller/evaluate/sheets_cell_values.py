@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 @evaluate.tool("sheets_cell_values")
 async def sheets_cell_values(
-    ctx: Context, args: Union[Dict[str, Any], List[Dict[str, Any]]], partial_rewarding: bool = False
+    ctx: Context, args: Union[Dict[str, Any], List[Dict[str, Any]]], partial_rewarding: bool = True
 ):
     """Check if specific cells in a Google Sheet have expected values.
 

@@ -16,6 +16,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+LIFECYCLE_TOOLS = {"setup", "evaluate"}
+
 
 def install_mcp_instrumentation(provider: TracerProvider) -> None:
     """Enable community MCP OpenTelemetry instrumentation if present.

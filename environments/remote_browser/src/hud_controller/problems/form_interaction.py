@@ -23,6 +23,6 @@ class FormFillAndSubmitProblem:
             "name": "page_contains",
             "arguments": {
                 "search_terms": ["Customer name:", "Pizza Size", "Submit order"],
-                "partial_rewarding": False,
+                "partial_rewarding": True,
             },
         }

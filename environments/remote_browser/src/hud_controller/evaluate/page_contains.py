@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 @evaluate.tool("page_contains")
 async def page_contains(
-    ctx: Context, search_terms: Union[str, List[str]], partial_rewarding: bool = False
+    ctx: Context, search_terms: Union[str, List[str]], partial_rewarding: bool = True
 ):
     """Check if the page contains specific text.
 

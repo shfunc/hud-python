@@ -14,7 +14,7 @@ async def verify_type_action(
     ctx: Context,
     expected_text: str,
     selector: Optional[str] = None,
-    partial_rewarding: bool = False,
+    partial_rewarding: bool = True,
 ):
     """Check for a sequence: first click on element, then type text into it.
 

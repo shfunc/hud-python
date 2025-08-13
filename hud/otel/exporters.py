@@ -324,10 +324,24 @@ class HudSpanExporter(SpanExporter):
             try:
                 url = f"{self._base_url}/v2/task_runs/{run_id}/telemetry-upload"
                 telemetry_spans = [_span_to_dict(s) for s in span_batch]
+                # Include current step count in metadata
+                metadata = {}
+                # Get the HIGHEST step count from the batch (most recent)
+                step_count = 0
+                for span in span_batch:
+                    if span.attributes and "hud.step_count" in span.attributes:
+                        current_step = span.attributes["hud.step_count"]
+                        if isinstance(current_step, int) and current_step > step_count:
+                            step_count = current_step
+
                 payload = {
-                    "metadata": {},  # reserved, can be filled later
+                    "metadata": metadata,
                     "telemetry": telemetry_spans,
                 }
+                
+                # Only include step_count if we found any steps
+                if step_count > 0:
+                    payload["step_count"] = step_count
 
                 logger.debug("HUD exporter sending %d spans to %s", len(span_batch), url)
                 make_request_sync(
