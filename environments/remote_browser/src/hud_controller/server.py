@@ -262,21 +262,18 @@ async def cleanup_browser():
     logger.info("Starting browser cleanup...")
 
     try:
-        # Close playwright connection
-        if playwright_tool:
-            try:
-                await playwright_tool.close()
-                logger.info("Playwright tool closed")
-            except Exception as e:
-                logger.error(f"Error closing playwright tool: {e}")
-
-        # Close browser through provider
+        # Only close the browser through the provider
         if browser_provider:
             try:
-                await browser_provider.close()
-                logger.info("Browser provider closed")
+                logger.info("Closing browser provider session...")
+                await asyncio.wait_for(browser_provider.close(), timeout=10.0)
+                logger.info("Browser provider closed successfully")
+            except asyncio.TimeoutError:
+                logger.error("Timeout closing browser provider (10s exceeded)")
             except Exception as e:
                 logger.error(f"Error closing browser provider: {e}")
+        else:
+            logger.info("No browser provider to close")
 
         logger.info("Browser cleanup completed")
     except Exception as e:
