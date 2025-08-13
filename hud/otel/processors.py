@@ -68,8 +68,12 @@ class HudEnrichmentProcessor(SpanProcessor):
             # Check for tool name in various places
             tool_name = None
             
-            # Try method name
-            method_name = attrs.get("mcp.method.name") or attrs.get("semconv_ai.mcp.method_name")
+            # Try method name - check multiple possible locations
+            method_name = (
+                attrs.get("method_name") or  # Direct attribute
+                attrs.get("mcp.method.name") or
+                attrs.get("semconv_ai.mcp.method_name")
+            )
             if method_name == "tools/call":
                 # For tools/call, the actual tool name might be in the request
                 request = attrs.get("request")

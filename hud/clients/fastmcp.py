@@ -58,7 +58,7 @@ class FastMCPHUDClient(BaseHUDClient):
             if url.startswith("http") and not url.endswith("/sse"):
                 headers = server_config.get("headers", {})
                 
-                logger.info("Enabling retry mechanism for HTTP transport to %s", url)
+                logger.debug("Enabling retry mechanism for HTTP transport to %s", url)
                 return StreamableHttpTransport(
                     url=url,
                     headers=headers,

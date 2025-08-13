@@ -132,8 +132,8 @@ def job(
     _current_job = job_obj
 
     try:
-        # Update status to running
-        fire_and_forget(job_obj.update_status("running"), "update job status to running")
+        # Update status to running synchronously to ensure job is registered before tasks start
+        job_obj.update_status_sync("running")
         yield job_obj
         # Update status to completed synchronously to ensure it completes before process exit
         job_obj.update_status_sync("completed")
