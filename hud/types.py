@@ -44,6 +44,7 @@ class AgentResponse(BaseModel):
     reasoning: str | None = Field(default=None)
     info: dict[str, Any] = Field(default_factory=dict)
     isError: bool = Field(default=False)
+    raw: Any | None = Field(default=None)  # Include raw response for access to Choice objects
 
     # Timestamps
     start_timestamp: str | None = None

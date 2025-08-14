@@ -115,6 +115,7 @@ class GenericOpenAIChatAgent(MCPAgent):
             content=msg.content,
             tool_calls=tool_calls,
             done=choice.finish_reason == "stop",
+            raw=response,  # Include raw response for access to Choice objects
         )
 
     async def format_tool_results(
