@@ -11,8 +11,10 @@ from typing import TYPE_CHECKING, Any
 from fastmcp import Client as FastMCPClient
 from mcp import types
 
-from hud.clients.base import BaseHUDClient
 from hud.types import MCPToolResult
+
+from .base import BaseHUDClient
+from .utils.retry_transport import create_retry_httpx_client
 
 if TYPE_CHECKING:
     from pydantic import AnyUrl
@@ -51,8 +53,6 @@ class FastMCPHUDClient(BaseHUDClient):
     def _create_transport_with_retry(self, mcp_config: dict[str, dict[str, Any]]) -> Any:
         """Create transport with retry support for HTTP-based servers."""
         from fastmcp.client.transports import StreamableHttpTransport
-
-        from hud.clients.utils.retry_transport import create_retry_httpx_client
 
         # If single server with HTTP URL, create transport directly with retry
         if len(mcp_config) == 1:
