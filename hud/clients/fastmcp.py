@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from contextlib import AsyncExitStack
 from typing import TYPE_CHECKING, Any
 
@@ -41,14 +42,18 @@ class FastMCPHUDClient(BaseHUDClient):
 
         # Create FastMCP client with the custom transport
         client_info = Implementation(name="hud-python", version="3.0.3")
-        self._client = FastMCPClient(transport, client_info=client_info)
+        
+        timeout = 5 * 60  # 5 minutes
+        os.environ["FASTMCP_CLIENT_INIT_TIMEOUT"] = str(timeout)
+        
+        self._client = FastMCPClient(transport, client_info=client_info, timeout=timeout)
         self._stack: AsyncExitStack | None = None
 
     def _create_transport_with_retry(self, mcp_config: dict[str, dict[str, Any]]) -> Any:
         """Create transport with retry support for HTTP-based servers."""
         from fastmcp.client.transports import StreamableHttpTransport
 
-        from hud.clients.utils.retry_transport import create_retry_httpx_client
+        from .utils.retry_transport import create_retry_httpx_client
 
         # If single server with HTTP URL, create transport directly with retry
         if len(mcp_config) == 1:
@@ -58,7 +63,7 @@ class FastMCPHUDClient(BaseHUDClient):
             if url.startswith("http") and not url.endswith("/sse"):
                 headers = server_config.get("headers", {})
 
-                logger.debug("Enabling retry mechanism for HTTP transport to %s", url)
+                logger.info("Enabling retry mechanism for HTTP transport to %s", url)
                 return StreamableHttpTransport(
                     url=url,
                     headers=headers,
