@@ -1,0 +1,92 @@
+# Configuration for ART training with HUD environments
+
+# HUD MCP environment configurations
+environments:
+  2048:
+    mcp_config:
+      local:
+        command: "docker"
+        args: ["run", "--rm", "-i", "hud-text-2048"]
+    description: "Text-based 2048 game environment"
+    max_turns: 20
+    
+  browser:
+    mcp_config:
+      local:
+        command: "docker"
+        args: ["run", "--rm", "-i", "hud-browser"]
+    description: "Browser automation environment"
+    max_turns: 15
+    
+  remote_2048:
+    mcp_config:
+      ssh:
+        command: "ssh"
+        args: ["user@remote-host", "docker", "run", "--rm", "-i", "hud-text-2048"]
+    description: "Remote 2048 game via SSH"
+    max_turns: 20
+
+# ART training configurations
+training:
+  # Model settings
+  base_models:
+    small: "Qwen/Qwen2.5-3B-Instruct"
+    medium: "Qwen/Qwen2.5-7B-Instruct"
+    large: "Qwen/Qwen2.5-14B-Instruct"
+  
+  # Training hyperparameters
+  default:
+    learning_rate: 1e-5
+    rollouts_per_group: 4
+    groups_per_step: 2
+    num_epochs: 1
+    max_seq_length: 8192
+    
+  # Environment-specific overrides
+  2048:
+    learning_rate: 1e-5
+    rollouts_per_group: 4
+    num_training_scenarios: 16
+    num_val_scenarios: 8
+    
+  browser:
+    learning_rate: 5e-6
+    rollouts_per_group: 3
+    num_training_scenarios: 20
+    num_val_scenarios: 10
+
+# 2048-specific settings
+scenarios:
+  2048_targets:
+    - 128
+    - 256
+    - 512
+    - 1024
+    - 2048
+
+# GPU and resource settings
+resources:
+  gpu_memory_utilization: 0.8
+  enforce_eager: true  # For smaller GPUs
+  
+  # Backend options
+  backend:
+    type: "local"  # local or skypilot
+    in_process: true
+    output_dir: "./.art"
+    
+  # SkyPilot settings (if using cloud)
+  skypilot:
+    cluster_name: "hud-art-training"
+    gpu: "H100-SXM"
+    spot: true
+
+# Logging and monitoring
+monitoring:
+  wandb:
+    enabled: false  # Set to true if using W&B
+    project: "hud-art"
+    
+  log_level: "INFO"
+  save_checkpoints_every: 5  # Save every N steps
+  validate_every: 5  # Run validation every N steps
