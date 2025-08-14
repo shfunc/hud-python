@@ -149,7 +149,7 @@ class TestClaudeMCPAgent:
         content = list(messages[0]["content"])
         assert len(content) == 1
         assert content[0]["type"] == "tool_result"  # type: ignore
-        assert content[0]["tool_use_id"] == "id1"  # type: ignore
+        assert content[0]["id"] == "id1"  # type: ignore
         # The actual content is nested inside
         inner_content = list(content[0]["content"])  # type: ignore
         assert inner_content[0]["type"] == "text"  # type: ignore

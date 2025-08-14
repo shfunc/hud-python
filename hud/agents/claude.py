@@ -203,9 +203,9 @@ class ClaudeMCPAgent(MCPAgent):
                 # Create MCPToolCall object with Claude metadata as extra fields
                 # Pyright will complain but the tool class accepts extra fields
                 tool_call = MCPToolCall(
+                    id=block.id,  # canonical identifier for telemetry
                     name=mcp_tool_name,
                     arguments=block.input,
-                    tool_use_id=block.id,  # type: ignore
                     claude_name=block.name,  # type: ignore
                 )
                 result.tool_calls.append(tool_call)
@@ -232,7 +232,7 @@ class ClaudeMCPAgent(MCPAgent):
 
         for tool_call, result in zip(tool_calls, tool_results, strict=True):
             # Extract Claude-specific metadata from extra fields
-            tool_use_id = getattr(tool_call, "tool_use_id", None)
+            tool_use_id = tool_call.id
             if not tool_use_id:
                 logger.warning("No tool_use_id found for %s", tool_call.name)
                 continue

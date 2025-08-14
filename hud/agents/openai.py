@@ -269,7 +269,7 @@ class OpenAIMCPAgent(MCPAgent):
                 tool_call = MCPToolCall(
                     name=computer_tool_name,
                     arguments=action,
-                    call_id=computer_call.call_id,  # type: ignore
+                    id=computer_call.call_id,  # type: ignore
                     pending_safety_checks=computer_call.pending_safety_checks,  # type: ignore
                 )
                 result.tool_calls.append(tool_call)

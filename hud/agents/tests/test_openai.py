@@ -64,8 +64,8 @@ class TestOpenAIMCPAgent:
         agent = OpenAIMCPAgent(mcp_client=mock_mcp_client, model_client=mock_openai)
 
         tool_calls = [
-            MCPToolCall(name="test_tool", arguments={}, call_id="call_123"),  # type: ignore
-            MCPToolCall(name="screenshot", arguments={}, call_id="call_456"),  # type: ignore
+            MCPToolCall(name="test_tool", arguments={}, id="call_123"),  # type: ignore
+            MCPToolCall(name="screenshot", arguments={}, id="call_456"),  # type: ignore
         ]
 
         tool_results = [
@@ -91,7 +91,7 @@ class TestOpenAIMCPAgent:
         agent = OpenAIMCPAgent(mcp_client=mock_mcp_client, model_client=mock_openai)
 
         tool_calls = [
-            MCPToolCall(name="failing_tool", arguments={}, call_id="call_error"),  # type: ignore
+            MCPToolCall(name="failing_tool", arguments={}, id="call_error"),  # type: ignore
         ]
 
         tool_results = [

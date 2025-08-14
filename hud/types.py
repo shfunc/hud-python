@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from typing import Any, Literal
 
 from mcp.types import CallToolRequestParams, CallToolResult
@@ -8,6 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class MCPToolCall(CallToolRequestParams):
     """A tool call."""
+
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))  # Unique identifier for reference
 
     def __str__(self) -> str:
         response = f"Tool: {self.name}"

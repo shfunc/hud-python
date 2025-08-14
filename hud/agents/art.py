@@ -1,0 +1,98 @@
+"""Adapter that plugs a *Trainable* ART model into the HUD MCPAgent stack.
+
+This extends GenericOpenAIChatAgent to collect messages_and_choices during
+execution for ART training.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import TYPE_CHECKING, Any, cast
+
+from openai.types.chat import ChatCompletionToolParam
+
+import hud
+from hud.types import AgentResponse
+from .openai_chat_generic import GenericOpenAIChatAgent
+
+if TYPE_CHECKING:
+    import art
+
+    from hud.clients import AgentMCPClient
+
+logger = logging.getLogger(__name__)
+
+
+class ArtHUDAgent(GenericOpenAIChatAgent):
+    """Use an ART *TrainableModel* as the LLM behind a HUD `MCPAgent`.
+    
+    This agent collects messages_and_choices during execution for ART training.
+    """
+
+    def __init__(
+        self, art_model: art.Model, mcp_client: AgentMCPClient, **agent_kwargs: Any
+    ) -> None:
+        # Use ART's openai_client() method to get proper timeouts and patching
+        openai_client = art_model.openai_client()
+
+        super().__init__(
+            mcp_client=mcp_client,
+            openai_client=openai_client,
+            model_name=art_model.get_inference_name(),
+            **agent_kwargs,
+        )
+
+        self.art_model = art_model
+        self.messages_and_choices: list[Any] = []  # Collect for ART training
+
+        logger.info(
+            "ArtHUDAgent initialised with model '%s' (project=%s)",
+            art_model.name,
+            getattr(art_model, "project", "unknown"),
+        )
+        
+    async def create_initial_messages(
+        self, prompt: str, initial_screenshot: bool = False
+    ) -> list[Any]:
+        """Create initial messages and store them for ART."""
+        messages = await super().create_initial_messages(prompt, initial_screenshot)
+        # Store initial messages as dicts for ART
+        self.messages_and_choices.extend(messages)
+        return messages
+        
+    @hud.instrument(
+        span_type="agent",
+        record_args=False,  # Messages can be large
+        record_result=True,
+    )
+    async def get_model_response(self, messages: list[Any]) -> AgentResponse:
+        """Get model response and store the Choice for ART."""
+        # Call the OpenAI API directly to get the full response
+        response = await self.oai.chat.completions.create(
+            model=self.model_name,
+            messages=messages,
+            tools=cast("list[ChatCompletionToolParam]", self.get_tool_schemas()),
+        )
+        
+        # Store the Choice object for ART training
+        choice = response.choices[0]
+        self.messages_and_choices.append(choice)
+        
+        # Convert to AgentResponse using parent's logic
+        msg = choice.message
+        tool_calls = [self._oai_to_mcp(tc) for tc in msg.tool_calls or []]
+        
+        return AgentResponse(
+            content=msg.content,
+            tool_calls=tool_calls,
+            done=choice.finish_reason == "stop",
+        )
+    
+    async def format_tool_results(
+        self, tool_calls: list[Any], tool_results: list[Any]
+    ) -> list[Any]:
+        """Format tool results and store them for ART."""
+        tool_messages = await super().format_tool_results(tool_calls, tool_results)
+        # Store tool messages for ART
+        self.messages_and_choices.extend(tool_messages)
+        return tool_messages
