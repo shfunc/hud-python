@@ -160,7 +160,7 @@ class FastMCPHUDClient(BaseHUDClient):
             logger.debug("Error while closing FastMCP client transport: %s", e)
 
         self._initialized = False
-        logger.info("FastMCP client closed")
+        logger.debug("FastMCP client closed")
 
     async def __aenter__(self: Any) -> Any:
         """Async context manager entry."""

@@ -167,9 +167,21 @@ Learn more:
 
 ## Tooling & telemetry
 
-- CLI: `hud debug <image>` and `hud analyze <image>` to validate environments
-- Tracing: `with hud.trace("run-name"):` streams runs to app.hud.so
-- Inspector: `npx @modelcontextprotocol/inspector` to poke tools/resources locally
+### CLI Tools (`hud`)
+
+**What's the difference?**
+
+- **`hud debug <IMAGE>`** – 5-phase checker (startup → MCP handshake → tools → telemetry → stress).
+- **`hud analyze <IMAGE>`** – Explore tools/resources (`--format json|markdown`). Requires debug phase 3.
+
+```bash
+hud debug hudpython/hud-remote-browser:latest
+hud analyze hudpython/hud-remote-browser:latest
+```
+
+### Tracing & Debugging
+
+- **Tracing**: `with hud.trace("run-name"):` - Stream any MCP-based trace to app.hud.so for debugging and visualization
 
 ---
 

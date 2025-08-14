@@ -228,7 +228,7 @@ class MCPUseHUDClient(BaseHUDClient):
         self._sessions = {}
         self._tool_map = {}
         self._initialized = False
-        logger.info("MCP-use client closed")
+        logger.debug("MCP-use client closed")
 
     async def __aenter__(self: Any) -> Any:
         """Async context manager entry."""
