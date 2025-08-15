@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
@@ -519,6 +520,16 @@ def _find_reward(result: MCPToolResult) -> float:
     for key in accept_keys:
         if isinstance(result.structuredContent, dict) and key in result.structuredContent:
             return result.structuredContent[key]
+    if isinstance(result.content, list):
+        for content in result.content:
+            if isinstance(content, types.TextContent):
+                try:
+                    json_content = json.loads(content.text)
+                    for key, value in json_content.items():
+                        if key in accept_keys:
+                            return value
+                except json.JSONDecodeError:
+                    pass
     return 0.0
 
 
