@@ -316,14 +316,23 @@ class MCPAgent(ABC):
 
         try:
             # Setup phase
+            setup_content = ""
             if task.setup_tool is not None:
                 logger.info("Setting up tool phase: %s", task.setup_tool)
                 results = await self.execute_tools(task.setup_tool)
                 if any(result.isError for result in results):
                     raise RuntimeError(f"{results}")
+                
+                if isinstance(results[0].content, list):
+                    for content in results[0].content:
+                        if isinstance(content, types.TextContent):
+                            setup_content += f"{content.text}\n"
 
-            # Execute the task prompt
-            prompt_result = await self.run_prompt(task.prompt, max_steps=max_steps)
+            # Initialize conversation with the prompt and setup content
+            start_prompt = setup_content + task.prompt
+
+            # Execute the task
+            prompt_result = await self.run_prompt(start_prompt, max_steps=max_steps)
 
         except Exception as e:
             logger.error("Task execution failed: %s", e)
@@ -366,25 +375,24 @@ class MCPAgent(ABC):
         )
 
     async def run_prompt(
-        self, prompt: str, *, max_steps: int = 10, initial_screenshot: bool = False
+        self, prompt: str, *, max_steps: int = 10
     ) -> Trace:
         """
         Run the agent with the given prompt. This is the core agent loop.
 
         Args:
-            prompt: The task to complete
+            prompt: The prompt to complete
             max_steps: Maximum number of steps (-1 for infinite)
-            initial_screenshot: Whether to capture initial screenshot (defaults to self.initial_screenshot)
 
         Returns:
             Trace with reward, done, content fields and trace steps
-        """  # noqa: E501
+        """
         final_response = None
         error = None
 
         try:
             # Initialize conversation with the prompt
-            messages = await self.create_initial_messages(prompt, initial_screenshot)
+            messages = await self.create_initial_messages(prompt, self.initial_screenshot)
 
             step_count = 0
             while max_steps == -1 or step_count < max_steps:
