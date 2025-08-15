@@ -160,8 +160,9 @@ action_mappings:
 ```
 
 Learn more:
-- rl/README.md – how hud-vf-gym + Verifiers work, configs and datasets
-- rl/configs/default.yaml (browser/computer), rl/configs/2048.yaml (2048)
+- rl/README.md – overview of RL frameworks (ART and Verifiers)
+- rl/verifiers/README.md – how hud-vf-gym + Verifiers work, configs and datasets
+- rl/verifiers/configs/default.yaml (browser/computer), rl/verifiers/configs/2048.yaml (2048)
 
 ---
 
@@ -189,7 +190,7 @@ hud analyze hudpython/hud-remote-browser:latest
 
 - environments/ – build an environment (BaseHub + tools)
 - examples/ – hello world, agent lifecycle, SheetBench
-- rl/ – RL via hud-vf-gym + Verifiers
+- rl/ – RL training with ART and Verifiers frameworks
 
 Install: `pip install hud-python`  •  Issues/feedback welcome.
 
