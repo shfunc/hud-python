@@ -11,13 +11,17 @@ Terminal 1 - Start vLLM server:
 """
 
 from __future__ import annotations
+import sys
+import os
+
+sys.path.insert(1, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import verifiers as vf
-from hud_vf_gym import load_environment
 
-vf_env = load_environment(
+vf_env = vf.load_environment(
+    env_id="hud_vf_gym",
     taskset="hud-evals/2048-taskset",  # HuggingFace dataset
-    config_path="./configs/2048.yaml",
+    config_path="verifiers/configs/2048.yaml",
     num_tasks=1,
 )
 
@@ -38,6 +42,8 @@ training_args.max_tokens = 1024
 training_args.max_seq_len = 2048
 training_args.max_prompt_length = 2048
 training_args.learning_rate = 1e-6
+
+training_args.async_generation_timeout = 900
 
 training_args.max_steps = 100
 training_args.save_strategy = "steps"

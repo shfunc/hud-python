@@ -4,7 +4,7 @@
 
 ## Installation
 
-You can directly install hud-vf-gym in this workspace `hud/rl`
+You can directly install hud-vf-gym in this workspace `hud-python/rl`
 
 ```bash
 # Clone hud-vf-gym
