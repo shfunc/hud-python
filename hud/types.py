@@ -60,6 +60,8 @@ class AgentResponse(BaseModel):
             response += f"""Tool Calls: {
                 ", ".join([f"{tc.name}: {tc.arguments}" for tc in self.tool_calls])
             }"""
+        if self.raw:
+            response += f"Raw: {self.raw}"
         return response
 
 

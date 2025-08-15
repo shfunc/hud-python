@@ -88,22 +88,30 @@ class GenericOpenAIChatAgent(MCPAgent):
             {"role": "user", "content": prompt},
         ]
 
+    def get_tool_schemas(self) -> list[dict]:
+        tool_schemas = super().get_tool_schemas()
+        openai_tools = []
+        for schema in tool_schemas:
+            openai_tool = {
+                "type": "function",
+                "function": {
+                    "name": schema["name"],
+                    "description": schema.get("description", ""),
+                    "parameters": schema.get("parameters", {"type": "object", "properties": {}}),
+                }
+            }
+            openai_tools.append(openai_tool)
+        return openai_tools
+        
     async def get_model_response(self, messages: list[Any]) -> AgentResponse:
         """Send chat request to OpenAI and convert the response."""
         # Convert MCP tool schemas to OpenAI format
         mcp_schemas = self.get_tool_schemas()
-        openai_tools = []
-        for schema in mcp_schemas:
-            openai_tool = {
-                "type": "function",
-                "function": schema
-            }
-            openai_tools.append(openai_tool)
         
         response = await self.oai.chat.completions.create(
             model=self.model_name,
             messages=messages,
-            tools=cast("list[ChatCompletionToolParam]", openai_tools),
+            tools=cast("list[ChatCompletionToolParam]", mcp_schemas),
         )
 
         choice = response.choices[0]
