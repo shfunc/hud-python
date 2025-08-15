@@ -74,7 +74,7 @@ class GenericOpenAIChatAgent(MCPAgent):
                 {
                     "role": "tool",
                     "tool_call_id": call.id,
-                    "content": content,
+                    "content": content or "",  # Ensure content is never None
                 }
             )
         return rendered

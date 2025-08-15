@@ -271,7 +271,7 @@ def _print_trace_url(task_run_id: str) -> None:
     # Print the box
     print(f"\n{DIM}{top_border}{RESET}")  # noqa: T201
     print(  # noqa: T201
-        f"{DIM}║{RESET}{' ' * header_padding}{header}{' ' * (box_width - len(header) - header_padding - 4)}{DIM}║{RESET}"  # noqa: E501
+        f"{DIM}║{RESET}{' ' * header_padding}{header}{' ' * (box_width - len(header) - header_padding - 3)}{DIM}║{RESET}"  # noqa: E501
     )
     print(f"{DIM}{divider}{RESET}")  # noqa: T201
     print(  # noqa: T201

@@ -40,6 +40,7 @@ class MCPAgent(ABC):
         append_tool_system_prompt: bool = True,
         custom_system_prompt: str | None = None,
         lifecycle_tools: list[str] | None = None,
+        append_setup_content: bool = True,
     ) -> None:
         """
         Initialize the base MCP agent.
@@ -69,6 +70,7 @@ class MCPAgent(ABC):
         self.max_screenshot_history = max_screenshot_history
         self.append_tool_system_prompt = append_tool_system_prompt
         self.custom_system_prompt = custom_system_prompt
+        self.append_setup_content = append_setup_content
 
         self.lifecycle_tools = lifecycle_tools or []
 
@@ -316,20 +318,20 @@ class MCPAgent(ABC):
 
         try:
             # Setup phase
-            setup_content = ""
+            start_prompt = ""
             if task.setup_tool is not None:
                 logger.info("Setting up tool phase: %s", task.setup_tool)
                 results = await self.execute_tools(task.setup_tool)
                 if any(result.isError for result in results):
                     raise RuntimeError(f"{results}")
                 
-                if isinstance(results[0].content, list):
+                if self.append_setup_content and isinstance(results[0].content, list):
                     for content in results[0].content:
                         if isinstance(content, types.TextContent):
-                            setup_content += f"{content.text}\n"
+                            start_prompt += f"{content.text}\n"
 
             # Initialize conversation with the prompt and setup content
-            start_prompt = setup_content + task.prompt
+            start_prompt += task.prompt
 
             # Execute the task
             prompt_result = await self.run_prompt(start_prompt, max_steps=max_steps)
