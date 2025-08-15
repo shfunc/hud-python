@@ -120,7 +120,13 @@ class GenericOpenAIChatAgent(MCPAgent):
         choice = response.choices[0]
         msg = choice.message
 
-        tool_calls = [self._oai_to_mcp(tc) for tc in msg.tool_calls or []]
+        tool_calls = []
+        if msg.tool_calls:
+            for tc in msg.tool_calls:
+                if tc.function.name is not None:
+                    tool_calls.append(self._oai_to_mcp(tc))
+                    if not self.parallel_tool_calls:
+                        break
 
         return AgentResponse(
             content=msg.content,
