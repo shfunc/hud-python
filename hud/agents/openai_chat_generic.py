@@ -39,11 +39,13 @@ class GenericOpenAIChatAgent(MCPAgent):
         *,
         openai_client: AsyncOpenAI,
         model_name: str = "gpt-4o-mini",
+        parallel_tool_calls: bool = False,
         **agent_kwargs: Any,
     ) -> None:
         super().__init__(mcp_client=mcp_client, **agent_kwargs)
         self.oai = openai_client
         self.model_name = model_name
+        self.parallel_tool_calls = parallel_tool_calls
 
     @staticmethod
     def _oai_to_mcp(tool_call: Any) -> MCPToolCall:  # type: ignore[valid-type]
@@ -112,6 +114,7 @@ class GenericOpenAIChatAgent(MCPAgent):
             model=self.model_name,
             messages=messages,
             tools=cast("list[ChatCompletionToolParam]", mcp_schemas),
+            parallel_tool_calls=self.parallel_tool_calls
         )
 
         choice = response.choices[0]
