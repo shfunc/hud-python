@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from fastmcp import Client as FastMCPClient
 from mcp import types
+from mcp.shared.exceptions import McpError
 
 from hud.types import MCPToolResult
 
@@ -120,9 +121,17 @@ class FastMCPHUDClient(BaseHUDClient):
         try:
             contents = await self._client.read_resource(uri)
             return types.ReadResourceResult(contents=contents)
+        except McpError as e:
+            if "telemetry://" in str(uri):
+                logger.debug("Telemetry resource not supported by server: %s", e)
+            elif self.verbose:
+                logger.debug("MCP resource error for '%s': %s", uri, e)
+            return None
         except Exception as e:
-            if self.verbose:
-                logger.debug("Could not read resource '%s': %s", uri, e)
+            if "telemetry://" in str(uri):
+                logger.debug("Failed to fetch telemetry: %s", e)
+            else:
+                logger.warning("Unexpected error reading resource '%s': %s", uri, e)
             return None
 
     async def close(self) -> None:

@@ -13,7 +13,7 @@ from openai.types.chat import ChatCompletionToolParam
 
 import hud
 from hud.types import AgentResponse
-from .openai_chat_generic import GenericOpenAIChatAgent
+from hud.agents.openai_chat_generic import GenericOpenAIChatAgent
 
 if TYPE_CHECKING:
     import art
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 class ArtHUDAgent(GenericOpenAIChatAgent):
     """Use an ART *TrainableModel* as the LLM behind a HUD `MCPAgent`.
-    
+
     This agent collects messages_and_choices during execution for ART training.
     """
 
@@ -50,7 +50,7 @@ class ArtHUDAgent(GenericOpenAIChatAgent):
             art_model.name,
             getattr(art_model, "project", "unknown"),
         )
-        
+
     async def create_initial_messages(
         self, prompt: str, initial_screenshot: bool = False
     ) -> list[Any]:
@@ -59,7 +59,7 @@ class ArtHUDAgent(GenericOpenAIChatAgent):
         # Store initial messages as dicts for ART
         self.messages_and_choices.extend(messages)
         return messages
-        
+
     @hud.instrument(
         span_type="agent",
         record_args=False,  # Messages can be large
@@ -67,27 +67,15 @@ class ArtHUDAgent(GenericOpenAIChatAgent):
     )
     async def get_model_response(self, messages: list[Any]) -> AgentResponse:
         """Get model response and store the Choice for ART."""
-        # Call the OpenAI API directly to get the full response
-        response = await self.oai.chat.completions.create(
-            model=self.model_name,
-            messages=messages,
-            tools=cast("list[ChatCompletionToolParam]", self.get_tool_schemas()),
-        )
-        
-        # Store the Choice object for ART training
-        choice = response.choices[0]
-        self.messages_and_choices.append(choice)
-        
-        # Convert to AgentResponse using parent's logic
-        msg = choice.message
-        tool_calls = [self._oai_to_mcp(tc) for tc in msg.tool_calls or []]
-        
-        return AgentResponse(
-            content=msg.content,
-            tool_calls=tool_calls,
-            done=choice.finish_reason == "stop",
-        )
-    
+        # Call parent's get_model_response
+        result = await super().get_model_response(messages)
+
+        # Extract and store the Choice from the raw response
+        if result.raw and hasattr(result.raw, 'choices') and result.raw.choices:
+            self.messages_and_choices.append(result.raw.choices[0])
+
+        return result
+
     async def format_tool_results(
         self, tool_calls: list[Any], tool_results: list[Any]
     ) -> list[Any]:
