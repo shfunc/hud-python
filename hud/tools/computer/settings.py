@@ -73,7 +73,7 @@ class ComputerSettings(BaseSettings):
         validation_alias="ANTHROPIC_RESCALE_IMAGES",
     )
     OPENAI_RESCALE_IMAGES: bool = Field(
-        default=False,
+        default=True,
         description="Whether to rescale images to the agent width and height",
         validation_alias="OPENAI_RESCALE_IMAGES",
     )
