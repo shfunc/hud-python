@@ -298,9 +298,9 @@ def _span_to_dict(span: ReadableSpan) -> dict[str, Any]:
 class HudSpanExporter(SpanExporter):
     """Exporter that forwards spans to HUD backend using existing endpoint."""
 
-    def __init__(self, *, base_url: str, api_key: str) -> None:
+    def __init__(self, *, telemetry_url: str, api_key: str) -> None:
         super().__init__()
-        self._base_url = base_url.rstrip("/")
+        self._telemetry_url = telemetry_url.rstrip("/")
         self._api_key = api_key
 
     # ------------------------------------------------------------------
@@ -322,7 +322,7 @@ class HudSpanExporter(SpanExporter):
         # Send each group synchronously (retry inside make_request_sync)
         for run_id, span_batch in grouped.items():
             try:
-                url = f"{self._base_url}/v2/task_runs/{run_id}/telemetry-upload"
+                url = f"{self._telemetry_url}/v2/task_runs/{run_id}/telemetry-upload"
                 telemetry_spans = [_span_to_dict(s) for s in span_batch]
                 # Include current step count in metadata
                 metadata = {}

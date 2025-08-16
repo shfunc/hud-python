@@ -172,7 +172,7 @@ async def _update_task_status_async(
 
         await make_request(
             method="POST",
-            url=f"{settings.base_url}/v2/task_runs/{task_run_id}/status",
+            url=f"{settings.hud_telemetry_url}/v2/task_runs/{task_run_id}/status",
             json=data,
             api_key=settings.api_key,
         )
@@ -230,7 +230,7 @@ def _update_task_status_sync(
 
         make_request_sync(
             method="POST",
-            url=f"{settings.base_url}/v2/task_runs/{task_run_id}/status",
+            url=f"{settings.hud_telemetry_url}/v2/task_runs/{task_run_id}/status",
             json=data,
             api_key=settings.api_key,
         )

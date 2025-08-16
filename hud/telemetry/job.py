@@ -60,7 +60,7 @@ class Job:
 
                 await make_request(
                     method="POST",
-                    url=f"{settings.base_url}/v2/jobs/{self.id}/status",
+                    url=f"{settings.hud_telemetry_url}/v2/jobs/{self.id}/status",
                     json=payload,
                     api_key=settings.api_key,
                 )
@@ -82,7 +82,7 @@ class Job:
 
                 make_request_sync(
                     method="POST",
-                    url=f"{settings.base_url}/v2/jobs/{self.id}/status",
+                    url=f"{settings.hud_telemetry_url}/v2/jobs/{self.id}/status",
                     json=payload,
                     api_key=settings.api_key,
                 )

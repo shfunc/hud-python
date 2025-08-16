@@ -14,10 +14,10 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="allow")
 
-    base_url: str = Field(
-        default="https://orchestration.hud.so/hud-gym/api",
+    hud_telemetry_url: str = Field(
+        default="https://telemetry.hud.so/hud-gym/api",
         description="Base URL for the HUD API",
-        validation_alias="base_url",
+        validation_alias="HUD_TELEMETRY_URL",
     )
 
     hud_mcp_url: str = Field(

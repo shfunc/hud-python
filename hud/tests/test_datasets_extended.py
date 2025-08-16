@@ -66,7 +66,7 @@ class TestTaskConfigExtended:
     def test_env_var_complex_resolution(self):
         """Test complex environment variable scenarios."""
         os.environ["API_KEY"] = "sk-12345"
-        os.environ["BASE_URL"] = "https://api.example.com"
+        os.environ["HUD_TELEMETRY_URL"] = "https://api.example.com"
         os.environ["EMPTY_VAR"] = ""
 
         try:
@@ -80,7 +80,7 @@ class TestTaskConfigExtended:
                             "empty": "${EMPTY_VAR}",
                             "missing": "${MISSING_VAR}",
                         },
-                        "endpoints": ["${BASE_URL}/v1", "${BASE_URL}/v2", "${MISSING_URL}"],
+                        "endpoints": ["${HUD_TELEMETRY_URL}/v1", "${HUD_TELEMETRY_URL}/v2", "${MISSING_URL}"],
                         "metadata": {"run_id": "${RUN_ID}", "combined": "${API_KEY}-${RUN_ID}"},
                     },
                 )
@@ -96,7 +96,7 @@ class TestTaskConfigExtended:
 
         finally:
             del os.environ["API_KEY"]
-            del os.environ["BASE_URL"]
+            del os.environ["HUD_TELEMETRY_URL"]
             del os.environ["EMPTY_VAR"]
 
     def test_non_string_values_preserved(self):

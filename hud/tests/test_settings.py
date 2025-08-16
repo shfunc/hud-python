@@ -15,7 +15,7 @@ def test_get_settings():
 def test_settings_defaults():
     """Test that settings have expected default values."""
     s = get_settings()
-    assert s.base_url == "https://orchestration.hud.so/hud-gym/api"
+    assert s.hud_telemetry_url == "https://telemetry.hud.so/hud-gym/api"
     assert s.hud_mcp_url == "https://mcp.hud.so/v3/mcp"
     assert s.telemetry_enabled is True
     assert s.hud_logging is True
