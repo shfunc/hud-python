@@ -6,6 +6,7 @@ from typing import Optional, Dict, Any
 import httpx
 
 from .base import BrowserProvider
+from .helper.proxy import get_proxy_config
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ class AnchorBrowserProvider(BrowserProvider):
 
         if not self.api_key:
             raise ValueError("AnchorBrowser API key not provided")
-
+    
     async def launch(self, **kwargs) -> str:
         """Launch an AnchorBrowser instance.
 
@@ -70,16 +71,19 @@ class AnchorBrowserProvider(BrowserProvider):
             },
         }
 
-        # Add proxy configuration if provided
-        if "proxy" in kwargs:
-            request_data["session"]["proxy"] = kwargs["proxy"]
-        else:
-            # Default to anchor residential proxy
-            request_data["session"]["proxy"] = {
+        proxy_config = await get_proxy_config()
+
+        # Default to residential proxy if nothing configured
+        if not proxy_config:
+            proxy_config = {
                 "type": "anchor_residential",
                 "active": True,
-                "country_code": "us",
+                "country_code": os.getenv("PROXY_COUNTRY", "us")
             }
+            logger.info("Using default AnchorBrowser residential proxy")
+        
+        # Add proxy to request data
+        request_data["session"]["proxy"] = proxy_config
 
         # Make API request
         async with httpx.AsyncClient() as client:
@@ -106,6 +110,7 @@ class AnchorBrowserProvider(BrowserProvider):
         self._is_running = True
 
         logger.info(f"Launched AnchorBrowser session: {self._instance_id}")
+        logger.info(f"Using proxy type: {proxy_config.get('type')}")
         return self._cdp_url
 
     async def close(self) -> None:
@@ -154,7 +159,7 @@ class AnchorBrowserProvider(BrowserProvider):
                         status["session_status"] = session_status
             except Exception as e:
                 logger.warning(f"Failed to get session status: {e}")
-
+        
         return status
 
     def get_live_view_url(self) -> Optional[str]:

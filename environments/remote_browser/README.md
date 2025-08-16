@@ -93,6 +93,33 @@ The `-v` flag mounts your local `src/` directory into the container, allowing in
 | `WINDOW_HEIGHT` | Browser window height |
 | `PROXY_URL` | HTTP proxy URL |
 
+### Proxy Configuration
+
+The remote browser environment supports multiple proxy providers:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PROXY_PROVIDER` | Proxy provider type (auto, decodo, standard, residential, none) | auto |
+
+#### Options:
+
+- **`auto`** (default): Let the browser use its default proxy
+- **`decodo`**: Use Decodo proxy service
+  - Requires: `DECODO_USERNAME`, `DECODO_PASSWORD`
+  - Optional: `DECODO_ROTATING` (false=port 10000, true=test ports 10001-11000)
+- **`standard`**: Use any HTTP/SOCKS proxy
+  - Requires: `PROXY_SERVER`
+  - Optional: `PROXY_USERNAME`, `PROXY_PASSWORD`
+- **`none`**: Force direct connection (no proxy)
+
+Example:
+```bash
+# Use Decodo proxy
+export PROXY_PROVIDER=decodo
+export DECODO_USERNAME=username
+export DECODO_PASSWORD=password
+```
+
 ### Google Cloud Platform (GCP) Credentials
 
 For Google Sheets functionality, you have multiple options to provide GCP credentials:

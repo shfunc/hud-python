@@ -204,30 +204,6 @@ async def initialize_environment(session=None, progress_token=None):
         # Build launch options
         launch_options = {}
 
-        # Add proxy configuration if environment variables are set
-        proxy_type = os.getenv("BROWSER_PROXY_TYPE")
-        if proxy_type:
-            if proxy_type == "custom":
-                proxy_config = {
-                    "type": "custom",
-                    "server": os.getenv("BROWSER_PROXY_SERVER"),
-                    "username": os.getenv("BROWSER_PROXY_USERNAME"),
-                    "password": os.getenv("BROWSER_PROXY_PASSWORD"),
-                    "active": True,
-                }
-            elif proxy_type == "anchor_residential":
-                proxy_config = {
-                    "type": "anchor_residential",
-                    "country_code": os.getenv("BROWSER_PROXY_COUNTRY", "us"),
-                    "active": True,
-                }
-            else:
-                proxy_config = None
-
-            if proxy_config:
-                launch_options["proxy"] = proxy_config
-                await send_progress(45, f"Using {proxy_type} proxy")
-
         # Add other launch options from environment
         max_duration = os.getenv("BROWSER_MAX_DURATION")
         if max_duration:
