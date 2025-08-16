@@ -44,10 +44,10 @@ class FastMCPHUDClient(BaseHUDClient):
 
         # Create FastMCP client with the custom transport
         client_info = Implementation(name="hud-python", version="3.0.3")
-        
+
         timeout = 5 * 60  # 5 minutes
         os.environ["FASTMCP_CLIENT_INIT_TIMEOUT"] = str(timeout)
-        
+
         self._client = FastMCPClient(transport, client_info=client_info, timeout=timeout)
         self._stack: AsyncExitStack | None = None
 

@@ -12,6 +12,7 @@ Key points:
   come from the ``MCPAgent`` base class, we only implement the three abstract
   methods
 """
+
 from __future__ import annotations
 
 import json
@@ -100,21 +101,21 @@ class GenericOpenAIChatAgent(MCPAgent):
                     "name": schema["name"],
                     "description": schema.get("description", ""),
                     "parameters": schema.get("parameters", {"type": "object", "properties": {}}),
-                }
+                },
             }
             openai_tools.append(openai_tool)
         return openai_tools
-        
+
     async def get_model_response(self, messages: list[Any]) -> AgentResponse:
         """Send chat request to OpenAI and convert the response."""
         # Convert MCP tool schemas to OpenAI format
         mcp_schemas = self.get_tool_schemas()
-        
+
         response = await self.oai.chat.completions.create(
             model=self.model_name,
             messages=messages,
             tools=cast("list[ChatCompletionToolParam]", mcp_schemas),
-            parallel_tool_calls=self.parallel_tool_calls
+            parallel_tool_calls=self.parallel_tool_calls,
         )
 
         choice = response.choices[0]

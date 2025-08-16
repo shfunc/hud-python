@@ -11,8 +11,9 @@ Terminal 1 - Start vLLM server:
 """
 
 from __future__ import annotations
-import sys
+
 import os
+import sys
 
 sys.path.insert(1, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

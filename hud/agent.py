@@ -324,7 +324,7 @@ class MCPAgent(ABC):
                 results = await self.execute_tools(task.setup_tool)
                 if any(result.isError for result in results):
                     raise RuntimeError(f"{results}")
-                
+
                 if self.append_setup_content and isinstance(results[0].content, list):
                     for content in results[0].content:
                         if isinstance(content, types.TextContent):
@@ -377,9 +377,7 @@ class MCPAgent(ABC):
             content=[types.TextContent(text=error_message, type="text")], isError=True
         )
 
-    async def run_prompt(
-        self, prompt: str, *, max_steps: int = 10
-    ) -> Trace:
+    async def run_prompt(self, prompt: str, *, max_steps: int = 10) -> Trace:
         """
         Run the agent with the given prompt. This is the core agent loop.
 

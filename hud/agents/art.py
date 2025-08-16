@@ -25,9 +25,10 @@ system_prompt = (
     "You are an MCP (Model Context Protocol) agent.\n\n"
     "Use MCP tools through the server to complete your task.\n\n"
     "You have a total of {MAX_STEPS} steps."
-    "You are an excellent 2048 player. Always choose the move most likely to combine tiles and reach higher numbers."
+    "You are an excellent 2048 player. Always choose the move most likely to combine tiles and reach higher numbers."  # noqa: E501
     "Only provide a maximum of one tool call at a time."
 )
+
 
 class ArtHUDAgent(GenericOpenAIChatAgent):
     """Use an ART *TrainableModel* as the LLM behind a HUD `MCPAgent`.
@@ -73,19 +74,19 @@ class ArtHUDAgent(GenericOpenAIChatAgent):
         record_result=True,
     )
     async def get_model_response(self, messages: list[Any]) -> AgentResponse:
-      """Get model response and store the Choice for ART."""
-      # Call parent's get_model_response
-      result = await super().get_model_response(messages)
+        """Get model response and store the Choice for ART."""
+        # Call parent's get_model_response
+        result = await super().get_model_response(messages)
 
-      # Extract and store the Choice from the raw response
-      if result.raw and hasattr(result.raw, "choices") and result.raw.choices:
-          choice = result.raw.choices[0]
-          # Ensure the message has content (required for ART tokenization)
-          if choice.message and choice.message.content is None:
+        # Extract and store the Choice from the raw response
+        if result.raw and hasattr(result.raw, "choices") and result.raw.choices:
+            choice = result.raw.choices[0]
+            # Ensure the message has content (required for ART tokenization)
+            if choice.message and choice.message.content is None:
                 choice.message.content = ""
-          self.messages_and_choices.append(choice)
+            self.messages_and_choices.append(choice)
 
-      return result
+        return result
 
     async def format_tool_results(
         self, tool_calls: list[Any], tool_results: list[Any]

@@ -216,7 +216,9 @@ class MCPUseHUDClient(BaseHUDClient):
             except McpError as e:
                 # McpError is expected for unsupported resources
                 if "telemetry://" in str(uri):
-                    logger.debug("Telemetry resource not supported by server '%s': %s", server_name, e)
+                    logger.debug(
+                        "Telemetry resource not supported by server '%s': %s", server_name, e
+                    )
                 elif self.verbose:
                     logger.debug(
                         "MCP resource error for '%s' from server '%s': %s", uri, server_name, e
@@ -228,7 +230,10 @@ class MCPUseHUDClient(BaseHUDClient):
                     logger.debug("Failed to fetch telemetry from server '%s': %s", server_name, e)
                 else:
                     logger.warning(
-                        "Unexpected error reading resource '%s' from server '%s': %s", uri, server_name, e
+                        "Unexpected error reading resource '%s' from server '%s': %s",
+                        uri,
+                        server_name,
+                        e,
                     )
                 continue
 
