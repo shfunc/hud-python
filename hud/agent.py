@@ -40,7 +40,7 @@ class MCPAgent(ABC):
         append_tool_system_prompt: bool = True,
         custom_system_prompt: str | None = None,
         lifecycle_tools: list[str] | None = None,
-        append_setup_content: bool = True,
+        append_setup_content: bool = False,
     ) -> None:
         """
         Initialize the base MCP agent.
@@ -332,6 +332,7 @@ class MCPAgent(ABC):
 
             # Initialize conversation with the prompt and setup content
             start_prompt += task.prompt
+            logger.info("Start prompt: %s", start_prompt)
 
             # Execute the task
             prompt_result = await self.run_prompt(start_prompt, max_steps=max_steps)
@@ -395,6 +396,7 @@ class MCPAgent(ABC):
         try:
             # Initialize conversation with the prompt
             messages = await self.create_initial_messages(prompt, self.initial_screenshot)
+            logger.info("Messages: %s", messages)
 
             step_count = 0
             while max_steps == -1 or step_count < max_steps:
