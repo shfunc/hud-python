@@ -17,7 +17,7 @@ The entire flow is wrapped in hud.trace() to provide RUN_ID context.
 import asyncio
 import hud
 from hud.datasets import TaskConfig
-from hud.agents import ClaudeMCPAgent
+from hud.agents import ClaudeAgent
 from hud.clients import MCPClient
 
 
@@ -32,7 +32,7 @@ async def main():
                     "url": "https://mcp.hud.so/v3/mcp",
                     "headers": {
                         "Authorization": "Bearer ${HUD_API_KEY}",
-                        "Mcp-Image": "hudpython/hud-remote-browser:latest",
+                        "Mcp-Image": "hudpython/hud-browser:latest",
                         "Run-Id": "${RUN_ID}",  # Automatically filled from trace
                     },
                 }
@@ -46,7 +46,7 @@ async def main():
         client = MCPClient(mcp_config=task.mcp_config)
 
         # Create agent
-        agent = ClaudeMCPAgent(
+        agent = ClaudeAgent(
             mcp_client=client,
             model="claude-3-7-sonnet-20250219",
             allowed_tools=["anthropic_computer"],

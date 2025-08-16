@@ -90,7 +90,7 @@ import hud
 from datasets import load_dataset
 from hud.datasets import to_taskconfigs
 from hud.client import MCPClient
-from hud.agents import ClaudeMCPAgent
+from hud.agents import ClaudeAgent
 
 async def main():
     with hud.trace("sheetbench-claude-demo"):
@@ -99,7 +99,7 @@ async def main():
         task = to_taskconfigs(dataset)[0]
 
         client = MCPClient(mcp_config=task.mcp_config)
-        agent = ClaudeMCPAgent(
+        agent = ClaudeAgent(
             mcp_client=client,
             model="claude-3-7-sonnet-20250219",
             allowed_tools=["anthropic_computer"],

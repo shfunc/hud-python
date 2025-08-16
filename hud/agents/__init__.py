@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 from .art import ArtHUDAgent
-from .claude import ClaudeMCPAgent
-from .langchain import LangChainMCPAgent
-from .openai import OpenAIMCPAgent
+from .claude import ClaudeAgent
+from .langchain import LangChainAgent
+from .openai import OperatorAgent
 from .openai_chat_generic import GenericOpenAIChatAgent
 
 __all__ = [
     "ArtHUDAgent",
-    "ClaudeMCPAgent",
+    "ClaudeAgent",
     "GenericOpenAIChatAgent",
-    "LangChainMCPAgent",
-    "OpenAIMCPAgent",
+    "LangChainAgent",
+    "OperatorAgent",
 ]

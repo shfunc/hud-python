@@ -13,7 +13,7 @@ OpenAI models excel at function calling and structured reasoning.
 
 import asyncio
 import hud
-from hud.agents import OpenAIMCPAgent
+from hud.agents import OperatorAgent
 from hud.clients import MCPClient
 
 
@@ -33,7 +33,7 @@ async def main():
 
         # Create OpenAI-specific agent
         client = MCPClient(mcp_config=mcp_config)
-        agent = OpenAIMCPAgent(
+        agent = OperatorAgent(
             mcp_client=client,
             model="gpt-4o",  # Latest OpenAI model
             temperature=0.3,

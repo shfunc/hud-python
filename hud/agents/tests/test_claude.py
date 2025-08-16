@@ -10,7 +10,7 @@ from anthropic import BadRequestError
 from mcp import types
 
 from hud.agents.claude import (
-    ClaudeMCPAgent,
+    ClaudeAgent,
     base64_to_content_block,
     text_to_content_block,
     tool_use_content_block,
@@ -56,8 +56,8 @@ class TestClaudeHelperFunctions:
         assert result["content"] == content  # type: ignore
 
 
-class TestClaudeMCPAgent:
-    """Test ClaudeMCPAgent class."""
+class TestClaudeAgent:
+    """Test ClaudeAgent class."""
 
     @pytest.fixture
     def mock_mcp_client(self):
@@ -81,7 +81,7 @@ class TestClaudeMCPAgent:
         """Test agent initialization."""
         # Test with provided model_client
         mock_model_client = MagicMock()
-        agent = ClaudeMCPAgent(
+        agent = ClaudeAgent(
             mcp_client=mock_mcp_client,
             model_client=mock_model_client,
             model="claude-3-opus-20240229",
@@ -96,7 +96,7 @@ class TestClaudeMCPAgent:
     async def test_init_without_model_client(self, mock_mcp_client):
         """Test agent initialization without model client."""
         with patch("hud.settings.settings.anthropic_api_key", "test_key"):
-            agent = ClaudeMCPAgent(mcp_client=mock_mcp_client, model="claude-3-opus-20240229")
+            agent = ClaudeAgent(mcp_client=mock_mcp_client, model="claude-3-opus-20240229")
 
             assert agent.model_name == "claude-3-opus-20240229"
             assert agent.anthropic_client is not None
@@ -105,7 +105,7 @@ class TestClaudeMCPAgent:
     async def test_create_initial_messages(self, mock_mcp_client):
         """Test creating initial messages."""
         mock_model_client = MagicMock()
-        agent = ClaudeMCPAgent(mcp_client=mock_mcp_client, model_client=mock_model_client)
+        agent = ClaudeAgent(mcp_client=mock_mcp_client, model_client=mock_model_client)
 
         # Test with text only
         messages = await agent.create_initial_messages("Hello, Claude!")
@@ -130,7 +130,7 @@ class TestClaudeMCPAgent:
     async def test_format_tool_results_method(self, mock_mcp_client):
         """Test the agent's format_tool_results method."""
         mock_model_client = MagicMock()
-        agent = ClaudeMCPAgent(mcp_client=mock_mcp_client, model_client=mock_model_client)
+        agent = ClaudeAgent(mcp_client=mock_mcp_client, model_client=mock_model_client)
 
         tool_calls = [
             MCPToolCall(name="test_tool", arguments={}, tool_use_id="id1"),  # type: ignore
@@ -160,7 +160,7 @@ class TestClaudeMCPAgent:
         """Test getting model response from Claude API."""
         # Disable telemetry for this test to avoid backend configuration issues
         with patch("hud.settings.settings.telemetry_enabled", False):
-            agent = ClaudeMCPAgent(mcp_client=mock_mcp_client, model_client=mock_anthropic)
+            agent = ClaudeAgent(mcp_client=mock_mcp_client, model_client=mock_anthropic)
 
             # Mock the API response
             mock_response = MagicMock()
@@ -204,7 +204,7 @@ class TestClaudeMCPAgent:
         """Test getting text-only response."""
         # Disable telemetry for this test to avoid backend configuration issues
         with patch("hud.settings.settings.telemetry_enabled", False):
-            agent = ClaudeMCPAgent(mcp_client=mock_mcp_client, model_client=mock_anthropic)
+            agent = ClaudeAgent(mcp_client=mock_mcp_client, model_client=mock_anthropic)
 
             mock_response = MagicMock()
             # Create text block
@@ -231,7 +231,7 @@ class TestClaudeMCPAgent:
         """Test handling API errors."""
         # Disable telemetry for this test to avoid backend configuration issues
         with patch("hud.settings.settings.telemetry_enabled", False):
-            agent = ClaudeMCPAgent(mcp_client=mock_mcp_client, model_client=mock_anthropic)
+            agent = ClaudeAgent(mcp_client=mock_mcp_client, model_client=mock_anthropic)
 
             # Mock API error
             mock_anthropic.beta.messages.create = AsyncMock(
@@ -252,7 +252,7 @@ class TestClaudeMCPAgent:
         """Test running agent with tool usage."""
         # Disable telemetry for this test to avoid backend configuration issues
         with patch("hud.settings.settings.telemetry_enabled", False):
-            agent = ClaudeMCPAgent(mcp_client=mock_mcp_client, model_client=mock_anthropic)
+            agent = ClaudeAgent(mcp_client=mock_mcp_client, model_client=mock_anthropic)
 
             # Mock tool availability
             agent._available_tools = [

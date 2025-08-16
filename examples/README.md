@@ -58,12 +58,12 @@ python task_with_setup_eval.py
 from hud.telemetry import trace
 from hud.datasets import TaskConfig
 from hud.clients import MCPClient
-from hud.agents import ClaudeMCPAgent
+from hud.agents import ClaudeAgent
 
 with trace("My Demo"):
     task = TaskConfig(...)
     client = MCPClient(mcp_config=task.mcp_config)
-    agent  = ClaudeMCPAgent(mcp_client=client, ...)
+    agent  = ClaudeAgent(mcp_client=client, ...)
     result = await agent.run(task)
 ```
 

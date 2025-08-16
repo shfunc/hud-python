@@ -14,7 +14,7 @@ import asyncio
 import argparse
 import os
 import hud
-from hud.agents import ClaudeMCPAgent
+from hud.agents import ClaudeAgent
 from hud.clients import MCPClient
 from hud.settings import settings
 from hud.datasets import TaskConfig
@@ -60,7 +60,7 @@ async def run_cloud_example():
         client = MCPClient(mcp_config=task.mcp_config)
         await client.initialize()
 
-        agent = ClaudeMCPAgent(
+        agent = ClaudeAgent(
             mcp_client=client,
             model="claude-3-7-sonnet-20250219",
             allowed_tools=["anthropic_computer"],
@@ -98,7 +98,7 @@ async def run_local_example():
         }
 
         client = MCPClient(mcp_config=mcp_config)
-        agent = ClaudeMCPAgent(
+        agent = ClaudeAgent(
             mcp_client=client,
             model="claude-3-7-sonnet-20250219",
             allowed_tools=["anthropic_computer"],

@@ -27,9 +27,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class OpenAIMCPAgent(MCPAgent):
+class OperatorAgent(MCPAgent):
     """
-    OpenAI agent that uses MCP servers for tool execution.
+    Operator agent that uses MCP servers for tool execution.
 
     This agent uses OpenAI's Computer Use API format but executes
     tools through MCP servers instead of direct implementation.
@@ -45,7 +45,7 @@ class OpenAIMCPAgent(MCPAgent):
         **kwargs: Any,
     ) -> None:
         """
-        Initialize OpenAI MCP agent.
+        Initialize Operator MCP agent.
 
         Args:
             client: AsyncOpenAI client (created if not provided)
@@ -131,7 +131,7 @@ class OpenAIMCPAgent(MCPAgent):
         # Check if we have computer tools available
         computer_tool_name = None
         for tool in self._available_tools:
-            if tool.name in ["computer_openai", "computer"]:
+            if tool.name in ["openai_computer", "computer"]:
                 computer_tool_name = tool.name
                 break
 

@@ -13,7 +13,7 @@ Usage:
 
 import asyncio
 import hud
-from hud.agents import ClaudeMCPAgent
+from hud.agents import ClaudeAgent
 from hud.clients import MCPClient
 from datasets import load_dataset
 from hud.datasets import run_dataset, TaskConfig
@@ -30,7 +30,7 @@ async def run_single_task():
 
         # Create client and agent
         client = MCPClient(mcp_config=task.mcp_config)
-        agent = ClaudeMCPAgent(
+        agent = ClaudeAgent(
             mcp_client=client,
             model="claude-sonnet-4-20250514",
             allowed_tools=["anthropic_computer"],
@@ -65,7 +65,7 @@ async def run_sheetbench_dataset():
     results = await run_dataset(
         name="SheetBench-50 Evaluation",
         dataset=dataset,
-        agent_class=ClaudeMCPAgent,
+        agent_class=ClaudeAgent,
         agent_config=agent_config,
         max_concurrent=50,
         metadata={

@@ -7,12 +7,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from mcp import types
 
-from hud.agents.openai import OpenAIMCPAgent
+from hud.agents.openai import OperatorAgent
 from hud.types import MCPToolCall, MCPToolResult
 
 
-class TestOpenAIMCPAgent:
-    """Test OpenAIMCPAgent class."""
+class TestOperatorAgent:
+    """Test OperatorAgent class."""
 
     @pytest.fixture
     def mock_mcp_client(self):
@@ -32,7 +32,7 @@ class TestOpenAIMCPAgent:
     async def test_init(self, mock_mcp_client):
         """Test agent initialization."""
         mock_model_client = MagicMock()
-        agent = OpenAIMCPAgent(
+        agent = OperatorAgent(
             mcp_client=mock_mcp_client, model_client=mock_model_client, model="gpt-4"
         )
 
@@ -44,7 +44,7 @@ class TestOpenAIMCPAgent:
     async def test_create_initial_messages(self, mock_mcp_client):
         """Test creating initial messages."""
         mock_model_client = MagicMock()
-        agent = OpenAIMCPAgent(mcp_client=mock_mcp_client, model_client=mock_model_client)
+        agent = OperatorAgent(mcp_client=mock_mcp_client, model_client=mock_model_client)
 
         # Test with text only
         messages = await agent.create_initial_messages("Hello, GPT!")
@@ -61,7 +61,7 @@ class TestOpenAIMCPAgent:
     @pytest.mark.asyncio
     async def test_format_tool_results(self, mock_mcp_client, mock_openai):
         """Test formatting tool results."""
-        agent = OpenAIMCPAgent(mcp_client=mock_mcp_client, model_client=mock_openai)
+        agent = OperatorAgent(mcp_client=mock_mcp_client, model_client=mock_openai)
 
         tool_calls = [
             MCPToolCall(name="test_tool", arguments={}, id="call_123"),  # type: ignore
@@ -88,7 +88,7 @@ class TestOpenAIMCPAgent:
     @pytest.mark.asyncio
     async def test_format_tool_results_with_error(self, mock_mcp_client, mock_openai):
         """Test formatting tool results with errors."""
-        agent = OpenAIMCPAgent(mcp_client=mock_mcp_client, model_client=mock_openai)
+        agent = OperatorAgent(mcp_client=mock_mcp_client, model_client=mock_openai)
 
         tool_calls = [
             MCPToolCall(name="failing_tool", arguments={}, id="call_error"),  # type: ignore
@@ -110,7 +110,7 @@ class TestOpenAIMCPAgent:
     @pytest.mark.asyncio
     async def test_get_model_response(self, mock_mcp_client, mock_openai):
         """Test getting model response from OpenAI API."""
-        agent = OpenAIMCPAgent(mcp_client=mock_mcp_client, model_client=mock_openai)
+        agent = OperatorAgent(mcp_client=mock_mcp_client, model_client=mock_openai)
 
         # Set up available tools so agent doesn't return "No computer use tools available"
         agent._available_tools = [
@@ -134,7 +134,7 @@ class TestOpenAIMCPAgent:
     @pytest.mark.asyncio
     async def test_get_model_response_text_only(self, mock_mcp_client, mock_openai):
         """Test getting text-only response when no computer tools available."""
-        agent = OpenAIMCPAgent(mcp_client=mock_mcp_client, model_client=mock_openai)
+        agent = OperatorAgent(mcp_client=mock_mcp_client, model_client=mock_openai)
 
         # Set up with no computer tools
         agent._available_tools = []
@@ -149,7 +149,7 @@ class TestOpenAIMCPAgent:
     @pytest.mark.asyncio
     async def test_run_with_tools(self, mock_mcp_client, mock_openai):
         """Test running agent with tool usage."""
-        agent = OpenAIMCPAgent(mcp_client=mock_mcp_client, model_client=mock_openai)
+        agent = OperatorAgent(mcp_client=mock_mcp_client, model_client=mock_openai)
 
         # Mock tool availability
         agent._available_tools = [
@@ -205,7 +205,7 @@ class TestOpenAIMCPAgent:
     @pytest.mark.asyncio
     async def test_handle_empty_response(self, mock_mcp_client, mock_openai):
         """Test handling empty response from API."""
-        agent = OpenAIMCPAgent(mcp_client=mock_mcp_client, model_client=mock_openai)
+        agent = OperatorAgent(mcp_client=mock_mcp_client, model_client=mock_openai)
 
         # Set up available tools
         agent._available_tools = [

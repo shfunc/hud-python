@@ -72,12 +72,12 @@ async with client:
 ### With Agents
 
 ```python
-from hud.agents import ClaudeMCPAgent
+from hud.agents import ClaudeAgent
 
 # Either client works with agents
 client = FastMCPHUDClient(mcp_config)
 
-agent = ClaudeMCPAgent(
+agent = ClaudeAgent(
     mcp_client=client,
     model="claude-3-7-sonnet-20250219"
 )

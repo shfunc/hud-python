@@ -97,7 +97,6 @@ class OpenAIComputerTool(HudComputerTool):
 
     async def __call__(
         self,
-        *,
         type: str = Field(..., description="The action type to perform"),
         # Coordinate parameters
         x: int | None = Field(None, description="X coordinate for click/move/scroll actions"),
@@ -142,7 +141,6 @@ class OpenAIComputerTool(HudComputerTool):
             screenshot_base64 = await self.executor.screenshot()
             if screenshot_base64:
                 # Rescale screenshot if requested
-                screenshot_base64 = await self._rescale_screenshot(screenshot_base64)
                 result = ContentResult(base64_image=screenshot_base64)
             else:
                 result = ContentResult(error="Failed to take screenshot")

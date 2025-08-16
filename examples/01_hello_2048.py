@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 import hud
 from hud.datasets import TaskConfig
-from hud.agents import ClaudeMCPAgent
+from hud.agents import ClaudeAgent
 from hud.clients import MCPClient
 
 
@@ -54,7 +54,7 @@ async def main():
         client = MCPClient(mcp_config=task.mcp_config)
 
         # Define the agent that uses a VLM and can call tools via the client
-        agent = ClaudeMCPAgent(mcp_client=client, allowed_tools=["move"])
+        agent = ClaudeAgent(mcp_client=client, allowed_tools=["move"])
 
         try:
             # Running a full TaskConfig automatically handles setup and evaluation!

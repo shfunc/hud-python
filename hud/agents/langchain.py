@@ -23,7 +23,7 @@ from hud.types import AgentResponse, MCPToolCall, MCPToolResult
 logger = logging.getLogger(__name__)
 
 
-class LangChainMCPAgent(MCPAgent):
+class LangChainAgent(MCPAgent):
     """
     LangChain agent that uses MCP servers for tool execution.
 

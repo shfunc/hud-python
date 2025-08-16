@@ -14,7 +14,7 @@ multi-step reasoning tasks.
 
 import asyncio
 import hud
-from hud.agents import ClaudeMCPAgent
+from hud.agents import ClaudeAgent
 from hud.clients import MCPClient
 from hud.settings import settings
 
@@ -39,7 +39,7 @@ async def main():
 
         # Create Claude-specific agent
         client = MCPClient(mcp_config=mcp_config)
-        agent = ClaudeMCPAgent(
+        agent = ClaudeAgent(
             mcp_client=client,
             model="claude-3-7-sonnet-20250219",
             allowed_tools=["anthropic_computer"],

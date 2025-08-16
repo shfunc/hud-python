@@ -136,7 +136,7 @@ async def run_dataset(
         name: Name for the job
         dataset: HuggingFace dataset identifier (e.g. "hud-evals/SheetBench-50"),
                 Dataset object, OR list of TaskConfig objects
-        agent_class: Agent class to instantiate (e.g., ClaudeMCPAgent)
+        agent_class: Agent class to instantiate (e.g., ClaudeAgent)
         agent_config: Configuration for agent (model, etc.)
         max_concurrent: Maximum parallel task execution
         metadata: Optional metadata for the job
@@ -147,21 +147,21 @@ async def run_dataset(
         List of results from agent.run() in dataset order
 
     Example:
-        >>> from hud.mcp import ClaudeMCPAgent
+        >>> from hud.agents import ClaudeAgent
         >>> # Option 1: From dataset string identifier
         >>> results = await run_dataset(
         ...     "SheetBench Eval",
         ...     "hud-evals/SheetBench-50",
-        ...     ClaudeMCPAgent,
+        ...     ClaudeAgent,
         ...     {"model": "claude-3-5-sonnet-20241022"},
         ... )
         >>> # Option 2: From HuggingFace dataset object
         >>> from datasets import load_dataset
         >>> dataset = load_dataset("hud-evals/browser-taskconfigs", split="train")
-        >>> results = await run_dataset("my_eval", dataset, ClaudeMCPAgent)
+        >>> results = await run_dataset("my_eval", dataset, ClaudeAgent)
         >>> # Option 3: From list of dicts
         >>> tasks = [{"prompt": "...", "mcp_config": {...}, ...}, ...]
-        >>> results = await run_dataset("browser_eval", tasks, ClaudeMCPAgent)
+        >>> results = await run_dataset("browser_eval", tasks, ClaudeAgent)
     """
     # Import here to avoid circular imports
     import hud

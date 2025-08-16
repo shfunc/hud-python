@@ -37,7 +37,7 @@ configure_telemetry(
 
 # Now import everything else
 import hud
-from hud.agents import ClaudeMCPAgent
+from hud.agents import ClaudeAgent
 from hud.clients import MCPClient
 from hud.datasets import TaskConfig
 
@@ -64,7 +64,7 @@ async def main():
     # Create client and agent
     mcp_client = MCPClient(mcp_config=task.mcp_config)
     # Create agent - its methods are already instrumented with @hud.instrument
-    agent = ClaudeMCPAgent(
+    agent = ClaudeAgent(
         mcp_client=mcp_client,
     )
 

@@ -51,7 +51,7 @@ def tool_use_content_block(
     return {"type": "tool_result", "tool_use_id": tool_use_id, "content": content}
 
 
-class ClaudeMCPAgent(MCPAgent):
+class ClaudeAgent(MCPAgent):
     """
     Claude agent that uses MCP servers for tool execution.
 
