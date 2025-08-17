@@ -88,29 +88,43 @@ Run with Claude (quick demo):
 import asyncio
 import hud
 from datasets import load_dataset
-from hud.datasets import to_taskconfigs
-from hud.client import MCPClient
+from hud.datasets import run_dataset, TaskConfig
+from hud.clients import MCPClient
 from hud.agents import ClaudeAgent
 
 async def main():
+    # Run single task
+    dataset = load_dataset("hud-evals/SheetBench-50", split="train")
+    
     with hud.trace("sheetbench-claude-demo"):
-        # Load a small SheetBench split from HF and convert to TaskConfig
-        dataset = load_dataset("hud-evals/SheetBench-50", split="train")
-        task = to_taskconfigs(dataset)[0]
-
+        task = TaskConfig(**dataset[0])
         client = MCPClient(mcp_config=task.mcp_config)
         agent = ClaudeAgent(
             mcp_client=client,
-            model="claude-3-7-sonnet-20250219",
+            model="claude-sonnet-4-20250514",
             allowed_tools=["anthropic_computer"],
             initial_screenshot=True,
         )
-        try:
-            print(task.prompt)
-            result = await agent.run(task, max_steps=15)
-            print(result.reward)
-        finally:
-            await client.close()
+        result = await agent.run(task, max_steps=40)
+        print(f"Task: {task.prompt}")
+        print(f"Result: {result.reward}")
+        await client.close()
+
+# Or run full dataset evaluation
+async def run_full_dataset():
+    results = await run_dataset(
+        name="SheetBench-50 Evaluation",
+        dataset="hud-evals/SheetBench-50", # HuggingFace dataset name
+        agent_class=ClaudeAgent,
+        agent_config={
+            "model": "claude-sonnet-4-20250514",
+            "allowed_tools": ["anthropic_computer"],
+            "initial_screenshot": True,
+        },
+        max_concurrent=50,
+        max_steps=150,
+    )
+    print(f"Average reward: {sum(r.reward for r in results if r) / len([r for r in results if r]):.2f}")
 
 asyncio.run(main())
 ```
@@ -143,22 +157,6 @@ cfg = GRPOConfig(model_name_or_path="your-model", num_train_epochs=3, per_device
 trainer = GRPOTrainer(model=model, env=env, args=cfg, processing_class=tokenizer)
 trainer.train()
 ```
-
-Action mapping (YAML):
-
-```yaml
-action_mappings:
-  screenshot:
-    _parser: { positional: [] }
-    _tool: "computer"
-    action: "screenshot"
-  key:
-    _parser: { positional: ["key"] }
-    _tool: "computer"
-    action: "press"
-    keys: { from_arg: "key", transform: "lambda x: x.split('+')" }
-```
-
 Learn more:
 - rl/README.md – overview of RL frameworks (ART and Verifiers)
 - rl/verifiers/README.md – how hud-vf-gym + Verifiers work, configs and datasets
