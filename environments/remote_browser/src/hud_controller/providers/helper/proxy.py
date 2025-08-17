@@ -14,11 +14,12 @@ async def _decodo_proxy() -> Optional[Dict[str, Any]]:
         return None
     host = os.getenv("DECODO_HOST", "us.decodo.com")
     rotating = os.getenv("DECODO_ROTATING", "false").lower() == "true"
+    logger.info(f"Using Decodo proxy with rotating: {os.getenv('DECODO_ROTATING')}")
     if not rotating:
         port = 10000
         logger.info("Using Decodo rotating proxy (port 10000)")
         return {
-            "type": "decodo",
+            "type": "custom",
             "server": f"{host}:{port}",
             "username": user,
             "password": pwd,
@@ -37,7 +38,7 @@ async def _decodo_proxy() -> Optional[Dict[str, Any]]:
                 if (await client.get("http://httpbin.org/ip")).status_code == 200:
                     logger.info("Decodo port %s works", port)
                     return {
-                        "type": "decodo",
+                        "type": "custom",
                         "server": f"{host}:{port}",
                         "username": user,
                         "password": pwd,

@@ -24,33 +24,23 @@ def _run_with_sigterm(coro_fn: Callable[..., Any], *args: Any, **kwargs: Any) ->
 
     async def _runner() -> None:
         stop_evt: asyncio.Event | None = None
-        logger.info("Running with sigterm handler") 
         if sys.platform != "win32" and os.getenv("FASTMCP_DISABLE_SIGTERM_HANDLER") != "1":
-            logger.info("Adding SIGTERM handler")
             if signal.getsignal(signal.SIGTERM) is signal.SIG_DFL:
                 loop = asyncio.get_running_loop()
                 stop_evt = asyncio.Event()
                 loop.add_signal_handler(signal.SIGTERM, stop_evt.set)
-                logger.info("SIGTERM handler added")
 
         async with anyio.create_task_group() as tg:
-            logger.info("Starting coroutine")
             tg.start_soon(coro_fn, *args, **kwargs)
-            logger.info("Coroutine started")
 
             if stop_evt is not None:
                 async def _watch() -> None:
                     logger.info("Waiting for SIGTERM")
                     await stop_evt.wait()
-                    logger.info("SIGTERM received, cancelling task group")
                     tg.cancel_scope.cancel()
-                    logger.info("Task group cancelled")
                 tg.start_soon(_watch)
-                logger.info("Watch task started")
 
-    logger.info("Running anyio.run")
     anyio.run(_runner)
-    logger.info("anyio.run finished")
 
 
 class HudMCP(FastMCP):
