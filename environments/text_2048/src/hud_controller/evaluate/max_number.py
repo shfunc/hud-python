@@ -11,6 +11,9 @@ async def evaluate_max_number(ctx: Context, target: int):
     game = evaluate.env
     highest_tile = game.get_state().get("highest_tile", 0)
 
+    # Adjust for initial tile
+    highest_tile = highest_tile - 2
+
     # Linear reward scale
     # Reward is proportional to highest_tile / target, capped at 1.0
     reward = min(1.0, highest_tile / target) if target > 0 else 0.0

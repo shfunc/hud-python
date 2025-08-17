@@ -17,6 +17,62 @@ from . import setup
 logger = logging.getLogger(__name__)
 
 
+async def navigate_to_google_sheet(page, sheet_url: str, max_attempts: int = 3):
+    """Navigate to a Google Sheet with retry logic and loading issue handling.
+    
+    Args:
+        page: Playwright page object
+        sheet_url: URL of the Google Sheet
+        max_attempts: Maximum number of navigation attempts
+        
+    Returns:
+        bool: True if navigation was successful, False otherwise
+    """
+    for attempt in range(max_attempts):
+        try:
+            if attempt > 0:
+                logger.info(f"Retrying navigation (attempt {attempt + 1}/{max_attempts})")
+            
+            # Navigate to the sheet
+            await page.goto(sheet_url, wait_until="load", timeout=45000)
+            
+            # Wait for sheet to load
+            try:
+                await page.wait_for_selector(".grid-container", timeout=20000)
+                logger.info("Sheet loaded successfully")
+                
+                # Check for loading issue popup
+                await page.wait_for_timeout(2000)  # Give popup time to appear
+                
+                if await page.locator('text="Loading issue"').is_visible(timeout=1000):
+                    logger.warning("Loading issue popup detected, reloading page")
+                    await page.reload(wait_until="networkidle", timeout=30000)
+                    
+                    # Wait for sheet to load again after reload
+                    await page.wait_for_selector(".grid-container", timeout=20000)
+                    logger.info("Sheet reloaded successfully")
+                
+                return True  # Success
+                
+            except Exception as e:
+                if attempt < max_attempts - 1:
+                    logger.warning("Timeout waiting for sheet to load, will retry with refresh")
+                    await page.reload(timeout=30000)
+                else:
+                    logger.warning("Timeout waiting for sheet to fully load after all attempts")
+                    return False
+        
+        except Exception as e:
+            if attempt < max_attempts - 1:
+                logger.warning(f"Navigation failed: {str(e)}, retrying...")
+                await page.wait_for_timeout(2000)  # Wait before retry
+            else:
+                logger.error(f"Navigation failed after all attempts: {str(e)}")
+                raise
+    
+    return False
+
+
 def get_gcp_credentials() -> Dict[str, str]:
     """Get GCP credentials from environment variable.
 
@@ -180,34 +236,8 @@ async def sheets_from_xlsx(
             page = playwright_tool.page
             logger.info(f"Navigating to sheet: {sheet_url}")
             
-            # Try loading with retry logic
-            max_attempts = 3
-            for attempt in range(max_attempts):
-                try:
-                    if attempt > 0:
-                        logger.info(f"Retrying navigation (attempt {attempt + 1}/{max_attempts})")
-                    
-                    await page.goto(sheet_url, wait_until="load", timeout=45000)
-                    
-                    # Wait for sheet to load
-                    try:
-                        await page.wait_for_selector(".grid-container", timeout=20000)
-                        logger.info("Sheet loaded successfully")
-                        break  # Success, exit retry loop
-                    except:
-                        if attempt < max_attempts - 1:
-                            logger.warning("Timeout waiting for sheet to load, will retry with refresh")
-                            await page.reload(timeout=30000)
-                        else:
-                            logger.warning("Timeout waiting for sheet to fully load after all attempts")
-                
-                except Exception as e:
-                    if attempt < max_attempts - 1:
-                        logger.warning(f"Navigation failed: {str(e)}, retrying...")
-                        # Wait a bit before retry
-                        await page.wait_for_timeout(2000)
-                    else:
-                        raise  # Re-raise on last attempt
+            # Use the unified navigation function
+            await navigate_to_google_sheet(page, sheet_url, max_attempts=3)
 
         sheet_info = {"sheet_id": sheet_id, "sheet_url": sheet_url, "sheet_name": sheet_name}
 
@@ -295,34 +325,8 @@ async def sheets_from_bytes(
             page = playwright_tool.page
             logger.info(f"Navigating to sheet: {sheet_url}")
             
-            # Try loading with retry logic
-            max_attempts = 2
-            for attempt in range(max_attempts):
-                try:
-                    if attempt > 0:
-                        logger.info(f"Retrying navigation (attempt {attempt + 1}/{max_attempts})")
-                    
-                    await page.goto(sheet_url, wait_until="domcontentloaded", timeout=25000)
-                    
-                    # Wait for sheet to load
-                    try:
-                        await page.wait_for_selector(".grid-container", timeout=20000)
-                        logger.info("Sheet loaded successfully")
-                        break  # Success, exit retry loop
-                    except:
-                        if attempt < max_attempts - 1:
-                            logger.warning("Timeout waiting for sheet to load, will retry with refresh")
-                            await page.reload(timeout=30000)
-                        else:
-                            logger.warning("Timeout waiting for sheet to fully load after all attempts")
-                
-                except Exception as e:
-                    if attempt < max_attempts - 1:
-                        logger.warning(f"Navigation failed: {str(e)}, retrying...")
-                        # Wait a bit before retry
-                        await page.wait_for_timeout(2000)
-                    else:
-                        raise  # Re-raise on last attempt
+            # Use the unified navigation function
+            await navigate_to_google_sheet(page, sheet_url, max_attempts=2)
 
         sheet_info = {"sheet_id": sheet_id, "sheet_url": sheet_url, "sheet_name": sheet_name}
 
