@@ -4,13 +4,14 @@ import asyncio
 import os
 import signal
 import sys
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
 import anyio
 from fastmcp.server.server import FastMCP, Transport
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, AsyncGenerator
 
 __all__ = ["HudServer"]
 
@@ -41,17 +42,41 @@ class HudServer(FastMCP):
     """FastMCP wrapper with SIGTERM and convenient helpers."""
 
     def __init__(self, *, name: str | None = None, **fastmcp_kwargs: Any) -> None:
+        # Store shutdown function placeholder before super().__init__
+        self._shutdown_fn: Callable | None = None
+
+        # Inject custom lifespan if user did not supply one
+        if "lifespan" not in fastmcp_kwargs:
+            @asynccontextmanager
+            async def _lifespan(_: Any) -> AsyncGenerator[dict[str, Any], None]:
+                try:
+                    yield {}
+                finally:
+                    if self._shutdown_fn is not None:
+                        await self._shutdown_fn()
+
+            fastmcp_kwargs["lifespan"] = _lifespan
+
         super().__init__(name=name, **fastmcp_kwargs)
         self._initializer_fn: Callable | None = None
 
-    # Initializer decorator
+    # Initializer decorator: runs on the initialize request
+    # Injects session and progress token (from the client's initialize request)
     def initialize(self, fn: Callable | None = None) -> Callable | None:
         def decorator(func: Callable) -> Callable:
             self._initializer_fn = func
             return func
         return decorator(fn) if fn else decorator
 
-    # Run with optional initializer + SIGTERM
+    # Shutdown decorator: runs after server stops
+    # Supports dockerized SIGTERM handling
+    def shutdown(self, fn: Callable | None = None) -> Callable | None:
+        def decorator(func: Callable) -> Callable:
+            self._shutdown_fn = func
+            return func
+        return decorator(fn) if fn else decorator
+
+    # Run with SIGTERM handling and custom initialization
     def run(
         self,
         transport: Transport | None = None,

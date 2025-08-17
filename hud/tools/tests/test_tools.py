@@ -9,8 +9,6 @@ from hud.tools.bash import BashTool
 from hud.tools.computer.hud import HudComputerTool
 from hud.tools.edit import EditTool
 
-# from hud.tools.helper import register_instance_tool  # TODO: Function not found in codebase
-
 
 @pytest.mark.asyncio
 async def test_bash_tool_echo():

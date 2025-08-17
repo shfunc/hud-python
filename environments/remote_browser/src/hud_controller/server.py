@@ -18,8 +18,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from fastmcp import FastMCP
-from hud.tools.helper import mcp_intialize_wrapper
+from hud.server import HudServer
 
 # Import tools
 from .tools import PlaywrightToolWithMemory, BrowserExecutor, create_computer_tools
@@ -41,7 +40,7 @@ _cleanup_in_progress = False
 
 
 @asynccontextmanager
-async def lifespan(app: FastMCP):
+async def lifespan(app: HudServer):
     """FastMCP lifespan manager - handles startup and cleanup."""
     global browser_provider, playwright_tool, browser_executor, _cleanup_in_progress
 
@@ -82,7 +81,7 @@ async def lifespan(app: FastMCP):
 
 
 # Create FastMCP instance
-mcp = FastMCP(
+mcp = HudServer(
     name="HUD Remote Browser Environment",
     instructions="""
     This is a remote browser automation environment that connects to cloud browser providers.
@@ -143,7 +142,7 @@ async def get_telemetry_resource() -> Telemetry:
     return telemetry_data
 
 
-@mcp_intialize_wrapper()
+@mcp.initialize()
 async def initialize_environment(session=None, progress_token=None):
     """Initialize the remote browser environment with progress reporting."""
     global browser_provider, playwright_tool, browser_executor
@@ -203,6 +202,7 @@ async def initialize_environment(session=None, progress_token=None):
 
         # Build launch options
         launch_options = {}
+
 
         # Add other launch options from environment
         max_duration = os.getenv("BROWSER_MAX_DURATION")

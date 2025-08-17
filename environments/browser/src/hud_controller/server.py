@@ -22,7 +22,7 @@ from mcp.shared.context import RequestContext
 from mcp.server.models import InitializationOptions
 
 # Import the helper for initialization progress and tool registration
-from hud.tools.helper import mcp_intialize_wrapper, register_instance_tool
+from hud.server.helper import mcp_intialize_wrapper
 
 from .services import ServiceManager
 from .evaluators import evaluate_tool
@@ -94,13 +94,13 @@ async def initialize_environment(session=None, progress_token=None):
             OpenAIComputerTool,
         )
 
-        register_instance_tool(mcp, HudComputerTool())
-        register_instance_tool(mcp, AnthropicComputerTool())
-        register_instance_tool(mcp, OpenAIComputerTool())
+        mcp.add_tool(HudComputerTool())
+        mcp.add_tool(AnthropicComputerTool())
+        mcp.add_tool(OpenAIComputerTool())
 
         # Store playwright tool instance for browser launch
         playwright_tool = PlaywrightTool()
-        register_instance_tool(mcp, playwright_tool)
+        mcp.add_tool(playwright_tool)
 
         # Initialize global context with service manager and playwright tool
         global_context = initialize_context(service_manager, playwright_tool)
