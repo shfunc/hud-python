@@ -1,3 +1,4 @@
+"""HUD server helpers."""
 from __future__ import annotations
 
 import asyncio
@@ -11,9 +12,9 @@ import anyio
 from fastmcp.server.server import FastMCP, Transport
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, AsyncGenerator
+    from collections.abc import AsyncGenerator, Callable
 
-__all__ = ["HudServer"]
+__all__ = ["HudMCP"]
 
 def _run_with_sigterm(coro_fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
     """Run *coro_fn* via anyio.run() and cancel on SIGTERM (POSIX)."""
@@ -38,8 +39,20 @@ def _run_with_sigterm(coro_fn: Callable[..., Any], *args: Any, **kwargs: Any) ->
     anyio.run(_runner)
 
 
-class HudServer(FastMCP):
-    """FastMCP wrapper with SIGTERM and convenient helpers."""
+class HudMCP(FastMCP):
+    """FastMCP wrapper that adds helpful functionality for dockerized environments.
+
+    Added features:
+    1. SIGTERM handling for graceful shutdown in container runtimes.
+    2. ``@HudMCP.initialize`` decorator that registers an async initializer
+       executed during the MCP *initialize* request, with progress reporting
+       support via ``mcp_intialize_wrapper``.
+    3. ``@HudMCP.shutdown`` decorator that registers a coroutine to run during
+       server teardown, after all lifespan contexts have exited.
+    4. Enhanced ``add_tool`` that accepts instances of
+       :class:`hud.tools.base.BaseTool` which are classes that implement the
+       FastMCP ``FunctionTool`` interface.
+    """
 
     def __init__(self, *, name: str | None = None, **fastmcp_kwargs: Any) -> None:
         # Store shutdown function placeholder before super().__init__
