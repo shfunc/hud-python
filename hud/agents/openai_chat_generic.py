@@ -41,12 +41,14 @@ class GenericOpenAIChatAgent(MCPAgent):
         openai_client: AsyncOpenAI,
         model_name: str = "gpt-4o-mini",
         parallel_tool_calls: bool = False,
+        logprobs: bool = False,
         **agent_kwargs: Any,
     ) -> None:
         super().__init__(mcp_client=mcp_client, **agent_kwargs)
         self.oai = openai_client
         self.model_name = model_name
         self.parallel_tool_calls = parallel_tool_calls
+        self.logprobs = logprobs
 
     @staticmethod
     def _oai_to_mcp(tool_call: Any) -> MCPToolCall:  # type: ignore[valid-type]
@@ -56,31 +58,6 @@ class GenericOpenAIChatAgent(MCPAgent):
             name=tool_call.function.name,
             arguments=json.loads(tool_call.function.arguments or "{}"),
         )
-
-    @staticmethod
-    def _mcp_results_to_tool_messages(
-        calls: list[MCPToolCall], results: list[MCPToolResult]
-    ) -> list[dict[str, Any]]:
-        """Render MCP tool results as OpenAI ``role=tool`` messages."""
-        rendered: list[dict[str, Any]] = []
-        for call, res in zip(calls, results, strict=False):
-            if res.structuredContent:
-                content = json.dumps(res.structuredContent)
-            else:
-                # Concatenate any TextContent blocks
-                content = "".join(
-                    c.text  # type: ignore[attr-defined]
-                    for c in res.content
-                    if hasattr(c, "text")
-                )
-            rendered.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": call.id,
-                    "content": content or "",  # Ensure content is never None
-                }
-            )
-        return rendered
 
     async def create_initial_messages(
         self, prompt: str, initial_screenshot: bool = False
@@ -116,6 +93,7 @@ class GenericOpenAIChatAgent(MCPAgent):
             messages=messages,
             tools=cast("list[ChatCompletionToolParam]", mcp_schemas),
             parallel_tool_calls=self.parallel_tool_calls,
+            logprobs=self.logprobs,
         )
 
         choice = response.choices[0]
@@ -141,5 +119,23 @@ class GenericOpenAIChatAgent(MCPAgent):
         tool_calls: list[MCPToolCall],
         tool_results: list[MCPToolResult],
     ) -> list[Any]:
-        """Format MCP results into OpenAI ``tool`` messages."""
-        return self._mcp_results_to_tool_messages(tool_calls, tool_results)
+        """Render MCP tool results as OpenAI ``role=tool`` messages."""
+        rendered: list[dict[str, Any]] = []
+        for call, res in zip(tool_calls, tool_results, strict=False):
+            if res.structuredContent:
+                content = json.dumps(res.structuredContent)
+            else:
+                # Concatenate any TextContent blocks
+                content = "".join(
+                    c.text  # type: ignore[attr-defined]
+                    for c in res.content
+                    if hasattr(c, "text")
+                )
+            rendered.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": call.id,
+                    "content": content or "",  # Ensure content is never None
+                }
+            )
+        return rendered

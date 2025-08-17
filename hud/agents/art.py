@@ -44,6 +44,7 @@ class ArtHUDAgent(GenericOpenAIChatAgent):
             mcp_client=mcp_client,
             openai_client=openai_client,
             model_name=art_model.get_inference_name(),
+            logprobs=True,
             **agent_kwargs,
         )
         self.custom_system_prompt = system_prompt
