@@ -29,13 +29,13 @@ class ComputerSettings(BaseSettings):
         validation_alias="DISPLAY_NUM",
     )
 
-    HUD_COMPUTER_WIDTH: int = Field(
-        default=1920,
+    HUD_COMPUTER_WIDTH: int | None = Field(
+        default=None,
         description="Width of the display to use for the computer tools",
         validation_alias="HUD_COMPUTER_WIDTH",
     )
-    HUD_COMPUTER_HEIGHT: int = Field(
-        default=1080,
+    HUD_COMPUTER_HEIGHT: int | None = Field(
+        default=None,
         description="Height of the display to use for the computer tools",
         validation_alias="HUD_COMPUTER_HEIGHT",
     )

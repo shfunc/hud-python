@@ -39,8 +39,9 @@ system_prompt: |
   2. Think step-by-step about what you need to do
   3. Use the <think>...</think> tags to plan your approach
   4. Use tools by wrapping function calls in <tool>...</tool> tags
-  5. Wait for the result before proceeding to the next action
-  6. When the task is complete, use the done() tool
+  5. Use ONLY ONE tool per turn - you must receive the tool's result before using another tool
+  6. After each tool call, analyze the result before proceeding to the next action
+  7. When the task is complete, use the done() tool
   
   Example interaction:
   <think>First, I need to see what's on the screen</think>
