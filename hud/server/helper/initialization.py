@@ -2,7 +2,7 @@
 
 Example:
     ```python
-    from hud.tools.helper import mcp_intialize_wrapper
+    from hud.server.helper import mcp_intialize_wrapper
 
 
     @mcp_intialize_wrapper

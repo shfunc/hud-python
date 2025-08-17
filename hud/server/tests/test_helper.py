@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from mcp.server.session import ServerSession
 
-from hud.tools.helper import mcp_intialize_wrapper
+from hud.server.helper import mcp_intialize_wrapper
 
 
 class TestMCPInitializeWrapper:
@@ -50,7 +50,7 @@ class TestMCPInitializeWrapper:
 
         # The wrapper should have patched ServerSession._received_request
         # Let's test that the initialization function gets called
-        from hud.tools.helper.server_initialization import _init_function
+        from hud.server.helper.initialization import _init_function
 
         # Verify our function was stored
         assert _init_function is not None
@@ -74,12 +74,12 @@ class TestMCPInitializeWrapper:
         mock_session = MagicMock(spec=ServerSession)
         mock_session.send_progress_notification = AsyncMock()
 
-        from hud.tools.helper.server_initialization import (
+        from hud.server.helper.initialization import (
             _patched_received_request,
         )
 
         # Mock the original _received_request to prevent calling it
-        with patch("hud.tools.helper.server_initialization._original_received_request"):
+        with patch("hud.server.helper.initialization._original_received_request"):
             # Create a mock responder with initialization request
             mock_responder = MagicMock()
 
@@ -122,7 +122,7 @@ class TestMCPInitializeWrapper:
 
         assert decorated is my_init  # Should return the same function
 
-        from hud.tools.helper.server_initialization import _init_function
+        from hud.server.helper.initialization import _init_function
 
         assert _init_function is my_init
 
@@ -132,7 +132,7 @@ class TestMCPInitializeWrapper:
         # Reset the module state
         import importlib
 
-        import hud.tools.helper.server_initialization as init_module
+        import hud.server.helper.initialization as init_module
 
         # Store original
         original_method = ServerSession._received_request
@@ -155,7 +155,7 @@ class TestMCPInitializeWrapper:
     @pytest.mark.asyncio
     async def test_import_from_package(self):
         """Test that the wrapper can be imported from the package."""
-        from hud.tools.helper import mcp_intialize_wrapper as wrapper
+        from hud.server.helper import mcp_intialize_wrapper as wrapper
 
         assert wrapper is mcp_intialize_wrapper
         assert callable(wrapper)
@@ -175,7 +175,7 @@ class TestMCPInitializeWrapper:
                     progress_token=progress_token, progress=100, total=100, message="Done"
                 )
 
-        from hud.tools.helper.server_initialization import _init_function
+        from hud.server.helper.initialization import _init_function
 
         # Call without progress token
         mock_session = MagicMock(spec=ServerSession)
@@ -196,7 +196,7 @@ class TestMCPInitializeWrapper:
         async def second_init(session=None, progress_token=None):
             return None
 
-        from hud.tools.helper.server_initialization import _init_function
+        from hud.server.helper.initialization import _init_function
 
         # The last decorated function should be the active one
         assert _init_function is second_init

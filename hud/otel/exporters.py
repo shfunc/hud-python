@@ -6,7 +6,7 @@ exactly the same semantics the old async worker in ``hud.telemetry.exporter``
 implemented.
 
 This exporter is *synchronous* (derives from :class:`SpanExporter`).  We rely on
-``hud.server.make_request_sync`` which already contains retry & auth logic.
+``hud.shared.make_request_sync`` which already contains retry & auth logic.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from mcp.types import ClientRequest, ServerResult
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 from pydantic import BaseModel, ConfigDict, Field
 
-from hud.server import make_request_sync
+from hud.shared import make_request_sync
 from hud.types import TraceStep as HudSpanAttributes
 
 if TYPE_CHECKING:

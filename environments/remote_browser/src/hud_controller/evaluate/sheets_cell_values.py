@@ -133,16 +133,27 @@ async def sheets_cell_values(
             )
 
             if attempt < max_attempts:
-                logger.info(f"Waiting 500ms before retry {attempt + 1}...")
-                await page.wait_for_timeout(500)
+                logger.info(f"Waiting 2500ms before retry {attempt + 1}...")
+                await page.wait_for_timeout(2500)
 
     if not answer_navigation_successful:
         logger.warning(
             f"⚠️ Failed to navigate to ANSWER sheet after {max_attempts} attempts, proceeding with current sheet"
         )
 
-    # Wait for 5 seconds to allow the sheet to load
-    await asyncio.sleep(5)
+    # Wait for sheet to fully load
+    logger.info("Waiting for sheet to fully load...")
+    try:
+        # Wait for grid container to be present
+        await page.wait_for_selector(".grid-container", timeout=20000)
+        logger.info("Sheet grid container loaded")
+        
+        # Additional wait for cells to populate
+        await page.wait_for_timeout(2000)
+    except Exception as e:
+        logger.warning(f"Timeout waiting for sheet to load: {str(e)}")
+        # Still proceed, but with a longer fallback wait
+        await asyncio.sleep(5)
 
     # Extract sheet content using clipboard method
     try:

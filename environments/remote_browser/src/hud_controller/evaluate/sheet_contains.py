@@ -77,6 +77,18 @@ async def sheet_contains(ctx: Context, args: Union[str, List[str]], partial_rewa
     logger.info(f"Search terms to find: {search_terms}")
 
     try:
+        # Wait for sheet to fully load before attempting to copy
+        logger.info("Waiting for sheet to fully load...")
+        try:
+            await page.wait_for_selector(".grid-container", timeout=20000)
+            logger.info("Sheet grid container loaded")
+            # Additional wait for cells to populate
+            await page.wait_for_timeout(2000)
+        except Exception as e:
+            logger.warning(f"Timeout waiting for sheet to load: {str(e)}")
+            # Still proceed, but with a longer fallback wait
+            await page.wait_for_timeout(5000)
+        
         # Select all cells using Ctrl+A
         logger.info("Selecting all cells with Ctrl+A")
         await page.keyboard.press("Control+A")

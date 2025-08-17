@@ -14,8 +14,8 @@ from datetime import UTC, datetime
 from functools import wraps
 from typing import TYPE_CHECKING, Any
 
-from hud.server import make_request, make_request_sync
 from hud.settings import settings
+from hud.shared import make_request, make_request_sync
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator

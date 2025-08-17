@@ -6,7 +6,7 @@ import sys
 import logging
 from fastmcp import FastMCP
 
-from hud.tools.helper import mcp_intialize_wrapper
+from hud.server.helper import mcp_intialize_wrapper
 
 from .game import Game2048
 from .tools import MoveTool

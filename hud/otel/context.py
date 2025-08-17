@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator
     from types import TracebackType
 
-from hud.server import make_request, make_request_sync
+from hud.shared import make_request, make_request_sync
 from hud.settings import settings
 from hud.utils.async_utils import fire_and_forget
 
@@ -374,8 +374,9 @@ class trace:
                 trace_name=self.span_name,
                 task_id=self.task_id,
             )
-            # Print the nice trace URL box
-            _print_trace_url(self.task_run_id)
+            # Print the nice trace URL box (only if not part of a job)
+            if not self.job_id:
+                _print_trace_url(self.task_run_id)
 
         logger.debug("Started HUD trace context for task_run_id=%s", self.task_run_id)
         return self.task_run_id
@@ -399,8 +400,9 @@ class trace:
                     trace_name=self.span_name,
                     task_id=self.task_id,
                 )
-                # Print error completion message
-                _print_trace_complete_url(self.task_run_id, error_occurred=True)
+                # Print error completion message (only if not part of a job)
+                if not self.job_id:
+                    _print_trace_complete_url(self.task_run_id, error_occurred=True)
             else:
                 # Use synchronous update to ensure it completes before process exit
                 _update_task_status_sync(
@@ -410,8 +412,9 @@ class trace:
                     trace_name=self.span_name,
                     task_id=self.task_id,
                 )
-                # Print success completion message
-                _print_trace_complete_url(self.task_run_id, error_occurred=False)
+                # Print success completion message (only if not part of a job)
+                if not self.job_id:
+                    _print_trace_complete_url(self.task_run_id, error_occurred=False)
 
         # End the span
         if self._span and self._span_manager is not None:

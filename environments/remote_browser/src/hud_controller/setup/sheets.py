@@ -179,14 +179,35 @@ async def sheets_from_xlsx(
         if playwright_tool and hasattr(playwright_tool, "page") and playwright_tool.page:
             page = playwright_tool.page
             logger.info(f"Navigating to sheet: {sheet_url}")
-            await page.goto(sheet_url, wait_until="domcontentloaded", timeout=45000)
-
-            # Wait for sheet to load
-            try:
-                await page.wait_for_selector(".grid-container", timeout=20000)
-                logger.info("Sheet loaded successfully")
-            except:
-                logger.warning("Timeout waiting for sheet to fully load")
+            
+            # Try loading with retry logic
+            max_attempts = 3
+            for attempt in range(max_attempts):
+                try:
+                    if attempt > 0:
+                        logger.info(f"Retrying navigation (attempt {attempt + 1}/{max_attempts})")
+                    
+                    await page.goto(sheet_url, wait_until="domcontentloaded", timeout=45000)
+                    
+                    # Wait for sheet to load
+                    try:
+                        await page.wait_for_selector(".grid-container", timeout=20000)
+                        logger.info("Sheet loaded successfully")
+                        break  # Success, exit retry loop
+                    except:
+                        if attempt < max_attempts - 1:
+                            logger.warning("Timeout waiting for sheet to load, will retry with refresh")
+                            await page.reload(timeout=30000)
+                        else:
+                            logger.warning("Timeout waiting for sheet to fully load after all attempts")
+                
+                except Exception as e:
+                    if attempt < max_attempts - 1:
+                        logger.warning(f"Navigation failed: {str(e)}, retrying...")
+                        # Wait a bit before retry
+                        await page.wait_for_timeout(2000)
+                    else:
+                        raise  # Re-raise on last attempt
 
         sheet_info = {"sheet_id": sheet_id, "sheet_url": sheet_url, "sheet_name": sheet_name}
 
@@ -273,14 +294,35 @@ async def sheets_from_bytes(
         if playwright_tool and hasattr(playwright_tool, "page") and playwright_tool.page:
             page = playwright_tool.page
             logger.info(f"Navigating to sheet: {sheet_url}")
-            await page.goto(sheet_url, wait_until="domcontentloaded", timeout=45000)
-
-            # Wait for sheet to load
-            try:
-                await page.wait_for_selector(".grid-container", timeout=20000)
-                logger.info("Sheet loaded successfully")
-            except:
-                logger.warning("Timeout waiting for sheet to fully load")
+            
+            # Try loading with retry logic
+            max_attempts = 2
+            for attempt in range(max_attempts):
+                try:
+                    if attempt > 0:
+                        logger.info(f"Retrying navigation (attempt {attempt + 1}/{max_attempts})")
+                    
+                    await page.goto(sheet_url, wait_until="domcontentloaded", timeout=25000)
+                    
+                    # Wait for sheet to load
+                    try:
+                        await page.wait_for_selector(".grid-container", timeout=20000)
+                        logger.info("Sheet loaded successfully")
+                        break  # Success, exit retry loop
+                    except:
+                        if attempt < max_attempts - 1:
+                            logger.warning("Timeout waiting for sheet to load, will retry with refresh")
+                            await page.reload(timeout=30000)
+                        else:
+                            logger.warning("Timeout waiting for sheet to fully load after all attempts")
+                
+                except Exception as e:
+                    if attempt < max_attempts - 1:
+                        logger.warning(f"Navigation failed: {str(e)}, retrying...")
+                        # Wait a bit before retry
+                        await page.wait_for_timeout(2000)
+                    else:
+                        raise  # Re-raise on last attempt
 
         sheet_info = {"sheet_id": sheet_id, "sheet_url": sheet_url, "sheet_name": sheet_name}
 

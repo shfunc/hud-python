@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import httpx
 
-from hud.server.exceptions import (
+from hud.shared.exceptions import (
     GymMakeException,
     HudAuthenticationError,
     HudException,

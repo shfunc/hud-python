@@ -12,7 +12,7 @@ from typing import Any
 
 import httpx
 
-from hud.server.exceptions import (
+from hud.shared.exceptions import (
     HudAuthenticationError,
     HudNetworkError,
     HudRequestError,

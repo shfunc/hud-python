@@ -9,13 +9,13 @@ from unittest.mock import AsyncMock, Mock, patch
 import httpx
 import pytest
 
-from hud.server.exceptions import (
+from hud.shared.exceptions import (
     HudAuthenticationError,
     HudNetworkError,
     HudRequestError,
     HudTimeoutError,
 )
-from hud.server.requests import (
+from hud.shared.requests import (
     _handle_retry,
     make_request,
     make_request_sync,
@@ -107,7 +107,7 @@ async def test_make_request_network_error():
     )
 
     # Replace handle_retry to avoid sleep
-    with patch("hud.server.requests._handle_retry", AsyncMock()) as mock_retry:
+    with patch("hud.shared.requests._handle_retry", AsyncMock()) as mock_retry:
         mock_retry.return_value = None
 
         with pytest.raises(HudNetworkError) as excinfo:
@@ -159,7 +159,7 @@ async def test_make_request_unexpected_error():
 @pytest.mark.asyncio
 async def test_make_request_auto_client_creation():
     """Test automatic client creation when not provided."""
-    with patch("hud.server.requests._create_default_async_client") as mock_create_client:
+    with patch("hud.shared.requests._create_default_async_client") as mock_create_client:
         mock_client = AsyncMock()
         mock_client.request.return_value = httpx.Response(
             200, json={"result": "success"}, request=httpx.Request("GET", "https://api.test.com")
@@ -261,7 +261,7 @@ def test_make_request_sync_unexpected_error():
 
 def test_make_request_sync_auto_client_creation():
     """Test automatic client creation when not provided."""
-    with patch("hud.server.requests._create_default_sync_client") as mock_create_client:
+    with patch("hud.shared.requests._create_default_sync_client") as mock_create_client:
         mock_client = Mock()
         mock_client.request.return_value = httpx.Response(
             200, json={"result": "success"}, request=httpx.Request("GET", "https://api.test.com")
