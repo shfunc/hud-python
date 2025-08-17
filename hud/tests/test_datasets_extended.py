@@ -80,7 +80,11 @@ class TestTaskConfigExtended:
                             "empty": "${EMPTY_VAR}",
                             "missing": "${MISSING_VAR}",
                         },
-                        "endpoints": ["${HUD_TELEMETRY_URL}/v1", "${HUD_TELEMETRY_URL}/v2", "${MISSING_URL}"],
+                        "endpoints": [
+                            "${HUD_TELEMETRY_URL}/v1",
+                            "${HUD_TELEMETRY_URL}/v2",
+                            "${MISSING_URL}",
+                        ],
                         "metadata": {"run_id": "${RUN_ID}", "combined": "${API_KEY}-${RUN_ID}"},
                     },
                 )

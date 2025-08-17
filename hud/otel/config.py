@@ -94,7 +94,9 @@ def configure_telemetry(
 
     # HUD exporter (only if enabled and API key is available)
     if settings.telemetry_enabled and settings.api_key:
-        exporter = HudSpanExporter(telemetry_url=settings.hud_telemetry_url, api_key=settings.api_key)
+        exporter = HudSpanExporter(
+            telemetry_url=settings.hud_telemetry_url, api_key=settings.api_key
+        )
         provider.add_span_processor(BatchSpanProcessor(exporter))
     elif settings.telemetry_enabled and not settings.api_key and not enable_otlp:
         # Error if no exporters are configured

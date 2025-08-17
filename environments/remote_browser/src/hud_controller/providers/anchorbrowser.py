@@ -33,7 +33,7 @@ class AnchorBrowserProvider(BrowserProvider):
 
         if not self.api_key:
             raise ValueError("AnchorBrowser API key not provided")
-    
+
     async def launch(self, **kwargs) -> str:
         """Launch an AnchorBrowser instance.
 
@@ -78,10 +78,10 @@ class AnchorBrowserProvider(BrowserProvider):
             proxy_config = {
                 "type": "anchor_residential",
                 "active": True,
-                "country_code": os.getenv("PROXY_COUNTRY", "us")
+                "country_code": os.getenv("PROXY_COUNTRY", "us"),
             }
             logger.info("Using default AnchorBrowser residential proxy")
-        
+
         # Add proxy to request data
         request_data["session"]["proxy"] = proxy_config
 
@@ -159,7 +159,7 @@ class AnchorBrowserProvider(BrowserProvider):
                         status["session_status"] = session_status
             except Exception as e:
                 logger.warning(f"Failed to get session status: {e}")
-        
+
         return status
 
     def get_live_view_url(self) -> Optional[str]:
