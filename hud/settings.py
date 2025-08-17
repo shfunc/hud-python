@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="allow")
 
     hud_telemetry_url: str = Field(
-        default="https://telemetry.hud.so/hud-gym/api",
+        default="https://telemetry.hud.so/v3/api",
         description="Base URL for the HUD API",
         validation_alias="HUD_TELEMETRY_URL",
     )
