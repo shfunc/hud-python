@@ -25,8 +25,6 @@ system_prompt = (
     "You are an MCP (Model Context Protocol) agent.\n\n"
     "Use MCP tools through the server to complete your task.\n\n"
     "You have a total of {MAX_STEPS} steps."
-    "You are an excellent 2048 player. Always choose the move most likely to combine tiles and reach higher numbers."  # noqa: E501
-    "Only provide a maximum of one tool call at a time."
 )
 
 
