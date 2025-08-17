@@ -31,7 +31,7 @@ MCP (Model-Context Protocol) is the wire format we use to send tool calls. You r
 
 ## 1) Environments
 
-Wrap your software as an environment by exposing a small set of tools. We use FastMCP to register tool functions and (usually) run them in Docker so they’re reproducible and scalable.
+Wrap your software as an environment by exposing a small set of tools. Use **HudMCP** (a tiny wrapper around FastMCP) to register tool functions and run them in Docker so they’re reproducible and scalable. HudMCP adds handling for docker environments plus the handy `@mcp.initialize` / `@mcp.shutdown` decorators that wrap the ends of the MCP lifecycle.
 
 Minimal call example (MCP client calling a local Docker image):
 
@@ -169,6 +169,12 @@ Learn more:
 ## Tooling & telemetry
 
 ### CLI Tools (`hud`)
+
+**Installation:**
+```bash
+# Install globally with uv
+uv tool install hud-python
+```
 
 **What's the difference?**
 

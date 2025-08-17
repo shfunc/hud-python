@@ -8,8 +8,9 @@ This document is a step-by-step guide for turning *any* piece of software that c
 >   *tools* the agent can invoke.
 > • MCP is simply the wire-format we use to move those tool calls back and forth
 >   (like gRPC or HTTP but JSON-RPC over stdio/Docker).
-> • FastMCP is the Python SDK that lets you register functions as tools and run
->   them inside a container.
+> • FastMCP is the underlying SDK; HUD provides **HudMCP** – a thin wrapper that
+>   adds SIGTERM handling, `@initialize` / `@shutdown` decorators, and easier
+>   tool registration while remaining 100 % compatible with FastMCP.
 > 
 > The picture:
 > ```text
@@ -58,11 +59,26 @@ A sophisticated browser automation environment featuring:
 The HUD SDK includes a powerful CLI for debugging and analyzing MCP environments:
 
 ```bash
-# Install HUD SDK (if not already installed)
-pip install hud-python
+# Install HUD CLI globally with uv (recommended)
+uv tool install hud-python
+
+# Or use without installing
+uvx --from hud-python hud --help
 
 # Verify installation
 hud --help
+```
+
+Common commands:
+```bash
+# Debug your Docker image (runs 5-phase test)
+hud debug my-mcp-server:latest
+
+# Analyze available tools and resources
+hud analyze my-mcp-server:latest --format json
+
+# Debug any command-based MCP server
+hud debug --command "python my_server.py"
 ```
 While you move through the phases it's handy to run the **interactive checker** to make sure nothing broke:
 
@@ -189,12 +205,12 @@ Need inspiration? Check out our reference implementations:
 
 The MCP lifecycle is *initialize → operate → shutdown* (see spec link above).
 
-### Skeleton server (FastMCP)
+### Skeleton server (HudMCP)
 
 ```python
 import sys
 import logging
-from fastmcp import FastMCP
+from hud.server import HudMCP
 
 # 1️⃣  Always log to stderr – stdout is reserved for JSON-RPC
 logging.basicConfig(
@@ -203,12 +219,12 @@ logging.basicConfig(
     format='[%(levelname)s] %(asctime)s | %(name)s | %(message)s'
 )
 
-mcp = FastMCP("My Environment")
+# Create the server early so decorators can reference it
+mcp = HudMCP(name="My Environment")
 
-from hud.tools.helper import mcp_intialize_wrapper
-
-@mcp_intialize_wrapper()
-async def initialize_environment():
+# Run heavy one-time setup during MCP initialize
+@mcp.initialize
+async def initialize_environment(session=None, progress_token=None):
     """Heavy one-time setup – start databases, launch background apps, etc."""
     logging.info("starting core services…")
     await start_services()            # your coroutine
@@ -284,14 +300,14 @@ hud analyze my-environment --format markdown  # Generate documentation
 
 ### Approach 1: Simple Direct Implementation
 
-For simple environments with just a few setup/evaluate functions, you can use direct tool decorators:
+For simple environments with just a few setup/evaluate functions, you can use direct tool decorators with **HudMCP**:
 
 ```python
-from fastmcp import FastMCP
+from hud.server import HudMCP
 from hud.tools.helper import mcp_intialize_wrapper
 from hud.tools import HudComputerTool
 
-mcp = FastMCP("my-environment")
+mcp = HudMCP(name="my-environment")
 
 @mcp.tool()
 async def setup(config: dict) -> dict:
@@ -301,8 +317,8 @@ async def setup(config: dict) -> dict:
 async def evaluate(config: dict) -> dict:
     ...               # return {"reward": <0-1>, "done": bool}
 
-@mcp_intialize_wrapper()
-async def initialize_environment():
+@mcp.initialize
+async def initialize_environment(session=None, progress_token=None):
     custom_tool = HudComputerTool()
     mcp.add_tool(custom_tool.mcp)
     
@@ -413,9 +429,9 @@ from .evaluate import evaluate as evaluate_hub
 from hud.tools.helper import mcp_intialize_wrapper
 
 # Create MCP server
-mcp = FastMCP(name="my-environment")
+mcp = HudMCP(name="my-environment")
 
-@mcp_intialize_wrapper()
+@mcp.initialize
 async def initialize_environment(session=None, progress_token=None):
     """Initialize the environment with progress notifications."""
     # Send progress updates if available
@@ -467,8 +483,9 @@ await client.call_tool("evaluate", {"name": "task_complete", "expected_count": 5
 ### Test workflow
 
 1. **Inspector first** – restart the server, refresh the *Tools* tab, confirm the new tools appear.  
-2. **Rebuild the image** – `docker build -t my-environment .`.  
-3. **HUD SDK test** – run a short script like the one below.  GUI environments built from `hudpython/novnc-base` still expose a VNC viewer on <http://localhost:8080/vnc.html> – keep it open while testing.
+2. **Run `hud debug my-environment`** – this validates initialization, tool discovery and basic calls automatically.  
+3. **Rebuild the image** – `docker build -t my-environment .`.  
+4. **HUD SDK script test** – run a short script like the one below.  GUI environments built from `hudpython/novnc-base` still expose a VNC viewer on <http://localhost:8080/vnc.html> – keep it open while testing.
 
 ```python
 import asyncio
@@ -556,12 +573,12 @@ Spin up **many** agents in parallel by just launching multiple tasks – HUD wil
 
 ### 3. Progress updates during `initialize` (Optional)
 
-At remote scale it can take 10-30 s for heavy services to boot.  Use `mcp_intialize_wrapper()` with a *progress token* to stream status messages:
+At remote scale it can take 10-30 s for heavy services to boot.  Use the new
+`@mcp.initialize` decorator plus the `session` / `progress_token` parameters to
+stream status messages:
 
 ```python
-from hud.tools.helper import mcp_intialize_wrapper
-
-@mcp_intialize_wrapper()
+@mcp.initialize
 async def initialize_environment(session=None, progress_token=None):
     async def send(p, msg):
         if session and progress_token:
@@ -573,7 +590,7 @@ async def initialize_environment(session=None, progress_token=None):
             )
     await send(10, "Starting X11...")
     await start_x11()
-    await send(50, "Launching browser...")
+    await send(50, "Launching browser…")
     await launch_browser()
     await send(100, "ready")
 ```

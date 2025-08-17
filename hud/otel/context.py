@@ -32,14 +32,24 @@ current_task_run_id: contextvars.ContextVar[str | None] = contextvars.ContextVar
 is_root_trace_var: contextvars.ContextVar[bool] = contextvars.ContextVar(
     "is_root_trace", default=False
 )
-current_step_count: contextvars.ContextVar[int] = contextvars.ContextVar(
-    "current_step_count", default=0
+
+# Step counters for different types
+current_base_mcp_steps: contextvars.ContextVar[int] = contextvars.ContextVar(
+    "current_base_mcp_steps", default=0
+)
+current_mcp_tool_steps: contextvars.ContextVar[int] = contextvars.ContextVar(
+    "current_mcp_tool_steps", default=0
+)
+current_agent_steps: contextvars.ContextVar[int] = contextvars.ContextVar(
+    "current_agent_steps", default=0
 )
 
 # Keys for OpenTelemetry baggage
 TASK_RUN_ID_KEY = "hud.task_run_id"
 IS_ROOT_TRACE_KEY = "hud.is_root_trace"
-STEP_COUNT_KEY = "hud.step_count"
+BASE_MCP_STEPS_KEY = "hud.base_mcp_steps"
+MCP_TOOL_STEPS_KEY = "hud.mcp_tool_steps"
+AGENT_STEPS_KEY = "hud.agent_steps"
 
 
 def set_current_task_run_id(task_run_id: str | None) -> contextvars.Token:
@@ -69,10 +79,11 @@ def is_root_trace() -> bool:
     return is_root_trace_var.get()
 
 
-def get_current_step_count() -> int:
-    """Get current step count from either contextvars or OTel baggage."""
+
+def get_base_mcp_steps() -> int:
+    """Get current base MCP step count from either contextvars or OTel baggage."""
     # First try OTel baggage
-    step_count = baggage.get_baggage(STEP_COUNT_KEY)
+    step_count = baggage.get_baggage(BASE_MCP_STEPS_KEY)
     if step_count and isinstance(step_count, str):
         try:
             return int(step_count)
@@ -80,30 +91,105 @@ def get_current_step_count() -> int:
             pass
 
     # Fallback to contextvars
-    return current_step_count.get()
+    return current_base_mcp_steps.get()
 
 
-def increment_step_count() -> int:
-    """Increment the current step count and update baggage.
+def get_mcp_tool_steps() -> int:
+    """Get current MCP tool step count from either contextvars or OTel baggage."""
+    # First try OTel baggage
+    step_count = baggage.get_baggage(MCP_TOOL_STEPS_KEY)
+    if step_count and isinstance(step_count, str):
+        try:
+            return int(step_count)
+        except ValueError:
+            pass
+
+    # Fallback to contextvars
+    return current_mcp_tool_steps.get()
+
+
+def get_agent_steps() -> int:
+    """Get current agent step count from either contextvars or OTel baggage."""
+    # First try OTel baggage
+    step_count = baggage.get_baggage(AGENT_STEPS_KEY)
+    if step_count and isinstance(step_count, str):
+        try:
+            return int(step_count)
+        except ValueError:
+            pass
+
+    # Fallback to contextvars
+    return current_agent_steps.get()
+
+
+def increment_base_mcp_steps() -> int:
+    """Increment the base MCP step count and update baggage.
 
     Returns:
-        The new step count after incrementing
+        The new base MCP step count after incrementing
     """
-    # Get current count
-    current = get_current_step_count()
+    current = get_base_mcp_steps()
     new_count = current + 1
 
     # Update contextvar
-    current_step_count.set(new_count)
+    current_base_mcp_steps.set(new_count)
 
     # Update baggage for propagation
-    ctx = baggage.set_baggage(STEP_COUNT_KEY, str(new_count))
+    ctx = baggage.set_baggage(BASE_MCP_STEPS_KEY, str(new_count))
     context.attach(ctx)
 
     # Update current span if one exists
     span = otel_trace.get_current_span()
     if span and span.is_recording():
-        span.set_attribute("hud.step_count", new_count)
+        span.set_attribute("hud.base_mcp_steps", new_count)
+
+    return new_count
+
+
+def increment_mcp_tool_steps() -> int:
+    """Increment the MCP tool step count and update baggage.
+
+    Returns:
+        The new MCP tool step count after incrementing
+    """
+    current = get_mcp_tool_steps()
+    new_count = current + 1
+
+    # Update contextvar
+    current_mcp_tool_steps.set(new_count)
+
+    # Update baggage for propagation
+    ctx = baggage.set_baggage(MCP_TOOL_STEPS_KEY, str(new_count))
+    context.attach(ctx)
+
+    # Update current span if one exists
+    span = otel_trace.get_current_span()
+    if span and span.is_recording():
+        span.set_attribute("hud.mcp_tool_steps", new_count)
+
+    return new_count
+
+
+def increment_agent_steps() -> int:
+    """Increment the agent step count and update baggage.
+
+    Returns:
+        The new agent step count after incrementing
+    """
+    current = get_agent_steps()
+    new_count = current + 1
+
+    # Update contextvar
+    current_agent_steps.set(new_count)
+
+    # Update baggage for propagation
+    ctx = baggage.set_baggage(AGENT_STEPS_KEY, str(new_count))
+    context.attach(ctx)
+
+    # Update current span if one exists
+    span = otel_trace.get_current_span()
+    if span and span.is_recording():
+        span.set_attribute("hud.agent_steps", new_count)
 
     return new_count
 
@@ -159,16 +245,21 @@ async def _update_task_status_async(
         if error_message:
             data["error_message"] = error_message
 
-        # Add trace name to metadata
+        # Build metadata with trace name and step counts
+        metadata = {}
         if trace_name:
-            data["metadata"] = {"trace_name": trace_name}
+            metadata["trace_name"] = trace_name
+        
+        # Include all three step counts in metadata
+        metadata["base_mcp_steps"] = get_base_mcp_steps()
+        metadata["mcp_tool_steps"] = get_mcp_tool_steps()
+        metadata["agent_steps"] = get_agent_steps()
+        
+        if metadata:
+            data["metadata"] = metadata
 
         if task_id:
             data["task_id"] = task_id
-
-        # Include current step count as a top-level field
-        step_count = get_current_step_count()
-        data["step_count"] = step_count
 
         await make_request(
             method="POST",
@@ -217,16 +308,21 @@ def _update_task_status_sync(
         if error_message:
             data["error_message"] = error_message
 
-        # Add trace name to metadata
+        # Build metadata with trace name and step counts
+        metadata = {}
         if trace_name:
-            data["metadata"] = {"trace_name": trace_name}
+            metadata["trace_name"] = trace_name
+        
+        # Include all three step counts in metadata
+        metadata["base_mcp_steps"] = get_base_mcp_steps()
+        metadata["mcp_tool_steps"] = get_mcp_tool_steps()
+        metadata["agent_steps"] = get_agent_steps()
+        
+        if metadata:
+            data["metadata"] = metadata
 
         if task_id:
             data["task_id"] = task_id
-
-        # Include current step count as a top-level field
-        step_count = get_current_step_count()
-        data["step_count"] = step_count
 
         make_request_sync(
             method="POST",

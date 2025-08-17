@@ -17,9 +17,7 @@ from __future__ import annotations
 from .collector import enable_trace_collection
 from .config import configure_telemetry, is_telemetry_configured, shutdown_telemetry
 from .context import (
-    get_current_step_count,
     get_current_task_run_id,
-    increment_step_count,
     is_root_trace,
     span_context,
     trace,
@@ -28,9 +26,7 @@ from .context import (
 __all__ = [
     "configure_telemetry",
     "enable_trace_collection",
-    "get_current_step_count",
     "get_current_task_run_id",
-    "increment_step_count",
     "is_root_trace",
     "is_telemetry_configured",
     "shutdown_telemetry",

@@ -98,13 +98,13 @@ See `examples/environments/simple_browser_example.py` for a complete working exa
 
 1. **Clean Protocol Separation**
    - All logging to stderr, only JSON-RPC to stdout
-   - Use `@mcp_intialize_wrapper` for progress notifications
-   - Separate tool registration timing (static vs dynamic)
+   - Use `@mcp.initialize` for progress notifications
+   - Register shutdown cleanup with `@mcp.shutdown`
 
 2. **Evaluation System Architecture**
    - **Class-based problems** with inheritance for reusability
    - **App-centric evaluation** - backends provide `/api/eval/*` endpoints
-   - **Registry pattern** for discovery (`@evaluator`, `@setup`, `@problem`)
+   - **Hub pattern for discovery (`@setup.tool`, `@evaluate.tool`, problems registry)**
    - **MCP resources** for runtime introspection
 
 3. **Service Management**
@@ -155,7 +155,7 @@ Set these in your environment/Docker configuration:
 
 3. **No tools registered**
    - Check that tools requiring X11 are registered AFTER X11 is ready
-   - Use `register_instance_tool()` in initialization, not at module load
+   - Add tools via `mcp.add_tool(instance)` once prerequisites are ready
    - Verify initialization completes before restoring handler
 
 4. **Evaluation fails unexpectedly**
