@@ -14,9 +14,9 @@ async def evaluate_max_number(ctx: Context, target: int):
     # Adjust for initial tile
     highest_tile = highest_tile - 2
 
-    # Linear reward scale
-    # Reward is proportional to highest_tile / target, capped at 1.0
-    reward = min(1.0, highest_tile / target) if target > 0 else 0.0
+    # Logarithmic reward scale
+    # Reward is proportional to log(highest_tile) / log(target), capped at 1.0
+    reward = min(1.0, math.log(highest_tile) / math.log(target)) if target > 0 else 0.0
     done = highest_tile >= target
 
     return EvaluationResult(
