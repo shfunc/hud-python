@@ -4,9 +4,8 @@ MCP server for text-based 2048 game environment using BaseHub pattern.
 
 import sys
 import logging
-from fastmcp import FastMCP
 
-from hud.server.helper import mcp_intialize_wrapper
+from hud.server import HudMCP
 
 from .game import Game2048
 from .tools import MoveTool
@@ -30,90 +29,52 @@ from .setup import setup as setup_hub
 from .evaluate import evaluate as evaluate_hub
 
 # Create main server first
-mcp = FastMCP(name="text-2048")
+mcp = HudMCP(name="text-2048")
 
 
-@mcp_intialize_wrapper()
+@mcp.initialize
 async def initialize_environment(session=None, progress_token=None):
     """Initialize the 2048 environment with progress notifications."""
     global game
 
-    logger.info("Initializing 2048 environment...")
+    async def send_progress(progress: int, message: str):
+        if session and progress_token:
+            await session.send_progress_notification(
+                progress_token=progress_token,
+                progress=progress,
+                total=100,
+                message=message,
+            )
 
-    if session and progress_token:
-        await session.send_progress_notification(
-            progress_token=progress_token,
-            progress=0,
-            total=100,
-            message="Starting 2048 game environment...",
-        )
+    logger.info("Initializing 2048 environment...")
+    await send_progress(0, "Starting 2048 game environment...")
 
     # Create and initialize the game
-    if session and progress_token:
-        await session.send_progress_notification(
-            progress_token=progress_token,
-            progress=30,
-            total=100,
-            message="Creating game instance...",
-        )
+    await send_progress(30, "Creating game instance...")
 
     game = Game2048()
 
-    if session and progress_token:
-        await session.send_progress_notification(
-            progress_token=progress_token,
-            progress=50,
-            total=100,
-            message="Setting up game board...",
-        )
+    await send_progress(50, "Setting up game board...")
 
     # Initialize game state
     game.reset()
 
     # Set up the game instance on hubs and tools
-    if session and progress_token:
-        await session.send_progress_notification(
-            progress_token=progress_token,
-            progress=70,
-            total=100,
-            message="Configuring tools and hubs...",
-        )
+    await send_progress(70, "Configuring tools and hubs...")
 
     setup_hub.env = game
     evaluate_hub.env = game
 
-    # Create and register move tool
-    move_tool = MoveTool(env=game)
-    mcp.add_tool(move_tool.mcp)
-
     # Mount hubs
-    logger.info(f"Mounting setup hub: {setup_hub}")
-    logger.info(f"Setup hub tools before mount: {hasattr(setup_hub, '_tool_manager')}")
-
-    # Check what tools are in the hub before mounting
-    if hasattr(setup_hub, "_tool_manager"):
-        logger.info(f"Setup hub tools: {list(setup_hub._tool_manager._tools.keys())}")
+    logger.info(f"Mounting hubs: {setup_hub} and {evaluate_hub}")
 
     mcp.mount(setup_hub)
-
-    logger.info(f"Mounting evaluate hub: {evaluate_hub}")
-    if hasattr(evaluate_hub, "_tool_manager"):
-        logger.info(f"Evaluate hub tools: {list(evaluate_hub._tool_manager._tools.keys())}")
-
     mcp.mount(evaluate_hub)
 
-    # Check what tools are available after mounting
-    logger.info(f"Main server tools after mounting: {list(mcp._tool_manager._tools.keys())}")
+    # Create and register move tool
+    mcp.add_tool(MoveTool(env=game))
 
-    if session and progress_token:
-        await session.send_progress_notification(
-            progress_token=progress_token,
-            progress=100,
-            total=100,
-            message="2048 environment ready",
-        )
-
-    logger.info("2048 environment ready")
+    await send_progress(100, "2048 environment ready")
 
 
 if __name__ == "__main__":

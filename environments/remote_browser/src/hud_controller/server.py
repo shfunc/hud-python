@@ -4,12 +4,10 @@ import asyncio
 import sys
 import logging
 import os
-import json
-from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Optional, TypedDict
 
-# Configure logging
+# Configure stderr logging
 logging.basicConfig(
     stream=sys.stderr,
     level=logging.INFO,
@@ -18,10 +16,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from hud.server import HudServer
+from hud.server import HudMCP
 
 # Import tools
-from .tools import PlaywrightToolWithMemory, BrowserExecutor, create_computer_tools
+from .tools import PlaywrightToolWithMemory, BrowserExecutor
+from hud.tools.computer import (
+    AnthropicComputerTool,
+    OpenAIComputerTool,
+    HudComputerTool,
+)
 
 # Import setup and evaluate hubs
 from .setup import setup as setup_hub
@@ -35,53 +38,8 @@ browser_provider: Optional[BrowserProvider] = None
 playwright_tool: Optional[PlaywrightToolWithMemory] = None
 browser_executor: Optional[BrowserExecutor] = None
 
-# Track if we're already cleaning up to prevent double cleanup
-_cleanup_in_progress = False
-
-
-@asynccontextmanager
-async def lifespan(app: HudServer):
-    """FastMCP lifespan manager - handles startup and cleanup."""
-    global browser_provider, playwright_tool, browser_executor, _cleanup_in_progress
-
-    try:
-        yield {}  # Nothing to initialize at startup
-    finally:
-        # This runs when the server shuts down
-        if _cleanup_in_progress:
-            logger.info("Cleanup already in progress, skipping")
-            return
-
-        _cleanup_in_progress = True
-        logger.info("🔧 Lifespan cleanup started")
-
-        try:
-            # Only close the browser through the provider - this is what actually terminates the remote session
-            # The playwright tool just has a connection to the remote browser, it doesn't need separate cleanup
-            if browser_provider:
-                try:
-                    logger.info("Closing browser provider session...")
-                    await asyncio.wait_for(browser_provider.close(), timeout=10.0)
-                    logger.info("Browser provider closed successfully")
-                except asyncio.TimeoutError:
-                    logger.error("Timeout closing browser provider (10s exceeded)")
-                except Exception as e:
-                    logger.error(f"Error closing browser provider: {e}")
-            else:
-                logger.info("No browser provider to close")
-
-            logger.info("✅ Lifespan cleanup finished")
-        except Exception as e:
-            logger.error(f"Error during lifespan cleanup: {e}")
-        finally:
-            _cleanup_in_progress = False
-            browser_provider = None
-            playwright_tool = None
-            browser_executor = None
-
-
-# Create FastMCP instance
-mcp = HudServer(
+# Create Hud FastMCP instance
+mcp = HudMCP(
     name="HUD Remote Browser Environment",
     instructions="""
     This is a remote browser automation environment that connects to cloud browser providers.
@@ -93,7 +51,6 @@ mcp = HudServer(
     - playwright tools: Browser automation (navigate, click, type, etc.)
     - computer tools: Control browser as if it were a desktop application
     """,
-    lifespan=lifespan,
 )
 
 
@@ -113,33 +70,28 @@ async def get_telemetry_resource() -> Telemetry:
     """MCP resource containing telemetry data including provider's live view URL."""
     global browser_provider
 
-    telemetry_data: Telemetry = {
-        "provider": os.getenv("BROWSER_PROVIDER", "unknown"),
-        "status": "unknown",
-        "live_url": None,
-        "timestamp": datetime.now().isoformat(),
-        "cdp_url": None,
-        "instance_id": None,
-    }
-
     if browser_provider:
         try:
-            # Get provider status
             status = await browser_provider.get_status()
-            telemetry_data.update(
-                {
-                    "status": "running" if browser_provider.is_running else "stopped",
-                    "cdp_url": browser_provider.cdp_url,
-                    "instance_id": status.get("instance_id"),
-                    "live_url": browser_provider.get_live_view_url(),
-                }
+            return Telemetry(
+                provider=os.getenv("BROWSER_PROVIDER", "unknown"),
+                status="running" if browser_provider.is_running else "stopped",
+                live_url=browser_provider.get_live_view_url(),
+                timestamp=datetime.now().isoformat(),
+                cdp_url=browser_provider.cdp_url,
+                instance_id=status.get("instance_id"),
             )
         except Exception as e:
             logger.error(f"Error getting telemetry data: {e}")
-    else:
-        telemetry_data["status"] = "not_initialized"
 
-    return telemetry_data
+    return Telemetry(
+        provider=os.getenv("BROWSER_PROVIDER", "unknown"),
+        status="not_initialized",
+        live_url=None,
+        timestamp=datetime.now().isoformat(),
+        cdp_url=None,
+        instance_id=None,
+    )
 
 
 @mcp.initialize()
@@ -233,10 +185,10 @@ async def initialize_environment(session=None, progress_token=None):
         await send_progress(75, "Browser executor initialized")
 
         # Create and register computer tools
-        computer_tools = create_computer_tools(browser_executor)
-        for _, tool_instance in computer_tools.items():
-            mcp.add_tool(tool_instance.mcp)
-        await send_progress(80, f"Registered {len(computer_tools)} computer tools")
+        mcp.add_tool(HudComputerTool(executor=browser_executor))
+        mcp.add_tool(AnthropicComputerTool(executor=browser_executor))
+        mcp.add_tool(OpenAIComputerTool(executor=browser_executor))
+        await send_progress(80, f"Registered computer tools")
 
         # Set the playwright_tool as environment for setup and evaluate hubs
         # This allows all setup/evaluate functions to access the browser
@@ -266,6 +218,33 @@ async def initialize_environment(session=None, progress_token=None):
             )
         raise
 
+
+@mcp.shutdown()
+async def shutdown_environment():
+    """Shutdown the remote browser environment."""
+    global browser_provider, playwright_tool, browser_executor
+
+    logger.info("🔧 Lifespan cleanup started")
+    try:
+        if browser_provider:
+            try:
+                logger.info("Closing browser provider session...")
+                await asyncio.wait_for(browser_provider.close(), timeout=10.0)
+                logger.info("Browser provider closed successfully")
+            except asyncio.TimeoutError:
+                logger.error("Timeout closing browser provider (10s exceeded)")
+            except Exception as e:
+                logger.error(f"Error closing browser provider: {e}")
+        else:
+            logger.info("No browser provider to close")
+
+        logger.info("✅ Lifespan cleanup finished")
+    except Exception as e:
+        logger.error(f"Error during lifespan cleanup: {e}")
+    finally:
+        browser_provider = None
+        playwright_tool = None
+        browser_executor = None
 
 if __name__ == "__main__":
     mcp.run()

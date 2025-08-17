@@ -41,8 +41,7 @@ def _run_with_sigterm(coro_fn: Callable[..., Any], *args: Any, **kwargs: Any) ->
 
 class HudMCP(FastMCP):
     """FastMCP wrapper that adds helpful functionality for dockerized environments.
-
-    Added features:
+    This works with any MCP client, and adds just a few extra server-side features:
     1. SIGTERM handling for graceful shutdown in container runtimes.
     2. ``@HudMCP.initialize`` decorator that registers an async initializer
        executed during the MCP *initialize* request, with progress reporting

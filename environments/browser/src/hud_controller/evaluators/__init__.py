@@ -1,16 +1,13 @@
 """Evaluators module for browser environment."""
 
-from hud.tools import EvaluateTool
+from hud.tools.base import BaseHub
 
-# Create global evaluate tool instance
-evaluate_tool = EvaluateTool(
-    name="evaluate", title="Browser Evaluator", description="Evaluate the current browser state"
+evaluate = BaseHub(
+    name="evaluate",
+    title="Browser Evaluators",
+    description="Evaluate the current browser state",
 )
 
-# Convenience decorator
-evaluator = evaluate_tool.register
+from . import todo  # noqa: E402
 
-# Import all evaluator modules to register their functions
-from . import todo
-
-__all__ = ["evaluate_tool", "evaluator"]
+__all__ = ["evaluate"]

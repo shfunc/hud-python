@@ -16,40 +16,30 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from mcp.server.fastmcp import FastMCP, Context
-from mcp.types import InitializeRequest, InitializeResult, Implementation
-from mcp.shared.context import RequestContext
-from mcp.server.models import InitializationOptions
-
-# Import the helper for initialization progress and tool registration
-from hud.server.helper import mcp_intialize_wrapper
+from fastmcp import Context  # for type annotations
+from hud.server import HudMCP
 
 from .services import ServiceManager
-from .evaluators import evaluate_tool
-from .setup import setup_tool
+from .evaluators import evaluate as evaluate_hub
+from .setup import setup as setup_hub
 from .problems import ProblemRegistry
 from .context import initialize_context, get_global_context
 
 service_manager = ServiceManager()
 
-# --- IMPORTANT ---
-# Two options for initializing the environment:
-# 1. Use the decorator to enable progress notifications during MCP initialization
-# 2. Just launch the server and initialize the mcp server after
+# Create main server first so decorators can reference it
+mcp = HudMCP(
+    name="HUD Browser Environment",
+    instructions="""
+    This is a browser automation environment with full GUI access.
+    Use the computer tool to interact with the browser and applications.
+    You can also launch additional apps dynamically with launch_app.
+    """,
+)
 
-
-# --- OPTION 1 ---
 # The decorator intercepts the MCP initialization to provide session and progress_token
-@mcp_intialize_wrapper()
+@mcp.initialize
 async def initialize_environment(session=None, progress_token=None):
-    """
-    Initialize the environment with progress reporting.
-
-    This function works with or without session/progress_token parameters.
-    - With them: Sends progress notifications during MCP initialization
-    - Without them: Can be called directly before creating the MCP server
-    - The decorator intercepts the MCP initialization to provide session and progress_token
-    """
     import logging
 
     logger = logging.getLogger(__name__)
@@ -59,7 +49,7 @@ async def initialize_environment(session=None, progress_token=None):
 
     async def send_progress(progress: float, message: str):
         """Send progress notification through the session."""
-        if progress_token:
+        if progress_token and session:
             logger.info(f"Sending progress: {progress}% - {message}")
             await session.send_progress_notification(
                 progress_token=progress_token, progress=progress, total=100, message=message
@@ -102,17 +92,14 @@ async def initialize_environment(session=None, progress_token=None):
         playwright_tool = PlaywrightTool()
         mcp.add_tool(playwright_tool)
 
-        # Initialize global context with service manager and playwright tool
+        # Initialize global context
         global_context = initialize_context(service_manager, playwright_tool)
 
-        # Set context on setup and evaluate tools
-        setup_tool.context = global_context
-        evaluate_tool.context = global_context
+        setup_hub.env = global_context
+        evaluate_hub.env = global_context
 
-        # Register setup and evaluate tools with MCP
-        # They will handle their own __call__ methods
-        register_instance_tool(mcp, setup_tool)
-        register_instance_tool(mcp, evaluate_tool)
+        mcp.mount(setup_hub)
+        mcp.mount(evaluate_hub)
 
         await send_progress(80, "All tools ready")
 
@@ -186,64 +173,7 @@ async def initialize_environment(session=None, progress_token=None):
         raise
 
 
-# --- OPTION 2 ---
-# Just launch the server and initialize the mcp server after
-# Or run the services in any other way (e.g. in a separate process)
-# await initialize_environment()
-# mcp = FastMCP("HUD Browser Environment")
-# mcp.run()
 
-
-# --- MCP SERVER & BASIC TOOLS ---
-# Create FastMCP instance
-# Note: The mcp_intialize_wrapper above handles the response to the initialize request with progress
-mcp = FastMCP(
-    name="HUD Browser Environment",
-    instructions="""
-    This is a browser automation environment with full GUI access.
-    Use the computer tool to interact with the browser and applications.
-    You can also launch additional apps dynamically with launch_app.
-    """,
-)
-
-
-# === PARAMETERIZED MCP RESOURCES ===
-
-
-@mcp.resource("evaluators://registry")
-async def get_evaluators_resource() -> str:
-    """MCP resource containing all available evaluators."""
-    return evaluate_tool.get_registry_json()
-
-
-@mcp.resource("evaluators://{env}")
-async def get_env_evaluators_resource(env: str) -> str:
-    """MCP resource containing environment-specific evaluators."""
-    # Get all evaluators and filter by app prefix
-    all_evaluators = json.loads(evaluate_tool.get_registry_json())
-    env_evaluators = [
-        e for e in all_evaluators.get("functions", []) if e.get("name", "").startswith(f"{env}_")
-    ]
-    return json.dumps(
-        {"env": env, "evaluators": env_evaluators, "count": len(env_evaluators)}, indent=2
-    )
-
-
-@mcp.resource("setup://registry")
-async def get_setup_registry_resource() -> str:
-    """MCP resource containing all available setup tools."""
-    return setup_tool.get_registry_json()
-
-
-@mcp.resource("setup://{env}")
-async def get_env_setup_resource(env: str) -> str:
-    """MCP resource containing environment-specific setup tools."""
-    # Get all setup tools and filter by app prefix
-    all_setup = json.loads(setup_tool.get_registry_json())
-    env_setup = [
-        s for s in all_setup.get("functions", []) if s.get("name", "").startswith(f"{env}_")
-    ]
-    return json.dumps({"env": env, "setup_tools": env_setup, "count": len(env_setup)}, indent=2)
 
 
 @mcp.resource("problems://registry")
@@ -257,28 +187,6 @@ async def get_env_problems_resource(env: str) -> str:
     """MCP resource containing environment-specific problems."""
     env_problems = ProblemRegistry.get_problems_by_app(env)
     return json.dumps({"env": env, "problems": env_problems, "count": len(env_problems)}, indent=2)
-
-
-@mcp.resource("schema://evaluator/{evaluator_name}")
-async def get_evaluator_schema_resource(evaluator_name: str) -> str:
-    """MCP resource containing detailed schema for a specific evaluator."""
-    # Get evaluator from registry
-    all_evaluators = json.loads(evaluate_tool.get_registry_json())
-    for e in all_evaluators.get("functions", []):
-        if e.get("name") == evaluator_name:
-            return json.dumps(e, indent=2)
-    return json.dumps({"error": f"Evaluator '{evaluator_name}' not found"}, indent=2)
-
-
-@mcp.resource("schema://setup/{setup_name}")
-async def get_setup_schema_resource(setup_name: str) -> str:
-    """MCP resource containing detailed schema for a specific setup tool."""
-    # Get setup tool from registry
-    all_setup = json.loads(setup_tool.get_registry_json())
-    for s in all_setup.get("functions", []):
-        if s.get("name") == setup_name:
-            return json.dumps(s, indent=2)
-    return json.dumps({"error": f"Setup tool '{setup_name}' not found"}, indent=2)
 
 
 @mcp.resource("schema://problem/{problem_name}")

@@ -1,18 +1,13 @@
 """Setup module for browser environment."""
 
-from hud.tools import SetupTool
+from hud.tools.base import BaseHub
 
-# Create global setup tool instance
-setup_tool = SetupTool(
+setup = BaseHub(
     name="setup",
     title="Browser Setup",
     description="Initialize or configure the browser environment",
 )
 
-# Convenience decorator
-setup = setup_tool.register
+from . import todo, apps  # noqa: E402
 
-# Import all setup modules to register their functions
-from . import todo, apps
-
-__all__ = ["setup_tool", "setup"]
+__all__ = ["setup"]
