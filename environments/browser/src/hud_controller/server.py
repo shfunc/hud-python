@@ -23,7 +23,7 @@ from .services import ServiceManager
 from .evaluators import evaluate as evaluate_hub
 from .setup import setup as setup_hub
 from .problems import ProblemRegistry
-from .context import initialize_context, get_global_context
+from .context import initialize_context
 
 service_manager = ServiceManager()
 

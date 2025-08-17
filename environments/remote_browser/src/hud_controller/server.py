@@ -94,7 +94,7 @@ async def get_telemetry_resource() -> Telemetry:
     )
 
 
-@mcp.initialize()
+@mcp.initialize
 async def initialize_environment(session=None, progress_token=None):
     """Initialize the remote browser environment with progress reporting."""
     global browser_provider, playwright_tool, browser_executor
@@ -188,7 +188,7 @@ async def initialize_environment(session=None, progress_token=None):
         mcp.add_tool(HudComputerTool(executor=browser_executor))
         mcp.add_tool(AnthropicComputerTool(executor=browser_executor))
         mcp.add_tool(OpenAIComputerTool(executor=browser_executor))
-        await send_progress(80, f"Registered computer tools")
+        await send_progress(80, "Registered hud computer tools")
 
         # Set the playwright_tool as environment for setup and evaluate hubs
         # This allows all setup/evaluate functions to access the browser
@@ -219,7 +219,7 @@ async def initialize_environment(session=None, progress_token=None):
         raise
 
 
-@mcp.shutdown()
+@mcp.shutdown
 async def shutdown_environment():
     """Shutdown the remote browser environment."""
     global browser_provider, playwright_tool, browser_executor

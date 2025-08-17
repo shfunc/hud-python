@@ -187,7 +187,7 @@ async def sheets_from_xlsx(
                     if attempt > 0:
                         logger.info(f"Retrying navigation (attempt {attempt + 1}/{max_attempts})")
                     
-                    await page.goto(sheet_url, wait_until="domcontentloaded", timeout=45000)
+                    await page.goto(sheet_url, wait_until="load", timeout=45000)
                     
                     # Wait for sheet to load
                     try:

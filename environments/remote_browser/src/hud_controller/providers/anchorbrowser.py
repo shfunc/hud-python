@@ -126,7 +126,7 @@ class AnchorBrowserProvider(BrowserProvider):
                         "anchor-api-key": str(self.api_key),
                         "Content-Type": "application/json",
                     },
-                    timeout=30.0,
+                    timeout=10.0,
                 )
                 response.raise_for_status()
 

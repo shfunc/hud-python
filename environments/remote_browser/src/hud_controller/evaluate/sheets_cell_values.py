@@ -182,8 +182,14 @@ async def sheets_cell_values(
         # Select all content
         await page.keyboard.press("Control+A")
 
+        # Wait for 1 second
+        await asyncio.sleep(1)
+
         # Copy to clipboard
         await page.keyboard.press("Control+C")
+
+        # Wait for 1 second
+        await asyncio.sleep(1)
 
         # Get clipboard content
         clipboard_content = await page.evaluate("() => navigator.clipboard.readText()")
