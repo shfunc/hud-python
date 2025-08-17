@@ -111,7 +111,7 @@ class BrowserBaseProvider(BrowserProvider):
 
         return self._cdp_url
 
-    async def close(self) -> None:
+    def close(self) -> None:
         """Terminate the BrowserBase session."""
         if not self._instance_id:
             return
@@ -119,8 +119,8 @@ class BrowserBaseProvider(BrowserProvider):
         try:
             # BrowserBase sessions automatically close after disconnect unless keepAlive is true
             # We can explicitly update the session to mark it as ended
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
+            with httpx.Client() as client:
+                response = client.post(
                     f"{self.base_url}/v1/sessions/{self._instance_id}",
                     json={"status": "COMPLETED"},
                     headers={"X-BB-API-Key": str(self.api_key), "Content-Type": "application/json"},

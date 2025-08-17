@@ -1,6 +1,5 @@
 """MCP server for remote browser environment."""
 
-import asyncio
 import sys
 import logging
 import os
@@ -229,10 +228,8 @@ async def shutdown_environment():
         if browser_provider:
             try:
                 logger.info("Closing browser provider session...")
-                await asyncio.wait_for(browser_provider.close(), timeout=10.0)
+                browser_provider.close()
                 logger.info("Browser provider closed successfully")
-            except asyncio.TimeoutError:
-                logger.error("Timeout closing browser provider (10s exceeded)")
             except Exception as e:
                 logger.error(f"Error closing browser provider: {e}")
         else:

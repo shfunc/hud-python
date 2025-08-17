@@ -4,6 +4,7 @@ import os
 import logging
 from typing import Optional, Dict, Any
 import httpx
+import requests
 
 from .base import BrowserProvider
 from .helper.proxy import get_proxy_config
@@ -113,22 +114,22 @@ class AnchorBrowserProvider(BrowserProvider):
         logger.info(f"Using proxy type: {proxy_config.get('type')}")
         return self._cdp_url
 
-    async def close(self) -> None:
+    def close(self) -> None:
         """Terminate the AnchorBrowser session."""
         if not self._instance_id:
             return
 
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.delete(
-                    f"{self.base_url}/v1/sessions/{self._instance_id}",
-                    headers={
-                        "anchor-api-key": str(self.api_key),
-                        "Content-Type": "application/json",
-                    },
-                    timeout=10.0,
-                )
-                response.raise_for_status()
+            logger.info(f"Terminating AnchorBrowser session: {self._instance_id}")
+            response = requests.delete(
+                f"{self.base_url}/v1/sessions/{self._instance_id}",
+                headers={
+                    "anchor-api-key": str(self.api_key),
+                    "Content-Type": "application/json",
+                },
+                timeout=25.0,
+            )
+            response.raise_for_status()
 
             logger.info(f"Terminated AnchorBrowser session: {self._instance_id}")
         except Exception as e:

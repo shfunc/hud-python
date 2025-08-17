@@ -9,5 +9,5 @@ class KernelProvider(BrowserProvider):
     async def launch(self, **kwargs) -> str:
         raise NotImplementedError("Kernel provider not yet implemented")
 
-    async def close(self) -> None:
+    def close(self) -> None:
         raise NotImplementedError("Kernel provider not yet implemented")

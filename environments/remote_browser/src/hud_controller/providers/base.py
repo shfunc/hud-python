@@ -41,7 +41,7 @@ class BrowserProvider(ABC):
         pass
 
     @abstractmethod
-    async def close(self) -> None:
+    def close(self) -> None:
         """Close the browser instance and cleanup resources.
 
         Raises:
@@ -93,4 +93,4 @@ class BrowserProvider(ABC):
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit - close the browser."""
-        await self.close()
+        self.close()
