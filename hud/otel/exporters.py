@@ -1,5 +1,5 @@
 """Custom OpenTelemetry exporter that sends spans to the existing HUD telemetry
-HTTP endpoint (/v2/task_runs/<id>/telemetry-upload).
+HTTP endpoint (/trace/<id>/telemetry-upload).
 
 The exporter groups spans by ``hud.task_run_id`` baggage / attribute so we keep
 exactly the same semantics the old async worker in ``hud.telemetry.exporter``
@@ -322,7 +322,7 @@ class HudSpanExporter(SpanExporter):
         # Send each group synchronously (retry inside make_request_sync)
         for run_id, span_batch in grouped.items():
             try:
-                url = f"{self._telemetry_url}/v2/task_runs/{run_id}/telemetry-upload"
+                url = f"{self._telemetry_url}/trace/{run_id}/telemetry-upload"
                 telemetry_spans = [_span_to_dict(s) for s in span_batch]
                 # Include current step count in metadata
                 metadata = {}
