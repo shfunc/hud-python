@@ -16,7 +16,7 @@ from openai.types.responses import (
 )
 
 import hud
-from hud.agents import MCPAgent
+from .base import MCPAgent
 from hud.settings import settings
 from hud.tools.computer.settings import computer_settings
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult, Trace

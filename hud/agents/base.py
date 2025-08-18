@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING, Any
 
 import mcp.types as types
 
-from .types import AgentResponse, MCPToolCall, MCPToolResult, Trace
+from hud.types import AgentResponse, MCPToolCall, MCPToolResult, Trace
 
 if TYPE_CHECKING:
-    from hud.agents.misc import ResponseAgent
+    from hud.clients.base import AgentMCPClient
     from hud.datasets import TaskConfig
 
-    from .clients.base import AgentMCPClient
+    from .misc import ResponseAgent
 
 
 logger = logging.getLogger(__name__)
@@ -427,7 +427,7 @@ class MCPAgent(ABC):
                         decision = "STOP"
                         if self.response_agent is not None and response.content:
                             try:
-                                decision = await self.response_agent.determine_response(response.content)
+                                decision = await self.response_agent.determine_response(response.content)  # noqa: E501
                             except Exception as e:
                                 logger.warning("ResponseAgent failed: %s", e)
                         if decision == "STOP":

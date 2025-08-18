@@ -10,7 +10,8 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 import hud
-from hud.agents.openai_chat_generic import GenericOpenAIChatAgent
+
+from .openai_chat_generic import GenericOpenAIChatAgent
 
 if TYPE_CHECKING:
     import art

@@ -19,8 +19,9 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any, cast
 
-from hud.agents import MCPAgent
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult
+
+from .base import MCPAgent
 
 if TYPE_CHECKING:
     from openai import AsyncOpenAI
