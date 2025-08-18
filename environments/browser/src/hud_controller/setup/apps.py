@@ -10,7 +10,7 @@ from hud.tools.setup import BaseSetup, SetupResult
 from . import setup
 
 
-@setup("rebuild_app", description="Rebuild and restart an app (frontend and/or backend)")
+@setup.tool("rebuild_app", description="Rebuild and restart an app (frontend and/or backend)")
 class RebuildAppSetup(BaseSetup):
     """Setup tool that rebuilds and restarts an app."""
 
@@ -94,7 +94,7 @@ class RebuildAppSetup(BaseSetup):
             return SetupResult(status="error", message=f"❌ Rebuild failed: {str(e)}")
 
 
-@setup("restart_all_apps", description="Restart all running apps")
+@setup.tool("restart_all_apps", description="Restart all running apps")
 class RestartAllAppsSetup(BaseSetup):
     """Setup tool that restarts all running apps."""
 

@@ -3,12 +3,12 @@
 import logging
 from typing import Dict, Any, List
 from hud.tools import BaseEvaluator, EvaluationResult
-from ..evaluators import evaluator
+from ..evaluators import evaluate
 
 logger = logging.getLogger(__name__)
 
 
-@evaluator("todo_completed", description="Check if expected number of todos are completed")
+@evaluate.tool("todo_completed", description="Check if expected number of todos are completed")
 class TodoCompletedEvaluator(BaseEvaluator):
     """Evaluator that checks if the expected number of todos are completed."""
 
@@ -49,7 +49,7 @@ class TodoCompletedEvaluator(BaseEvaluator):
             )
 
 
-@evaluator("todo_exists", description="Check if a todo with specific title exists")
+@evaluate.tool("todo_exists", description="Check if a todo with specific title exists")
 class TodoExistsEvaluator(BaseEvaluator):
     """Evaluator that checks if a todo with a specific title exists."""
 
@@ -85,7 +85,7 @@ class TodoExistsEvaluator(BaseEvaluator):
             )
 
 
-@evaluator("todo_completion_rate", description="Check if completion rate meets target")
+@evaluate.tool("todo_completion_rate", description="Check if completion rate meets target")
 class TodoCompletionRateEvaluator(BaseEvaluator):
     """Evaluator that checks if the todo completion rate meets a target."""
 
@@ -131,7 +131,7 @@ class TodoCompletionRateEvaluator(BaseEvaluator):
             )
 
 
-@evaluator("todo_total_count", description="Check if total todo count meets minimum")
+@evaluate.tool("todo_total_count", description="Check if total todo count meets minimum")
 class TodoTotalCountEvaluator(BaseEvaluator):
     """Evaluator that checks if the total number of todos meets a minimum."""
 
@@ -168,7 +168,7 @@ class TodoTotalCountEvaluator(BaseEvaluator):
             )
 
 
-@evaluator("todo_all_completed", description="Check if all todos are completed")
+@evaluate.tool("todo_all_completed", description="Check if all todos are completed")
 class TodoAllCompletedEvaluator(BaseEvaluator):
     """Evaluator that checks if all todos are completed."""
 
