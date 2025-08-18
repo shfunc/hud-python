@@ -184,6 +184,7 @@ class BrowserExecutor(BaseExecutor):
     async def write(
         self,
         text: str,
+        enter_after: bool = False,
         hold_keys: list[str] | None = None,
         take_screenshot: bool = True,
     ) -> ContentResult:
@@ -199,6 +200,9 @@ class BrowserExecutor(BaseExecutor):
 
             # Type the text
             await page.keyboard.type(text)
+
+            if enter_after:
+                await page.keyboard.press("Enter")
 
             # Release modifier keys
             if hold_keys:
