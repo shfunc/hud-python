@@ -492,7 +492,7 @@ import asyncio
 import hud
 from hud.datasets import TaskConfig
 from hud.agents import ClaudeAgent
-from hud.client import MCPClient
+from hud.clients import MCPClient
 
 async def main():
     # `trace` captures *everything* that happens and sends it to app.hud.so
@@ -551,7 +551,7 @@ Here's how to configure a remote MCP server that runs **the same Docker image**:
 
 ```python
 from hud import settings
-from hud.client import MCPClient
+from hud.clients import MCPClient
 
 # Your image is in a registry, now tell HUD to pull & run it on demand
 config = {

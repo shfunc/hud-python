@@ -12,9 +12,9 @@ from hud.adapters.common.types import CLA
 
 # Update import to current API; if this script is legacy, keep it optional
 try:
-    from hud.agent import MCPAgent as Agent  # type: ignore[assignment]
+    from hud.agents import MCPAgent as Agent  # type: ignore[assignment]
 except Exception:  # pragma: no cover - optional example script
-    from hud.agent import MCPAgent as Agent  # fallback
+    from hud.agents import MCPAgent as Agent  # fallback
 from hud.settings import settings
 
 if TYPE_CHECKING:

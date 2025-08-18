@@ -19,7 +19,7 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any, cast
 
-from hud.agent import MCPAgent
+from hud.agents import MCPAgent
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult
 
 if TYPE_CHECKING:

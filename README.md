@@ -38,7 +38,7 @@ Minimal call example (MCP client calling a local Docker image):
 ```python
 import asyncio
 import hud
-from hud.client import MCPClient
+from hud.clients import MCPClient
 
 async def main():
     with hud.trace("env-quickstart"):

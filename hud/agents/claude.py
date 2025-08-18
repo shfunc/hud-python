@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 import mcp.types as types
 
-from hud.agent import MCPAgent
+from hud.agents import MCPAgent
 from hud.settings import settings
 from hud.tools.computer.settings import computer_settings
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult

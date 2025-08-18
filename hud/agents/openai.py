@@ -16,7 +16,7 @@ from openai.types.responses import (
 )
 
 import hud
-from hud.agent import MCPAgent
+from hud.agents import MCPAgent
 from hud.settings import settings
 from hud.tools.computer.settings import computer_settings
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult, Trace
@@ -330,10 +330,5 @@ class OperatorAgent(MCPAgent):
     async def create_user_message(self, text: str) -> dict[str, Any]:
         """
         Create a user message for OpenAI's stateful API.
-
-        Since OpenAI maintains conversation state server-side,
-        we just need to track that we're expecting user input.
         """
-        # For OpenAI, we'll handle this in get_model_response
-        # by including the user's text in the next input
         return {"type": "user_input", "text": text}

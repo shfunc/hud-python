@@ -12,15 +12,22 @@ Usage:
 """
 
 import asyncio
+import argparse
 import hud
-from hud.agents import ClaudeAgent
+from hud.agents import ClaudeAgent, OperatorAgent
+from hud.agents.misc import ResponseAgent
 from hud.clients import MCPClient
+from openai import AsyncOpenAI
 from datasets import load_dataset
 from hud.datasets import run_dataset, TaskConfig
+from typing import Any
+
+import logging
+logging.basicConfig(level=logging.INFO)
 
 
-async def run_single_task():
-    """Run a single task from SheetBench dataset."""
+async def run_single_task(agent_type: str = "claude", model: str | None = None, allowed_tools: list[str] | None = None) -> None:
+    """Run a single task from the SheetBench dataset with the chosen agent."""
     # Load the dataset
     print("📊 Loading SheetBench dataset...")
     dataset = load_dataset("hud-evals/SheetBench-50", split="train")
@@ -30,52 +37,65 @@ async def run_single_task():
 
         # Create client and agent
         client = MCPClient(mcp_config=task.mcp_config)
-        agent = ClaudeAgent(
-            mcp_client=client,
-            model="claude-sonnet-4-20250514",
-            allowed_tools=["anthropic_computer"],
-            initial_screenshot=True,
-        )
+
+        if agent_type == "openai":
+            allowed_tools = allowed_tools or ["openai_computer"]
+            openai_client = AsyncOpenAI()
+            agent = OperatorAgent(
+                mcp_client=client,
+                allowed_tools=allowed_tools,
+                response_agent=ResponseAgent(),
+            )
+        else:
+            allowed_tools = allowed_tools or ["anthropic_computer"]
+            agent = ClaudeAgent(
+                mcp_client=client,
+                model=model or "claude-sonnet-4-20250514",
+                allowed_tools=allowed_tools,
+            )
 
         try:
             print(task.prompt)
             result = await agent.run(task, max_steps=40)
             print(result.reward)
-
         finally:
             print("\n🔚 Closing client...")
             await client.close()
 
 
-async def run_sheetbench_dataset():
-    """Run the entire SheetBench dataset using run_dataset."""
-    # Load the dataset
+async def run_sheetbench_dataset(agent_type: str = "claude", model: str | None = None, allowed_tools: list[str] | None = None, max_concurrent: int = 50) -> list[Any]:
+    """Run the entire SheetBench dataset using run_dataset with the chosen agent."""
     print("📊 Loading SheetBench dataset...")
     dataset = load_dataset("hud-evals/SheetBench-50", split="train")
 
-    # Define agent configuration
-    agent_config = {
-        "model": "claude-sonnet-4-20250514",
-        "allowed_tools": ["anthropic_computer"],
-        "initial_screenshot": True,
-    }
+    if agent_type == "openai":
+        agent_class = OperatorAgent
+        agent_config = {
+            "allowed_tools": allowed_tools or ["openai_computer"],
+        }
+    else:
+        agent_class = ClaudeAgent
+        agent_config = {
+            "model": model or "claude-sonnet-4-20250514",
+            "allowed_tools": allowed_tools or ["anthropic_computer"],
+        }
 
-    # Run the dataset
     print("🚀 Running SheetBench dataset evaluation...")
     results = await run_dataset(
         name="SheetBench-50 Evaluation",
         dataset=dataset,
-        agent_class=ClaudeAgent,
+        agent_class=agent_class,
         agent_config=agent_config,
-        max_concurrent=50,
+        max_concurrent=max_concurrent,
         metadata={
             "dataset": "SheetBench-50",
             "split": "train",
         },
         max_steps=150,
+        auto_respond=True,
     )
 
-    # Process results
+    # Process results (same as before)
     print("\n📈 Results Summary:")
     rewards = [r.reward for r in results if r is not None]
     if rewards:
@@ -90,16 +110,27 @@ async def run_sheetbench_dataset():
     return results
 
 
-async def main():
-    """Main entry point - choose which function to run."""
-    import sys
+async def main() -> None:
+    """Parse CLI arguments and run the desired evaluation mode."""
+    parser = argparse.ArgumentParser(description="SheetBench Agent Runner")
+    parser.add_argument("mode", choices=["single", "dataset"], nargs="?", default="single", help="Run a single task or the entire dataset")
+    parser.add_argument("--agent", choices=["claude", "openai"], default="claude", help="Agent backend to use")
+    parser.add_argument("--model", dest="model", default=None, help="Model name to use for the chosen agent")
+    parser.add_argument("--allowed-tools", dest="allowed_tools", default=None, help="Comma-separated list of allowed tools")
+    parser.add_argument("--max-concurrent", dest="max_concurrent", type=int, default=50, help="Maximum concurrency for dataset mode")
+    args = parser.parse_args()
 
-    if len(sys.argv) > 1 and sys.argv[1] == "dataset":
-        # Run the entire dataset
-        await run_sheetbench_dataset()
+    allowed_tools = [t.strip() for t in args.allowed_tools.split(",") if t.strip()] if args.allowed_tools else None
+
+    if args.mode == "dataset":
+        await run_sheetbench_dataset(
+            agent_type=args.agent,
+            model=args.model,
+            allowed_tools=allowed_tools,
+            max_concurrent=args.max_concurrent,
+        )
     else:
-        # Run a single task (default)
-        await run_single_task()
+        await run_single_task(agent_type=args.agent, model=args.model, allowed_tools=allowed_tools)
 
 
 if __name__ == "__main__":

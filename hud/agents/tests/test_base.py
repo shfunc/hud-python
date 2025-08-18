@@ -15,7 +15,7 @@ except ImportError:
 import pytest
 from mcp import types
 
-from hud.agent import MCPAgent
+from hud.agents import MCPAgent
 from hud.tools.executors.base import BaseExecutor
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult, Trace
 

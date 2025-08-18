@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SheetBench Agent Example
+OSWorld Agent Example
 
 Prerequisites:
 - uv add hud-python
@@ -24,13 +24,13 @@ logging.basicConfig(level=logging.INFO)
 
 
 async def run_single_task():
-    """Run a single task from SheetBench dataset."""
+    """Run a single task from OSWorld dataset."""
     # Load the dataset
-    print("📊 Loading SheetBench dataset...")
+    print("📊 Loading OSWorld dataset...")
     dataset = load_dataset("hud-evals/OSWorld-Gold-Beta", split="train")
     # dataset = load_dataset("hud-evals/OSWorld-Verified-XLang", split="train")
 
-    with hud.trace("SheetBench Agent"):
+    with hud.trace("OSWorld Agent"):
         task = TaskConfig(**dataset[0])
 
         # Create client and agent
@@ -50,10 +50,10 @@ async def run_single_task():
             await client.close()
 
 
-async def run_sheetbench_dataset():
-    """Run the entire SheetBench dataset using run_dataset."""
+async def run_osworld_dataset():
+    """Run the entire OSWorld dataset using run_dataset."""
     # Load the dataset
-    print("📊 Loading SheetBench dataset...")
+    print("📊 Loading OSWorld dataset...")
     dataset = load_dataset("hud-evals/OSWorld-Gold-Beta", split="train")
 
     # Define agent configuration
@@ -62,7 +62,7 @@ async def run_sheetbench_dataset():
     }
 
     # Run the dataset
-    print("🚀 Running SheetBench dataset evaluation...")
+    print("🚀 Running OSWorld dataset evaluation...")
     results = await run_dataset(
         name="OSWorld-Gold-Beta Evaluation",
         dataset=dataset,
@@ -83,7 +83,7 @@ async def main():
 
     if len(sys.argv) > 1 and sys.argv[1] == "dataset":
         # Run the entire dataset
-        await run_sheetbench_dataset()
+        await run_osworld_dataset()
     else:
         # Run a single task (default)
         await run_single_task()

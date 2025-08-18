@@ -13,6 +13,7 @@ import mcp.types as types
 from .types import AgentResponse, MCPToolCall, MCPToolResult, Trace
 
 if TYPE_CHECKING:
+    from hud.agents.misc import ResponseAgent
     from hud.datasets import TaskConfig
 
     from .clients.base import AgentMCPClient
@@ -41,6 +42,7 @@ class MCPAgent(ABC):
         custom_system_prompt: str | None = None,
         lifecycle_tools: list[str] | None = None,
         append_setup_content: bool = False,
+        response_agent: ResponseAgent | None = None,
     ) -> None:
         """
         Initialize the base MCP agent.
@@ -80,6 +82,8 @@ class MCPAgent(ABC):
         self._available_tools: list[types.Tool] = []
         self._tool_map: dict[str, types.Tool] = {}  # Simplified: just name to tool
         self.screenshot_history: list[str] = []
+
+        self.response_agent = response_agent
 
     async def _filter_tools(self) -> None:
         """Apply tool filtering based on allowed/disallowed lists."""
@@ -203,6 +207,13 @@ class MCPAgent(ABC):
             try:
                 logger.info("Calling tool: %s", tool_call)
                 results.append(await self.call_tool(tool_call))
+            except TimeoutError as e:
+                logger.error("Tool execution timed out: %s", e)
+                try:
+                    await self.mcp_client.close()
+                except Exception as close_err:
+                    logger.debug("Failed to close MCP client cleanly: %s", close_err)
+                raise
             except Exception as e:
                 logger.error("Tool execution failed: %s", e)
                 results.append(self._format_error_result(str(e)))
@@ -412,13 +423,21 @@ class MCPAgent(ABC):
 
                     # Check if we should stop
                     if response.done or not response.tool_calls:
-                        logger.info(
-                            "Agent finished - done=%s, tool_calls=%s",
-                            response.done,
-                            len(response.tool_calls),
-                        )
-                        final_response = response
-                        break
+                        # Optional external ResponseAgent to decide whether to stop
+                        decision = "STOP"
+                        if self.response_agent is not None and response.content:
+                            try:
+                                decision = await self.response_agent.determine_response(response.content)
+                            except Exception as e:
+                                logger.warning("ResponseAgent failed: %s", e)
+                        if decision == "STOP":
+                            logger.info("Stopping execution")
+                            final_response = response
+                            break
+                        else:
+                            logger.info("Continuing execution")
+                            messages.append(await self.create_user_message(decision))
+                            continue
 
                     # 2. Execute tools
                     tool_calls = response.tool_calls

@@ -165,7 +165,7 @@ class TestRunDatasetExtended:
             mock_job_func.return_value.__enter__.return_value = mock_job_obj
 
             # Create a mock agent class with proper type
-            from hud.agent import MCPAgent
+            from hud.agents import MCPAgent
 
             mock_agent_class = type("MockAgent", (MCPAgent,), {})
 
@@ -181,7 +181,7 @@ class TestRunDatasetExtended:
     @pytest.mark.asyncio
     async def test_run_dataset_with_metadata(self):
         """Test run_dataset with custom metadata."""
-        from hud.agent import MCPAgent
+        from hud.agents import MCPAgent
 
         # Create a proper mock agent class
         mock_agent_instance = AsyncMock()
@@ -307,7 +307,7 @@ class TestRunDatasetExtended:
     @pytest.mark.asyncio
     async def test_run_dataset_client_cleanup(self):
         """Test that MCP clients are properly cleaned up."""
-        from hud.agent import MCPAgent
+        from hud.agents import MCPAgent
 
         mock_agent_instance = AsyncMock()
         mock_agent_instance.run.return_value = {"done": True}
@@ -359,7 +359,7 @@ class TestRunDatasetExtended:
             "mcp_config": {"dummy": "config"},
         }
 
-        from hud.agent import MCPAgent
+        from hud.agents import MCPAgent
 
         mock_agent_class = type("MockAgent", (MCPAgent,), {})
 

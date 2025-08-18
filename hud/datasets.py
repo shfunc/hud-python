@@ -11,10 +11,12 @@ from typing import TYPE_CHECKING, Any, cast
 from datasets import Dataset, load_dataset
 from pydantic import BaseModel, Field, field_validator
 
+from hud.agents.misc import ResponseAgent
+
 from .types import MCPToolCall
 
 if TYPE_CHECKING:
-    from hud.agent import MCPAgent
+    from hud.agents import MCPAgent
 
 logger = logging.getLogger("hud.datasets")
 
@@ -128,6 +130,7 @@ async def run_dataset(
     metadata: dict[str, Any] | None = None,
     max_steps: int = 40,
     split: str = "train",
+    auto_respond: bool = False,
 ) -> list[Any]:
     """
     Run all tasks in a dataset with automatic job tracking.
@@ -165,7 +168,7 @@ async def run_dataset(
     """
     # Import here to avoid circular imports
     import hud
-    from hud.client import MCPClient
+    from hud.clients import MCPClient
 
     dataset_link = None
 
@@ -207,6 +210,8 @@ async def run_dataset(
                         agent = agent_class(mcp_client=client, **(agent_config or {}))
 
                         try:
+                            if auto_respond:
+                                agent.response_agent = ResponseAgent()
                             results[index] = await agent.run(task, max_steps=max_steps)
                         finally:
                             await client.close()

@@ -25,7 +25,7 @@ import sys
 from pathlib import Path
 
 from fastmcp import FastMCP
-from hud.client import MCPClient
+from hud.clients import MCPClient
 
 # ------------------------------------------------------------------
 # Environment (server)
