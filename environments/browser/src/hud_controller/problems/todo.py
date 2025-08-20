@@ -81,8 +81,8 @@ class TodoCompositeWeightedProblem:
     def get_setup(self) -> Dict[str, Any]:
         """Setup with mixed completion state."""
         return {
-            "function": "todo_custom_seed",
-            "args": {
+            "name": "todo_custom_seed",
+            "arguments": {
                 "items": [
                     {"title": "Important task", "description": "High priority", "completed": True},
                     {
@@ -102,7 +102,7 @@ class TodoCompositeWeightedProblem:
             "arguments": {
                 "evaluators": [
                     {"name": "todo_completed", "arguments": {"expected_count": 2}, "weight": 0.6},
-                    {"name": "todo_exists", "arguments": {"text": "important"}, "weight": 0.4},
+                    {"name": "todo_exists", "arguments": {"title": "Important task"}, "weight": 0.4},
                 ]
             },
         }
@@ -149,8 +149,8 @@ class TodoDirectDbTestProblem(BaseSetupResetProblem):
     def get_setup(self) -> Dict[str, Any]:
         """Setup with a specific item for testing."""
         return {
-            "function": "todo_custom_seed",
-            "args": {
+            "name": "todo_custom_seed",
+            "arguments": {
                 "items": [
                     {"title": "Test item", "description": "For direct access", "completed": True}
                 ]

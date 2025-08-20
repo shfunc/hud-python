@@ -76,7 +76,7 @@ async def todo_exists(ctx: Context, title: str):
 
         return EvaluationResult(
             reward=1.0 if exists else 0.0,
-            done=True,
+            done=exists,
             info={
                 "success": exists,
                 "title": title,
@@ -125,7 +125,7 @@ async def todo_completion_rate(ctx: Context, target_rate: float = 0.5):
 
         return EvaluationResult(
             reward=reward,
-            done=True,
+            done=success,
             info={
                 "success": success,
                 "actual_rate": actual_rate,
@@ -169,7 +169,7 @@ async def todo_total_count(ctx: Context, min_count: int = 1):
 
         return EvaluationResult(
             reward=reward,
-            done=True,
+            done=success,
             info={
                 "success": success,
                 "total_count": total_count,
@@ -216,7 +216,7 @@ async def todo_all_completed(ctx: Context):
             reward=1.0
             if success
             else (completed_count / total_count if total_count > 0 else 0.0),
-            done=True,
+            done=success,
             info={
                 "success": success,
                 "completed_count": completed_count,
