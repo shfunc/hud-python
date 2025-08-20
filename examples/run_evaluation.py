@@ -95,7 +95,7 @@ async def run_single_task(
     dataset_system_prompt = await fetch_system_prompt_from_dataset(dataset_name)
 
     with hud.trace(name=task_prompt):
-        task = TaskConfig(**first_task)  # type: ignore[arg-type]
+        task = Task(**first_task)  # type: ignore[arg-type]
         client = MCPClient(mcp_config=task.mcp_config)
         agent = _build_agent(
             agent_type,
