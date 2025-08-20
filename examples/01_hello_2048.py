@@ -10,7 +10,7 @@ import asyncio
 import sys
 from pathlib import Path
 import hud
-from hud.datasets import TaskConfig
+from hud.datasets import Task
 from hud.agents import ClaudeAgent
 from hud.clients import MCPClient
 
@@ -48,7 +48,7 @@ async def main():
             },
             "evaluate_tool": {"name": "evaluate", "arguments": {"name": "max_number"}},
         }
-        task = TaskConfig(**task_dict)
+        task = Task(**task_dict)
 
         # All of our environments use MCP as a generalizeable interface to interact with the environment
         client = MCPClient(mcp_config=task.mcp_config)
@@ -57,7 +57,7 @@ async def main():
         agent = ClaudeAgent(mcp_client=client, allowed_tools=["move"])
 
         try:
-            # Running a full TaskConfig automatically handles setup and evaluation!
+            # Running a full Task automatically handles setup and evaluation!
             result = await agent.run(task, max_steps=-1)
             print(f"Game completed! Reward: {result.reward}")
         finally:

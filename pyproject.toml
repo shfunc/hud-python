@@ -9,30 +9,15 @@ authors = [
 ]
 license = { file = "LICENSE" }
 dependencies = [
-    # Core v3 dependencies
+    # Core dependencies - minimal for MCP servers and CLI
     "httpx>=0.23.0,<1",
     "pydantic>=2,<3",
     "pydantic-settings>=2,<3",
     # MCP dependencies
     "fastmcp>=2.11.2",
     "mcp @ git+https://github.com/hud-evals/mcp-python-sdk.git",
-    "mcp-use @ git+https://github.com/hud-evals/mcp-use.git",
     "pathspec>=0.12.1",
     "wrapt>=1.14.0",
-    # Agent dependencies
-    "anthropic",
-    "openai",
-    "langchain",
-    "langchain-openai",
-    "langchain-anthropic",
-    # Telemetry dependencies
-    "opentelemetry-instrumentation-mcp>=0.44.1",
-    "opentelemetry-api>=1.34.1",
-    "opentelemetry-sdk>=1.34.1",
-    "opentelemetry-exporter-otlp-proto-grpc>=1.34.1",
-    # Common utilities
-    "dotenv>=0.9.9",
-    "datasets>=2.14.0",
     # CLI dependencies
     "typer>=0.9.0",
     "rich>=13.0.0",
@@ -74,8 +59,31 @@ packages = ["hud"]
 
 
 [project.optional-dependencies]
-# Development dependencies - includes all optional packages for testing and automation
+# Agent dependencies - AI capabilities + telemetry + datasets
+agent = [
+    # AI providers
+    "anthropic",
+    "openai",
+    "langchain",
+    "langchain-openai",
+    "langchain-anthropic",
+    # Telemetry
+    "opentelemetry-instrumentation-mcp>=0.44.1",
+    "opentelemetry-api>=1.34.1",
+    "opentelemetry-sdk>=1.34.1",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.34.1",
+    # Data and evaluation
+    "datasets>=2.14.0",
+    "numpy>=1.24.0",
+    # Other agent utilities
+    "mcp-use @ git+https://github.com/hud-evals/mcp-use.git",
+    "dotenv>=0.9.9",
+]
+
+# Development dependencies - includes testing, linting, and automation tools
 dev = [
+    # Include agent dependencies
+    "hud-python[agent]",
     # Testing and linting
     "ruff >=0.11.8",
     "pytest >=8.1.1,<9",
@@ -88,7 +96,6 @@ dev = [
     "ipython <9",
     "jupyter_client",
     "jupyter_core",
-    # AI providers already in core dependencies
     # Automation and computer control
     "playwright",
     "pyautogui>=0.9.54",
@@ -96,7 +103,6 @@ dev = [
     # Legacy v2 dependencies
     "textdistance>=4.5.0,<5",
     "inspect-ai>=0.3.80",
-    "numpy",
     # Other utilities
     "aiodocker>=0.24.0",
     "toml>=0.10.2",

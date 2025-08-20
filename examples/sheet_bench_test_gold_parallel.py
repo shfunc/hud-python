@@ -20,7 +20,7 @@ import sys
 import hud
 from hud.clients import MCPClient
 from datasets import load_dataset
-from hud.datasets import TaskConfig
+from hud.datasets import Task
 from typing import Any
 
 
@@ -40,8 +40,8 @@ async def test_gold_files_parallel(job_id: str, max_concurrent: int = 50):
         async with sem:
             # Create trace for this task with explicit job_id
             with hud.trace(task_dict.get("prompt"), job_id=job_id, task_id=task_dict.get("id")):
-                # Convert to TaskConfig
-                task = TaskConfig(**task_dict)
+                # Convert to Task
+                task = Task(**task_dict)
                 
                 # Extract gold_file_url from metadata
                 gold_file_url = task.metadata.get('gold_file_url')

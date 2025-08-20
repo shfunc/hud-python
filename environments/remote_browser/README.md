@@ -11,9 +11,6 @@ The Docker image supports both production and development modes using the same D
 ```bash
 # Production build (default)
 docker build -t hud-remote-browser:latest .
-
-# Development build (for hot-reload with volume mounts)
-docker build --build-arg DEV_MODE=true -t hud-remote-browser:dev .
 ```
 
 ### Running in Production Mode

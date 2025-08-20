@@ -15,7 +15,7 @@ from fastmcp.server.server import FastMCP, Transport
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable
 
-__all__ = ["HudMCP"]
+__all__ = ["MCPServer"]
 
 logger = logging.getLogger(__name__)
 
@@ -43,14 +43,14 @@ def _run_with_sigterm(coro_fn: Callable[..., Any], *args: Any, **kwargs: Any) ->
     anyio.run(_runner)
 
 
-class HudMCP(FastMCP):
+class MCPServer(FastMCP):
     """FastMCP wrapper that adds helpful functionality for dockerized environments.
     This works with any MCP client, and adds just a few extra server-side features:
     1. SIGTERM handling for graceful shutdown in container runtimes.
-    2. ``@HudMCP.initialize`` decorator that registers an async initializer
+    2. ``@MCPServer.initialize`` decorator that registers an async initializer
        executed during the MCP *initialize* request, with progress reporting
        support via ``mcp_intialize_wrapper``.
-    3. ``@HudMCP.shutdown`` decorator that registers a coroutine to run during
+    3. ``@MCPServer.shutdown`` decorator that registers a coroutine to run during
        server teardown, after all lifespan contexts have exited.
     4. Enhanced ``add_tool`` that accepts instances of
        :class:`hud.tools.base.BaseTool` which are classes that implement the

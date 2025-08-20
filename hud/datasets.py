@@ -1,4 +1,4 @@
-"""Dataset utilities for working with HuggingFace datasets and TaskConfigs."""
+"""Dataset utilities for working with HuggingFace datasets and Tasks."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger("hud.datasets")
 
 
-class TaskConfig(BaseModel):
+class Task(BaseModel):
     """
     A task configuration that can be used to create a task.
 
@@ -138,7 +138,7 @@ async def run_dataset(
     Args:
         name: Name for the job
         dataset: HuggingFace dataset identifier (e.g. "hud-evals/SheetBench-50"),
-                Dataset object, OR list of TaskConfig objects
+                Dataset object, OR list of Task objects
         agent_class: Agent class to instantiate (e.g., ClaudeAgent)
         agent_config: Configuration for agent (model, etc.)
         max_concurrent: Maximum parallel task execution
@@ -160,7 +160,7 @@ async def run_dataset(
         ... )
         >>> # Option 2: From HuggingFace dataset object
         >>> from datasets import load_dataset
-        >>> dataset = load_dataset("hud-evals/browser-taskconfigs", split="train")
+        >>> dataset = load_dataset("hud-evals/SheetBench-50", split="train")
         >>> results = await run_dataset("my_eval", dataset, ClaudeAgent)
         >>> # Option 3: From list of dicts
         >>> tasks = [{"prompt": "...", "mcp_config": {...}, ...}, ...]
@@ -201,8 +201,8 @@ async def run_dataset(
                 # Create trace for this task
                 task_name = task_dict.get("prompt") or f"Task {index}"
                 with hud.trace(task_name, job_id=job_obj.id, task_id=task_dict.get("id")):
-                    # Convert dict to TaskConfig here, at trace level
-                    task = TaskConfig(**task_dict)
+                    # Convert dict to Task here, at trace level
+                    task = Task(**task_dict)
 
                     # Create fresh MCP client per task
                     if task.mcp_config:
@@ -228,54 +228,66 @@ async def run_dataset(
     return results
 
 
-def save_taskconfigs(taskconfigs: list[dict[str, Any]], repo_id: str, **kwargs: Any) -> None:
+def save_tasks(tasks: list[dict[str, Any]], repo_id: str, **kwargs: Any) -> None:
     """
-    Save TaskConfigs to HuggingFace dataset with JSON string serialization.
+    Save Tasks to HuggingFace dataset with JSON string serialization.
 
     Complex fields are serialized as JSON strings to maintain clean schema
     and avoid null value pollution in HuggingFace datasets.
 
     Args:
-        taskconfigs: List of TaskConfig dicts (NOT TaskConfig objects, to preserve templates)
+        tasks: List of Task dicts (NOT Task objects, to preserve templates)
         repo_id: HuggingFace repository ID (e.g., "hud-evals/my-tasks")
         **kwargs: Additional arguments passed to dataset.push_to_hub()
     """
     from datasets import Dataset
 
-    # Safety check: Ensure we're not saving TaskConfig objects (which have resolved env vars)
-    if taskconfigs and isinstance(taskconfigs[0], TaskConfig):
+    # Safety check: Ensure we're not saving Task objects (which have resolved env vars)
+    if tasks and isinstance(tasks[0], Task):
         raise ValueError(
-            "save_taskconfigs expects dictionaries, not TaskConfig objects. "
-            "TaskConfig objects have resolved environment variables which would expose secrets. "
+            "save_tasks expects dictionaries, not Task objects. "
+            "Task objects have resolved environment variables which would expose secrets. "
             "Please pass raw dictionaries with template strings like '${HUD_API_KEY}' preserved."
         )
 
     # Convert to rows with JSON string fields
     data = []
-    for i, tc_dict in enumerate(taskconfigs):
+    for i, tc_dict in enumerate(tasks):
         # Additional safety check for each item
-        if isinstance(tc_dict, TaskConfig):
+        if isinstance(tc_dict, Task):
             raise ValueError(
-                f"Item {i} is a TaskConfig object, not a dictionary. "
+                f"Item {i} is a Task object, not a dictionary. "
                 "This would expose resolved environment variables. "
                 "Please convert to dictionary format with template strings preserved."
             )
         row = {
             "prompt": tc_dict["prompt"],
-            "mcp_config": json.dumps(tc_dict["mcp_config"]),
         }
 
-        if tc_dict.get("id"):
-            row["id"] = tc_dict["id"]
+        fields = ["mcp_config", "id", "metadata", "setup_tool", "evaluate_tool"]
+        warnings = set()
+        for field in fields:
+            if field in tc_dict:
+                if isinstance(tc_dict[field], dict):
+                    row[field] = json.dumps(tc_dict[field])
+                elif isinstance(tc_dict[field], str | int | float | bool):
+                    if field != "id":
+                        try:
+                            json.loads(tc_dict[field])
+                            warnings.add(field)
+                        except json.JSONDecodeError:
+                            raise ValueError(
+                                "Field %s is not a dictionary, make sure it is loadable: %s",
+                                field,
+                                tc_dict[field],
+                            ) from None
+                    row[field] = str(tc_dict[field])
 
-        if tc_dict.get("metadata"):
-            row["metadata"] = json.dumps(tc_dict["metadata"])
-
-        if tc_dict.get("setup_tool"):
-            row["setup_tool"] = json.dumps(tc_dict["setup_tool"])
-
-        if tc_dict.get("evaluate_tool"):
-            row["evaluate_tool"] = json.dumps(tc_dict["evaluate_tool"])
+        if warnings:
+            logger.warning(
+                "Please avoid using strings for %s, make sure they are dictionaries on load",
+                warnings,
+            )
 
         data.append(row)
 

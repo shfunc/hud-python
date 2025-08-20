@@ -14,7 +14,7 @@ from hud.types import AgentResponse, MCPToolCall, MCPToolResult, Trace
 
 if TYPE_CHECKING:
     from hud.clients.base import AgentMCPClient
-    from hud.datasets import TaskConfig
+    from hud.datasets import Task
 
     from .misc import ResponseAgent
 
@@ -57,11 +57,8 @@ class MCPAgent(ABC):
             custom_system_prompt: Custom system prompt to use
             lifecycle_tools: List of tool names to use for lifecycle tools
         """
-        if not mcp_client:
-            raise ValueError(
-                "MCPClient is required. Please provide a configured MCPClient instance."
-            )
         self.mcp_client = mcp_client
+        self._auto_created_client = False  # Track if we created the client
 
         # Filtering
         self.allowed_tools = allowed_tools
@@ -105,15 +102,30 @@ class MCPAgent(ABC):
             # Simplified mapping - just tool name to tool
             self._tool_map[tool.name] = tool
 
-    async def initialize(self, task: str | TaskConfig | None = None) -> None:
+    async def initialize(self, task: str | Task | None = None) -> None:
         """Initialize the agent with task-specific configuration."""
+        # Import here to avoid circular imports
+        from hud.datasets import Task
+        
+        # Create client if needed
+        if self.mcp_client is None and isinstance(task, Task) and task.mcp_config:
+            from hud.clients import MCPClient
+            
+            self.mcp_client = MCPClient(mcp_config=task.mcp_config)
+            self._auto_created_client = True
+            logger.info("Auto-created MCPClient from task.mcp_config")
+        
+        # Ensure we have a client
+        if self.mcp_client is None:
+            raise ValueError(
+                "No MCPClient. Please provide one in __init__ or pass a Task with mcp_config."
+            )
+        
         # Initialize client if needed
         await self.mcp_client.initialize()
 
         # If task is provided, add lifecycle tools
-        from hud.datasets import TaskConfig
-
-        if isinstance(task, TaskConfig):
+        if isinstance(task, Task):
             if task.setup_tool:
                 if isinstance(task.setup_tool, list):
                     for tool in task.setup_tool:
@@ -223,6 +235,18 @@ class MCPAgent(ABC):
         """Check if any computer control tools are available."""
         computer_tools = {"computer", "computer_anthropic", "computer_openai", "screenshot"}
         return any(tool.name in computer_tools for tool in self._available_tools)
+    
+    async def cleanup(self) -> None:
+        """Cleanup resources."""
+        if self._auto_created_client and self.mcp_client:
+            try:
+                await self.mcp_client.close()
+                logger.info("Closed auto-created MCPClient")
+            except Exception as e:
+                logger.warning("Failed to close auto-created client: %s", e)
+            finally:
+                self.mcp_client = None
+                self._auto_created_client = False
 
     def get_tool_schemas(self) -> list[dict]:
         """Get tool schemas in a format suitable for the model."""
@@ -286,7 +310,7 @@ class MCPAgent(ABC):
                         latest_screenshot = content.data
         return latest_screenshot
 
-    async def run(self, prompt_or_task: str | TaskConfig, max_steps: int = 10) -> Trace:
+    async def run(self, prompt_or_task: str | Task, max_steps: int = 10) -> Trace:
         """
         Run the agent with the given prompt or task.
 
@@ -298,23 +322,27 @@ class MCPAgent(ABC):
             Trace with reward, done, content, isError fields and trace steps
         """
         # Import here to avoid circular imports
-        from hud.datasets import TaskConfig
+        from hud.datasets import Task
 
-        if len(self._available_tools) == 0:
-            await self.initialize(prompt_or_task)
+        try:
+            if len(self._available_tools) == 0:
+                await self.initialize(prompt_or_task)
 
-        # Handle Task objects with full lifecycle
-        if isinstance(prompt_or_task, TaskConfig):
-            return await self._run_task(prompt_or_task, max_steps)
+            # Handle Task objects with full lifecycle
+            if isinstance(prompt_or_task, Task):
+                return await self._run_task(prompt_or_task, max_steps)
 
-        # Handle simple string prompts
-        elif isinstance(prompt_or_task, str):
-            return await self.run_prompt(prompt_or_task, max_steps=max_steps)
+            # Handle simple string prompts
+            elif isinstance(prompt_or_task, str):
+                return await self.run_prompt(prompt_or_task, max_steps=max_steps)
 
-        else:
-            raise TypeError(f"prompt_or_task must be str or TaskConfig, got {type(prompt_or_task)}")
+            else:
+                raise TypeError(f"prompt_or_task must be str or Task, got {type(prompt_or_task)}")
+        finally:
+            # Cleanup auto-created resources
+            await self.cleanup()
 
-    async def _run_task(self, task: TaskConfig, max_steps: int = 10) -> Trace:
+    async def _run_task(self, task: Task, max_steps: int = 10) -> Trace:
         """
         Execute a task with setup and evaluate phases.
 

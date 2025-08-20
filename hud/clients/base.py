@@ -35,6 +35,10 @@ class AgentMCPClient(Protocol):
         """Execute a tool by name."""
         ...
 
+    async def close(self) -> None:
+        """Close the client."""
+        ...
+
 
 class BaseHUDClient(ABC):
     """Base class with common HUD functionality."""

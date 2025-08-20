@@ -5,7 +5,7 @@ MCP server for text-based 2048 game environment using BaseHub pattern.
 import sys
 import logging
 
-from hud.server import HudMCP
+from hud.server import MCPServer
 
 from .game import Game2048
 from .tools import MoveTool
@@ -29,7 +29,7 @@ from .setup import setup as setup_hub
 from .evaluate import evaluate as evaluate_hub
 
 # Create main server first
-mcp = HudMCP(name="text-2048")
+mcp = MCPServer(name="text-2048")
 
 
 @mcp.initialize

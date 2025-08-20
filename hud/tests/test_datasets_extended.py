@@ -9,22 +9,22 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from hud.datasets import (
-    TaskConfig,
+    Task,
     run_dataset,
-    save_taskconfigs,
+    save_tasks,
 )
 from hud.types import MCPToolCall
 
 
-class TestTaskConfigExtended:
-    """Extended tests for TaskConfig functionality."""
+class TestTaskExtended:
+    """Extended tests for Task functionality."""
 
     def test_taskconfig_with_all_fields(self):
-        """Test TaskConfig with all possible fields."""
+        """Test Task with all possible fields."""
         setup_tool = MCPToolCall(name="setup", arguments={"board_size": 4})
         evaluate_tool = MCPToolCall(name="evaluate", arguments={"metric": "score"})
 
-        task = TaskConfig(
+        task = Task(
             id="test-123",
             prompt="Play the game",
             mcp_config={
@@ -44,13 +44,13 @@ class TestTaskConfigExtended:
         assert task.metadata["version"] == 2
 
     def test_taskconfig_list_tools(self):
-        """Test TaskConfig with list of tools."""
+        """Test Task with list of tools."""
         setup_tools = [
             MCPToolCall(name="init", arguments={}),
             MCPToolCall(name="configure", arguments={"mode": "test"}),
         ]
 
-        task = TaskConfig(
+        task = Task(
             prompt="Multi-setup task", mcp_config={"test": True}, setup_tool=setup_tools
         )
 
@@ -72,7 +72,7 @@ class TestTaskConfigExtended:
         try:
             # Mock get_current_task_run_id at the module level it's used
             with patch("hud.otel.get_current_task_run_id", return_value="run-789"):
-                task = TaskConfig(
+                task = Task(
                     prompt="Complex env test",
                     mcp_config={
                         "auth": {
@@ -105,7 +105,7 @@ class TestTaskConfigExtended:
 
     def test_non_string_values_preserved(self):
         """Test that non-string values are preserved during env resolution."""
-        task = TaskConfig(
+        task = Task(
             prompt="Test non-strings",
             mcp_config={
                 "string": "${MISSING}",
@@ -133,20 +133,20 @@ class TestDatasetOperations:
             mock_instance = MagicMock()
             MockDataset.from_list.return_value = mock_instance
 
-            save_taskconfigs([], "test-org/empty-dataset")
+            save_tasks([], "test-org/empty-dataset")
 
             MockDataset.from_list.assert_called_once_with([])
             mock_instance.push_to_hub.assert_called_once()
 
     def test_save_taskconfigs_mixed_rejection(self):
-        """Test that mixing dicts and TaskConfig objects is rejected."""
+        """Test that mixing dicts and Task objects is rejected."""
         valid_dict = {"prompt": "Dict task", "mcp_config": {"test": True}}
 
-        task_object = TaskConfig(prompt="Object task", mcp_config={"resolved": "${SOME_VAR}"})
+        task_object = Task(prompt="Object task", mcp_config={"resolved": "${SOME_VAR}"})
 
         # First item is dict, second is object
-        with pytest.raises(ValueError, match="Item 1 is a TaskConfig object"):
-            save_taskconfigs([valid_dict, task_object], "test-org/mixed")  # type: ignore
+        with pytest.raises(ValueError, match="Item 1 is a Task object"):
+            save_tasks([valid_dict, task_object], "test-org/mixed")  # type: ignore
 
 
 class TestRunDatasetExtended:

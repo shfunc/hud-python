@@ -17,7 +17,11 @@ import hud
 from hud.agents import ClaudeAgent
 from hud.clients import MCPClient
 from hud.settings import settings
-from hud.datasets import TaskConfig
+from hud.datasets import Task
+
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 
 async def run_cloud_example():
@@ -34,7 +38,8 @@ async def run_cloud_example():
                     "url": settings.hud_mcp_url,
                     "headers": {
                         "Authorization": f"Bearer {settings.api_key}",
-                        "Mcp-Image": "hudpython/gmail-clone:latest",
+                        "Mcp-Image": "hudpython/hud-gmail-clone:v1.5",
+                        "Mcp-Expose-Ports": "9222,6080",
                         "Run-Id": run_id,
                     },
                 }
@@ -54,7 +59,7 @@ async def run_cloud_example():
             "metadata": {"id": "forward-series-b-deck-to-billgates"},
         }
 
-        task = TaskConfig(**task)
+        task = Task(**task)
         print(task)
 
         client = MCPClient(mcp_config=task.mcp_config)
@@ -62,12 +67,22 @@ async def run_cloud_example():
 
         agent = ClaudeAgent(
             mcp_client=client,
-            model="claude-3-7-sonnet-20250219",
+            model="claude-sonnet-4-20250514",
             allowed_tools=["anthropic_computer"],
-            initial_screenshot=True,
         )
-
         try:
+            # Phase 1: Initialize agent with task context
+            print("🔧 Initializing agent...")
+            await agent.initialize(task)
+
+            # Phase 2: Run setup tool
+            print("📋 Running setup...")
+            setup_result = await agent.call_tool(task.setup_tool)
+
+            # just wait for 500 seconds
+            await asyncio.sleep(2500)
+
+
             print("🚀 Launching cloud browser...")
             result = await agent.run(task)
             print(f"✅ Cloud task completed: {result}")
@@ -91,8 +106,10 @@ async def run_local_example():
                     "--rm",
                     "-i",
                     "-p",
-                    "8080:8080",  # VNC port for viewing
-                    "hud-browser",
+                    "9222:9222",  # VNC port for viewing
+                    "-p",
+                    "6080:6080",  # VNC port for viewing
+                    "hud-gmail-clone:v1.0",
                 ],
             }
         }
@@ -102,7 +119,6 @@ async def run_local_example():
             mcp_client=client,
             model="claude-3-7-sonnet-20250219",
             allowed_tools=["anthropic_computer"],
-            initial_screenshot=True,
         )
 
         try:

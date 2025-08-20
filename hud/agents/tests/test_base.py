@@ -20,9 +20,9 @@ from hud.tools.executors.base import BaseExecutor
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult, Trace
 
 if TYPE_CHECKING:
-    from hud.datasets import TaskConfig as Task
+    from hud.datasets import Task
 
-from hud.datasets import TaskConfig
+from hud.datasets import Task
 
 
 class MockMCPAgent(MCPAgent):
@@ -550,10 +550,10 @@ class TestMCPAgentExtended:
 
     @pytest.mark.asyncio
     async def test_run_with_task_object(self, agent_with_tools):
-        """Test running agent with TaskConfig object."""
+        """Test running agent with Task object."""
         from hud.types import MCPToolResult
 
-        task = TaskConfig(
+        task = Task(
             id="test_task",
             prompt="Click the button",
             mcp_config={"test_server": {"url": "http://localhost:8080"}},
@@ -604,7 +604,7 @@ class TestMCPAgentExtended:
         """Test task execution with setup phase error."""
         from hud.types import MCPToolResult
 
-        task = TaskConfig(
+        task = Task(
             id="test_task",
             prompt="Do something",
             mcp_config={"test_server": {"url": "http://localhost:8080"}},
@@ -632,7 +632,7 @@ class TestMCPAgentExtended:
     async def test_run_with_multiple_setup_tools(self, agent_with_tools):
         """Test task with multiple setup tools."""
 
-        task = TaskConfig(
+        task = Task(
             id="test_task",
             prompt="Test multiple setup",
             mcp_config={"test_server": {"url": "http://localhost:8080"}},
@@ -829,7 +829,7 @@ class TestMCPAgentExtended:
     @pytest.mark.asyncio
     async def test_run_with_invalid_prompt_type(self, agent_with_tools):
         """Test run with invalid prompt type raises TypeError."""
-        with pytest.raises(TypeError, match="prompt_or_task must be str or TaskConfig"):
+        with pytest.raises(TypeError, match="prompt_or_task must be str or Task"):
             await agent_with_tools.run(123)  # Invalid type
 
     @pytest.mark.asyncio
@@ -866,7 +866,7 @@ class TestMCPAgentExtended:
         """Test evaluation phase with multiple evaluation tools."""
         from hud.types import MCPToolResult
 
-        task = TaskConfig(
+        task = Task(
             id="test_task",
             prompt="Test evaluation",
             mcp_config={"test_server": {"url": "http://localhost:8080"}},
@@ -898,7 +898,7 @@ class TestMCPAgentExtended:
     async def test_trace_population_on_error(self, agent_with_tools):
         """Test that trace is populated on task execution error."""
 
-        task = TaskConfig(
+        task = Task(
             id="test_task",
             prompt="Test error",
             mcp_config={"test_server": {"url": "http://localhost:8080"}},

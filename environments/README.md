@@ -8,7 +8,7 @@ This document is a step-by-step guide for turning *any* piece of software that c
 >   *tools* the agent can invoke.
 > • MCP is simply the wire-format we use to move those tool calls back and forth
 >   (like gRPC or HTTP but JSON-RPC over stdio/Docker).
-> • FastMCP is the underlying SDK; HUD provides **HudMCP** – a thin wrapper that
+> • FastMCP is the underlying SDK; HUD provides **MCPServer** – a thin wrapper that
 >   adds SIGTERM handling, `@initialize` / `@shutdown` decorators, and easier
 >   tool registration while remaining 100 % compatible with FastMCP.
 > 
@@ -205,12 +205,12 @@ Need inspiration? Check out our reference implementations:
 
 The MCP lifecycle is *initialize → operate → shutdown* (see spec link above).
 
-### Skeleton server (HudMCP)
+### Skeleton server (MCPServer)
 
 ```python
 import sys
 import logging
-from hud.server import HudMCP
+from hud.server import MCPServer
 
 # 1️⃣  Always log to stderr – stdout is reserved for JSON-RPC
 logging.basicConfig(
@@ -220,7 +220,7 @@ logging.basicConfig(
 )
 
 # Create the server early so decorators can reference it
-mcp = HudMCP(name="My Environment")
+mcp = MCPServer(name="My Environment")
 
 # Run heavy one-time setup during MCP initialize
 @mcp.initialize
@@ -300,14 +300,14 @@ hud analyze my-environment --format markdown  # Generate documentation
 
 ### Approach 1: Simple Direct Implementation
 
-For simple environments with just a few setup/evaluate functions, you can use direct tool decorators with **HudMCP**:
+For simple environments with just a few setup/evaluate functions, you can use direct tool decorators with **MCPServer**:
 
 ```python
-from hud.server import HudMCP
+from hud.server import MCPServer
 from hud.tools.helper import mcp_intialize_wrapper
 from hud.tools import HudComputerTool
 
-mcp = HudMCP(name="my-environment")
+mcp = MCPServer(name="my-environment")
 
 @mcp.tool()
 async def setup(config: dict) -> dict:
@@ -429,7 +429,7 @@ from .evaluate import evaluate as evaluate_hub
 from hud.tools.helper import mcp_intialize_wrapper
 
 # Create MCP server
-mcp = HudMCP(name="my-environment")
+mcp = MCPServer(name="my-environment")
 
 @mcp.initialize
 async def initialize_environment(session=None, progress_token=None):
@@ -490,14 +490,14 @@ await client.call_tool("evaluate", {"name": "task_complete", "expected_count": 5
 ```python
 import asyncio
 import hud
-from hud.datasets import TaskConfig
+from hud.datasets import Task
 from hud.agents import ClaudeAgent
 from hud.clients import MCPClient
 
 async def main():
     # `trace` captures *everything* that happens and sends it to app.hud.so
     with hud.trace("local_test"):
-        task = TaskConfig(
+        task = Task(
             prompt="Complete the task",
             mcp_config={
                 "local": {

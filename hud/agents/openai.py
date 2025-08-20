@@ -22,7 +22,7 @@ from hud.tools.computer.settings import computer_settings
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult, Trace
 
 if TYPE_CHECKING:
-    from hud.datasets import TaskConfig
+    from hud.datasets import Task
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +92,7 @@ class OperatorAgent(MCPAgent):
         Remember: You are expected to complete tasks autonomously. The user trusts you to do what they asked.
         """  # noqa: E501
 
-    async def run(self, prompt_or_task: str | TaskConfig, max_steps: int = 10) -> Trace:
+    async def run(self, prompt_or_task: str | Task, max_steps: int = 10) -> Trace:
         """
         Run the agent with the given prompt or task.
 

@@ -116,7 +116,11 @@ async def sheets_cell_values(
                 logger.info("Clicked on ANSWER tab, waiting for sheet to switch...")
 
                 # Wait a bit for the sheet to switch
-                await page.wait_for_timeout(1000)
+                try:
+                    await page.wait_for_timeout(1000)
+                except Exception as timeout_error:
+                    logger.debug(f"Timeout error (continuing): {timeout_error}")
+                    await asyncio.sleep(1)
                 logger.info(f"✅ Successfully navigated to ANSWER sheet on attempt {attempt}")
                 answer_navigation_successful = True
                 break
@@ -125,7 +129,11 @@ async def sheets_cell_values(
 
                 if attempt < max_attempts:
                     logger.info(f"Waiting 500ms before retry {attempt + 1}...")
-                    await page.wait_for_timeout(500)
+                    try:
+                        await page.wait_for_timeout(500)
+                    except Exception as timeout_error:
+                        logger.debug(f"Timeout error (continuing): {timeout_error}")
+                        await asyncio.sleep(0.5)
 
         except Exception as nav_error:
             logger.error(
@@ -134,7 +142,11 @@ async def sheets_cell_values(
 
             if attempt < max_attempts:
                 logger.info(f"Waiting 2500ms before retry {attempt + 1}...")
-                await page.wait_for_timeout(2500)
+                try:
+                    await page.wait_for_timeout(2500)
+                except Exception as timeout_error:
+                    logger.debug(f"Timeout error (continuing): {timeout_error}")
+                    await asyncio.sleep(2.5)
 
     if not answer_navigation_successful:
         logger.warning(
@@ -149,7 +161,11 @@ async def sheets_cell_values(
         logger.info("Sheet grid container loaded")
         
         # Additional wait for cells to populate
-        await page.wait_for_timeout(2000)
+        try:
+            await page.wait_for_timeout(2000)
+        except Exception as timeout_error:
+            logger.debug(f"Timeout error (continuing): {timeout_error}")
+            await asyncio.sleep(2)
     except Exception as e:
         logger.warning(f"Timeout waiting for sheet to load: {str(e)}")
         # Still proceed, but with a longer fallback wait

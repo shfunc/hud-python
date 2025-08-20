@@ -15,7 +15,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from hud.server import HudMCP
+from hud.server import MCPServer
 
 # Import tools
 from .tools import PlaywrightToolWithMemory, BrowserExecutor
@@ -38,7 +38,7 @@ playwright_tool: Optional[PlaywrightToolWithMemory] = None
 browser_executor: Optional[BrowserExecutor] = None
 
 # Create Hud FastMCP instance
-mcp = HudMCP(
+mcp = MCPServer(
     name="HUD Remote Browser Environment",
     instructions="""
     This is a remote browser automation environment that connects to cloud browser providers.

@@ -66,6 +66,31 @@ class PlaywrightToolWithMemory(PlaywrightTool):
                     logger.debug(f"Page loaded: {self.page.url}")
 
             self.page.on("load", on_load)
+            
+            # Track and handle dialogs
+            async def on_dialog(dialog):
+                """Track and handle JavaScript dialogs."""
+                try:
+                    dialog_info = {
+                        "type": dialog.type,
+                        "message": dialog.message,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    logger.info(f"Dialog detected: {dialog_info}")
+                    
+                    # Add to action history
+                    self._record_action("dialog", dialog_info)
+                    
+                    # Let the base class dialog handler take care of dismissing
+                    # It's already set up in the parent class
+                except Exception as e:
+                    # Don't let dialog tracking errors cause issues
+                    logger.debug(f"Error tracking dialog: {e}")
+
+            try:
+                self.page.on("dialog", on_dialog)
+            except Exception as e:
+                logger.debug(f"Could not add dialog listener: {e}")
 
         except Exception as e:
             logger.warning(f"Failed to setup event listeners: {e}")

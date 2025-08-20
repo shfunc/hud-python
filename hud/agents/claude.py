@@ -19,7 +19,7 @@ if TYPE_CHECKING:
         BetaToolResultBlockParam,
     )
 
-    from hud.datasets import TaskConfig
+    from hud.datasets import Task
 
 import mcp.types as types
 
@@ -102,7 +102,7 @@ class ClaudeAgent(MCPAgent):
         # Track mapping from Claude tool names to MCP tool names
         self._claude_to_mcp_tool_map: dict[str, str] = {}
 
-    async def initialize(self, task: str | TaskConfig | None = None) -> None:
+    async def initialize(self, task: str | Task | None = None) -> None:
         """Initialize the agent and build tool mappings."""
         await super().initialize(task)
         # Build tool mappings after tools are discovered

@@ -19,7 +19,7 @@ from hud.agents.misc import ResponseAgent
 from hud.clients import MCPClient
 from openai import AsyncOpenAI
 from datasets import load_dataset
-from hud.datasets import run_dataset, TaskConfig
+from hud.datasets import run_dataset, Task
 from typing import Any
 
 import logging
@@ -33,14 +33,13 @@ async def run_single_task(agent_type: str = "claude", model: str | None = None, 
     dataset = load_dataset("hud-evals/SheetBench-50", split="train")
 
     with hud.trace("SheetBench Agent"):
-        task = TaskConfig(**dataset[0])
+        task = Task(**dataset[0])
 
         # Create client and agent
         client = MCPClient(mcp_config=task.mcp_config)
 
         if agent_type == "openai":
             allowed_tools = allowed_tools or ["openai_computer"]
-            openai_client = AsyncOpenAI()
             agent = OperatorAgent(
                 mcp_client=client,
                 allowed_tools=allowed_tools,

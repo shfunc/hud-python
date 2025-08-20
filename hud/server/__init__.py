@@ -1,5 +1,5 @@
 from __future__ import annotations
 
-from .server import HudMCP
+from .server import MCPServer
 
-__all__ = ["HudMCP"]
+__all__ = ["MCPServer"]

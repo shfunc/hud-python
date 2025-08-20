@@ -39,7 +39,7 @@ configure_telemetry(
 import hud
 from hud.agents import ClaudeAgent
 from hud.clients import MCPClient
-from hud.datasets import TaskConfig
+from hud.datasets import Task
 
 
 async def main():
@@ -59,7 +59,7 @@ async def main():
             "arguments": {"function": "max_number"},
         },
     }
-    task = TaskConfig(**task_dict)
+    task = Task(**task_dict)
 
     # Create client and agent
     mcp_client = MCPClient(mcp_config=task.mcp_config)

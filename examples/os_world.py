@@ -16,7 +16,7 @@ import hud
 from hud.agents import OperatorAgent
 from hud.clients import MCPClient
 from datasets import load_dataset
-from hud.datasets import run_dataset, TaskConfig
+from hud.datasets import run_dataset, Task
 
 import logging
 
@@ -31,7 +31,7 @@ async def run_single_task():
     # dataset = load_dataset("hud-evals/OSWorld-Verified-XLang", split="train")
 
     with hud.trace("OSWorld Agent"):
-        task = TaskConfig(**dataset[0])
+        task = Task(**dataset[0])
 
         # Create client and agent
         client = MCPClient(mcp_config=task.mcp_config)

@@ -17,7 +17,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 from fastmcp import Context  # for type annotations
-from hud.server import HudMCP
+from hud.server import MCPServer
 
 from .services import ServiceManager
 from .evaluators import evaluate as evaluate_hub
@@ -28,7 +28,7 @@ from .context import initialize_context
 service_manager = ServiceManager()
 
 # Create main server first so decorators can reference it
-mcp = HudMCP(
+mcp = MCPServer(
     name="HUD Browser Environment",
     instructions="""
     This is a browser automation environment with full GUI access.

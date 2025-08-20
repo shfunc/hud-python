@@ -277,7 +277,7 @@ All environments use the same XML format for tool calls:
 
 ## Dataset Format
 
-HUD Gym uses HuggingFace datasets with hud.TaskConfig format:
+HUD Gym uses HuggingFace datasets with hud.Task format:
 
 ```python
 {

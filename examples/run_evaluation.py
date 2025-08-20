@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generic HuggingFace dataset evaluation runner.
 
-This script lets you evaluate any HUD-compatible TaskConfig dataset with either
+This script lets you evaluate any HUD-compatible Task dataset with either
 Claude or OpenAI (Operator) agents.
 
 Prerequisites:
@@ -29,7 +29,7 @@ import hud
 from datasets import load_dataset
 from hud.agents import ClaudeAgent, OperatorAgent
 from hud.clients import MCPClient
-from hud.datasets import TaskConfig, run_dataset
+from hud.datasets import Task, run_dataset
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +82,7 @@ async def run_single_task(
     print("📊 Loading dataset…")
     dataset = load_dataset(dataset_name, split="train")
     with hud.trace(name=dataset[0].get("prompt", f"Task {dataset[0]['id']}")):
-        task = TaskConfig(**dataset[0])
+        task = Task(**dataset[0])
 
         client = MCPClient(mcp_config=task.mcp_config)
         agent = _build_agent(

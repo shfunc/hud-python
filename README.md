@@ -2,211 +2,195 @@
   <img src="https://raw.githubusercontent.com/hud-evals/hud-python/main/docs/logo/hud_logo.svg" alt="HUD" width="150" style="margin-bottom: 20px;"/>
 </div>
 
-Evaluate and improve agent–environment systems. Wrap software as environments, define measurable evaluations, and train with RL – locally or at scale.
+Evaluate and improve agents. Wrap software as environments, run benchmarks, and train with RL – locally or at scale.
+
+[![PyPI version](https://img.shields.io/pypi/v/hud-python)](https://pypi.org/project/hud-python/) 
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE) 
+[![Built on MCP](https://img.shields.io/badge/Built%20on-MCP-blueviolet)](https://modelcontextprotocol.io) 
+[![X Follow](https://img.shields.io/twitter/follow/hud_evals?style=social)](https://x.com/intent/user?screen_name=hud_evals)
 
 ### Are you a startup building agents?
 
 [📅 Hop on a call](https://cal.com/jay-ram-z6st6w/demo) or [📧 founders@hud.so](mailto:founders@hud.so)
 
-We're here to help with eval strategies, custom environments, or improving your agent via RL!
+## Highlights
 
-[![PyPI version](https://img.shields.io/pypi/v/hud-python)](https://pypi.org/project/hud-python/)
+- 🚀 **MCP-native connectivity** – any language model can call any HUD environment.
+- ⚡️ **Live telemetry** – inspect every tool call, observation, and reward in real time.
+- 🗂️ **Public benchmarks** – SheetBench-50, OSWorld, and more.
+- 🌱 **Reinforcement learning built-in** – Verifiers gym and ART pipelines for training.
+- 🌐 **Cloud browsers** – AnchorBrowser, Steel, BrowserBase integrations.
+- 🛠️ **Hot-reload dev loop** – edit environments live inside Cursor Agent.
 
-## What we help you do
+> | We welcome contributors and feature requests – open an issue to discuss improvements.
 
-- Environments: turn any app (browser, game, API) into a controllable environment with tools
-- Evaluations: define setup/evaluate logic and run benchmarks (e.g., SheetBench)
-- RL: train and evaluate via HUD’s Verifier-based gym (hud-vf-gym)
+## Installation
 
-```text
-Agent (LLM/Policy)  ── tool calls (MCP JSON-RPC) ──►  Environment (your software)
-                                   │                        ▲
-                                   ▼                        │
-                           HUD Client/SDK           Tools you expose (setup/evaluate/act)
+```bash
+# Core installation - MCP servers, CLI, basic tools for environment design
+pip install hud-python
+
+# Agent installation - Adds AI providers, telemetry, datasets
+pip install "hud-python[agent]"
+
+# CLI utilities (inside isolated env)
+uv tool install hud-python
+
+# From source (latest)
+git clone https://github.com/hud-evals/hud-python
+pip install -e "hud-python[dev]"
 ```
 
-MCP (Model-Context Protocol) is the wire format we use to send tool calls. You rarely “see” MCP directly – it’s just the protocol that lets any agent talk to any environment, locally or in Docker or in the cloud.
+> | See [docs.hud.so](https://docs.hud.so) for full documentation.
 
----
-
-## 1) Environments
-
-Wrap your software as an environment by exposing a small set of tools. Use **HudMCP** (a tiny wrapper around FastMCP) to register tool functions and run them in Docker so they’re reproducible and scalable. HudMCP adds handling for docker environments plus the handy `@mcp.initialize` / `@mcp.shutdown` decorators that wrap the ends of the MCP lifecycle.
-
-Minimal call example (MCP client calling a local Docker image):
+## Quick start
 
 ```python
-import asyncio
-import hud
-from hud.clients import MCPClient
-
-async def main():
-    with hud.trace("env-quickstart"):
-        client = MCPClient(mcp_config={
-            "local": {
-                "command": "docker",
-                "args": ["run","--rm","-i","hud-text-2048"]
-            }
-        })
-        # Setup 2048 board, make a move, then evaluate
-        await client.call_tool("setup", {"name": "board", "arguments": {"board_size": 4}})
-        await client.call_tool("move", {"direction": "up"})
-        result = await client.call_tool("evaluate", {"name": "max_number", "arguments": {"target": 64}})
-        print(result)
-        await client.close()
-
-asyncio.run(main())
-```
-
-Start here:
-- environments/README.md – how to build an environment (with BaseHub + tools)
-- examples/01_hello_2048.py – end-to-end hello world using the 2048 environment
-- examples/task_with_setup_eval.py – minimal setup/evaluate without an LLM
-
----
-
-## 2) Evaluations
-
-Evaluations turn tasks into measurable outcomes. Your `evaluate` tool returns a reward (0–1), a done flag, and optional info.
-
-Return shapes:
-
-```python
-from hud.tools.types import SetupResult, EvaluationResult
-
-SetupResult(content="Seeded 5 items", info={"items": 5})
-EvaluationResult(reward=0.8, done=False, content="Found 8/10 entries")
-```
-
-Recommended starting points:
-- examples/sheet_bench.py – SheetBench demo using a dataset → TaskConfig → agent run
-- environments/remote_browser – rich setup/evaluate hubs (navigate, cookies, page checks)
-
-Run with Claude (quick demo):
-
-```python
-import asyncio
-import hud
-from datasets import load_dataset
-from hud.datasets import run_dataset, TaskConfig
+import asyncio, hud, os
 from hud.clients import MCPClient
 from hud.agents import ClaudeAgent
+from hud.datasets import Task
 
-async def main():
-    # Run single task
-    dataset = load_dataset("hud-evals/SheetBench-50", split="train")
-    
-    with hud.trace("sheetbench-claude-demo"):
-        task = TaskConfig(**dataset[0])
+async def main() -> None:
+    with hud.trace("Quick Start 2048"): # All telemetry works for any MCP agent
+        task = Task(
+            prompt="Reach 64 in 2048.",
+            mcp_config={
+                "hud": {
+                    "url": "https://mcp.hud.so", # All hud environments work with any MCP client
+                    "headers": {
+                        "Authorization": f"Bearer {os.getenv('HUD_API_KEY')}",
+                        "Mcp-Image": "hudpython/hud-text-2048:v1.1"
+                    }
+                }
+            },
+            evaluate_tool={"name": "evaluate", "arguments": {"name": "max_number", "target": 64}},
+        )
+
         client = MCPClient(mcp_config=task.mcp_config)
         agent = ClaudeAgent(
             mcp_client=client,
-            model="claude-sonnet-4-20250514",
-            allowed_tools=["anthropic_computer"],
-            initial_screenshot=True,
+            model="claude-3-7-sonnet-20250219",  # requires ANTHROPIC_API_KEY
         )
-        result = await agent.run(task, max_steps=40)
-        print(f"Task: {task.prompt}")
-        print(f"Result: {result.reward}")
-        await client.close()
 
-# Or run full dataset evaluation
-async def run_full_dataset():
-    results = await run_dataset(
-        name="SheetBench-50 Evaluation",
-        dataset="hud-evals/SheetBench-50", # HuggingFace dataset name
-        agent_class=ClaudeAgent,
-        agent_config={
-            "model": "claude-sonnet-4-20250514",
-            "allowed_tools": ["anthropic_computer"],
-            "initial_screenshot": True,
-        },
-        max_concurrent=50,
-        max_steps=150,
-    )
-    print(f"Average reward: {sum(r.reward for r in results if r) / len([r for r in results if r]):.2f}")
+        result = await agent.run(task)
+        print(f"Reward: {result.reward}")
+        await client.close()
 
 asyncio.run(main())
 ```
 
-Tip: use `with hud.trace("run-name"):` to send traces to app.hud.so for debugging.
+> | Every HUD environment is MCP-based and interactable from anywhere. Requires `HUD_API_KEY` and `ANTHROPIC_API_KEY`.
 
----
+## Architecture
 
-## 3) RL (hud-vf-gym + Verifiers)
-
-HUD integrates with the Verifiers framework via `hud-vf-gym` (config-driven). A YAML config defines the agent-facing tools and maps them to MCP tools (action_mappings). You can run evaluations with the Verifiers CLI and train with GRPO.
-
-Run evals (CLI):
+![HUD architecture](docs/images/architecture.svg)
 
 ```bash
-vf-eval hud_vf_gym \
-  --model gpt-4.1-mini \
-  --env-args '{"taskset":"hud-evals/gmail-taskset","config_path":"./configs/default.yaml"}' \
-  --num-examples 5
+# Explore any HUD-compatible image
+hud analyze hudpython/hud-text-2048:v1.1
 ```
 
-Train with GRPO (programmatic):
+> | `hud analyze` launches the container, performs an MCP handshake, and lists tools/resources. Requires Docker.
+
+## Reinforcement learning
+
+```bash
+git clone https://github.com/hud-evals/hud-python
+cd hud-python
+python rl/verifiers/train_2048.py
+```
+
+![RL curve](docs/images/rl_curve.png)
+
+> | The repository ships runnable RL scripts; this example trains a policy on the 2048 environment using Verifiers.
+
+## Agent evaluation
+
+```bash
+# Evaluate full dataset from command line
+python examples/run_evaluation.py hud-evals/SheetBench-50 --full --agent claude
+
+# Or use the run_dataset API
+```
 
 ```python
-from verifiers.trainers import GRPOTrainer, GRPOConfig
-from hud_vf_gym import load_environment
+import asyncio
+from hud.datasets import run_dataset
+from hud.agents import ClaudeAgent
 
-env = load_environment(taskset="hud-evals/gmail-taskset", config_path="./configs/default.yaml")
-cfg = GRPOConfig(model_name_or_path="your-model", num_train_epochs=3, per_device_train_batch_size=4)
-trainer = GRPOTrainer(model=model, env=env, args=cfg, processing_class=tokenizer)
-trainer.train()
+results = await run_dataset(
+    name="My SheetBench-50 Evaluation",
+    dataset="hud-evals/SheetBench-50",
+    agent_class=ClaudeAgent,
+    agent_config={"model": "claude-3-7-sonnet-20250219"},
+    max_concurrent=50,
+    max_steps=50,
+)
+print(f"Average reward: {sum(r.reward for r in results) / len(results):.2f}")
 ```
-Learn more:
-- rl/README.md – overview of RL frameworks (ART and Verifiers)
-- rl/verifiers/README.md – how hud-vf-gym + Verifiers work, configs and datasets
-- rl/verifiers/configs/default.yaml (browser/computer), rl/verifiers/configs/2048.yaml (2048)
 
----
+![Trace screenshot](docs/images/trace_overview.png)
 
-## Tooling & telemetry
+> | Batch evaluation streams results to the HUD platform for analysis and leaderboard submission.
 
-### CLI Tools (`hud`)
+## Custom environments (MCP)
 
-**Installation:**
+```python
+from hud.server import MCPServer
+
+mcp = MCPServer("My Environment")
+
+@mcp.tool()
+async def click(x: int, y: int) -> None:
+    ...
+
+if __name__ == "__main__":
+    mcp.run()
+```
+
+![Debug phases](docs/images/debug_progress.png)
+
+> | Wrap any program as an MCP server with a few decorators; `hud debug` validates five phases automatically.
+
+## Leaderboards & benchmarks
+
 ```bash
-# Install globally with uv
-uv tool install hud-python
+python examples/run_evaluation.py SheetBench-50 --dataset
 ```
 
-**What's the difference?**
+![Leaderboard](docs/images/leaderboard_sheetbench.png)
 
-- **`hud debug <IMAGE>`** – 5-phase checker (startup → MCP handshake → tools → telemetry → stress).
-- **`hud analyze <IMAGE>`** – Explore tools/resources (`--format json|markdown`). Requires debug phase 3.
+> | `run_dataset` evaluates an agent on every task and uploads results for leaderboard comparison.
 
-```bash
-hud debug hudpython/hud-remote-browser:latest
-hud analyze hudpython/hud-remote-browser:latest
-```
+## CLI reference
 
-### Tracing & Debugging
+| Command | Purpose |
+|---------|---------|
+| `hud analyze <image>` | Discover tools, resources, and metadata. |
+| `hud debug <image>` | Five-phase health check of an environment. |
+| `hud mcp` | Expose analysis & debug as an MCP server. |
 
-- **Tracing**: `with hud.trace("run-name"):` - Stream any MCP-based trace to app.hud.so for debugging and visualization
+## Roadmap & community
 
----
+- Integrations with every agent.
+- Evaluation environment registry.
+- Native RL training to hud environments.
 
-## Next steps
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines. Open a PR or [issue](https://github.com/hud-evals/hud-python/issues).
 
-- environments/ – build an environment (BaseHub + tools)
-- examples/ – hello world, agent lifecycle, SheetBench
-- rl/ – RL training with ART and Verifiers frameworks
-
-Install: `pip install hud-python`  •  Issues/feedback welcome.
-
-
-[MIT License](LICENSE)
+## Citation
 
 ```bibtex
 @software{hud2025agentevalplatform,
   author = {HUD and Jay Ram and Lorenss Martinsons and Parth Patel and Oskars Putans and Govind Pimpale and Mayank Singamreddy and Nguyen Nhat Minh},
-  title = {{HUD: An Evaluation Platform for Agents}},
-  date = {2025-04},
-  url = {https://github.com/hud-evals/hud-python},
+  title  = {HUD: An Evaluation Platform for Agents},
+  date   = {2025-04},
+  url    = {https://github.com/hud-evals/hud-python},
   langid = {en}
 }
 ```
+
+## License
+
+HUD is released under the MIT License – see the [LICENSE](LICENSE) file for details.

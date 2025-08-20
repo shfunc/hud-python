@@ -16,7 +16,7 @@ The entire flow is wrapped in hud.trace() to provide RUN_ID context.
 
 import asyncio
 import hud
-from hud.datasets import TaskConfig
+from hud.datasets import Task
 from hud.agents import ClaudeAgent
 from hud.clients import MCPClient
 
@@ -40,7 +40,7 @@ async def main():
             "setup_tool": {"name": "setup", "arguments": {"name": "todo_creation_test"}},
             "evaluate_tool": {"name": "evaluate", "arguments": {"name": "todo_creation_test"}},
         }
-        task = TaskConfig(**task_dict)
+        task = Task(**task_dict)
 
         # Create MCP client with resolved config
         client = MCPClient(mcp_config=task.mcp_config)

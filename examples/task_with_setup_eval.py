@@ -17,7 +17,7 @@ This pattern is essential for:
 
 import asyncio
 import hud
-from hud.datasets import TaskConfig
+from hud.datasets import Task
 from hud.agents import ClaudeAgent
 from hud.clients import MCPClient
 
@@ -31,7 +31,7 @@ async def main():
         tasks = [
             {
                 "name": "Todo Creation Task",
-                "config": TaskConfig(
+                "config": Task(
                     prompt="Create a new todo item with the title 'Complete project' and description 'Finish the final report by Friday'",
                     mcp_config={
                         "browser": {
@@ -55,7 +55,7 @@ async def main():
             },
             {
                 "name": "Web Navigation Task",
-                "config": TaskConfig(
+                "config": Task(
                     prompt="Navigate to Wikipedia, search for 'Artificial Intelligence', and take a screenshot of the first paragraph",
                     mcp_config={
                         "browser": {
