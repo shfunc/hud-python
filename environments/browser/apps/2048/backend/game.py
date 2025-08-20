@@ -121,7 +121,7 @@ class Game2048:
         # Check if target tile is reached
         if not self.won and self.board.max() >= self.target_tile:
             self.won = True
-        
+
         # Check if game is over (no valid moves)
         # Check for empty cells
         if 0 in self.board:
@@ -153,7 +153,7 @@ class Game2048:
             "won": bool(self.won),
             "highest_tile": int(self.board.max()),
             "target_tile": self.target_tile,
-            "board_size": self.size
+            "board_size": self.size,
         }
 
     def set_board(self, board: List[List[int]], score: int = 0, moves: int = 0):
@@ -165,7 +165,7 @@ class Game2048:
 
     def reset(self, size: Optional[int] = None, target_tile: Optional[int] = None):
         """Reset the game to initial state
-        
+
         Args:
             size: Optional new board size
             target_tile: Optional new target tile
@@ -174,7 +174,7 @@ class Game2048:
             self.size = size
         if target_tile is not None:
             self.target_tile = target_tile
-            
+
         self.board = np.zeros((self.size, self.size), dtype=int)
         self.score = 0
         self.game_over = False
@@ -185,23 +185,18 @@ class Game2048:
 
     def can_move(self) -> dict:
         """Check which moves are valid"""
-        valid_moves = {
-            "up": False,
-            "down": False,
-            "left": False,
-            "right": False
-        }
-        
+        valid_moves = {"up": False, "down": False, "left": False, "right": False}
+
         if self.game_over:
             return valid_moves
-            
+
         # Test each direction without modifying the actual board
         original_board = self.board.copy()
-        
+
         for direction in ["up", "down", "left", "right"]:
             test_board = original_board.copy()
             self.board = test_board
-            
+
             # Try the move
             if direction == "left":
                 for i in range(self.size):
@@ -209,7 +204,7 @@ class Game2048:
                     if not np.array_equal(self.board[i], compressed):
                         valid_moves[direction] = True
                         break
-                        
+
             elif direction == "right":
                 for i in range(self.size):
                     reversed_row = self.board[i][::-1]
@@ -217,7 +212,7 @@ class Game2048:
                     if not np.array_equal(reversed_row, compressed):
                         valid_moves[direction] = True
                         break
-                        
+
             elif direction == "up":
                 for j in range(self.size):
                     column = self.board[:, j]
@@ -225,7 +220,7 @@ class Game2048:
                     if not np.array_equal(column, compressed):
                         valid_moves[direction] = True
                         break
-                        
+
             elif direction == "down":
                 for j in range(self.size):
                     column = self.board[:, j][::-1]
@@ -233,7 +228,7 @@ class Game2048:
                     if not np.array_equal(column, compressed):
                         valid_moves[direction] = True
                         break
-        
+
         # Restore original board
         self.board = original_board
         return valid_moves

@@ -92,7 +92,6 @@ class ServiceManager:
         await asyncio.gather(vnc_ready, websockify_ready)
         logger.info("noVNC available at: http://localhost:8080/vnc.html")
 
-
     async def launch_app(self, app_name: str) -> Dict[str, Any]:
         """Launch a specific app dynamically.
 
@@ -140,7 +139,7 @@ class ServiceManager:
             # Wait for both ports in parallel
             await asyncio.gather(
                 self._wait_for_port(frontend_port, f"app '{app_name}' frontend", timeout=60),
-                self._wait_for_port(backend_port, f"app '{app_name}' backend", timeout=60)
+                self._wait_for_port(backend_port, f"app '{app_name}' backend", timeout=60),
             )
 
             logger.info(

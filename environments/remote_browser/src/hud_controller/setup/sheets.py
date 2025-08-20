@@ -19,12 +19,12 @@ logger = logging.getLogger(__name__)
 
 async def navigate_to_google_sheet(page, sheet_url: str, max_attempts: int = 3):
     """Navigate to a Google Sheet with retry logic and loading issue handling.
-    
+
     Args:
         page: Playwright page object
         sheet_url: URL of the Google Sheet
         max_attempts: Maximum number of navigation attempts
-        
+
     Returns:
         bool: True if navigation was successful, False otherwise
     """
@@ -32,28 +32,28 @@ async def navigate_to_google_sheet(page, sheet_url: str, max_attempts: int = 3):
         try:
             if attempt > 0:
                 logger.info(f"Retrying navigation (attempt {attempt + 1}/{max_attempts})")
-            
+
             # Navigate to the sheet
             await page.goto(sheet_url, wait_until="load", timeout=45000)
-            
+
             # Wait for sheet to load
             try:
                 await page.wait_for_selector(".grid-container", timeout=20000)
                 logger.info("Sheet loaded successfully")
-                
+
                 # Check for loading issue popup
                 await page.wait_for_timeout(2000)  # Give popup time to appear
-                
+
                 if await page.locator('text="Loading issue"').is_visible(timeout=1000):
                     logger.warning("Loading issue popup detected, reloading page")
                     await page.reload(wait_until="networkidle", timeout=30000)
-                    
+
                     # Wait for sheet to load again after reload
                     await page.wait_for_selector(".grid-container", timeout=20000)
                     logger.info("Sheet reloaded successfully")
-                
+
                 return True  # Success
-                
+
             except Exception as e:
                 if attempt < max_attempts - 1:
                     logger.warning("Timeout waiting for sheet to load, will retry with refresh")
@@ -61,7 +61,7 @@ async def navigate_to_google_sheet(page, sheet_url: str, max_attempts: int = 3):
                 else:
                     logger.warning("Timeout waiting for sheet to fully load after all attempts")
                     return False
-        
+
         except Exception as e:
             if attempt < max_attempts - 1:
                 logger.warning(f"Navigation failed: {str(e)}, retrying...")
@@ -69,7 +69,7 @@ async def navigate_to_google_sheet(page, sheet_url: str, max_attempts: int = 3):
             else:
                 logger.error(f"Navigation failed after all attempts: {str(e)}")
                 raise
-    
+
     return False
 
 
@@ -235,7 +235,7 @@ async def sheets_from_xlsx(
         if playwright_tool and hasattr(playwright_tool, "page") and playwright_tool.page:
             page = playwright_tool.page
             logger.info(f"Navigating to sheet: {sheet_url}")
-            
+
             # Use the unified navigation function
             await navigate_to_google_sheet(page, sheet_url, max_attempts=3)
 
@@ -324,7 +324,7 @@ async def sheets_from_bytes(
         if playwright_tool and hasattr(playwright_tool, "page") and playwright_tool.page:
             page = playwright_tool.page
             logger.info(f"Navigating to sheet: {sheet_url}")
-            
+
             # Use the unified navigation function
             await navigate_to_google_sheet(page, sheet_url, max_attempts=2)
 

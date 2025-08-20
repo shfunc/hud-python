@@ -39,6 +39,7 @@ class MCPAgent(ABC):
         initial_screenshot: bool = False,
         max_screenshot_history: int = 3,
         append_tool_system_prompt: bool = True,
+        dataset_system_prompt: str | None = None,
         custom_system_prompt: str | None = None,
         lifecycle_tools: list[str] | None = None,
         append_setup_content: bool = False,
@@ -54,6 +55,7 @@ class MCPAgent(ABC):
             initial_screenshot: Whether to capture screenshot before first prompt
             max_screenshot_history: Maximum number of screenshots to keep in context
             append_tool_system_prompt: Whether to append available tools to system prompt
+            dataset_system_prompt: System prompt from dataset (used if custom_system_prompt is None)
             custom_system_prompt: Custom system prompt to use
             lifecycle_tools: List of tool names to use for lifecycle tools
         """
@@ -68,6 +70,7 @@ class MCPAgent(ABC):
         self.initial_screenshot = initial_screenshot
         self.max_screenshot_history = max_screenshot_history
         self.append_tool_system_prompt = append_tool_system_prompt
+        self.dataset_system_prompt = dataset_system_prompt
         self.custom_system_prompt = custom_system_prompt
         self.append_setup_content = append_setup_content
 
@@ -106,21 +109,21 @@ class MCPAgent(ABC):
         """Initialize the agent with task-specific configuration."""
         # Import here to avoid circular imports
         from hud.datasets import Task
-        
+
         # Create client if needed
         if self.mcp_client is None and isinstance(task, Task) and task.mcp_config:
             from hud.clients import MCPClient
-            
+
             self.mcp_client = MCPClient(mcp_config=task.mcp_config)
             self._auto_created_client = True
             logger.info("Auto-created MCPClient from task.mcp_config")
-        
+
         # Ensure we have a client
         if self.mcp_client is None:
             raise ValueError(
                 "No MCPClient. Please provide one in __init__ or pass a Task with mcp_config."
             )
-        
+
         # Initialize client if needed
         await self.mcp_client.initialize()
 
@@ -153,9 +156,21 @@ class MCPAgent(ABC):
         return [tool for tool in self._available_tools if tool.name not in lifecycle_tool_names]
 
     def get_system_prompt(self) -> str:
-        """Generate system prompt with optional tool information."""
-        base_prompt = self.custom_system_prompt or "You are a helpful assistant."
+        """Generate system prompt by combining base/custom with dataset prompt.
 
+        Returns: (base OR custom) + dataset_prompt + tools
+        """
+        # Start with base or custom prompt
+        if self.custom_system_prompt:
+            prompt = self.custom_system_prompt
+        else:
+            prompt = "You are an assistant that can use tools to help the user. You will be given a task and you will need to use the tools to complete the task."
+
+        # Append dataset prompt if available
+        if self.dataset_system_prompt:
+            prompt = f"{prompt}\n\n{self.dataset_system_prompt}"
+
+        # Append tool descriptions if enabled
         if self.append_tool_system_prompt and self._available_tools:
             tool_descriptions = []
             for tool in self._available_tools:
@@ -167,9 +182,9 @@ class MCPAgent(ABC):
             tools_prompt = "\n\nYou have access to the following tools:\n" + "\n".join(
                 tool_descriptions
             )
-            return base_prompt + tools_prompt
+            return prompt + tools_prompt
 
-        return base_prompt
+        return prompt
 
     async def call_tool(self, tool_call: MCPToolCall | None = None) -> MCPToolResult:
         """
@@ -222,7 +237,9 @@ class MCPAgent(ABC):
             except TimeoutError as e:
                 logger.error("Tool execution timed out: %s", e)
                 try:
-                    await self.mcp_client.close()
+                    # Check if client has close method (concrete implementations have it)
+                    if hasattr(self.mcp_client, "close"):
+                        await self.mcp_client.close()  # type: ignore[attr-defined]
                 except Exception as close_err:
                     logger.debug("Failed to close MCP client cleanly: %s", close_err)
                 raise
@@ -235,7 +252,7 @@ class MCPAgent(ABC):
         """Check if any computer control tools are available."""
         computer_tools = {"computer", "computer_anthropic", "computer_openai", "screenshot"}
         return any(tool.name in computer_tools for tool in self._available_tools)
-    
+
     async def cleanup(self) -> None:
         """Cleanup resources."""
         if self._auto_created_client and self.mcp_client:
@@ -455,7 +472,9 @@ class MCPAgent(ABC):
                         decision = "STOP"
                         if self.response_agent is not None and response.content:
                             try:
-                                decision = await self.response_agent.determine_response(response.content)  # noqa: E501
+                                decision = await self.response_agent.determine_response(
+                                    response.content
+                                )  # noqa: E501
                             except Exception as e:
                                 logger.warning("ResponseAgent failed: %s", e)
                         if decision == "STOP":

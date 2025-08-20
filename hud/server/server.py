@@ -1,13 +1,14 @@
 """HUD server helpers."""
+
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import signal
 import sys
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
-import logging
 
 import anyio
 from fastmcp.server.server import FastMCP, Transport
@@ -18,6 +19,7 @@ if TYPE_CHECKING:
 __all__ = ["MCPServer"]
 
 logger = logging.getLogger(__name__)
+
 
 def _run_with_sigterm(coro_fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
     """Run *coro_fn* via anyio.run() and cancel on SIGTERM (POSIX)."""
@@ -34,10 +36,12 @@ def _run_with_sigterm(coro_fn: Callable[..., Any], *args: Any, **kwargs: Any) ->
             tg.start_soon(coro_fn, *args, **kwargs)
 
             if stop_evt is not None:
+
                 async def _watch() -> None:
                     logger.info("Waiting for SIGTERM")
                     await stop_evt.wait()
                     tg.cancel_scope.cancel()
+
                 tg.start_soon(_watch)
 
     anyio.run(_runner)
@@ -63,6 +67,7 @@ class MCPServer(FastMCP):
 
         # Inject custom lifespan if user did not supply one
         if "lifespan" not in fastmcp_kwargs:
+
             @asynccontextmanager
             async def _lifespan(_: Any) -> AsyncGenerator[dict[str, Any], None]:
                 try:
@@ -82,6 +87,7 @@ class MCPServer(FastMCP):
         def decorator(func: Callable) -> Callable:
             self._initializer_fn = func
             return func
+
         return decorator(fn) if fn else decorator
 
     # Shutdown decorator: runs after server stops
@@ -90,6 +96,7 @@ class MCPServer(FastMCP):
         def decorator(func: Callable) -> Callable:
             self._shutdown_fn = func
             return func
+
         return decorator(fn) if fn else decorator
 
     # Run with SIGTERM handling and custom initialization
@@ -104,6 +111,7 @@ class MCPServer(FastMCP):
 
         if self._initializer_fn is not None:
             from hud.server.helper import mcp_intialize_wrapper
+
             mcp_intialize_wrapper(self._initializer_fn)
 
         async def _bootstrap() -> None:

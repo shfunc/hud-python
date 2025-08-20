@@ -13,9 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 # Configure logging to stderr to avoid stdio contamination
-logging.basicConfig(
-    level=logging.INFO, format="[%(asctime)s] 2048: %(message)s", stream=sys.stderr
-)
+logging.basicConfig(level=logging.INFO, format="[%(asctime)s] 2048: %(message)s", stream=sys.stderr)
 
 # Global variables to track processes
 frontend_process: Optional[subprocess.Popen] = None

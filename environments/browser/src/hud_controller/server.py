@@ -37,6 +37,7 @@ mcp = MCPServer(
     """,
 )
 
+
 # The decorator intercepts the MCP initialization to provide session and progress_token
 @mcp.initialize
 async def initialize_environment(session=None, progress_token=None):
@@ -60,20 +61,20 @@ async def initialize_environment(session=None, progress_token=None):
 
     try:
         await send_progress(10, "Starting core services...")
-        
+
         # Start ONLY core services (X11, VNC) - NO app launching
         await service_manager.start_services()
         await send_progress(20, "X11 server started")
-        
+
         # Wait for X11 to be ready
         await service_manager.wait_for_x11()
         await send_progress(30, "X11 ready")
-        
+
         # Start VNC and wait for it
         await service_manager.wait_for_vnc()
         vnc_message = {"message": "VNC server ready", "live_url": "http://localhost:8080/vnc.html"}
         await send_progress(50, json.dumps(vnc_message))
-        
+
         # Initialize browser tools
         await send_progress(60, "Initializing browser tools...")
         from hud.tools import (
@@ -82,33 +83,32 @@ async def initialize_environment(session=None, progress_token=None):
             AnthropicComputerTool,
             OpenAIComputerTool,
         )
-        
+
         # Store playwright tool instance for browser launch
         playwright_tool = PlaywrightTool()
         await playwright_tool._ensure_browser()
         await send_progress(70, "Browser ready...")
-        
+
         # Create context and set on hubs
         global_context = initialize_context(service_manager, playwright_tool)
         setup_hub.env = global_context
         evaluate_hub.env = global_context
-        
+
         # Try without proxy first to match text_2048 and remote_browser pattern
         mcp.mount(setup_hub)
         mcp.mount(evaluate_hub)
         logger.info("Mounted setup and evaluate hubs")
-        
-        
+
         await send_progress(80, "Tools registered...")
-        
+
         # Register interaction tools
         mcp.add_tool(HudComputerTool())
         mcp.add_tool(AnthropicComputerTool())
         mcp.add_tool(OpenAIComputerTool())
         mcp.add_tool(playwright_tool)
-        
+
         await send_progress(100, "Environment ready!")
-        
+
     except Exception as e:
         logger.error(f"Initialization failed: {e}")
         if progress_token and session:
@@ -175,8 +175,8 @@ async def launch_app(ctx: Context, app_name: str) -> str:
     await ctx.info(f"Launching app: {app_name}")
 
     app_info = await service_manager.launch_app(app_name)
-    app_url = app_info['url']
-    
+    app_url = app_info["url"]
+
     # Automatically navigate to the app after launching
     # Get the playwright tool from global context to navigate
     global_context = get_global_context()
@@ -188,7 +188,7 @@ async def launch_app(ctx: Context, app_name: str) -> str:
             return f"Launched {app_name} at {app_url} and navigated to it"
         except Exception as e:
             logger.warning(f"Could not auto-navigate to app: {e}")
-    
+
     return f"Launched {app_name} at {app_url}"
 
 

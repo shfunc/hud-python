@@ -102,7 +102,11 @@ class TodoCompositeWeightedProblem:
             "arguments": {
                 "evaluators": [
                     {"name": "todo_completed", "arguments": {"expected_count": 2}, "weight": 0.6},
-                    {"name": "todo_exists", "arguments": {"title": "Important task"}, "weight": 0.4},
+                    {
+                        "name": "todo_exists",
+                        "arguments": {"title": "Important task"},
+                        "weight": 0.4,
+                    },
                 ]
             },
         }

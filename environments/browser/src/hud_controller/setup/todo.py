@@ -28,20 +28,18 @@ async def todo_seed(ctx: Context, num_items: int = 5):
         if env.playwright:
             await env.playwright.page.reload()
             import asyncio
+
             await asyncio.sleep(0.5)  # Wait for page to reload
 
         return SetupResult(
             content=f"Seeded database with test data",
             info={
                 "items_added": result.get("items_added", num_items),
-            }
+            },
         )
     except Exception as e:
         logger.error(f"todo_seed failed: {e}")
-        return SetupResult(
-            content=f"Failed to seed database: {str(e)}",
-            isError=True
-        )
+        return SetupResult(content=f"Failed to seed database: {str(e)}", isError=True)
 
 
 @setup.tool("todo_reset")
@@ -56,15 +54,10 @@ async def todo_reset(ctx: Context):
         env = setup.env  # Get BrowserEnvironmentContext from hub
         result = await env.call_app_api("todo", "/api/eval/reset", method="DELETE")
 
-        return SetupResult(
-            content="Database reset to empty state"
-        )
+        return SetupResult(content="Database reset to empty state")
     except Exception as e:
         logger.error(f"todo_reset failed: {e}")
-        return SetupResult(
-            content=f"Failed to reset database: {str(e)}",
-            isError=True
-        )
+        return SetupResult(content=f"Failed to reset database: {str(e)}", isError=True)
 
 
 @setup.tool("todo_custom_seed")
@@ -83,9 +76,7 @@ async def todo_custom_seed(ctx: Context, items: List[Dict[str, Any]]):
         for item in items:
             formatted_item = {
                 "title": item.get("title", ""),
-                "description": item.get(
-                    "description", ""
-                ),  # Add empty description if not provided
+                "description": item.get("description", ""),  # Add empty description if not provided
                 "completed": item.get("completed", False),
             }
             formatted_items.append(formatted_item)
@@ -100,14 +91,11 @@ async def todo_custom_seed(ctx: Context, items: List[Dict[str, Any]]):
             content=f"Seeded database with {len(items)} custom items",
             info={
                 "items_added": result.get("items_added", len(items)),
-            }
+            },
         )
     except Exception as e:
         logger.error(f"todo_custom_seed failed: {e}")
-        return SetupResult(
-            content=f"Failed to seed custom items: {str(e)}",
-            isError=True
-        )
+        return SetupResult(content=f"Failed to seed custom items: {str(e)}", isError=True)
 
 
 @setup.tool("todo_navigate")
@@ -134,16 +122,10 @@ async def todo_navigate(ctx: Context, url: str = None):
                 content=f"Navigated to Todo app at {url}",
                 info={
                     "url": url,
-                }
+                },
             )
         else:
-            return SetupResult(
-                content="Playwright tool not available for navigation",
-                isError=True
-            )
+            return SetupResult(content="Playwright tool not available for navigation", isError=True)
     except Exception as e:
         logger.error(f"todo_navigate failed: {e}")
-        return SetupResult(
-            content=f"Failed to navigate to Todo app: {str(e)}",
-            isError=True
-        )
+        return SetupResult(content=f"Failed to navigate to Todo app: {str(e)}", isError=True)

@@ -50,9 +50,7 @@ class TestTaskExtended:
             MCPToolCall(name="configure", arguments={"mode": "test"}),
         ]
 
-        task = Task(
-            prompt="Multi-setup task", mcp_config={"test": True}, setup_tool=setup_tools
-        )
+        task = Task(prompt="Multi-setup task", mcp_config={"test": True}, setup_tool=setup_tools)
 
         assert isinstance(task.setup_tool, list)
         assert len(task.setup_tool) == 2

@@ -17,8 +17,9 @@ if TYPE_CHECKING:
     from langchain.schema.language_model import BaseLanguageModel
     from langchain_core.tools import BaseTool
 
-from .base import MCPAgent
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult
+
+from .base import MCPAgent
 
 logger = logging.getLogger(__name__)
 

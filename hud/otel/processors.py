@@ -46,27 +46,29 @@ class HudEnrichmentProcessor(SpanProcessor):
             # Check what type of step this is and increment appropriate counters
             if span.is_recording():
                 step_type = self._get_step_type(span)
-                
+
                 if step_type == "agent":
                     # Increment agent steps
                     new_agent_count = increment_agent_steps()
                     span.set_attribute("hud.agent_steps", new_agent_count)
                     logger.debug("Incremented agent steps to %d", new_agent_count)
-                    
+
                 elif step_type == "base_mcp":
                     # Increment base MCP steps
                     new_base_count = increment_base_mcp_steps()
                     span.set_attribute("hud.base_mcp_steps", new_base_count)
                     logger.debug("Incremented base MCP steps to %d", new_base_count)
-                    
+
                 elif step_type == "mcp_tool":
                     # Increment both base MCP and MCP tool steps
                     new_base_count = increment_base_mcp_steps()
                     new_tool_count = increment_mcp_tool_steps()
                     span.set_attribute("hud.base_mcp_steps", new_base_count)
                     span.set_attribute("hud.mcp_tool_steps", new_tool_count)
-                    logger.debug("Incremented MCP steps to base=%d, tool=%d", new_base_count, new_tool_count)
-                
+                    logger.debug(
+                        "Incremented MCP steps to base=%d, tool=%d", new_base_count, new_tool_count
+                    )
+
                 # Always set all current step counts on the span
                 span.set_attribute("hud.base_mcp_steps", get_base_mcp_steps())
                 span.set_attribute("hud.mcp_tool_steps", get_mcp_tool_steps())
@@ -77,7 +79,7 @@ class HudEnrichmentProcessor(SpanProcessor):
 
     def _get_step_type(self, span: Span) -> str | None:
         """Determine what type of step this span represents.
-        
+
         Returns:
             'base_mcp' for any MCP span
             'mcp_tool' for MCP tool calls (tools/call.mcp)
@@ -87,21 +89,21 @@ class HudEnrichmentProcessor(SpanProcessor):
         # Check span attributes
         attrs = span.attributes or {}
         span_name = span.name
-        
+
         # Check for agent steps (instrumented with span_type="agent")
         if attrs.get("category") == "agent":
             return "agent"
-        
+
         # Check span name pattern for MCP calls
         if span_name:
             # tools/call.mcp is an mcp_tool step
             if span_name == "tools/call.mcp":
                 return "mcp_tool"
-            
+
             # Any other .mcp suffixed span is a base MCP step
             elif span_name.endswith(".mcp"):
                 return "base_mcp"
-        
+
         return None
 
     def on_end(self, span: ReadableSpan) -> None:

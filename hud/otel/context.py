@@ -19,8 +19,8 @@ if TYPE_CHECKING:
     from collections.abc import Generator
     from types import TracebackType
 
-from hud.shared import make_request, make_request_sync
 from hud.settings import settings
+from hud.shared import make_request, make_request_sync
 from hud.utils.async_utils import fire_and_forget
 
 logger = logging.getLogger(__name__)
@@ -77,7 +77,6 @@ def is_root_trace() -> bool:
 
     # Fallback to contextvars
     return is_root_trace_var.get()
-
 
 
 def get_base_mcp_steps() -> int:
@@ -249,12 +248,12 @@ async def _update_task_status_async(
         metadata = {}
         if trace_name:
             metadata["trace_name"] = trace_name
-        
+
         # Include all three step counts in metadata
         metadata["base_mcp_steps"] = get_base_mcp_steps()
         metadata["mcp_tool_steps"] = get_mcp_tool_steps()
         metadata["agent_steps"] = get_agent_steps()
-        
+
         if metadata:
             data["metadata"] = metadata
 
@@ -312,12 +311,12 @@ def _update_task_status_sync(
         metadata = {}
         if trace_name:
             metadata["trace_name"] = trace_name
-        
+
         # Include all three step counts in metadata
         metadata["base_mcp_steps"] = get_base_mcp_steps()
         metadata["mcp_tool_steps"] = get_mcp_tool_steps()
         metadata["agent_steps"] = get_agent_steps()
-        
+
         if metadata:
             data["metadata"] = metadata
 

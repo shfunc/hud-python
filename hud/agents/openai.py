@@ -16,10 +16,11 @@ from openai.types.responses import (
 )
 
 import hud
-from .base import MCPAgent
 from hud.settings import settings
 from hud.tools.computer.settings import computer_settings
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult, Trace
+
+from .base import MCPAgent
 
 if TYPE_CHECKING:
     from hud.datasets import Task
@@ -77,6 +78,13 @@ class OperatorAgent(MCPAgent):
 
         self.model_name = "openai-" + self.model
 
+        # Log if dataset system prompt is being used
+        if hasattr(self, "dataset_system_prompt") and self.dataset_system_prompt:
+            logger.info(
+                "OperatorAgent using dataset system prompt (length: %d chars)",
+                len(self.dataset_system_prompt),
+            )
+
         # Base system prompt for autonomous operation
         self.base_system_prompt = """
         You are an autonomous computer-using agent. Follow these guidelines:
@@ -90,7 +98,7 @@ class OperatorAgent(MCPAgent):
         7. Be decisive and action-oriented. Complete the requested task fully.
 
         Remember: You are expected to complete tasks autonomously. The user trusts you to do what they asked.
-        """  # noqa: E501
+        """.strip()  # noqa: E501
 
     async def run(self, prompt_or_task: str | Task, max_steps: int = 10) -> Trace:
         """
@@ -171,10 +179,15 @@ class OperatorAgent(MCPAgent):
 
             input_param: ResponseInputParam = [{"role": "user", "content": input_content}]  # type: ignore[reportUnknownMemberType]
 
-            # Combine base system prompt with any custom system prompt
-            full_instructions = self.base_system_prompt
+            # Combine system prompts: (base OR custom) + dataset_prompt
             if self.custom_system_prompt:
-                full_instructions = f"{self.custom_system_prompt}\n\n{full_instructions}"
+                full_instructions = self.custom_system_prompt
+            else:
+                full_instructions = self.base_system_prompt
+
+            # Append dataset prompt if available
+            if hasattr(self, "dataset_system_prompt") and self.dataset_system_prompt:
+                full_instructions = f"{full_instructions}\n\n{self.dataset_system_prompt}"
 
             response = await self.openai_client.responses.create(
                 model=self.model,
@@ -182,7 +195,7 @@ class OperatorAgent(MCPAgent):
                 input=input_param,
                 instructions=full_instructions,
                 truncation="auto",
-                reasoning={"summary": "auto"},
+                reasoning={"summary": "auto"},  # type: ignore[arg-type]
             )
         else:
             # Follow-up step - check if this is user input or tool result

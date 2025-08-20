@@ -121,6 +121,51 @@ class Task(BaseModel):
         return substitute_in_value(v)
 
 
+async def fetch_system_prompt_from_dataset(dataset_id: str) -> str | None:
+    """
+    Fetch system_prompt.txt from a HuggingFace dataset repository.
+    
+    Args:
+        dataset_id: HuggingFace dataset identifier (e.g., "hud-evals/SheetBench-50")
+    
+    Returns:
+        System prompt text if found, None otherwise
+    """
+    try:
+        # Import here to avoid unnecessary dependency
+        from huggingface_hub import hf_hub_download
+        from huggingface_hub.errors import EntryNotFoundError
+        
+        # Try to download the system_prompt.txt file
+        try:
+            file_path = hf_hub_download(
+                repo_id=dataset_id,
+                filename="system_prompt.txt",
+                repo_type="dataset"
+            )
+            
+            # Read and return the content
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if content:
+                    logger.info("Loaded system prompt from %s (length: %d chars)", dataset_id, len(content))
+                    return content
+                else:
+                    logger.warning("System prompt file is empty in %s", dataset_id)
+                    return None
+                    
+        except EntryNotFoundError:
+            logger.debug("No system_prompt.txt found in dataset %s", dataset_id)
+            return None
+            
+    except ImportError:
+        logger.warning("huggingface_hub not installed. Install it to fetch system prompts from datasets.")
+        return None
+    except Exception as e:
+        logger.error("Error fetching system prompt from %s: %s", dataset_id, e)
+        return None
+
+
 async def run_dataset(
     name: str,
     dataset: str | Dataset | list[dict[str, Any]],
@@ -131,6 +176,7 @@ async def run_dataset(
     max_steps: int = 40,
     split: str = "train",
     auto_respond: bool = False,
+    custom_system_prompt: str | None = None,
 ) -> list[Any]:
     """
     Run all tasks in a dataset with automatic job tracking.
@@ -140,11 +186,12 @@ async def run_dataset(
         dataset: HuggingFace dataset identifier (e.g. "hud-evals/SheetBench-50"),
                 Dataset object, OR list of Task objects
         agent_class: Agent class to instantiate (e.g., ClaudeAgent)
-        agent_config: Configuration for agent (model, etc.)
+        agent_config: Configuration/kwargs for agent (model, etc.)
         max_concurrent: Maximum parallel task execution
         metadata: Optional metadata for the job
         max_steps: Maximum steps per task
         split: Dataset split to use when loading from string (default: "train")
+        auto_respond: Whether to use auto-response agent
 
     Returns:
         List of results from agent.run() in dataset order
@@ -170,18 +217,31 @@ async def run_dataset(
     import hud
 
     dataset_link = None
+    config = agent_config or {}
 
     # Load dataset from string if needed
     if isinstance(dataset, str):
         logger.info("Loading dataset %s from HuggingFace...", dataset)
         dataset_link = dataset
+
+        # Always try to fetch system prompt from dataset
+        dataset_system_prompt = await fetch_system_prompt_from_dataset(dataset)
+        if dataset_system_prompt:
+            logger.info("Using system prompt from dataset (length: %d chars)", len(dataset_system_prompt))
+
+        if custom_system_prompt:
+            config.update({"custom_system_prompt": custom_system_prompt})
+        
+        if dataset_system_prompt:
+            config.update({"dataset_system_prompt": dataset_system_prompt})
+
+        # Load dataset from HuggingFace
         dataset = cast("Dataset", load_dataset(dataset, split=split))
 
     # Create job context
     job_metadata = metadata or {}
     job_metadata["agent_class"] = agent_class.__name__
-    if agent_config:
-        job_metadata["agent_config"] = agent_config
+    job_metadata["agent_config"] = config
 
     # Extract dataset verification info if available
     if isinstance(dataset, Dataset) and not dataset_link:
@@ -203,7 +263,7 @@ async def run_dataset(
                     # Convert dict to Task here, at trace level
                     task = Task(**task_dict)
 
-                    agent = agent_class(**(agent_config or {}))
+                    agent = agent_class(**(config or {}))
 
                     if auto_respond:
                         agent.response_agent = ResponseAgent()

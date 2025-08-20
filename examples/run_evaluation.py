@@ -26,9 +26,11 @@ import logging
 from typing import Any, Literal
 
 import hud
-from datasets import load_dataset
+from datasets import load_dataset, Dataset
 from hud.agents import ClaudeAgent, OperatorAgent
-from hud.datasets import Task, run_dataset
+from hud.agents.misc.response_agent import ResponseAgent
+from hud.clients import MCPClient
+from hud.datasets import Task, fetch_system_prompt_from_dataset, run_dataset
 
 logger = logging.getLogger(__name__)
 
@@ -37,11 +39,13 @@ logger = logging.getLogger(__name__)
 # Agent factory helpers
 # ---------------------------------------------------------------------------
 
+
 def _build_agent(
     agent_type: Literal["claude", "openai"],
     *,
     model: str | None = None,
     allowed_tools: list[str] | None = None,
+    dataset_system_prompt: str | None = None,
 ) -> ClaudeAgent | OperatorAgent:
     """Create and return the requested agent type."""
 
@@ -50,6 +54,8 @@ def _build_agent(
 
         return OperatorAgent(
             allowed_tools=allowed_tools,
+            dataset_system_prompt=dataset_system_prompt,
+            response_agent=ResponseAgent(),
         )
 
     # Fallback Claude agent (Anthropic)
@@ -59,12 +65,15 @@ def _build_agent(
     return ClaudeAgent(
         model=model,
         allowed_tools=allowed_tools,
+        dataset_system_prompt=dataset_system_prompt,
+        response_agent=ResponseAgent(),
     )
 
 
 # ---------------------------------------------------------------------------
 # Single-task runner
 # ---------------------------------------------------------------------------
+
 
 async def run_single_task(
     dataset_name: str,
@@ -77,13 +86,22 @@ async def run_single_task(
 
     print("📊 Loading dataset…")
     dataset = load_dataset(dataset_name, split="train")
-    with hud.trace(name=dataset[0].get("prompt", f"Task {dataset[0]['id']}")):
-        task = Task(**dataset[0])
 
+    # Get first task from dataset
+    first_task = dataset[0]  # type: ignore[index]
+    task_prompt = first_task.get("prompt", f"Task {first_task.get('id', 0)}")  # type: ignore[attr-defined]
+
+    # Get hud official system prompt for this dataset
+    dataset_system_prompt = await fetch_system_prompt_from_dataset(dataset_name)
+
+    with hud.trace(name=task_prompt):
+        task = TaskConfig(**first_task)  # type: ignore[arg-type]
+        client = MCPClient(mcp_config=task.mcp_config)
         agent = _build_agent(
             agent_type,
             model=model,
             allowed_tools=allowed_tools,
+            dataset_system_prompt=dataset_system_prompt,
         )
         print(task.prompt)
         result = await agent.run(task, max_steps=40)
@@ -93,6 +111,7 @@ async def run_single_task(
 # ---------------------------------------------------------------------------
 # Full-dataset runner
 # ---------------------------------------------------------------------------
+
 
 async def run_full_dataset(
     dataset_name: str,
@@ -105,7 +124,7 @@ async def run_full_dataset(
 ) -> list[Any]:
     """Run evaluation across the entire dataset using hud.datasets.run_dataset."""
 
-    # Build agent class + config for run_dataset – we pass the *class* and a minimal
+    # Build agent class + config for run_dataset – we pass the *class* and a minimal
     # config dict, run_dataset will create a fresh agent per task.
     if agent_type == "openai":
         agent_class = OperatorAgent
@@ -128,12 +147,14 @@ async def run_full_dataset(
         max_concurrent=max_concurrent,
         metadata={"dataset": dataset_name},
         max_steps=max_steps,
+        auto_respond=True,
     )
 
 
 # ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
+
 
 def parse_args() -> argparse.Namespace:  # type: ignore[valid-type]
     parser = argparse.ArgumentParser(description="Generic HUD dataset evaluation runner")

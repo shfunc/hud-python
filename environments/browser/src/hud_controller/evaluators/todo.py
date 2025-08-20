@@ -11,10 +11,10 @@ logger = logging.getLogger(__name__)
 @evaluate.tool("todo_completed")
 async def todo_completed(ctx: Context, expected_count: int):
     """Check if expected number of todos are completed.
-    
+
     Args:
         expected_count: The expected number of completed todos
-        
+
     Returns:
         Evaluation result
     """
@@ -27,9 +27,7 @@ async def todo_completed(ctx: Context, expected_count: int):
 
         success = completed_count >= expected_count
         reward = (
-            1.0
-            if success
-            else (completed_count / expected_count if expected_count > 0 else 0.0)
+            1.0 if success else (completed_count / expected_count if expected_count > 0 else 0.0)
         )
 
         return EvaluationResult(
@@ -59,10 +57,10 @@ async def todo_completed(ctx: Context, expected_count: int):
 @evaluate.tool("todo_exists")
 async def todo_exists(ctx: Context, title: str):
     """Check if a todo with specific title exists.
-    
+
     Args:
         title: The title of the todo to check
-        
+
     Returns:
         Evaluation result
     """
@@ -100,10 +98,10 @@ async def todo_exists(ctx: Context, title: str):
 @evaluate.tool("todo_completion_rate")
 async def todo_completion_rate(ctx: Context, target_rate: float = 0.5):
     """Check if completion rate meets target.
-    
+
     Args:
         target_rate: The target completion rate (default 0.5)
-        
+
     Returns:
         Evaluation result
     """
@@ -151,10 +149,10 @@ async def todo_completion_rate(ctx: Context, target_rate: float = 0.5):
 @evaluate.tool("todo_total_count")
 async def todo_total_count(ctx: Context, min_count: int = 1):
     """Check if total todo count meets minimum.
-    
+
     Args:
         min_count: The minimum number of todos expected (default 1)
-        
+
     Returns:
         Evaluation result
     """
@@ -193,7 +191,7 @@ async def todo_total_count(ctx: Context, min_count: int = 1):
 @evaluate.tool("todo_all_completed")
 async def todo_all_completed(ctx: Context):
     """Check if all todos are completed.
-    
+
     Returns:
         Evaluation result
     """
@@ -213,9 +211,7 @@ async def todo_all_completed(ctx: Context):
             message = f"{completed_count}/{total_count} todos completed"
 
         return EvaluationResult(
-            reward=1.0
-            if success
-            else (completed_count / total_count if total_count > 0 else 0.0),
+            reward=1.0 if success else (completed_count / total_count if total_count > 0 else 0.0),
             done=success,
             info={
                 "success": success,

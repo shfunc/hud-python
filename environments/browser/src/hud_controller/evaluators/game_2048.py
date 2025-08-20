@@ -12,12 +12,12 @@ logger = logging.getLogger(__name__)
 @evaluate.tool("game_2048_max_number")
 async def game_2048_max_number(ctx: Context, target: int):
     """Check if player reached target tile value.
-    
+
     Uses logarithmic reward scaling to match text-2048 implementation.
-    
+
     Args:
         target: The target tile value to reach
-        
+
     Returns:
         EvaluationResult with logarithmic reward
     """
@@ -26,45 +26,38 @@ async def game_2048_max_number(ctx: Context, target: int):
         env = evaluate.env  # Get BrowserEnvironmentContext from hub
         game_state = await env.call_app_api("2048", "/api/game/state")
         highest_tile = game_state.get("highest_tile", 0)
-        
+
         # Logarithmic reward scale (matching text-2048)
         # Reward is proportional to log(highest_tile) / log(target), capped at 1.0
         if target > 1 and highest_tile > 1:
             reward = min(1.0, math.log(highest_tile) / math.log(target))
         else:
             reward = 0.0
-            
+
         done = highest_tile >= target
-        
+
         return EvaluationResult(
             reward=reward,
             done=done,
             content=f"Target: {target}, Highest: {highest_tile}",
-            info={
-                "target": target,
-                "highest_tile": highest_tile,
-                "progress": reward
-            }
+            info={"target": target, "highest_tile": highest_tile, "progress": reward},
         )
     except Exception as e:
         logger.error(f"game_2048_max_number failed: {e}")
         return EvaluationResult(
-            reward=0.0,
-            done=False,
-            content=f"Failed to evaluate max number: {str(e)}",
-            isError=True
+            reward=0.0, done=False, content=f"Failed to evaluate max number: {str(e)}", isError=True
         )
 
 
 @evaluate.tool("game_2048_efficiency")
 async def game_2048_efficiency(ctx: Context, min_ratio: float):
     """Evaluate game efficiency based on score/moves ratio.
-    
+
     Matches text-2048 implementation.
-    
+
     Args:
         min_ratio: The minimum efficiency ratio to achieve
-        
+
     Returns:
         EvaluationResult with linear reward based on efficiency
     """
@@ -74,42 +67,34 @@ async def game_2048_efficiency(ctx: Context, min_ratio: float):
         game_state = await env.call_app_api("2048", "/api/game/state")
         score = game_state.get("score", 0)
         moves = game_state.get("moves", 0)
-        
+
         # Calculate the efficiency ratio directly (no logarithmic scaling)
         ratio = score / moves if moves > 0 else 0.0
-        
+
         # Linear reward: proportional to ratio / min_ratio, capped at 1.0
         reward = min(1.0, ratio / min_ratio) if min_ratio > 0 else 0.0
         done = ratio >= min_ratio
-        
+
         return EvaluationResult(
             reward=reward,
             done=done,
             content=f"Efficiency: {ratio:.2f} (target: {min_ratio})",
-            info={
-                "score": score,
-                "moves": moves,
-                "ratio": ratio,
-                "target_ratio": min_ratio
-            }
+            info={"score": score, "moves": moves, "ratio": ratio, "target_ratio": min_ratio},
         )
     except Exception as e:
         logger.error(f"game_2048_efficiency failed: {e}")
         return EvaluationResult(
-            reward=0.0,
-            done=False,
-            content=f"Failed to evaluate efficiency: {str(e)}",
-            isError=True
+            reward=0.0, done=False, content=f"Failed to evaluate efficiency: {str(e)}", isError=True
         )
 
 
 @evaluate.tool("game_2048_score_reached")
 async def game_2048_score_reached(ctx: Context, target_score: int):
     """Check if player reached target score.
-    
+
     Args:
         target_score: The target score to reach
-        
+
     Returns:
         EvaluationResult
     """
@@ -117,35 +102,28 @@ async def game_2048_score_reached(ctx: Context, target_score: int):
         env = evaluate.env  # Get BrowserEnvironmentContext from hub
         game_state = await env.call_app_api("2048", "/api/game/state")
         score = game_state.get("score", 0)
-        
+
         # Linear reward based on score progress
         reward = min(1.0, score / target_score) if target_score > 0 else 0.0
         done = score >= target_score
-        
+
         return EvaluationResult(
             reward=reward,
             done=done,
             content=f"Score: {score} (target: {target_score})",
-            info={
-                "score": score,
-                "target_score": target_score,
-                "progress": reward
-            }
+            info={"score": score, "target_score": target_score, "progress": reward},
         )
     except Exception as e:
         logger.error(f"game_2048_score_reached failed: {e}")
         return EvaluationResult(
-            reward=0.0,
-            done=False,
-            content=f"Failed to evaluate score: {str(e)}",
-            isError=True
+            reward=0.0, done=False, content=f"Failed to evaluate score: {str(e)}", isError=True
         )
 
 
 @evaluate.tool("game_2048_game_won")
 async def game_2048_game_won(ctx: Context):
     """Check if game is won (reached target tile).
-    
+
     Returns:
         EvaluationResult
     """
@@ -155,31 +133,24 @@ async def game_2048_game_won(ctx: Context):
         won = game_state.get("won", False)
         highest_tile = game_state.get("highest_tile", 0)
         target_tile = game_state.get("target_tile", 2048)
-        
+
         return EvaluationResult(
             reward=1.0 if won else 0.0,
             done=won,
             content=f"Game {'won' if won else 'in progress'} (highest: {highest_tile}, target: {target_tile})",
-            info={
-                "won": won,
-                "highest_tile": highest_tile,
-                "target_tile": target_tile
-            }
+            info={"won": won, "highest_tile": highest_tile, "target_tile": target_tile},
         )
     except Exception as e:
         logger.error(f"game_2048_game_won failed: {e}")
         return EvaluationResult(
-            reward=0.0,
-            done=False,
-            content=f"Failed to check win status: {str(e)}",
-            isError=True
+            reward=0.0, done=False, content=f"Failed to check win status: {str(e)}", isError=True
         )
 
 
 @evaluate.tool("game_2048_game_over")
 async def game_2048_game_over(ctx: Context):
     """Check if game is over (no valid moves).
-    
+
     Returns:
         EvaluationResult
     """
@@ -189,16 +160,12 @@ async def game_2048_game_over(ctx: Context):
         game_over = game_state.get("game_over", False)
         score = game_state.get("score", 0)
         moves = game_state.get("moves", 0)
-        
+
         return EvaluationResult(
             reward=0.0,  # Game over is not a positive outcome
             done=game_over,
             content=f"Game {'over' if game_over else 'active'} (score: {score}, moves: {moves})",
-            info={
-                "game_over": game_over,
-                "score": score,
-                "moves": moves
-            }
+            info={"game_over": game_over, "score": score, "moves": moves},
         )
     except Exception as e:
         logger.error(f"game_2048_game_over failed: {e}")
@@ -206,17 +173,17 @@ async def game_2048_game_over(ctx: Context):
             reward=0.0,
             done=False,
             content=f"Failed to check game over status: {str(e)}",
-            isError=True
+            isError=True,
         )
 
 
 @evaluate.tool("game_2048_moves_made")
 async def game_2048_moves_made(ctx: Context, min_moves: int):
     """Check if minimum number of moves were made.
-    
+
     Args:
         min_moves: The minimum number of moves to make
-        
+
     Returns:
         EvaluationResult
     """
@@ -224,26 +191,19 @@ async def game_2048_moves_made(ctx: Context, min_moves: int):
         env = evaluate.env  # Get BrowserEnvironmentContext from hub
         game_state = await env.call_app_api("2048", "/api/game/state")
         moves = game_state.get("moves", 0)
-        
+
         # Linear reward based on move progress
         reward = min(1.0, moves / min_moves) if min_moves > 0 else 1.0
         done = moves >= min_moves
-        
+
         return EvaluationResult(
             reward=reward,
             done=done,
             content=f"Moves: {moves} (minimum: {min_moves})",
-            info={
-                "moves": moves,
-                "min_moves": min_moves,
-                "progress": reward
-            }
+            info={"moves": moves, "min_moves": min_moves, "progress": reward},
         )
     except Exception as e:
         logger.error(f"game_2048_moves_made failed: {e}")
         return EvaluationResult(
-            reward=0.0,
-            done=False,
-            content=f"Failed to evaluate moves: {str(e)}",
-            isError=True
+            reward=0.0, done=False, content=f"Failed to evaluate moves: {str(e)}", isError=True
         )

@@ -154,7 +154,6 @@ async def initialize_environment(session=None, progress_token=None):
         # Build launch options
         launch_options = {}
 
-
         # Add other launch options from environment
         max_duration = os.getenv("BROWSER_MAX_DURATION")
         if max_duration:
@@ -242,6 +241,7 @@ async def shutdown_environment():
         browser_provider = None
         playwright_tool = None
         browser_executor = None
+
 
 if __name__ == "__main__":
     mcp.run()

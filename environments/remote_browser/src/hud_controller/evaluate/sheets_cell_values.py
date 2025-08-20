@@ -159,7 +159,7 @@ async def sheets_cell_values(
         # Wait for grid container to be present
         await page.wait_for_selector(".grid-container", timeout=20000)
         logger.info("Sheet grid container loaded")
-        
+
         # Additional wait for cells to populate
         try:
             await page.wait_for_timeout(2000)

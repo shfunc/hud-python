@@ -122,7 +122,7 @@ def configure_telemetry(
             else:
                 # Default HTTP endpoint
                 otlp_config["endpoint"] = "http://localhost:4318/v1/traces"
-                
+
             if otlp_headers:
                 otlp_config["headers"] = otlp_headers
 

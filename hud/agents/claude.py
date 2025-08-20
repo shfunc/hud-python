@@ -23,10 +23,11 @@ if TYPE_CHECKING:
 
 import mcp.types as types
 
-from .base import MCPAgent
 from hud.settings import settings
 from hud.tools.computer.settings import computer_settings
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult
+
+from .base import MCPAgent
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +103,27 @@ class ClaudeAgent(MCPAgent):
         # Track mapping from Claude tool names to MCP tool names
         self._claude_to_mcp_tool_map: dict[str, str] = {}
 
+        # Base system prompt for autonomous operation
+        self.base_system_prompt = """
+        You are Claude, an AI assistant created by Anthropic. You are helpful, harmless, and honest.
+        
+        When working on tasks:
+        1. Be thorough and systematic in your approach
+        2. Complete tasks autonomously without asking for confirmation
+        3. Use available tools efficiently to accomplish your goals
+        4. Verify your actions and ensure task completion
+        5. Be precise and accurate in all operations
+        
+        Remember: You are expected to complete tasks autonomously. The user trusts you to accomplish what they asked.
+        """.strip()  # noqa: E501
+
+        # Log if dataset system prompt is being used
+        if hasattr(self, "dataset_system_prompt") and self.dataset_system_prompt:
+            logger.info(
+                "ClaudeAgent using dataset system prompt (length: %d chars)",
+                len(self.dataset_system_prompt),
+            )
+
     async def initialize(self, task: str | Task | None = None) -> None:
         """Initialize the agent and build tool mappings."""
         await super().initialize(task)
@@ -131,6 +153,39 @@ class ClaudeAgent(MCPAgent):
                 },
             )
         ]
+
+    def get_system_prompt(self) -> str:
+        """Generate system prompt by combining base/custom with dataset prompt.
+
+        Returns: (base OR custom) + dataset_prompt
+        """
+        # Start with base or custom prompt
+        if self.custom_system_prompt:
+            prompt = self.custom_system_prompt
+        else:
+            prompt = self.base_system_prompt
+
+        # Append dataset prompt if available
+        if hasattr(self, "dataset_system_prompt") and self.dataset_system_prompt:
+            prompt = f"{prompt}\n\n{self.dataset_system_prompt}"
+
+        # Append tool descriptions if enabled
+        if self.append_tool_system_prompt and self._available_tools:
+            tool_descriptions = []
+            for tool in self._available_tools:
+                if tool.name not in self.lifecycle_tools:
+                    desc = f"- {tool.name}: {tool.description}"
+                    if tool.inputSchema:
+                        desc += f" (parameters: {tool.inputSchema})"
+                    tool_descriptions.append(desc)
+
+            if tool_descriptions:
+                tools_prompt = "\n\nYou have access to the following tools:\n" + "\n".join(
+                    tool_descriptions
+                )
+                prompt = prompt + tools_prompt
+
+        return prompt
 
     @hud.instrument(
         span_type="agent",
