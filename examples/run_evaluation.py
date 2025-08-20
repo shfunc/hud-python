@@ -28,7 +28,6 @@ from typing import Any, Literal
 import hud
 from datasets import load_dataset
 from hud.agents import ClaudeAgent, OperatorAgent
-from hud.clients import MCPClient
 from hud.datasets import Task, run_dataset
 
 logger = logging.getLogger(__name__)
@@ -40,7 +39,6 @@ logger = logging.getLogger(__name__)
 
 def _build_agent(
     agent_type: Literal["claude", "openai"],
-    mcp_client: MCPClient,
     *,
     model: str | None = None,
     allowed_tools: list[str] | None = None,
@@ -51,7 +49,6 @@ def _build_agent(
         allowed_tools = allowed_tools or ["openai_computer"]
 
         return OperatorAgent(
-            mcp_client=mcp_client,
             allowed_tools=allowed_tools,
         )
 
@@ -60,7 +57,6 @@ def _build_agent(
     allowed_tools = allowed_tools or ["anthropic_computer"]
 
     return ClaudeAgent(
-        mcp_client=mcp_client,
         model=model,
         allowed_tools=allowed_tools,
     )
@@ -84,19 +80,14 @@ async def run_single_task(
     with hud.trace(name=dataset[0].get("prompt", f"Task {dataset[0]['id']}")):
         task = Task(**dataset[0])
 
-        client = MCPClient(mcp_config=task.mcp_config)
         agent = _build_agent(
             agent_type,
-            client,
             model=model,
             allowed_tools=allowed_tools,
         )
-        try:
-            print(task.prompt)
-            result = await agent.run(task, max_steps=40)
-            print("✅ Reward:", result.reward)
-        finally:
-            await client.close()
+        print(task.prompt)
+        result = await agent.run(task, max_steps=40)
+        print("✅ Reward:", result.reward)
 
 
 # ---------------------------------------------------------------------------

@@ -168,7 +168,6 @@ async def run_dataset(
     """
     # Import here to avoid circular imports
     import hud
-    from hud.clients import MCPClient
 
     dataset_link = None
 
@@ -204,20 +203,11 @@ async def run_dataset(
                     # Convert dict to Task here, at trace level
                     task = Task(**task_dict)
 
-                    # Create fresh MCP client per task
-                    if task.mcp_config:
-                        client = MCPClient(mcp_config=task.mcp_config)
-                        agent = agent_class(mcp_client=client, **(agent_config or {}))
+                    agent = agent_class(**(agent_config or {}))
 
-                        try:
-                            if auto_respond:
-                                agent.response_agent = ResponseAgent()
-                            results[index] = await agent.run(task, max_steps=max_steps)
-                        finally:
-                            await client.close()
-                    else:
-                        logger.warning("Task %d has no mcp_config defined", index)
-                        results[index] = None
+                    if auto_respond:
+                        agent.response_agent = ResponseAgent()
+                    results[index] = await agent.run(task, max_steps=max_steps)
 
         # Execute all tasks
         await asyncio.gather(

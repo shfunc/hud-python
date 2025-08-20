@@ -10,7 +10,7 @@ To run:
 2. Start Jaeger:
    docker run -d --name jaeger \
      -e COLLECTOR_OTLP_ENABLED=true \
-     -p 16686:16686 -p 4317:4317 \
+     -p 16686:16686 -p 4318:4318 \
      jaegertracing/all-in-one:latest
 
 3. Run this example:
@@ -32,7 +32,7 @@ from hud.otel import configure_telemetry
 configure_telemetry(
     service_name="hud-2048-jaeger",
     enable_otlp=True,
-    otlp_endpoint="localhost:4317",  # Jaeger's OTLP gRPC endpoint
+    otlp_endpoint="localhost:4318",  # Jaeger's OTLP HTTP endpoint
 )
 
 # Now import everything else

@@ -111,24 +111,28 @@ def configure_telemetry(
     # OTLP exporter (optional - for standard OTel viewers)
     if enable_otlp:
         try:
-            from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+            from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 
             otlp_config = {}
             if otlp_endpoint:
                 otlp_config["endpoint"] = otlp_endpoint
-                # If endpoint doesn't have a scheme, assume insecure connection
+                # Default to HTTP endpoint if not specified
                 if not otlp_endpoint.startswith(("http://", "https://")):
-                    otlp_config["insecure"] = True
+                    otlp_config["endpoint"] = f"http://{otlp_endpoint}/v1/traces"
+            else:
+                # Default HTTP endpoint
+                otlp_config["endpoint"] = "http://localhost:4318/v1/traces"
+                
             if otlp_headers:
                 otlp_config["headers"] = otlp_headers
 
             otlp_exporter = OTLPSpanExporter(**otlp_config)
             provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
-            logger.info("OTLP exporter enabled - endpoint: %s", otlp_endpoint or "localhost:4317")
+            logger.info("OTLP HTTP exporter enabled - endpoint: %s", otlp_config["endpoint"])
         except ImportError:
             logger.warning(
-                "OTLP export requested but opentelemetry-exporter-otlp-proto-grpc not installed. "
-                "Install with: pip install opentelemetry-exporter-otlp-proto-grpc"
+                "OTLP export requested but opentelemetry-exporter-otlp-proto-http not installed. "
+                "Install with: pip install 'hud-python[agent]'"
             )
 
     # ------------------------------------------------------------------

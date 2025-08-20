@@ -1,80 +1,84 @@
-# HUD SDK – Examples Overview
+# Examples
 
-These examples show **modern v3 patterns** for building, running and evaluating agents with the HUD SDK.
+A collection of examples demonstrating HUD SDK usage patterns.
 
----
+## Quick Start Examples
 
-## Quick navigation
-
-| Example | Level | Purpose |
-|---------|-------|---------|
-| 00_minimal_fastmcp.py | Beginner | Server **and** stdio-client in one file (sum two numbers) |
-| 01_hello_2048.py | Beginner | Launch `text_2048` environment (Docker) + Claude agent |
-| task_with_setup_eval.py | Beginner | Manual call of `setup` / `evaluate` without LLM |
-| 02_agent_lifecycle.py | Intermediate | Save / resume runs, HUD trace & telemetry |
-| 03_cloud_vs_local.py | Intermediate | Run the same image locally vs remotely on HUD |
-| mcp_use_agent.py | Intermediate | Using the HTTP `mcp_use` client |
-| playwright_screenshot.py | Intermediate | Capture a browser screenshot via `remote_browser` |
-| rl/hud_vf_gym/ | Advanced | Reinforcement-learning loop with value-function gym |
-| sheet_bench*.py | Advanced | Google-sheet style benchmark via remote browser |
-| claude_agent.py / openai_agent.py | Quickstart | Direct chat agents (no environment) |
-
-_Notebooks_: exploratory notebooks are optional and live next to the scripts.
-
-Run an example:
-```bash
-python examples/00_minimal_fastmcp.py
-```
-
----
----
-
-## 2 · Prerequisites
-
-| Requirement | Why |
-|-------------|-----|
-| **Docker** | Needed for local browser examples. |
-| **HUD_API_KEY** | Required for cloud routes. |
-| **OPENAI / ANTHROPIC API keys** | Only if you run those LLM agents. |
-
----
-
-## 3 · Running Visual Examples
+### 00_agent_env.py
+Minimal MCP server and client in one file. Shows the basic agent-environment communication pattern.
 
 ```bash
-# Build the browser image once
-docker pull hudpython/hud-browser:latest
-
-# Start a visual task
-python task_with_setup_eval.py
-# Open http://localhost:8080/vnc.html to watch the agent
+python examples/00_agent_env.py
 ```
 
----
+### 01_hello_2048.py
+Complete agent evaluation on the 2048 environment using Claude.
 
-## 4 · Pattern Cheat-Sheet
+```bash
+python examples/01_hello_2048.py
+```
+
+> | Requires Docker and `ANTHROPIC_API_KEY` environment variable.
+
+## Core Patterns
+
+### 02_agent_lifecycle.py
+Demonstrates the full agent lifecycle with telemetry and state management.
+- Task creation and configuration
+- Trace context for debugging
+- State persistence between runs
+
+### run_evaluation.py
+Generic dataset evaluation runner supporting multiple agents.
+
+```bash
+# Run single task
+python examples/run_evaluation.py hud-evals/SheetBench-50
+
+# Run full dataset
+python examples/run_evaluation.py hud-evals/SheetBench-50 --full
+```
+
+## Integration Examples
+
+### claude_agent.py
+Direct usage of Claude agent without environments.
+
+### integration_mcp_use.py
+Using the legacy `mcp_use` client for multi-server setups.
+
+### integration_otel.py
+Custom OpenTelemetry backend integration (e.g., Jaeger).
+
+## Prerequisites
+
+| Requirement | Used For |
+|-------------|----------|
+| Docker | Running environment containers |
+| `HUD_API_KEY` | Cloud deployments and telemetry |
+| `ANTHROPIC_API_KEY` | Claude agent examples |
+
+## Common Pattern
+
+All examples follow this structure:
 
 ```python
-from hud.telemetry import trace
+import asyncio, hud
 from hud.datasets import Task
-from hud.clients import MCPClient
 from hud.agents import ClaudeAgent
 
-with trace("My Demo"):
-    task = Task(...)
-    client = MCPClient(mcp_config=task.mcp_config)
-    agent  = ClaudeAgent(mcp_client=client, ...)
-    result = await agent.run(task)
+async def main():
+    with hud.trace("example-name"):
+        task = Task(
+            prompt="Your task here",
+            mcp_config={...}
+        )
+        
+        agent = ClaudeAgent()
+        result = await agent.run(task)
+        print(f"Reward: {result.reward}")
+
+asyncio.run(main())
 ```
 
-*️⃣  Every example follows this structure – once you understand it, you can mix-and-match components to build your own flows.
-
----
-
-## 5 · Alternative Tracing Backends
-
-Want to use Jaeger or another OpenTelemetry backend instead of HUD's? See `custom_otel_backend.py` for a simple example that sends `hud.trace()` spans to Jaeger.
-
----
-
-Happy hacking 🚀
+> | The agent automatically creates an MCP client from `task.mcp_config` if none is provided.
