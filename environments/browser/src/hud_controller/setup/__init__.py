@@ -8,6 +8,7 @@ setup = BaseHub(
     description="Initialize or configure the browser environment",
 )
 
-from . import todo, apps  # noqa: E402
+# Import all setup tools to register them
+from . import game_2048, todo
 
 __all__ = ["setup"]

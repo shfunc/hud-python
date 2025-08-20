@@ -12,6 +12,18 @@ interface Item {
 
 type FilterType = 'all' | 'active' | 'completed'
 
+// Dynamically determine API URL based on current port
+// Backend is always on frontend_port + 1
+const getApiUrl = () => {
+  if (typeof window !== 'undefined') {
+    const currentPort = parseInt(window.location.port) || 3000;
+    return `http://localhost:${currentPort + 1}`;
+  }
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+};
+
+const API_URL = getApiUrl();
+
 export default function Home() {
   const [items, setItems] = useState<Item[]>([])
   const [newTitle, setNewTitle] = useState('')
@@ -26,7 +38,7 @@ export default function Home() {
 
   const fetchItems = async () => {
     try {
-      const response = await fetch('/api/items')
+      const response = await fetch(`${API_URL}/api/items`)
       const data = await response.json()
       setItems(data)
     } catch (error) {
@@ -41,7 +53,7 @@ export default function Home() {
     if (!newTitle.trim()) return
 
     try {
-      const response = await fetch('/api/items', {
+      const response = await fetch(`${API_URL}/api/items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -63,7 +75,7 @@ export default function Home() {
 
   const toggleItem = async (id: number, item: Item) => {
     try {
-      const response = await fetch(`/api/items/${id}`, {
+      const response = await fetch(`${API_URL}/api/items/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -82,7 +94,7 @@ export default function Home() {
 
   const deleteItem = async (id: number) => {
     try {
-      const response = await fetch(`/api/items/${id}`, {
+      const response = await fetch(`${API_URL}/api/items/${id}`, {
         method: 'DELETE'
       })
       

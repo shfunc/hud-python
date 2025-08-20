@@ -16,8 +16,8 @@ The controller manages:
 
 ### Core Files
 - **server.py** - FastMCP server with tools, resources, and initialization
-- **runtime.py** - Implementation of setup and evaluate tools
 - **services.py** - Service management (X11, VNC, browser, apps)
+- **context.py** - Browser environment context for unified API access
 
 ### Evaluation System
 - **evaluators/** - `@evaluator` decorated classes with `EvaluatorRegistry`
@@ -104,7 +104,7 @@ Registries exposed as MCP resources:
 
 ## Runtime Tools
 
-Core evaluation tools in `runtime.py`:
+Core evaluation tools mounted via hub pattern:
 - **setup** - `{"name": "problem_name"}` or `{"function": "setup_name", "args": {...}}`
 - **evaluate** - `{"name": "problem_name"}` or `{"function": "evaluator_name", "args": {...}}`
 
