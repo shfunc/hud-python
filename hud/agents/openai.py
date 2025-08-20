@@ -159,6 +159,16 @@ class OperatorAgent(MCPAgent):
             "environment": self.environment,
         }
 
+        # Combine system prompts: (base OR custom) + dataset_prompt
+        if self.custom_system_prompt:
+            full_instructions = self.custom_system_prompt
+        else:
+            full_instructions = self.base_system_prompt
+        
+        # Append dataset prompt if available
+        if hasattr(self, 'dataset_system_prompt') and self.dataset_system_prompt:
+            full_instructions = f"{full_instructions}\n\n{self.dataset_system_prompt}"
+
         # Build the request based on whether this is first step or follow-up
         if self.pending_call_id is None and self.last_response_id is None:
             # First step - extract prompt and screenshot from messages
@@ -179,15 +189,6 @@ class OperatorAgent(MCPAgent):
 
             input_param: ResponseInputParam = [{"role": "user", "content": input_content}]  # type: ignore[reportUnknownMemberType]
 
-            # Combine system prompts: (base OR custom) + dataset_prompt
-            if self.custom_system_prompt:
-                full_instructions = self.custom_system_prompt
-            else:
-                full_instructions = self.base_system_prompt
-
-            # Append dataset prompt if available
-            if hasattr(self, "dataset_system_prompt") and self.dataset_system_prompt:
-                full_instructions = f"{full_instructions}\n\n{self.dataset_system_prompt}"
 
             response = await self.openai_client.responses.create(
                 model=self.model,
@@ -245,6 +246,7 @@ class OperatorAgent(MCPAgent):
                 previous_response_id=self.last_response_id,
                 tools=[computer_tool],
                 input=input_param_followup,
+                instructions=full_instructions,
                 truncation="auto",
             )
 
