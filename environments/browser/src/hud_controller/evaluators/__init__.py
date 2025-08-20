@@ -8,6 +8,6 @@ evaluate = BaseHub(
     description="Evaluate the current browser state",
 )
 
-from . import todo  # noqa: E402
+from . import todo, game_2048  # noqa: E402
 
 __all__ = ["evaluate"]
