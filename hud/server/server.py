@@ -97,6 +97,10 @@ class MCPServer(FastMCP):
                 return self._initializer_fn(ctx)
             return None
 
+        # Save the old server's handlers before replacing it
+        old_request_handlers = self._mcp_server.request_handlers
+        old_notification_handlers = self._mcp_server.notification_handlers
+        
         self._mcp_server = LowLevelServerWithInit(
             name=self.name,
             version=self.version,
@@ -104,6 +108,10 @@ class MCPServer(FastMCP):
             lifespan=self._mcp_server.lifespan,  # reuse the existing lifespan
             init_fn=_run_init,
         )
+        
+        # Copy handlers from the old server to the new one
+        self._mcp_server.request_handlers = old_request_handlers
+        self._mcp_server.notification_handlers = old_notification_handlers
 
     # Initializer decorator: runs on the initialize request
     # The decorated function receives a RequestContext object with access to:

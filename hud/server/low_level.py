@@ -43,11 +43,6 @@ class InitSession(ServerSession):
         super().__init__(read_stream, write_stream, init_opts, stateless=stateless)
         self._init_fn = init_fn
         self._did_init = stateless  # skip when running stateless
-        self.notification_options = NotificationOptions(
-            prompts_changed=True,
-            resources_changed=True,
-            tools_changed=True,
-        )
 
     # pylint: disable=protected-access  # we need to hook into internal method
     async def _received_request(
