@@ -35,9 +35,7 @@ class ArtHUDAgent(GenericOpenAIChatAgent):
     This agent collects messages_and_choices during execution for ART training.
     """
 
-    def __init__(
-        self, art_model: Any, mcp_client: AgentMCPClient, **agent_kwargs: Any
-    ) -> None:
+    def __init__(self, art_model: Any, mcp_client: AgentMCPClient, **agent_kwargs: Any) -> None:
         # Use ART's openai_client() method to get proper timeouts and patching
         openai_client = art_model.openai_client()
 
