@@ -17,13 +17,13 @@ from mcp.server.lowlevel.server import (
 )
 from mcp.server.session import ServerSession
 from mcp.shared.context import RequestContext
+from mcp.server.lowlevel.server import NotificationOptions
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
     from mcp.server.models import InitializationOptions
-    from mcp.server.lowlevel.server import NotificationOptions
     from mcp.shared.message import SessionMessage
     from mcp.shared.session import RequestResponder
 
