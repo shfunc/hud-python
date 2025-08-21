@@ -191,12 +191,6 @@ Thanks to all our contributors!
   <img src="https://contrib.rocks/image?repo=hud-evals/hud-python&max=50" />
 </a>
 
-
-Projects using HUD for agent evaluation and development:
-
-<!-- gh-dependents-info-used-by-start -->
-<!-- gh-dependents-info-used-by-end -->
-
 ## Citation
 
 ```bibtex
