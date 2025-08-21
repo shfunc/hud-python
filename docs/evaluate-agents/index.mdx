@@ -13,7 +13,7 @@ Evaluate an agent on a single task:
 ```python
 import hud
 import os
-from hud import Task
+from hud.datasets import Task
 from hud.agents import ClaudeAgent
 
 with hud.trace("eval-demo"):
@@ -32,14 +32,14 @@ with hud.trace("eval-demo"):
             "name": "setup",
             "arguments": {
                 "name": "navigate",
-                "arguments": {"url": "https://sheets.google.com"}
+                "url": "https://sheets.google.com"
             }
         },
         evaluate_tool={
             "name": "evaluate", 
             "arguments": {
                 "name": "sheet_contains",
-                "arguments": {"text": "Q1 Sales"}
+                "text": "Q1 Sales"
             }
         }
     )
@@ -71,14 +71,14 @@ task = Task(
         "name": "setup",
         "arguments": {
             "name": "navigate",
-            "arguments": {"url": "https://github.com"}
+            "url": "https://github.com"
         }
     },
     evaluate_tool={
         "name": "evaluate", 
         "arguments": {
             "name": "url_contains",
-            "arguments": {"substring": "hud-python"}
+            "substring": "hud-python"
         }
     }
 )

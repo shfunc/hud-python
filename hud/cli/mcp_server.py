@@ -18,8 +18,8 @@ from fastmcp import FastMCP
 def get_image_name(directory: str | Path, image_override: str | None = None) -> tuple[str, str]:
     """
     Resolve image name with source tracking.
-    
-    Returns:
+
+        Returns:
         Tuple of (image_name, source) where source is "override", "cache", or "auto"
     """
     if image_override:
@@ -149,7 +149,8 @@ async def start_mcp_proxy(
     directory: str | Path,
     image_name: str,
     port: int,
-    no_reload: bool = False
+    no_reload: bool = False,
+    verbose: bool = False
 ) -> None:
     """Start the MCP development proxy server."""
     # Ensure src directory exists
@@ -161,16 +162,32 @@ async def start_mcp_proxy(
     # Create the proxy server
     proxy = create_proxy_server(directory, image_name, no_reload)
     
+    # Suppress FastMCP's verbose output in quiet mode
+    import logging
+    if not verbose:
+        # Suppress uvicorn logs
+        logging.getLogger("uvicorn").setLevel(logging.WARNING)
+        logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+        # Suppress FastMCP banner by setting environment variable
+        import os
+        os.environ["FASTMCP_DISABLE_BANNER"] = "1"
+
+    click.echo(f"🌐 Reloading proxy live, press Ctrl+C to stop")
+    
     try:
         # Run the proxy with HTTP transport
         await proxy.run_async(
             transport="http",
             host="0.0.0.0",
             port=port,
-            path="/mcp"  # Serve at /mcp endpoint
+            path="/mcp",  # Serve at /mcp endpoint
+            log_level="warning" if not verbose else "info"
         )
     except KeyboardInterrupt:
-        click.echo("\n👋 Shutting down...")
+        if not verbose:
+            click.echo("\n👋 Shutting down...")
+        else:
+            click.echo("\n✅ MCP proxy stopped")
 
 
 def run_mcp_dev_server(
@@ -179,7 +196,8 @@ def run_mcp_dev_server(
     build: bool = False,
     no_cache: bool = False,
     port: int = 8765,
-    no_reload: bool = False
+    no_reload: bool = False,
+    verbose: bool = False
 ) -> None:
     """Run MCP development server with hot-reload.
     
@@ -253,4 +271,4 @@ def run_mcp_dev_server(
     click.echo(f"✨ Add to Cursor: {deeplink}")
     
     # Start the proxy
-    asyncio.run(start_mcp_proxy(directory, resolved_image, port, no_reload))
+    asyncio.run(start_mcp_proxy(directory, resolved_image, port, no_reload, verbose))

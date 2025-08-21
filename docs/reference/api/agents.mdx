@@ -145,18 +145,18 @@ agent = ClaudeAgent(model="claude-3-5-sonnet-20241022")
 result = await agent.run(task)
 ```
 
-## OpenAIAgent
+## OperatorAgent
 
-Agent using OpenAI models.
+Agent using OpenAI models, including Operator.
 
 ```python
-from hud.agents import OpenAIAgent
+from hud.agents import OperatorAgent
 ```
 
 ### Constructor
 
 ```python
-OpenAIAgent(
+OperatorAgent(
     model: str = "gpt-4o",
     base_url: str | None = None,
     **kwargs
@@ -164,7 +164,7 @@ OpenAIAgent(
 ```
 
 <ParamField body="model" type="str" default="gpt-4o">
-  OpenAI model to use
+  OpenAI model to use (supports Operator models)
 </ParamField>
 
 <ParamField body="base_url" type="str" optional>
@@ -178,12 +178,48 @@ OpenAIAgent(
 ### Example
 
 ```python
-# OpenAI
-agent = OpenAIAgent(model="gpt-4o")
+# OpenAI/Operator
+agent = OperatorAgent(model="gpt-4o")
 
 # Local model with vLLM
-agent = OpenAIAgent(
+agent = OperatorAgent(
     model="local-model",
+    base_url="http://localhost:8000/v1"
+)
+```
+
+## GenericOpenAIChatAgent
+
+Generic OpenAI-compatible chat agent for custom models.
+
+```python
+from hud.agents import GenericOpenAIChatAgent
+```
+
+### Constructor
+
+```python
+GenericOpenAIChatAgent(
+    model: str = "gpt-4o",
+    base_url: str | None = None,
+    **kwargs
+)
+```
+
+<ParamField body="model" type="str" default="gpt-4o">
+  Model name to use
+</ParamField>
+
+<ParamField body="base_url" type="str" optional>
+  Custom API endpoint for OpenAI-compatible servers
+</ParamField>
+
+### Example
+
+```python
+# Custom OpenAI-compatible model
+agent = GenericOpenAIChatAgent(
+    model="custom-model",
     base_url="http://localhost:8000/v1"
 )
 ```
@@ -193,7 +229,7 @@ agent = OpenAIAgent(
 ### Task
 
 ```python
-from hud import Task
+from hud.datasets import Task
 
 class Task(BaseModel):
     id: str | None = None
@@ -201,6 +237,7 @@ class Task(BaseModel):
     mcp_config: dict[str, Any]
     setup_tool: MCPToolCall | list[MCPToolCall] | None = None
     evaluate_tool: MCPToolCall | list[MCPToolCall] | None = None
+    system_prompt: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 ```
 

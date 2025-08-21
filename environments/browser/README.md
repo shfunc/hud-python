@@ -38,8 +38,8 @@ docker push ghcr.io/your-org/hud-browser:latest
 ```python
 import os
 import hud
-from mcp_use import MCPClient
-from hud.mcp import ClaudeAgent
+from hud.clients import MCPClient
+from hud.agents import ClaudeAgent
 
 BASE_URL = "https://mcp.hud.so"
 HUD_API_KEY = os.getenv("HUD_API_KEY")

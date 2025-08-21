@@ -21,7 +21,7 @@ Opens a browser UI to explore tools, resources, and test interactions.
 docker build -t hud-text-2048 .
 
 # Validate all phases
-python ../docker_debug.py hud-text-2048
+hud debug hud-text-2048
 ```
 
 ### 4. Cursor Integration

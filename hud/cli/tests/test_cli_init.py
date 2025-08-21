@@ -85,7 +85,7 @@ class TestCLICommands:
         with patch("hud.cli.parse_cursor_config") as mock_parse:
             mock_parse.return_value = (None, "Server 'test' not found")
             result = runner.invoke(app, ["analyze", "--cursor", "test"])
-            assert result.exit_code == 2
+            assert result.exit_code == 1
             assert "Server 'test' not found" in result.output
 
     def test_analyze_no_arguments_shows_error(self) -> None:

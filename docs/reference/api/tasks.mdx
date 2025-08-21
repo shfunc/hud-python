@@ -16,14 +16,19 @@ from hud.datasets import Task
 
 ```python
 Task(
+    id: str | None = None,
     prompt: str,
     mcp_config: dict[str, Any],
-    id: str | None = None,
     setup_tool: MCPToolCall | list[MCPToolCall] | None = None,
     evaluate_tool: MCPToolCall | list[MCPToolCall] | None = None,
+    system_prompt: str | None = None,
     metadata: dict[str, Any] = Field(default_factory=dict)
 )
 ```
+
+<ParamField body="id" type="str" optional>
+  Unique identifier for the task
+</ParamField>
 
 <ParamField body="prompt" type="str" required>
   The instruction given to the agent
@@ -33,16 +38,16 @@ Task(
   Environment connection configuration with variable substitution support
 </ParamField>
 
-<ParamField body="id" type="str" optional>
-  Unique identifier for the task
-</ParamField>
-
 <ParamField body="setup_tool" type="MCPToolCall | list" optional>
   Tool(s) to initialize environment state
 </ParamField>
 
 <ParamField body="evaluate_tool" type="MCPToolCall | list" optional>
   Tool(s) to score agent performance
+</ParamField>
+
+<ParamField body="system_prompt" type="str" optional>
+  System prompt to provide additional context to the agent
 </ParamField>
 
 <ParamField body="metadata" type="dict" optional>
@@ -74,7 +79,7 @@ Format: `${VAR_NAME}` or `${VAR_NAME:default_value}`
 Defines a tool invocation.
 
 ```python
-from hud.datasets import MCPToolCall
+from hud.types import MCPToolCall
 ```
 
 ### Constructor
@@ -268,7 +273,8 @@ class Trace(BaseModel):
 ### Basic Task Creation
 
 ```python
-from hud import Task, MCPToolCall
+from hud.datasets import Task
+from hud.types import MCPToolCall
 
 # Simple task
 task = Task(

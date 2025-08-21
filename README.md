@@ -88,7 +88,7 @@ async def main() -> None:
         client = MCPClient(mcp_config=task.mcp_config)
         agent = ClaudeAgent(
             mcp_client=client,
-            model="claude-3-7-sonnet-20250219",  # requires ANTHROPIC_API_KEY
+            model="claude-sonnet-4-20250514",  # requires ANTHROPIC_API_KEY
         )
 
         result = await agent.run(task)
@@ -147,7 +147,7 @@ results = await run_dataset(
     name="My SheetBench-50 Evaluation",
     dataset="hud-evals/SheetBench-50",      # <-- HuggingFace dataset
     agent_class=ClaudeAgent,                # <-- Your custom agent can replace this (see https://docs.hud.so/evaluate-agents/create-agents)
-    agent_config={"model": "claude-3-7-sonnet-20250219"},
+    agent_config={"model": "claude-sonnet-4-20250514"},
     max_concurrent=50,
     max_steps=30,
 )
@@ -265,7 +265,7 @@ result = await ClaudeAgent().run({  # See all agents: https://docs.hud.so/refere
 
 All leaderboards are publicly available on [app.hud.so/leaderboards](https://app.hud.so/leaderboards) (see [docs](https://docs.hud.so/evaluate-agents/leaderboards))
 
-![Leaderboard](https://raw.githubusercontent.com/hud-evals/hud-python/l/text-2048/docs/src/images/leaderboards_1.png)
+![Leaderboard](https://raw.githubusercontent.com/hud-evals/hud-python/l/text-2048/docs/src/images/leaderboards_2.png)
 
 We highly suggest running 3-5 evaluations per dataset for the most consistent results across multiple jobs.
 

@@ -38,7 +38,7 @@ console = Console()
 @app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
 def analyze(
     params: list[str] = typer.Argument(  # type: ignore[arg-type]  # noqa: B008
-        ...,  # Required positional arguments
+        None,  # Optional positional arguments
         help="Docker image followed by optional Docker run arguments (e.g., 'hud-image:latest -e KEY=value')",  # noqa: E501
     ),
     config: Path = typer.Option(  # noqa: B008
@@ -108,7 +108,7 @@ def analyze(
 @app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
 def debug(
     params: list[str] = typer.Argument(  # type: ignore[arg-type]  # noqa: B008
-        ...,
+        None,
         help="Docker image followed by optional Docker run arguments (e.g., 'hud-image:latest -e KEY=value')",  # noqa: E501
     ),
     config: Path = typer.Option(  # noqa: B008
@@ -250,6 +250,7 @@ def mcp(
     no_cache: bool = typer.Option(False, "--no-cache", help="Force rebuild without cache"),
     port: int = typer.Option(8765, "--port", "-p", help="HTTP server port"),
     no_reload: bool = typer.Option(False, "--no-reload", help="Disable hot-reload"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show server logs"),
 ) -> None:
     """🔥 Run MCP development proxy with hot-reload.
 
@@ -264,8 +265,9 @@ def mcp(
         hud mcp . --build            # Build image first
         hud mcp . --image custom:tag # Use specific image
         hud mcp . --no-cache         # Force clean rebuild
+        hud mcp . --verbose          # Show server logs
     """
-    run_mcp_dev_server(directory, image, build, no_cache, port, no_reload)
+    run_mcp_dev_server(directory, image, build, no_cache, port, no_reload, verbose)
 
 
 @app.command()
