@@ -23,12 +23,12 @@ Evaluate and improve agents. Wrap software as environments, run benchmarks, and 
 
 - 🚀 **MCP-native connectivity** – any language model can call any hud environment.
 - ⚡️ **Live telemetry** – inspect every tool call, observation, and reward in real time.
-- 🗂️ **Public benchmarks** – SheetBench-50, OSWorld, and more.
+- 🗂️ **Public benchmarks** – OSWorld-Verified, SheetBench-50, and more.
 - 🌱 **Reinforcement learning built-in** – Verifiers gym and ART pipelines for training.
 - 🌐 **Cloud browsers** – AnchorBrowser, Steel, BrowserBase integrations.
 - 🛠️ **Hot-reload dev loop** – edit environments live inside Cursor Agent.
 
-> | We welcome contributors and feature requests – open an issue to discuss improvements.
+> We welcome contributors and feature requests – open an issue or hop on a call to discuss improvements.
 
 ## Installation
 
@@ -47,12 +47,19 @@ git clone https://github.com/hud-evals/hud-python
 pip install -e "hud-python[dev]"
 ```
 
-> | See [docs.hud.so](https://docs.hud.so) for full documentation.
+> See [docs.hud.so](https://docs.hud.so) for full documentation.
 
 ## Quick start
 
+For a tutorial that explains the agent and evaluation design, run:
+```python
+uvx hud-python quickstart
+```
+
+Or just write your own agent loop:
 ```python
 import asyncio, hud, os
+from hud.settings import settings
 from hud.clients import MCPClient
 from hud.agents import ClaudeAgent
 from hud.datasets import Task
@@ -73,6 +80,7 @@ async def main() -> None:
             evaluate_tool={"name": "evaluate", "arguments": {"name": "max_number", "target": 64}},
         )
 
+        # 1. Define the client explicitly:
         client = MCPClient(mcp_config=task.mcp_config)
         agent = ClaudeAgent(
             mcp_client=client,
@@ -80,26 +88,25 @@ async def main() -> None:
         )
 
         result = await agent.run(task)
+
+        # 2. Or just:
+        # result = await ClaudeAgent().run(task)
+
         print(f"Reward: {result.reward}")
         await client.close()
 
 asyncio.run(main())
 ```
 
-> | Every HUD environment is MCP-based and interactable from anywhere. Requires `HUD_API_KEY` and `ANTHROPIC_API_KEY`.
+> Every HUD environment is MCP-based and interactable from anywhere. Requires `HUD_API_KEY` and `ANTHROPIC_API_KEY`.
 
-## Architecture
+## Reinforcement Learning with GRPO
 
-![HUD architecture](docs/images/architecture.svg)
+This is a Qwen-2.5-3B agent training a policy on the `text-2048` environment using Verifiers:
 
-```bash
-# Explore any HUD-compatible image
-hud analyze hudpython/hud-text-2048:v1.1
-```
+![RL curve](docs/src/images/rl_1.png)
 
-> | `hud analyze` launches the container, performs an MCP handshake, and lists tools/resources. Requires Docker.
-
-## Reinforcement learning
+To start training:
 
 ```bash
 git clone https://github.com/hud-evals/hud-python
@@ -107,19 +114,24 @@ cd hud-python
 python rl/verifiers/train_2048.py
 ```
 
-![RL curve](docs/images/rl_curve.png)
+Any hud MCP environment and evaluation works with our RL pipeline. Even our remote configurations!
 
-> | The repository ships runnable RL scripts; this example trains a policy on the 2048 environment using Verifiers.
+> The `rl/README.md` walks you through several examples of RL training and takes less than 15 minutes to set up for your custom agent!
 
-## Agent evaluation
+## Benchmarking Agents
 
+This is an agent running on our proprietary financial analyst benchmark SheetBench-50:
+
+![Trace screenshot](docs/src/images/trace_sheet.gif)
+
+> [See this trace on _app.hud.so_](app.hud.so/trace/9e212e9e-3627-4f1f-9eb5-c6d03c59070a)
+
+This example runs the full dataset:
 ```bash
-# Evaluate full dataset from command line
 python examples/run_evaluation.py hud-evals/SheetBench-50 --full --agent claude
-
-# Or use the run_dataset API
 ```
 
+Or in code:
 ```python
 import asyncio
 from hud.datasets import run_dataset
@@ -127,8 +139,8 @@ from hud.agents import ClaudeAgent
 
 results = await run_dataset(
     name="My SheetBench-50 Evaluation",
-    dataset="hud-evals/SheetBench-50",
-    agent_class=ClaudeAgent,
+    dataset="hud-evals/SheetBench-50",      # <-- HuggingFace dataset
+    agent_class=ClaudeAgent,                # <-- Your custom agent
     agent_config={"model": "claude-3-7-sonnet-20250219"},
     max_concurrent=50,
     max_steps=50,
@@ -136,38 +148,153 @@ results = await run_dataset(
 print(f"Average reward: {sum(r.reward for r in results) / len(results):.2f}")
 ```
 
-![Trace screenshot](docs/images/trace_overview.png)
-
-> | Batch evaluation streams results to the HUD platform for analysis and leaderboard submission.
+> Batch evaluation streams results to the app.hud.so platform for analysis and leaderboard submission.
 
 ## Custom environments (MCP)
 
+This is how you can make any environment into an interactable one in 5 steps:
+
+1. Define MCP server layer
 ```python
 from hud.server import MCPServer
+from hud.tools import HudComputerTool
 
 mcp = MCPServer("My Environment")
 
-@mcp.tool()
-async def click(x: int, y: int) -> None:
-    ...
+# Add hud tools
+mcp.add_tool(HudComputerTool())
+
+# Or custom tools
+@mcp.tool("launch_app"):
+def launch_app(name: str = "Gmail")
+...
 
 if __name__ == "__main__":
     mcp.run()
 ```
 
-![Debug phases](docs/images/debug_progress.png)
+2. Write a simple Dockerfile that installs packages and runs:
+```python
+CMD ["python", "-m", "hud_controller.server"]
+```
+And build the image:
+```bash
+docker build -t my-name/my-environment:latest .
+```
 
-> | Wrap any program as an MCP server with a few decorators; `hud debug` validates five phases automatically.
+3. Debug it with the CLI to see if it launches:
+
+```bash
+$ hud debug my-name/my-environment:latest
+[STDIO] Sending: {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {"roots": {"listChanged": true}}, "clientInfo": {"name": "DebugClient", "version": "1.0.0"}}}
+...
+Progress: [█████] 5/5 phases (100%)
+✅ All phases completed successfully!
+```
+
+Analyze it to see if all tools appear (this is how a ready  environment looks):
+```bash
+$ hud analyze hudpython/hud-remote-browser:latest
+⠏ ✓ Analysis complete
+...
+Tools
+├── Regular Tools
+│   ├── computer
+│   │   └── Control computer with mouse, keyboard, and screenshots
+...
+└── Hub Tools
+    ├── setup
+    │   ├── navigate_to_url
+    │   ├── set_cookies
+    │   ├── ...
+    └── evaluate
+        ├── url_match
+        ├── page_contains
+        ├── cookie_exists
+        ├── ...
+
+📡 Telemetry Data
+ Live URL  https://live.anchorbrowser.io?sessionId=123456789
+```
+
+4. When the tests pass, push it up to the docker registry:
+
+```bash
+docker push my-name/my-environment:latest
+```
+
+5. Now you can use `mcp.hud.so` to launch 100s of instances of this environment in parallel with any agent, and see everything live on app.hud.so:
+```python
+from hud.agents import ClaudeAgent
+
+result = await ClaudeAgent().run({
+    "prompt": "Please explore this environment",
+    "mcp_config": {
+        "my-environment": {
+            "url": "https://mcp.hud.so",
+            "headers": {
+                "Authorization": f"Bearer {os.getenv('HUD_API_KEY')}",
+                "Mcp-Image": "my-name/my-environment"
+            }
+        }
+    }
+})
+
+```
+> See the full environment design guide and commmon pitfalls in `environments/README.md`
 
 ## Leaderboards & benchmarks
 
-```bash
-python examples/run_evaluation.py SheetBench-50 --dataset
+All leaderboards are publicly available on [app.hud.so/leaderboards](https://app.hud.so/leaderboards)
+
+![Leaderboard](docs/src/images/leaderboards_1.png)
+
+Using the `run_dataset` function with a HuggingFace dataset automatically assigns your job to that leaderboards page!
+
+## Architecture
+
+```mermaid
+%%{init: { "sequence": { "wrap": true, "width":300 } } }%%
+graph TB
+    subgraph "HUD Platform"
+        Dashboard["📊 Dashboard<br/>(app.hud.so)"]
+        API["🔌 HUD MCP<br/>(Remote Orchestrator)"]
+    end
+    
+    subgraph "Your Code"
+        Agent["🤖 Agent<br/>(Claude/Operator)"]
+        Task["📋 Task<br/>(Prompt + Evaluation)"]
+        SDK["📦 HUD SDK"]
+    end
+    
+    subgraph "Environments"
+        LocalEnv["🖥️ Local Docker<br/>(Development)"]
+        RemoteEnv["☁️ Remote Docker<br/>(100s Parallel)"]
+    end
+    
+    subgraph "Telemetry"
+        Trace["📡 OpenTelemetry<br/>(Traces & Metrics)"]
+    end
+    
+    Dataset["📚 Dataset<br/>(HuggingFace)"]
+    
+    AnyMCP["🔗 Any MCP Client<br/>(Cursor, Claude, Custom)"]
+    
+    Agent <--> SDK
+    Task --> SDK
+    Dataset <-.-> Task
+    SDK <-->|"MCP"| LocalEnv
+    SDK <-->|"MCP"| API
+    API  <-->|"MCP"| RemoteEnv
+    SDK  --> Trace
+    Trace --> Dashboard
+    AnyMCP -->|"MCP"| API
+    
+    style Dashboard fill:#e0e7ff,stroke:#6366f1,stroke-width:2px
+    style SDK fill:#fef3c7,stroke:#f59e0b,stroke-width:2px
+    style RemoteEnv fill:#d1fae5,stroke:#10b981,stroke-width:2px
+    style AnyMCP fill:#fce7f3,stroke:#ec4899,stroke-width:2px,stroke-dasharray: 5 5
 ```
-
-![Leaderboard](docs/images/leaderboard_sheetbench.png)
-
-> | `run_dataset` evaluates an agent on every task and uploads results for leaderboard comparison.
 
 ## CLI reference
 
@@ -177,13 +304,16 @@ python examples/run_evaluation.py SheetBench-50 --dataset
 | `hud debug <image>`   | Five-phase health check of an environment. |
 | `hud mcp`             | Expose analysis & debug as an MCP server.  |
 
-## Roadmap & community
+## Roadmap
 
-- Integrations with every agent.
-- Evaluation environment registry.
-- Native RL training to hud environments.
+- Integrations with every major agent framework
+- Evaluation environment registry
+- Native RL training to HUD environments
+- Global opentelemetry standard
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines. Open a PR or [issue](https://github.com/hud-evals/hud-python/issues).
+## Contributing
+
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 Thanks to all our contributors!
 
@@ -202,7 +332,4 @@ Thanks to all our contributors!
   langid = {en}
 }
 ```
-
-## License
-
-HUD is released under the MIT License – see the [LICENSE](LICENSE) file for details.
+> **License**: HUD is released under the MIT License – see the [LICENSE](LICENSE) file for details.

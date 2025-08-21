@@ -51,7 +51,7 @@ build-backend = "hatchling.build"
 
 [tool.hud.clone]
 title = "🚀 Welcome to HUD SDK!"
-message = """[bold cyan]Thanks for cloning the HUD SDK![/bold cyan]
+message = """[bold cyan]Thanks for using the hud SDK![/bold cyan]
 
 [yellow]Quick Start:[/yellow]
 • Install in development mode: [green]pip install -e .[/green]
