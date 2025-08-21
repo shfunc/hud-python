@@ -19,6 +19,8 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any, cast
 
+import mcp.types as types
+
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult
 
 from .base import MCPAgent
@@ -60,13 +62,23 @@ class GenericOpenAIChatAgent(MCPAgent):
             arguments=json.loads(tool_call.function.arguments or "{}"),
         )
 
-    async def create_initial_messages(
-        self, prompt: str, initial_screenshot: bool = False
-    ) -> list[Any]:
-        """Compose the starting conversation messages."""
+    async def get_system_messages(self) -> list[Any]:
+        """Get system messages for OpenAI."""
         return [
-            {"role": "system", "content": self.get_system_prompt()},
-            {"role": "user", "content": prompt},
+            {"role": "system", "content": self.system_prompt},
+        ]
+
+    async def format_blocks(self, blocks: list[types.ContentBlock]) -> list[Any]:
+        """Format blocks for OpenAI."""
+        return [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": block.text}
+                    for block in blocks
+                    if isinstance(block, types.TextContent)
+                ],
+            },
         ]
 
     def get_tool_schemas(self) -> list[dict]:
@@ -84,7 +96,7 @@ class GenericOpenAIChatAgent(MCPAgent):
             openai_tools.append(openai_tool)
         return openai_tools
 
-    async def get_model_response(self, messages: list[Any]) -> AgentResponse:
+    async def get_response(self, messages: list[Any]) -> AgentResponse:
         """Send chat request to OpenAI and convert the response."""
         # Convert MCP tool schemas to OpenAI format
         mcp_schemas = self.get_tool_schemas()

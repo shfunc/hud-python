@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 from unittest.mock import MagicMock, mock_open, patch
 
-from hud.cli.clone import clone_repository, get_clone_message, print_error, print_success
+from hud.cli.clone import clone_repository, get_clone_message
 
 
 def test_clone_repository_success():
@@ -108,32 +108,35 @@ def test_get_clone_message_none():
         assert config is None
 
 
-def test_print_success(capsys):
-    """Test success message printing."""
-    print_success("https://github.com/user/repo.git", "/home/user/repo")
+# The following tests are commented out as print_success and print_error
+# functions are no longer part of the clone module
 
-    captured = capsys.readouterr()
-    assert "Successfully cloned" in captured.out
-    assert "repo" in captured.out
-    assert "/home/user/repo" in captured.out
+# def test_print_success(capsys):
+#     """Test success message printing."""
+#     print_success("https://github.com/user/repo.git", "/home/user/repo")
 
-
-def test_print_success_with_config(capsys):
-    """Test success message with configuration."""
-    config = {"title": "My Project", "message": "Thanks for cloning!"}
-
-    print_success("https://github.com/user/repo.git", "/home/user/repo", config)
-
-    captured = capsys.readouterr()
-    assert "Successfully cloned" in captured.out
-    assert "My Project" in captured.out
-    assert "Thanks for cloning!" in captured.out
+#     captured = capsys.readouterr()
+#     assert "Successfully cloned" in captured.out
+#     assert "repo" in captured.out
+#     assert "/home/user/repo" in captured.out
 
 
-def test_print_error(capsys):
-    """Test error message printing."""
-    print_error("Repository not found")
+# def test_print_success_with_config(capsys):
+#     """Test success message with configuration."""
+#     config = {"title": "My Project", "message": "Thanks for cloning!"}
 
-    captured = capsys.readouterr()
-    assert "Repository not found" in captured.out
-    assert "Clone Failed" in captured.out
+#     print_success("https://github.com/user/repo.git", "/home/user/repo", config)
+
+#     captured = capsys.readouterr()
+#     assert "Successfully cloned" in captured.out
+#     assert "My Project" in captured.out
+#     assert "Thanks for cloning!" in captured.out
+
+
+# def test_print_error(capsys):
+#     """Test error message printing."""
+#     print_error("Repository not found")
+
+#     captured = capsys.readouterr()
+#     assert "Repository not found" in captured.out
+#     assert "Clone Failed" in captured.out

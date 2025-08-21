@@ -13,8 +13,12 @@ from typing import TYPE_CHECKING, Any
 import anyio
 from fastmcp.server.server import FastMCP, Transport
 
+from hud.server.low_level import LowLevelServerWithInit
+
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable
+
+    from mcp.shared.context import RequestContext
 
 __all__ = ["MCPServer"]
 
@@ -52,8 +56,11 @@ class MCPServer(FastMCP):
     This works with any MCP client, and adds just a few extra server-side features:
     1. SIGTERM handling for graceful shutdown in container runtimes.
     2. ``@MCPServer.initialize`` decorator that registers an async initializer
-       executed during the MCP *initialize* request, with progress reporting
-       support via ``mcp_intialize_wrapper``.
+       executed during the MCP *initialize* request. The initializer function receives
+       a single ``ctx`` parameter (RequestContext) from which you can access:
+       - ``ctx.session``: The MCP ServerSession
+       - ``ctx.meta.progressToken``: Token for progress notifications (if provided)
+       - ``ctx.session.client_params.clientInfo``: Client information
     3. ``@MCPServer.shutdown`` decorator that registers a coroutine to run during
        server teardown, after all lifespan contexts have exited.
     4. Enhanced ``add_tool`` that accepts instances of
@@ -80,9 +87,29 @@ class MCPServer(FastMCP):
 
         super().__init__(name=name, **fastmcp_kwargs)
         self._initializer_fn: Callable | None = None
+        self._did_init = False
+
+        # Replace FastMCP's low-level server with our version that supports
+        # per-server initialization hooks
+        def _run_init(ctx: RequestContext) -> Any:
+            if self._initializer_fn is not None and not self._did_init:
+                self._did_init = True
+                return self._initializer_fn(ctx)
+            return None
+
+        self._mcp_server = LowLevelServerWithInit(
+            name=self.name,
+            version=self.version,
+            instructions=self.instructions,
+            lifespan=self._mcp_server.lifespan,  # reuse the existing lifespan
+            init_fn=_run_init,
+        )
 
     # Initializer decorator: runs on the initialize request
-    # Injects session and progress token (from the client's initialize request)
+    # The decorated function receives a RequestContext object with access to:
+    # - ctx.session: The MCP ServerSession
+    # - ctx.meta.progressToken: Progress token (if provided by client)
+    # - ctx.session.client_params.clientInfo: Client information
     def initialize(self, fn: Callable | None = None) -> Callable | None:
         def decorator(func: Callable) -> Callable:
             self._initializer_fn = func
@@ -108,11 +135,6 @@ class MCPServer(FastMCP):
     ) -> None:
         if transport is None:
             transport = "stdio"
-
-        if self._initializer_fn is not None:
-            from hud.server.helper import mcp_intialize_wrapper
-
-            mcp_intialize_wrapper(self._initializer_fn)
 
         async def _bootstrap() -> None:
             await self.run_async(transport=transport, show_banner=show_banner, **transport_kwargs)  # type: ignore[arg-type]

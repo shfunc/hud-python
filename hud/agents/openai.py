@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, ClassVar, Literal
 
 import mcp.types as types
 from openai import AsyncOpenAI
@@ -22,9 +22,6 @@ from hud.types import AgentResponse, MCPToolCall, MCPToolResult, Trace
 
 from .base import MCPAgent
 
-if TYPE_CHECKING:
-    from hud.datasets import Task
-
 logger = logging.getLogger(__name__)
 
 
@@ -36,13 +33,16 @@ class OperatorAgent(MCPAgent):
     tools through MCP servers instead of direct implementation.
     """
 
+    metadata: ClassVar[dict[str, Any]] = {
+        "display_width": computer_settings.OPENAI_COMPUTER_WIDTH,
+        "display_height": computer_settings.OPENAI_COMPUTER_HEIGHT,
+    }
+
     def __init__(
         self,
         model_client: AsyncOpenAI | None = None,
         model: str = "computer-use-preview",
         environment: Literal["windows", "mac", "linux", "browser"] = "linux",
-        display_width: int = computer_settings.OPENAI_COMPUTER_WIDTH,
-        display_height: int = computer_settings.OPENAI_COMPUTER_HEIGHT,
         **kwargs: Any,
     ) -> None:
         """
@@ -68,8 +68,6 @@ class OperatorAgent(MCPAgent):
         self.openai_client = model_client
         self.model = model
         self.environment = environment
-        self.display_width = display_width
-        self.display_height = display_height
 
         # State tracking for OpenAI's stateful API
         self.last_response_id: str | None = None
@@ -78,15 +76,8 @@ class OperatorAgent(MCPAgent):
 
         self.model_name = "openai-" + self.model
 
-        # Log if dataset system prompt is being used
-        if hasattr(self, "dataset_system_prompt") and self.dataset_system_prompt:
-            logger.info(
-                "OperatorAgent using dataset system prompt (length: %d chars)",
-                len(self.dataset_system_prompt),
-            )
-
         # Base system prompt for autonomous operation
-        self.base_system_prompt = """
+        self.system_prompt = """
         You are an autonomous computer-using agent. Follow these guidelines:
 
         1. NEVER ask for confirmation. Complete all tasks autonomously.
@@ -100,7 +91,7 @@ class OperatorAgent(MCPAgent):
         Remember: You are expected to complete tasks autonomously. The user trusts you to do what they asked.
         """.strip()  # noqa: E501
 
-    async def run(self, prompt_or_task: str | Task, max_steps: int = 10) -> Trace:
+    async def _run_context(self, context: list[Any], max_steps: int = 10) -> Trace:
         """
         Run the agent with the given prompt or task.
 
@@ -112,27 +103,33 @@ class OperatorAgent(MCPAgent):
         self.pending_safety_checks = []
 
         # Use base implementation
-        return await super().run(prompt_or_task, max_steps)
+        return await super()._run_context(context, max_steps=max_steps)
 
-    async def create_initial_messages(
-        self, prompt: str, screenshot: str | None = None
-    ) -> list[Any]:
+    async def get_system_messages(self) -> list[Any]:
         """
         Create initial messages for OpenAI.
 
         OpenAI uses a different message format - we'll store the prompt
         and screenshot for use in get_model_response.
         """
-        # For OpenAI, we don't create messages upfront, we build them in get_model_response
-        # Just return a list with the prompt and screenshot
-        return [{"prompt": prompt, "screenshot": screenshot}]
+        return []
+
+    async def format_blocks(self, blocks: list[types.ContentBlock]) -> list[Any]:
+        """
+        Format blocks for OpenAI.
+        """
+        return [
+            {"type": "user_input", "text": block.text}
+            for block in blocks
+            if isinstance(block, types.TextContent)
+        ]
 
     @hud.instrument(
         span_type="agent",
         record_args=False,  # Messages can be large
         record_result=True,
     )
-    async def get_model_response(self, messages: list[Any]) -> AgentResponse:
+    async def get_response(self, messages: list[Any]) -> AgentResponse:
         """Get response from OpenAI including any tool calls."""
         # OpenAI's API is stateful, so we handle messages differently
 
@@ -154,20 +151,10 @@ class OperatorAgent(MCPAgent):
         # Define the computer use tool
         computer_tool: ToolParam = {  # type: ignore[reportAssignmentType]
             "type": "computer_use_preview",
-            "display_width": self.display_width,
-            "display_height": self.display_height,
+            "display_width": self.metadata["display_width"],
+            "display_height": self.metadata["display_height"],
             "environment": self.environment,
         }
-
-        # Combine system prompts: (base OR custom) + dataset_prompt
-        if self.custom_system_prompt:
-            full_instructions = self.custom_system_prompt
-        else:
-            full_instructions = self.base_system_prompt
-        
-        # Append dataset prompt if available
-        if hasattr(self, 'dataset_system_prompt') and self.dataset_system_prompt:
-            full_instructions = f"{full_instructions}\n\n{self.dataset_system_prompt}"
 
         # Build the request based on whether this is first step or follow-up
         if self.pending_call_id is None and self.last_response_id is None:
@@ -189,12 +176,11 @@ class OperatorAgent(MCPAgent):
 
             input_param: ResponseInputParam = [{"role": "user", "content": input_content}]  # type: ignore[reportUnknownMemberType]
 
-
             response = await self.openai_client.responses.create(
                 model=self.model,
                 tools=[computer_tool],
                 input=input_param,
-                instructions=full_instructions,
+                instructions=self.system_prompt,
                 truncation="auto",
                 reasoning={"summary": "auto"},  # type: ignore[arg-type]
             )
@@ -246,7 +232,7 @@ class OperatorAgent(MCPAgent):
                 previous_response_id=self.last_response_id,
                 tools=[computer_tool],
                 input=input_param_followup,
-                instructions=full_instructions,
+                instructions=self.system_prompt,
                 truncation="auto",
             )
 
@@ -341,9 +327,3 @@ class OperatorAgent(MCPAgent):
                 "screenshot": latest_screenshot,
             }
         ]
-
-    async def create_user_message(self, text: str) -> dict[str, Any]:
-        """
-        Create a user message for OpenAI's stateful API.
-        """
-        return {"type": "user_input", "text": text}

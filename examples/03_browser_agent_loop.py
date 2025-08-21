@@ -23,6 +23,7 @@ import hud
 from hud.datasets import Task
 from hud.agents import ClaudeAgent
 from hud.clients import MCPClient
+from hud.agents.base import text_to_blocks
 
 
 # App-specific configurations
@@ -150,7 +151,9 @@ async def main():
         # Phase 2: Launch the app
         print(f"\n🚀 Launching {app_name} app...")
         try:
-            launch_result = await client.call_tool("launch_app", {"app_name": app_name})
+            launch_result = await client.call_tool(
+                name="launch_app", arguments={"app_name": app_name}
+            )
             print(f"Launch result: {launch_result}")
             await asyncio.sleep(2)  # Wait for page to load
         except Exception as e:
@@ -162,7 +165,8 @@ async def main():
             try:
                 # Call the setup hub
                 setup_result = await client.call_tool(
-                    "setup", {"name": config["setup_name"], "arguments": config["setup_args"]}
+                    name="setup",
+                    arguments={"name": config["setup_name"], "arguments": config["setup_args"]},
                 )
                 print(f"Setup result: {setup_result}")
             except Exception as e:
@@ -171,7 +175,8 @@ async def main():
 
         # Phase 4: Run agent loop
         print(f"\n🤖 Starting task: {config['prompt'][:50]}...")
-        messages = await agent.create_initial_messages(task.prompt, None)
+        messages = await agent.get_system_messages()
+        messages.extend(await agent.format_message(task.prompt))
 
         done = False
         steps = 0
@@ -181,7 +186,7 @@ async def main():
 
         while not done and steps < max_steps:
             # Get model response (agent decides next action)
-            response = await agent.get_model_response(messages)
+            response = await agent.get_response(messages)
             print(f"\n   Step {steps + 1}:")
 
             if response.content:
@@ -223,8 +228,8 @@ async def main():
                     if task.evaluate_tool:
                         try:
                             eval_result = await client.call_tool(
-                                "evaluate",
-                                {
+                                name="evaluate",
+                                arguments={
                                     "name": config["evaluate_name"],
                                     "arguments": config["evaluate_args"],
                                 },
@@ -293,8 +298,11 @@ async def main():
         if task.evaluate_tool:
             try:
                 final_eval = await client.call_tool(
-                    "evaluate",
-                    {"name": config["evaluate_name"], "arguments": config["evaluate_args"]},
+                    name="evaluate",
+                    arguments={
+                        "name": config["evaluate_name"],
+                        "arguments": config["evaluate_args"],
+                    },
                 )
             except Exception as e:
                 print(f"Failed to evaluate: {e}")
@@ -344,7 +352,7 @@ async def main():
     finally:
         # Phase 6: Cleanup
         print("\n🧹 Cleaning up...")
-        await client.close()
+        await client.shutdown()
 
     print(f"\n✨ {app_name} agent loop complete!")
 

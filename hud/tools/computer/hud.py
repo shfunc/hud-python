@@ -33,8 +33,8 @@ class HudComputerTool(BaseTool):
         display_num: int | None = None,
         # Overrides for what dimensions the agent thinks it operates in
         # Define per subclass (e.g., Anthropic, OpenAI)
-        width: int = computer_settings.HUD_COMPUTER_WIDTH,
-        height: int = computer_settings.HUD_COMPUTER_HEIGHT,
+        width: int | None = computer_settings.HUD_COMPUTER_WIDTH,
+        height: int | None = computer_settings.HUD_COMPUTER_HEIGHT,
         rescale_images: bool = computer_settings.HUD_RESCALE_IMAGES,
         # What the agent sees as the tool's name, title, and description
         name: str | None = None,

@@ -91,7 +91,7 @@ class TestMCPClient:
         mock_mcp_use_client.create_all_sessions.assert_called_once()
 
         # Check tools were discovered via public API
-        tools = client.get_available_tools()
+        tools = await client.list_tools()
         names = {t.name for t in tools}
         assert names == {"tool1", "tool2"}
 
@@ -143,7 +143,7 @@ class TestMCPClient:
         mock_mcp_use_client.create_all_sessions.assert_called_once()
 
         # Check tools from both servers
-        tools = client.get_available_tools()
+        tools = await client.list_tools()
         names = {t.name for t in tools}
         assert names == {"tool1", "tool2"}
 
@@ -180,7 +180,9 @@ class TestMCPClient:
         await client.initialize()
 
         # Call the tool
-        result = await client.call_tool("calculator", {"operation": "add", "a": 20, "b": 22})
+        result = await client.call_tool(
+            name="calculator", arguments={"operation": "add", "a": 20, "b": 22}
+        )
 
         assert isinstance(result, MCPToolResult)
         assert result.content[0].text == "Result: 42"  # type: ignore
@@ -208,7 +210,7 @@ class TestMCPClient:
         await client.initialize()
 
         with pytest.raises(ValueError, match="Tool 'nonexistent' not found"):
-            await client.call_tool("nonexistent", {})
+            await client.call_tool(name="nonexistent", arguments={})
 
     @pytest.mark.asyncio
     async def test_get_telemetry_data(self, mock_mcp_use_client):
@@ -243,7 +245,7 @@ class TestMCPClient:
 
         await client.initialize()
 
-        telemetry_data = client.get_telemetry_data()
+        telemetry_data = client._telemetry_data
         # In the new client, telemetry is a flat dict of fields
         assert isinstance(telemetry_data, dict)
 
@@ -265,7 +267,7 @@ class TestMCPClient:
         mock_mcp_use_client.close_all_sessions = AsyncMock()
 
         await client.initialize()
-        await client.close()
+        await client.shutdown()
 
         mock_mcp_use_client.close_all_sessions.assert_called_once()
 
@@ -293,35 +295,46 @@ class TestMCPClient:
         # Verify cleanup was called
         mock_mcp_use_client.close_all_sessions.assert_called_once()
 
-    def test_get_available_tools(self, mock_mcp_use_client):
+    @pytest.mark.asyncio
+    async def test_get_available_tools(self, mock_mcp_use_client):
         """Test getting available tools."""
         config = {"test": {"command": "test"}}
         client = MCPClient(mcp_config=config)
 
-        # Prefer using public API; simulate via internal _tools if available
-        try:
-            client._tools = [  # type: ignore[attr-defined]
-                types.Tool(name="tool1", description="Tool 1", inputSchema={"type": "object"}),
-                types.Tool(name="tool2", description="Tool 2", inputSchema={"type": "object"}),
-            ]
-        except Exception:
-            logger.warning("Failed to set tools")
+        # Create tool objects
+        tool1 = types.Tool(name="tool1", description="Tool 1", inputSchema={"type": "object"})
+        tool2 = types.Tool(name="tool2", description="Tool 2", inputSchema={"type": "object"})
 
-        tools = client.get_available_tools()
+        # Mock the client's list_tools method
+        mock_mcp_use_client.list_tools.return_value = [tool1, tool2]
+
+        # Setup client's internal state
+        client._client = mock_mcp_use_client
+        client._initialized = True
+        client._tool_map = {"tool1": ("test", tool1), "tool2": ("test", tool2)}
+
+        tools = await client.list_tools()
         names = {t.name for t in tools}
         assert names == {"tool1", "tool2"}
 
-    def test_get_tool_map(self, mock_mcp_use_client):
+    @pytest.mark.asyncio
+    async def test_get_tool_map(self, mock_mcp_use_client):
         """Test getting tool map."""
         config = {"test": {"command": "test"}}
         client = MCPClient(mcp_config=config)
 
-        # Simulate discovered tools
-        client._tools = [  # type: ignore[attr-defined]
-            types.Tool(name="tool1", description="Tool 1", inputSchema={"type": "object"}),
-            types.Tool(name="tool2", description="Tool 2", inputSchema={"type": "object"}),
-        ]
+        # Create tool objects
+        tool1 = types.Tool(name="tool1", description="Tool 1", inputSchema={"type": "object"})
+        tool2 = types.Tool(name="tool2", description="Tool 2", inputSchema={"type": "object"})
 
-        tools = client.get_available_tools()
+        # Mock the client's list_tools method
+        mock_mcp_use_client.list_tools.return_value = [tool1, tool2]
+
+        # Setup client's internal state
+        client._client = mock_mcp_use_client
+        client._initialized = True
+        client._tool_map = {"tool1": ("test", tool1), "tool2": ("test", tool2)}
+
+        tools = await client.list_tools()
         names = {t.name for t in tools}
         assert names == {"tool1", "tool2"}

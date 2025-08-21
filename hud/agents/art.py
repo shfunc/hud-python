@@ -14,7 +14,7 @@ import hud
 from .openai_chat_generic import GenericOpenAIChatAgent
 
 if TYPE_CHECKING:
-    import art
+    import mcp.types as types
 
     from hud.clients import AgentMCPClient
     from hud.types import AgentResponse
@@ -36,7 +36,7 @@ class ArtHUDAgent(GenericOpenAIChatAgent):
     """
 
     def __init__(
-        self, art_model: art.Model, mcp_client: AgentMCPClient, **agent_kwargs: Any
+        self, art_model: Any, mcp_client: AgentMCPClient, **agent_kwargs: Any
     ) -> None:
         # Use ART's openai_client() method to get proper timeouts and patching
         openai_client = art_model.openai_client()
@@ -48,7 +48,7 @@ class ArtHUDAgent(GenericOpenAIChatAgent):
             logprobs=True,
             **agent_kwargs,
         )
-        self.custom_system_prompt = system_prompt
+        self.system_prompt = system_prompt
 
         self.art_model = art_model
         self.messages_and_choices: list[Any] = []  # Collect for ART training
@@ -59,11 +59,16 @@ class ArtHUDAgent(GenericOpenAIChatAgent):
             getattr(art_model, "project", "unknown"),
         )
 
-    async def create_initial_messages(
-        self, prompt: str, initial_screenshot: bool = False
-    ) -> list[Any]:
-        """Create initial messages and store them for ART."""
-        messages = await super().create_initial_messages(prompt, initial_screenshot)
+    async def get_system_messages(self) -> list[Any]:
+        """Get system messages for ART."""
+        messages = await super().get_system_messages()
+        # Store initial messages as dicts for ART
+        self.messages_and_choices.extend(messages)
+        return messages
+
+    async def format_blocks(self, blocks: list[types.ContentBlock]) -> list[Any]:
+        """Format blocks for ART."""
+        messages = await super().format_blocks(blocks)
         # Store initial messages as dicts for ART
         self.messages_and_choices.extend(messages)
         return messages
@@ -73,10 +78,10 @@ class ArtHUDAgent(GenericOpenAIChatAgent):
         record_args=False,  # Messages can be large
         record_result=True,
     )
-    async def get_model_response(self, messages: list[Any]) -> AgentResponse:
+    async def get_response(self, messages: list[Any]) -> AgentResponse:
         """Get model response and store the Choice for ART."""
         # Call parent's get_model_response
-        result = await super().get_model_response(messages)
+        result = await super().get_response(messages)
 
         # Extract and store the Choice from the raw response
         if result.raw and hasattr(result.raw, "choices") and result.raw.choices:

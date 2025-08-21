@@ -16,52 +16,52 @@ from hud.clients import MCPClient
 
 
 async def main():
+    # THERE ARE TWO WAYS TO RUN THE LOCAL ENVIRONMENT
+    # OPTION 1: Direct Python execution (Not recommended for production use)
+    text_2048 = Path(__file__).parent.parent / "environments/text_2048"
+    mcp_config = {
+        "local": {
+            "command": sys.executable,
+            "args": ["-m", "hud_controller.server"],
+            "env": {"PYTHONPATH": str(text_2048 / "src")},
+            "cwd": str(text_2048),
+        }
+    }
+
+    # OPTION 2: Needs: docker build -t hud-text-2048 environments/text_2048
+    # But this allows for running an arbitrary environment in the same way!
+    # mcp_config = {
+    #     "local": {
+    #         "command": "docker",
+    #         "args": ["run", "--rm", "-i", "hud-text-2048"]
+    #     }
+    # }
+
+    task_dict = {
+        "prompt": "Play 2048 and get the highest score possible.",
+        "mcp_config": mcp_config,
+        # Setup and evaluated tools are defined by the environment (see environments/text_2048/)
+        "setup_tool": {
+            "name": "setup",
+            "arguments": {"name": "board", "arguments": {"board_size": 4}},
+        },
+        "evaluate_tool": {"name": "evaluate", "arguments": {"name": "max_number"}},
+    }
+    task = Task(**task_dict)
+
+    # All of our environments use MCP as a generalizeable interface to interact with the environment
+    client = MCPClient(mcp_config=task.mcp_config)
+
+    # Define the agent that uses a VLM and can call tools via the client
+    agent = ClaudeAgent(mcp_client=client, allowed_tools=["move"])
+
     with hud.trace("Hello 2048 Game"):
-        # THERE ARE TWO WAYS TO RUN THE LOCAL ENVIRONMENT
-        # OPTION 1: Direct Python execution (Not recommended for production use)
-        text_2048 = Path(__file__).parent.parent / "environments/text_2048"
-        mcp_config = {
-            "local": {
-                "command": sys.executable,
-                "args": ["-m", "hud_controller.server"],
-                "env": {"PYTHONPATH": str(text_2048 / "src")},
-                "cwd": str(text_2048),
-            }
-        }
-
-        # OPTION 2: Needs: docker build -t hud-text-2048 environments/text_2048
-        # But this allows for running an arbitrary environment in the same way!
-        # mcp_config = {
-        #     "local": {
-        #         "command": "docker",
-        #         "args": ["run", "--rm", "-i", "hud-text-2048"]
-        #     }
-        # }
-
-        task_dict = {
-            "prompt": "Play 2048 and get the highest score possible.",
-            "mcp_config": mcp_config,
-            # Setup and evaluated tools are defined by the environment (see environments/text_2048/)
-            "setup_tool": {
-                "name": "setup",
-                "arguments": {"name": "board", "arguments": {"board_size": 4}},
-            },
-            "evaluate_tool": {"name": "evaluate", "arguments": {"name": "max_number"}},
-        }
-        task = Task(**task_dict)
-
-        # All of our environments use MCP as a generalizeable interface to interact with the environment
-        client = MCPClient(mcp_config=task.mcp_config)
-
-        # Define the agent that uses a VLM and can call tools via the client
-        agent = ClaudeAgent(mcp_client=client, allowed_tools=["move"])
-
         try:
             # Running a full Task automatically handles setup and evaluation!
             result = await agent.run(task, max_steps=-1)
             print(f"Game completed! Reward: {result.reward}")
         finally:
-            await client.close()
+            await client.shutdown()
 
 
 if __name__ == "__main__":

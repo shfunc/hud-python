@@ -69,8 +69,8 @@ async def main():
     )
 
     # Run with hud.trace() - this creates the root span in Jaeger
-    with hud.trace("play_2048_game") as task_run_id:
-        print(f"🎮 Starting 2048 game (trace: {task_run_id})")
+    with hud.trace("play_2048_game"):
+        print(f"🎮 Starting 2048 game")
 
         # Agent will play the game with setup and evaluate phases
         # Each call to get_model_response() and execute_tools()

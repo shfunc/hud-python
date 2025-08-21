@@ -20,7 +20,7 @@ from hud.settings import settings
 
 
 async def main():
-    with hud.trace("Claude Agent Demo") as run_id:
+    with hud.trace("Claude Agent Demo"):
         # For any environment, you can run :
         # hud debug <IMAGE_NAME> to see the logs
         # hud analyze <IMAGE_NAME> to get a report about its capabilities (tools, resources, etc.)
@@ -32,7 +32,6 @@ async def main():
                 "headers": {
                     "Authorization": f"Bearer {settings.api_key}",
                     "Mcp-Image": "hudpython/hud-remote-browser:latest",
-                    "Run-Id": run_id,
                 },
             }
         }
@@ -68,7 +67,8 @@ async def main():
             print(f"🚀 Running Claude agent...\n")
 
             await client.call_tool(
-                "setup", {"name": "navigate_to_url", "arguments": {"url": initial_url}}
+                name="setup",
+                arguments={"name": "navigate_to_url", "arguments": {"url": initial_url}},
             )
 
             # Run the task
@@ -77,7 +77,7 @@ async def main():
             print(result)
 
         finally:
-            await client.close()
+            await client.shutdown()
 
     print("\n✨ Claude agent demo complete!")
 

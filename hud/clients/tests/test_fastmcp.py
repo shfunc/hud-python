@@ -9,7 +9,7 @@ from mcp import types
 from pydantic.networks import AnyUrl
 
 from hud.clients.fastmcp import FastMCPHUDClient
-from hud.types import MCPToolResult
+from hud.types import MCPToolCall, MCPToolResult
 
 
 class TestFastMCPHUDClient:
@@ -19,14 +19,32 @@ class TestFastMCPHUDClient:
         """Test client initialization."""
         config = {"server1": {"command": "python", "args": ["server.py"]}}
 
-        with patch("hud.clients.fastmcp.FastMCPClient") as mock_client_class:
-            FastMCPHUDClient(config)
+        # Client is just instantiated, not connected yet
+        client = FastMCPHUDClient(config)
 
-            # Check FastMCP client was created with correct config
+        # Check that the client has the config stored
+        assert client._mcp_config == config
+        assert client._client is None  # Not connected yet
+
+    @pytest.mark.asyncio
+    async def test_connect_creates_client(self):
+        """Test that _connect creates the FastMCP client."""
+        config = {"server1": {"command": "test"}}
+
+        with patch("hud.clients.fastmcp.FastMCPClient") as mock_client_class:
+            mock_fastmcp = AsyncMock()
+            mock_client_class.return_value = mock_fastmcp
+
+            client = FastMCPHUDClient(config)
+            await client._connect(config)
+
+            # Check FastMCP client was created
             mock_client_class.assert_called_once()
+
+            # Check it was created with correct transport and client info
             call_args = mock_client_class.call_args
             assert call_args[0][0] == {"mcpServers": config}
-            assert call_args[1]["client_info"].name == "hud-python"
+            assert call_args[1]["client_info"].name == "hud-fastmcp"
 
     @pytest.mark.asyncio
     async def test_connect_logs_info(self):
@@ -40,7 +58,7 @@ class TestFastMCPHUDClient:
             client = FastMCPHUDClient(config)
 
             with patch("hud.clients.fastmcp.logger") as mock_logger:
-                await client._connect()
+                await client._connect(config)
 
                 # Check info was logged
                 mock_logger.info.assert_called_with("FastMCP client connected")
@@ -61,6 +79,7 @@ class TestFastMCPHUDClient:
 
             client = FastMCPHUDClient(config)
             client._initialized = True  # Skip initialization
+            client._client = mock_fastmcp  # Set the mock client
 
             tools = await client.list_tools()
 
@@ -86,8 +105,45 @@ class TestFastMCPHUDClient:
 
             client = FastMCPHUDClient(config)
             client._initialized = True
+            client._client = mock_fastmcp  # Set the mock client
 
-            result = await client.call_tool("test_tool", {"arg": "value"})
+            result = await client.call_tool(name="test_tool", arguments={"arg": "value"})
+
+            assert isinstance(result, MCPToolResult)
+            assert result.content == mock_result.content
+            assert result.isError is False
+            assert result.structuredContent == {"key": "value"}
+
+            mock_fastmcp.call_tool.assert_called_once_with(
+                name="test_tool",
+                arguments={"arg": "value"},
+                raise_on_error=False,
+            )
+
+    @pytest.mark.asyncio
+    async def test_call_tool_with_mcp_tool_call(self):
+        """Test calling a tool with MCPToolCall object."""
+        config = {"server1": {"command": "test"}}
+
+        with patch("hud.clients.fastmcp.FastMCPClient") as mock_client_class:
+            mock_fastmcp = AsyncMock()
+
+            # Mock FastMCP result
+            mock_result = MagicMock()
+            mock_result.content = [types.TextContent(type="text", text="result")]
+            mock_result.is_error = False
+            mock_result.structured_content = {"key": "value"}
+
+            mock_fastmcp.call_tool.return_value = mock_result
+            mock_client_class.return_value = mock_fastmcp
+
+            client = FastMCPHUDClient(config)
+            client._initialized = True
+            client._client = mock_fastmcp  # Set the mock client
+
+            # Test with MCPToolCall object
+            tool_call = MCPToolCall(name="test_tool", arguments={"arg": "value"})
+            result = await client.call_tool(tool_call)
 
             assert isinstance(result, MCPToolResult)
             assert result.content == mock_result.content
@@ -117,8 +173,9 @@ class TestFastMCPHUDClient:
 
             client = FastMCPHUDClient(config)
             client._initialized = True
+            client._client = mock_fastmcp  # Set the mock client
 
-            await client.call_tool("test_tool")
+            await client.call_tool(name="test_tool", arguments={})
 
             # Should pass empty dict for arguments
             mock_fastmcp.call_tool.assert_called_once_with(
@@ -143,6 +200,7 @@ class TestFastMCPHUDClient:
 
             client = FastMCPHUDClient(config)
             client._initialized = True
+            client._client = mock_fastmcp  # Set the mock client
 
             resources = await client.list_resources()
 
@@ -172,8 +230,9 @@ class TestFastMCPHUDClient:
             # Now create the HUD client - it will use our mocked FastMCP client
             client = FastMCPHUDClient(config)
             client._initialized = True
+            client._client = mock_fastmcp  # Set the mock client
 
-            result = await client._read_resource_internal("file:///test")
+            result = await client.read_resource("file:///test")
 
             assert isinstance(result, types.ReadResourceResult)
             assert result.contents == mock_contents
@@ -191,13 +250,14 @@ class TestFastMCPHUDClient:
 
             client = FastMCPHUDClient(config, verbose=True)
             client._initialized = True
+            client._client = mock_fastmcp  # Set the mock client
 
             with patch("hud.clients.fastmcp.logger") as mock_logger:
-                result = await client._read_resource_internal("file:///bad")
+                result = await client.read_resource("file:///bad")
 
                 assert result is None
-                mock_logger.debug.assert_called_with(
-                    "Could not read resource '%s': %s", "file:///bad", ANY
+                mock_logger.warning.assert_called_with(
+                    "Unexpected error reading resource '%s': %s", "file:///bad", ANY
                 )
 
     @pytest.mark.asyncio
@@ -212,17 +272,18 @@ class TestFastMCPHUDClient:
 
             client = FastMCPHUDClient(config, verbose=False)
             client._initialized = True
+            client._client = mock_fastmcp  # Set the mock client
 
             with patch("hud.clients.fastmcp.logger") as mock_logger:
-                result = await client._read_resource_internal("file:///bad")
+                result = await client.read_resource("file:///bad")
 
                 assert result is None
                 # Should not log in non-verbose mode
                 mock_logger.debug.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_close(self):
-        """Test closing the client."""
+    async def test_shutdown(self):
+        """Test shutting down the client."""
         config = {"server1": {"command": "test"}}
 
         with patch("hud.clients.fastmcp.FastMCPClient") as mock_client_class:
@@ -231,22 +292,23 @@ class TestFastMCPHUDClient:
 
             client = FastMCPHUDClient(config)
 
-            # Set up stack
+            # Set up stack and client
             mock_stack = AsyncMock()
             client._stack = mock_stack
             client._initialized = True
+            client._client = mock_fastmcp  # Set the mock client
 
             with patch("hud.clients.fastmcp.logger") as mock_logger:
-                await client.close()
+                await client.shutdown()
 
                 mock_stack.aclose.assert_called_once()
                 assert client._stack is None
                 assert client._initialized is False
-                mock_logger.info.assert_called_with("FastMCP client closed")
+                mock_logger.debug.assert_called_with("FastMCP client closed")
 
     @pytest.mark.asyncio
-    async def test_close_no_stack(self):
-        """Test closing when no stack exists."""
+    async def test_shutdown_no_stack(self):
+        """Test shutting down when no stack exists."""
         config = {"server1": {"command": "test"}}
 
         with patch("hud.clients.fastmcp.FastMCPClient"):
@@ -254,7 +316,7 @@ class TestFastMCPHUDClient:
             client._stack = None
 
             # Should not raise error
-            await client.close()
+            await client.shutdown()
 
             assert client._stack is None
 
@@ -271,7 +333,7 @@ class TestFastMCPHUDClient:
 
             with (
                 patch.object(client, "initialize", new_callable=AsyncMock) as mock_init,
-                patch.object(client, "close", new_callable=AsyncMock) as mock_close,
+                patch.object(client, "shutdown", new_callable=AsyncMock) as mock_close,
             ):
                 async with client as ctx:
                     assert ctx is client

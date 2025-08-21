@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from fastmcp import FastMCP
 
-from hud.tools.types import ContentBlock, EvaluationResult, SetupResult
+from hud.tools.types import ContentBlock, EvaluationResult
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from fastmcp.tools.tool import Tool, ToolResult
 
 # Basic result types for tools
-BaseResult = list[ContentBlock] | EvaluationResult | SetupResult
+BaseResult = list[ContentBlock] | EvaluationResult
 
 
 class BaseTool(ABC):

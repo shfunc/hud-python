@@ -34,7 +34,6 @@ class Task(BaseModel):
                 "url": "${HUD_MCP_URL:https://mcp.hud.so/v3/mcp}",
                 "headers": {
                     "Authorization": "Bearer ${HUD_API_KEY}",
-                    "Run-Id": "${RUN_ID}",
                     "Mcp-Image": "your-mcp-image"
                 }
             }
@@ -46,6 +45,7 @@ class Task(BaseModel):
     mcp_config: dict[str, Any]
     setup_tool: MCPToolCall | list[MCPToolCall] | None = None
     evaluate_tool: MCPToolCall | list[MCPToolCall] | None = None
+    system_prompt: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("mcp_config", "metadata", mode="before")
@@ -85,23 +85,15 @@ class Task(BaseModel):
         """
         Automatically resolve environment variables in mcp_config using Template.
 
-        Supports ${VAR_NAME} syntax with variable substitution from:
-        1. System environment variables (including HUD_API_KEY, etc.)
-        2. Runtime context variables (e.g., RUN_ID from telemetry context)
+        Supports ${VAR_NAME} syntax with variable substitution from
+        System environment variables (including HUD_API_KEY, etc.)
 
         Missing variables resolve to empty strings.
         """
         import os
 
-        from hud.otel import get_current_task_run_id
-
         # Start with current environment variables
         mapping = dict(os.environ)
-
-        # Add runtime context variables if available
-        run_id = get_current_task_run_id()
-        if run_id:
-            mapping["RUN_ID"] = run_id
 
         def substitute_in_value(obj: Any) -> Any:
             """Recursively substitute variables in nested structures."""
@@ -124,10 +116,10 @@ class Task(BaseModel):
 async def fetch_system_prompt_from_dataset(dataset_id: str) -> str | None:
     """
     Fetch system_prompt.txt from a HuggingFace dataset repository.
-    
+
     Args:
         dataset_id: HuggingFace dataset identifier (e.g., "hud-evals/SheetBench-50")
-    
+
     Returns:
         System prompt text if found, None otherwise
     """
@@ -135,31 +127,33 @@ async def fetch_system_prompt_from_dataset(dataset_id: str) -> str | None:
         # Import here to avoid unnecessary dependency
         from huggingface_hub import hf_hub_download
         from huggingface_hub.errors import EntryNotFoundError
-        
+
         # Try to download the system_prompt.txt file
         try:
             file_path = hf_hub_download(
-                repo_id=dataset_id,
-                filename="system_prompt.txt",
-                repo_type="dataset"
+                repo_id=dataset_id, filename="system_prompt.txt", repo_type="dataset"
             )
-            
+
             # Read and return the content
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, encoding="utf-8") as f:  # noqa: ASYNC230
                 content = f.read().strip()
                 if content:
-                    logger.info("Loaded system prompt from %s (length: %d chars)", dataset_id, len(content))
+                    logger.info(
+                        "Loaded system prompt from %s (length: %d chars)", dataset_id, len(content)
+                    )
                     return content
                 else:
                     logger.warning("System prompt file is empty in %s", dataset_id)
                     return None
-                    
+
         except EntryNotFoundError:
             logger.debug("No system_prompt.txt found in dataset %s", dataset_id)
             return None
-            
+
     except ImportError:
-        logger.warning("huggingface_hub not installed. Install it to fetch system prompts from datasets.")
+        logger.warning(
+            "huggingface_hub not installed. Install it to fetch system prompts from datasets."
+        )
         return None
     except Exception as e:
         logger.error("Error fetching system prompt from %s: %s", dataset_id, e)
@@ -217,7 +211,7 @@ async def run_dataset(
     import hud
 
     dataset_link = None
-    config = agent_config or {}
+    dataset_system_prompt = None
 
     # Load dataset from string if needed
     if isinstance(dataset, str):
@@ -226,14 +220,6 @@ async def run_dataset(
 
         # Always try to fetch system prompt from dataset
         dataset_system_prompt = await fetch_system_prompt_from_dataset(dataset)
-        if dataset_system_prompt:
-            logger.info("Using system prompt from dataset (length: %d chars)", len(dataset_system_prompt))
-
-        if custom_system_prompt:
-            config.update({"custom_system_prompt": custom_system_prompt})
-        
-        if dataset_system_prompt:
-            config.update({"dataset_system_prompt": dataset_system_prompt})
 
         # Load dataset from HuggingFace
         dataset = cast("Dataset", load_dataset(dataset, split=split))
@@ -241,7 +227,7 @@ async def run_dataset(
     # Create job context
     job_metadata = metadata or {}
     job_metadata["agent_class"] = agent_class.__name__
-    job_metadata["agent_config"] = config
+    job_metadata["agent_config"] = agent_config
 
     # Extract dataset verification info if available
     if isinstance(dataset, Dataset) and not dataset_link:
@@ -261,9 +247,9 @@ async def run_dataset(
                 task_name = task_dict.get("prompt") or f"Task {index}"
                 with hud.trace(task_name, job_id=job_obj.id, task_id=task_dict.get("id")):
                     # Convert dict to Task here, at trace level
-                    task = Task(**task_dict)
+                    task = Task(**task_dict, system_prompt=dataset_system_prompt)
 
-                    agent = agent_class(**(config or {}))
+                    agent = agent_class(**(agent_config or {}))
 
                     if auto_respond:
                         agent.response_agent = ResponseAgent()

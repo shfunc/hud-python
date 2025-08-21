@@ -47,7 +47,7 @@ async def analyze_environment(docker_cmd: list[str], output_format: str, verbose
     ) as progress:
         task = progress.add_task("Initializing MCP client...", total=None)
 
-        client = MCPClient(mcp_config=mcp_config, verbose=verbose)
+        client = MCPClient(mcp_config=mcp_config, verbose=verbose, auto_trace=False)
 
         try:
             await client.initialize()
@@ -73,7 +73,7 @@ async def analyze_environment(docker_cmd: list[str], output_format: str, verbose
 
             return
         finally:
-            await client.close()
+            await client.shutdown()
 
     # Display results based on format
     if output_format == "json":
@@ -278,7 +278,7 @@ async def _analyze_with_config(
             progress.update(task, description=f"[red]✗ Failed: {e}[/red]")
             return
         finally:
-            await client.close()
+            await client.shutdown()
 
     # Display results based on format
     if output_format == "json":

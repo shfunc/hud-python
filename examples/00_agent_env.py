@@ -55,9 +55,9 @@ async def run_client() -> None:
     }
     client = MCPClient(mcp_config=cfg)
     await client.initialize()
-    result = await client.call_tool("sum", {"a": 3, "b": 4})
+    result = await client.call_tool(name="sum", arguments={"a": 3, "b": 4})
     print("3 + 4 =", result)
-    await client.close()
+    await client.shutdown()
 
 
 if __name__ == "__main__":

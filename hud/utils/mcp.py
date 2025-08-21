@@ -1,0 +1,55 @@
+from __future__ import annotations
+
+from typing import Any
+
+from pydantic import BaseModel, Field
+
+from hud.settings import settings
+
+
+class MCPConfigPatch(BaseModel):
+    """Patch for MCP config."""
+
+    headers: dict[str, Any] | None = Field(default_factory=dict, alias="headers")
+    meta: dict[str, Any] | None = Field(default_factory=dict, alias="meta")
+
+
+def patch_mcp_config(mcp_config: dict[str, dict[str, Any]], patch: MCPConfigPatch) -> None:
+    """Patch MCP config with additional values."""
+    hud_mcp_url = settings.hud_mcp_url
+
+    for server_cfg in mcp_config.values():
+        url = server_cfg.get("url", "")
+
+        # 1) HTTP header lane (only for hud MCP servers)
+        if hud_mcp_url in url and patch.headers:
+            for key, value in patch.headers.items():
+                headers = server_cfg.setdefault("headers", {})
+                headers.setdefault(key, value)
+
+        # 2) Metadata lane (for all servers)
+        if patch.meta:
+            for key, value in patch.meta.items():
+                meta = server_cfg.setdefault("meta", {})
+                meta.setdefault(key, value)
+
+
+def setup_hud_telemetry(mcp_config: dict[str, dict[str, Any]], auto_trace: bool = True) -> None:
+    """Setup telemetry for hud servers."""
+    if not mcp_config:
+        raise ValueError("Please run initialize() before setting up client-side telemetry")
+
+    from hud.otel import get_current_task_run_id
+    from hud.telemetry import trace
+
+    run_id = get_current_task_run_id()
+    if not run_id and auto_trace:
+        auto_trace_cm = trace("My Trace")
+        run_id = auto_trace_cm.__enter__()
+
+    # Patch HUD servers with run-id (works whether auto or user trace)
+    if run_id:
+        patch_mcp_config(
+            mcp_config,
+            MCPConfigPatch(headers={"Run-Id": run_id}, meta={"run_id": run_id}),
+        )

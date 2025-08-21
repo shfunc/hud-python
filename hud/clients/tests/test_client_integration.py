@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from hud.clients import FastMCPHUDClient, MCPUseHUDClient
+from hud.clients import FastMCPHUDClient
 from hud.clients.base import AgentMCPClient
+from hud.clients.mcp_use import MCPUseHUDClient
 
 
 class TestClientIntegration:

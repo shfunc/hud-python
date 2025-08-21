@@ -142,7 +142,7 @@ def create_mcp_server() -> FastMCP:
             client = MCPClient(mcp_config=mcp_config, verbose=verbose)
             await client.initialize()
             analysis = await client.analyze_environment()
-            await client.close()
+            await client.shutdown()
 
             # Return as JSON
             return [TextContent(text=json.dumps(analysis, indent=2), type="text")]
@@ -185,7 +185,7 @@ def create_mcp_server() -> FastMCP:
             client = MCPClient(mcp_config=mcp_config, verbose=verbose)
             await client.initialize()
             analysis = await client.analyze_environment()
-            await client.close()
+            await client.shutdown()
 
             # Return as JSON
             return [TextContent(text=json.dumps(analysis, indent=2), type="text")]
@@ -217,7 +217,7 @@ def create_mcp_server() -> FastMCP:
             client = MCPClient(mcp_config=config, verbose=verbose)
             await client.initialize()
             analysis = await client.analyze_environment()
-            await client.close()
+            await client.shutdown()
 
             # Return as JSON
             return [TextContent(text=json.dumps(analysis, indent=2), type="text")]

@@ -9,10 +9,11 @@ from contextlib import AsyncExitStack
 from typing import TYPE_CHECKING, Any
 
 from fastmcp import Client as FastMCPClient
-from mcp import types
+from mcp import Implementation, types
 from mcp.shared.exceptions import McpError
 
-from hud.types import MCPToolResult
+from hud.types import MCPToolCall, MCPToolResult
+from hud.version import __version__ as hud_version
 
 from .base import BaseHUDClient
 from .utils.retry_transport import create_retry_httpx_client
@@ -26,7 +27,11 @@ logger = logging.getLogger(__name__)
 class FastMCPHUDClient(BaseHUDClient):
     """FastMCP-based implementation of HUD MCP client."""
 
-    def __init__(self, mcp_config: dict[str, dict[str, Any]], **kwargs: Any) -> None:
+    client_info = Implementation(
+        name="hud-fastmcp", title="hud FastMCP Client", version=hud_version
+    )
+
+    def __init__(self, mcp_config: dict[str, dict[str, Any]] | None = None, **kwargs: Any) -> None:
         """
         Initialize FastMCP client with retry support for HTTP transports.
 
@@ -34,22 +39,10 @@ class FastMCPHUDClient(BaseHUDClient):
             mcp_config: MCP server configuration dict
             **kwargs: Additional arguments passed to base class
         """
-        super().__init__(mcp_config, **kwargs)
+        super().__init__(mcp_config=mcp_config, **kwargs)
 
-        # Import here to avoid circular imports
-        from mcp.types import Implementation
-
-        # Create custom transport with retry support for HTTP servers
-        transport = self._create_transport_with_retry(mcp_config)
-
-        # Create FastMCP client with the custom transport
-        client_info = Implementation(name="hud-python", version="3.0.3")
-
-        timeout = 5 * 60  # 5 minutes
-        os.environ["FASTMCP_CLIENT_INIT_TIMEOUT"] = str(timeout)
-
-        self._client = FastMCPClient(transport, client_info=client_info, timeout=timeout)
         self._stack: AsyncExitStack | None = None
+        self._client: FastMCPClient | None = None
 
     def _create_transport_with_retry(self, mcp_config: dict[str, dict[str, Any]]) -> Any:
         """Create transport with retry support for HTTP-based servers."""
@@ -73,8 +66,20 @@ class FastMCPHUDClient(BaseHUDClient):
         # For all other cases, use standard config (no retry)
         return {"mcpServers": mcp_config}
 
-    async def _connect(self) -> None:
+    async def _connect(self, mcp_config: dict[str, dict[str, Any]]) -> None:
         """Enter FastMCP context to establish connection."""
+        if self._client is not None:
+            logger.warning("Client is already connected, cannot connect again")
+            return
+
+        # Create FastMCP client with the custom transport
+        timeout = 5 * 60  # 5 minutes
+        os.environ["FASTMCP_CLIENT_INIT_TIMEOUT"] = str(timeout)
+
+        # Create custom transport with retry support for HTTP servers
+        transport = self._create_transport_with_retry(mcp_config)
+        self._client = FastMCPClient(transport, client_info=self.client_info, timeout=timeout)
+
         if self._stack is None:
             self._stack = AsyncExitStack()
             await self._stack.enter_async_context(self._client)
@@ -87,21 +92,26 @@ class FastMCPHUDClient(BaseHUDClient):
                 and self._client._session_state.session is not None
             ):
                 self._client._session_state.session._validation_options = ValidationOptions(
-                    strict_output_validation=self.strict_validation
+                    strict_output_validation=self._strict_validation
                 )
 
             logger.info("FastMCP client connected")
 
     async def list_tools(self) -> list[types.Tool]:
         """List all available tools."""
+        if self._client is None:
+            raise ValueError("Client is not connected, call initialize() first")
         return await self._client.list_tools()
 
-    async def call_tool(self, name: str, arguments: dict[str, Any] | None = None) -> MCPToolResult:
+    async def _call_tool(self, tool_call: MCPToolCall) -> MCPToolResult:
         """Execute a tool by name."""
+        if self._client is None:
+            raise ValueError("Client is not connected, call initialize() first")
+
         # FastMCP returns a different result type, convert it
         result = await self._client.call_tool(
-            name=name,
-            arguments=arguments or {},
+            name=tool_call.name,
+            arguments=tool_call.arguments or {},
             raise_on_error=False,  # Don't raise, return error in result
         )
 
@@ -114,10 +124,14 @@ class FastMCPHUDClient(BaseHUDClient):
 
     async def list_resources(self) -> list[types.Resource]:
         """List all available resources."""
+        if self._client is None:
+            raise ValueError("Client is not connected, call initialize() first")
         return await self._client.list_resources()
 
-    async def _read_resource_internal(self, uri: str | AnyUrl) -> types.ReadResourceResult | None:
+    async def read_resource(self, uri: str | AnyUrl) -> types.ReadResourceResult | None:
         """Read a resource by URI."""
+        if self._client is None:
+            raise ValueError("Client is not connected, call initialize() first")
         try:
             contents = await self._client.read_resource(uri)
             return types.ReadResourceResult(contents=contents)
@@ -134,8 +148,12 @@ class FastMCPHUDClient(BaseHUDClient):
                 logger.warning("Unexpected error reading resource '%s': %s", uri, e)
             return None
 
-    async def close(self) -> None:
+    async def _disconnect(self) -> None:
         """Close the client connection, ensuring the underlying transport is terminated."""
+        if self._client is None:
+            logger.warning("Client is not connected, cannot disconnect")
+            return
+
         # First close any active async context stack (this triggers client.__aexit__()).
         if self._stack:
             await self._stack.aclose()
@@ -172,7 +190,6 @@ class FastMCPHUDClient(BaseHUDClient):
         except Exception as e:
             logger.debug("Error while closing FastMCP client transport: %s", e)
 
-        self._initialized = False
         logger.debug("FastMCP client closed")
 
     async def __aenter__(self: Any) -> Any:
@@ -182,4 +199,4 @@ class FastMCPHUDClient(BaseHUDClient):
 
     async def __aexit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
         """Async context manager exit."""
-        await self.close()
+        await self.shutdown()

@@ -6,20 +6,23 @@ import asyncio
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import mcp.types as types
 
+from hud.datasets import Task
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult, Trace
+from hud.utils.mcp import MCPConfigPatch, patch_mcp_config, setup_hud_telemetry
 
 if TYPE_CHECKING:
     from hud.clients.base import AgentMCPClient
-    from hud.datasets import Task
 
     from .misc import ResponseAgent
 
 
 logger = logging.getLogger(__name__)
+
+GLOBAL_SYSTEM_PROMPT = "You are an assistant that can use tools to help the user. You will be given a task and you will need to use the tools to complete the task."  # noqa: E501
 
 
 class MCPAgent(ABC):
@@ -31,19 +34,24 @@ class MCPAgent(ABC):
     implementation details to subclasses.
     """
 
+    metadata: dict[str, Any]
+
     def __init__(
         self,
         mcp_client: AgentMCPClient | None = None,
+        # Filtering
         allowed_tools: list[str] | None = None,
         disallowed_tools: list[str] | None = None,
-        initial_screenshot: bool = False,
-        max_screenshot_history: int = 3,
-        append_tool_system_prompt: bool = True,
-        dataset_system_prompt: str | None = None,
-        custom_system_prompt: str | None = None,
         lifecycle_tools: list[str] | None = None,
+        # Messages
+        initial_screenshot: bool = False,
+        system_prompt: str = GLOBAL_SYSTEM_PROMPT,
+        append_tool_system_prompt: bool = False,
         append_setup_content: bool = False,
+        # Misc
+        model_name: str = "mcp-agent",
         response_agent: ResponseAgent | None = None,
+        auto_trace: bool = True,
     ) -> None:
         """
         Initialize the base MCP agent.
@@ -52,64 +60,40 @@ class MCPAgent(ABC):
             mcp_client: AgentMCPClient instance for server connections
             allowed_tools: List of tool names to allow (None = all tools)
             disallowed_tools: List of tool names to disallow
-            initial_screenshot: Whether to capture screenshot before first prompt
-            max_screenshot_history: Maximum number of screenshots to keep in context
-            append_tool_system_prompt: Whether to append available tools to system prompt
-            dataset_system_prompt: System prompt from dataset (used if custom_system_prompt is None)
-            custom_system_prompt: Custom system prompt to use
             lifecycle_tools: List of tool names to use for lifecycle tools
+            initial_screenshot: Whether to capture screenshot before first prompt
+            system_prompt: System prompt to use
+            append_tool_system_prompt: Whether to append available tools to system prompt
+            append_setup_content: Whether to append setup content to system prompt
         """
+
         self.mcp_client = mcp_client
         self._auto_created_client = False  # Track if we created the client
+
+        self.model_name = model_name
 
         # Filtering
         self.allowed_tools = allowed_tools
         self.disallowed_tools = disallowed_tools or []
-
-        # Screenshots
-        self.initial_screenshot = initial_screenshot
-        self.max_screenshot_history = max_screenshot_history
-        self.append_tool_system_prompt = append_tool_system_prompt
-        self.dataset_system_prompt = dataset_system_prompt
-        self.custom_system_prompt = custom_system_prompt
-        self.append_setup_content = append_setup_content
-
         self.lifecycle_tools = lifecycle_tools or []
 
-        self.model_name = "test-agent"
+        # Messages
+        self.system_prompt = system_prompt
+        self.append_tool_system_prompt = append_tool_system_prompt
+        self.append_setup_content = append_setup_content
+        self.initial_screenshot = initial_screenshot
 
         # Initialize these here so methods can be called before initialize()
         self._available_tools: list[types.Tool] = []
         self._tool_map: dict[str, types.Tool] = {}  # Simplified: just name to tool
         self.screenshot_history: list[str] = []
+        self._auto_trace = auto_trace
 
+        # Response agent to automatically interact with the model
         self.response_agent = response_agent
-
-    async def _filter_tools(self) -> None:
-        """Apply tool filtering based on allowed/disallowed lists."""
-        # Get all tools from client
-        all_tools = await self.mcp_client.list_tools()
-
-        # Filter tools
-        self._available_tools = []
-        self._tool_map = {}
-
-        for tool in all_tools:
-            # Check if tool should be included
-            if self.allowed_tools and tool.name not in self.allowed_tools:
-                continue
-            if tool.name in self.disallowed_tools:
-                continue
-
-            self._available_tools.append(tool)
-            # Simplified mapping - just tool name to tool
-            self._tool_map[tool.name] = tool
 
     async def initialize(self, task: str | Task | None = None) -> None:
         """Initialize the agent with task-specific configuration."""
-        # Import here to avoid circular imports
-        from hud.datasets import Task
-
         # Create client if needed
         if self.mcp_client is None and isinstance(task, Task) and task.mcp_config:
             from hud.clients import MCPClient
@@ -121,8 +105,10 @@ class MCPAgent(ABC):
         # Ensure we have a client
         if self.mcp_client is None:
             raise ValueError(
-                "No MCPClient. Please provide one in __init__ or pass a Task with mcp_config."
+                "No MCPClient. Please provide one when initializing the agent or pass a Task with mcp_config."  # noqa: E501
             )
+
+        await self._setup_config(self.mcp_client.mcp_config)
 
         # Initialize client if needed
         await self.mcp_client.initialize()
@@ -141,6 +127,8 @@ class MCPAgent(ABC):
                         self.lifecycle_tools.append(tool.name)
                 else:
                     self.lifecycle_tools.append(task.evaluate_tool.name)
+            if task.system_prompt:
+                self.system_prompt += "\n\n" + task.system_prompt
 
         # Re-apply filtering with updated lifecycle tools
         await self._filter_tools()
@@ -150,184 +138,7 @@ class MCPAgent(ABC):
             len(self._available_tools),
         )
 
-    def get_available_tools(self) -> list[types.Tool]:
-        """Get list of available MCP tools for LLM use (excludes lifecycle tools)."""
-        lifecycle_tool_names = self.lifecycle_tools
-        return [tool for tool in self._available_tools if tool.name not in lifecycle_tool_names]
-
-    def get_system_prompt(self) -> str:
-        """Generate system prompt by combining base/custom with dataset prompt.
-
-        Returns: (base OR custom) + dataset_prompt + tools
-        """
-        # Start with base or custom prompt
-        if self.custom_system_prompt:
-            prompt = self.custom_system_prompt
-        else:
-            prompt = "You are an assistant that can use tools to help the user. You will be given a task and you will need to use the tools to complete the task."
-
-        # Append dataset prompt if available
-        if self.dataset_system_prompt:
-            prompt = f"{prompt}\n\n{self.dataset_system_prompt}"
-
-        # Append tool descriptions if enabled
-        if self.append_tool_system_prompt and self._available_tools:
-            tool_descriptions = []
-            for tool in self._available_tools:
-                desc = f"- {tool.name}: {tool.description}"
-                if tool.inputSchema:
-                    desc += f" (parameters: {tool.inputSchema})"
-                tool_descriptions.append(desc)
-
-            tools_prompt = "\n\nYou have access to the following tools:\n" + "\n".join(
-                tool_descriptions
-            )
-            return prompt + tools_prompt
-
-        return prompt
-
-    async def call_tool(self, tool_call: MCPToolCall | None = None) -> MCPToolResult:
-        """
-        Call a tool through the MCP client.
-
-        Args:
-            tool_call: Dict with 'name' and optional 'arguments' keys
-
-        Returns:
-            The raw MCPToolResult
-        """
-        if tool_call is None:
-            raise ValueError("tool_call must be an MCPToolCall object")
-
-        tool_name = tool_call.name
-        if not tool_name:
-            raise ValueError("Tool call must have a 'name' field")
-
-        tool_args = tool_call.arguments
-
-        if tool_name not in self._tool_map and tool_name not in self.lifecycle_tools:
-            raise ValueError(f"Tool '{tool_name}' not found or not allowed")
-
-        if self.mcp_client is None:
-            raise ValueError("Client is not initialized")
-
-        # Use client's call_tool method which handles routing
-        result = await self.mcp_client.call_tool(tool_name, tool_args)
-
-        # Log result for debugging
-        if result.isError:
-            logger.error("Tool '%s' returned error: %s", tool_name, result.content)
-        else:
-            logger.debug("Tool '%s' completed successfully", tool_name)
-
-        return result
-
-    async def execute_tools(
-        self, tool_calls: MCPToolCall | list[MCPToolCall]
-    ) -> list[MCPToolResult]:
-        """Execute a list of tools with error handling."""
-        if isinstance(tool_calls, MCPToolCall):
-            tool_calls = [tool_calls]
-
-        results: list[MCPToolResult] = []
-        for tool_call in tool_calls:
-            try:
-                logger.info("Calling tool: %s", tool_call)
-                results.append(await self.call_tool(tool_call))
-            except TimeoutError as e:
-                logger.error("Tool execution timed out: %s", e)
-                try:
-                    # Check if client has close method (concrete implementations have it)
-                    if hasattr(self.mcp_client, "close"):
-                        await self.mcp_client.close()  # type: ignore[attr-defined]
-                except Exception as close_err:
-                    logger.debug("Failed to close MCP client cleanly: %s", close_err)
-                raise
-            except Exception as e:
-                logger.error("Tool execution failed: %s", e)
-                results.append(self._format_error_result(str(e)))
-        return results
-
-    def has_computer_tools(self) -> bool:
-        """Check if any computer control tools are available."""
-        computer_tools = {"computer", "computer_anthropic", "computer_openai", "screenshot"}
-        return any(tool.name in computer_tools for tool in self._available_tools)
-
-    async def cleanup(self) -> None:
-        """Cleanup resources."""
-        if self._auto_created_client and self.mcp_client:
-            try:
-                await self.mcp_client.close()
-                logger.info("Closed auto-created MCPClient")
-            except Exception as e:
-                logger.warning("Failed to close auto-created client: %s", e)
-            finally:
-                self.mcp_client = None
-                self._auto_created_client = False
-
-    def get_tool_schemas(self) -> list[dict]:
-        """Get tool schemas in a format suitable for the model."""
-        schemas = []
-        for tool in self._available_tools:
-            # Filter out lifecycle tools from LLM conversation
-            if tool.name in self.lifecycle_tools:
-                continue
-
-            schema = {
-                "name": tool.name,
-                "description": tool.description,
-            }
-            if tool.inputSchema:
-                schema["parameters"] = tool.inputSchema
-            schemas.append(schema)
-        return schemas
-
-    async def capture_screenshot(self) -> str | None:
-        """Capture a screenshot using available tools."""
-        if not self.has_computer_tools():
-            return None
-
-        # Try different screenshot tools
-        for tool_name in [
-            "computer",
-            "screenshot",
-            "computer_anthropic",
-            "computer_openai",
-            "anthropic_computer",
-            "openai_computer",
-        ]:
-            if tool_name in self._tool_map:
-                try:
-                    # Different tools have different APIs
-                    if tool_name == "computer_openai":
-                        tool_call = MCPToolCall(name=tool_name, arguments={"type": "screenshot"})
-                    else:
-                        tool_call = MCPToolCall(name=tool_name, arguments={"action": "screenshot"})
-
-                    result = await self.call_tool(tool_call)
-
-                    # Extract screenshot from result
-                    for content in result.content:
-                        if isinstance(content, types.ImageContent):
-                            logger.info("Captured screenshot")
-                            return content.data
-
-                except Exception as e:
-                    logger.warning("Failed to capture screenshot with %s: %s", tool_name, e)
-
-        return None
-
-    def extract_latest_screenshot(self, tool_results: list[MCPToolResult]) -> str | None:
-        """Extract the latest screenshot from tool results."""
-        latest_screenshot = None
-        for result in tool_results:
-            if not result.isError:
-                for content in result.content:
-                    if isinstance(content, types.ImageContent):
-                        latest_screenshot = content.data
-        return latest_screenshot
-
-    async def run(self, prompt_or_task: str | Task, max_steps: int = 10) -> Trace:
+    async def run(self, prompt_or_task: str | Task | dict[str, Any], max_steps: int = 10) -> Trace:
         """
         Run the agent with the given prompt or task.
 
@@ -341,25 +152,29 @@ class MCPAgent(ABC):
         # Import here to avoid circular imports
         from hud.datasets import Task
 
+        if isinstance(prompt_or_task, dict):
+            prompt_or_task = Task(**prompt_or_task)
+
         try:
             if len(self._available_tools) == 0:
                 await self.initialize(prompt_or_task)
 
             # Handle Task objects with full lifecycle
             if isinstance(prompt_or_task, Task):
-                return await self._run_task(prompt_or_task, max_steps)
+                return await self.run_task(prompt_or_task, max_steps)
 
             # Handle simple string prompts
             elif isinstance(prompt_or_task, str):
-                return await self.run_prompt(prompt_or_task, max_steps=max_steps)
+                context = text_to_blocks(prompt_or_task)
+                return await self._run_context(context, max_steps=max_steps)
 
             else:
                 raise TypeError(f"prompt_or_task must be str or Task, got {type(prompt_or_task)}")
         finally:
             # Cleanup auto-created resources
-            await self.cleanup()
+            await self._cleanup()
 
-    async def _run_task(self, task: Task, max_steps: int = 10) -> Trace:
+    async def run_task(self, task: Task, max_steps: int = 10) -> Trace:
         """
         Execute a task with setup and evaluate phases.
 
@@ -374,24 +189,22 @@ class MCPAgent(ABC):
 
         try:
             # Setup phase
-            start_prompt = ""
+            start_context: list[types.ContentBlock] = []
+            if task.prompt:
+                start_context.extend(text_to_blocks(task.prompt))
             if task.setup_tool is not None:
                 logger.info("Setting up tool phase: %s", task.setup_tool)
-                results = await self.execute_tools(task.setup_tool)
+                results = await self.call_tools(task.setup_tool)
                 if any(result.isError for result in results):
                     raise RuntimeError(f"{results}")
 
                 if self.append_setup_content and isinstance(results[0].content, list):
-                    for content in results[0].content:
-                        if isinstance(content, types.TextContent):
-                            start_prompt += f"{content.text}\n"
-
-            # Initialize conversation with the prompt and setup content
-            start_prompt += task.prompt
-            logger.info("Start prompt: %s", start_prompt)
+                    start_context.extend(results[0].content)
+            if not self.initial_screenshot:
+                start_context = await self._filter_messages(start_context, include_types=["text"])
 
             # Execute the task
-            prompt_result = await self.run_prompt(start_prompt, max_steps=max_steps)
+            prompt_result = await self._run_context(start_context, max_steps=max_steps)
 
         except Exception as e:
             logger.error("Task execution failed: %s", e)
@@ -403,15 +216,15 @@ class MCPAgent(ABC):
         if prompt_result is not None and task.evaluate_tool is not None:
             try:
                 logger.info("Evaluating tool phase: %s", task.evaluate_tool)
-                results = await self.execute_tools(task.evaluate_tool)
+                results = await self.call_tools(task.evaluate_tool)
 
                 if any(result.isError for result in results):
                     raise RuntimeError(f"{results}")
 
                 # Extract reward and content from evaluation
                 if results:
-                    reward = _find_reward(results[0])
-                    eval_content = _find_content(results[0])
+                    reward = find_reward(results[0])
+                    eval_content = find_content(results[0])
 
                     # Update the prompt result with evaluation reward
                     prompt_result.reward = reward
@@ -428,17 +241,14 @@ class MCPAgent(ABC):
             else Trace(reward=0.0, done=True, content="No result available", isError=True)
         )
 
-    def _format_error_result(self, error_message: str) -> MCPToolResult:
-        return MCPToolResult(
-            content=[types.TextContent(text=error_message, type="text")], isError=True
-        )
-
-    async def run_prompt(self, prompt: str, *, max_steps: int = 10) -> Trace:
+    async def _run_context(
+        self, context: list[types.ContentBlock], *, max_steps: int = 10
+    ) -> Trace:
         """
-        Run the agent with the given prompt. This is the core agent loop.
+        Run the agent with the given context messages. This is the core agent loop.
 
         Args:
-            prompt: The prompt to complete
+            context: The context to complete
             max_steps: Maximum number of steps (-1 for infinite)
 
         Returns:
@@ -448,9 +258,12 @@ class MCPAgent(ABC):
         error = None
 
         try:
-            # Initialize conversation with the prompt
-            messages = await self.create_initial_messages(prompt, self.initial_screenshot)
-            logger.info("Messages: %s", messages)
+            # Start with system messages
+            messages = await self.get_system_messages()
+
+            # Add initial context
+            messages.extend(await self.format_message(context))
+            logger.debug("Messages: %s", messages)
 
             step_count = 0
             while max_steps == -1 or step_count < max_steps:
@@ -462,7 +275,7 @@ class MCPAgent(ABC):
 
                 try:
                     # 1. Get model response
-                    response = await self.get_model_response(messages)
+                    response = await self.get_response(messages)
 
                     logger.info("Agent:\n%s", response)
 
@@ -474,7 +287,7 @@ class MCPAgent(ABC):
                             try:
                                 decision = await self.response_agent.determine_response(
                                     response.content
-                                )  # noqa: E501
+                                )
                             except Exception as e:
                                 logger.warning("ResponseAgent failed: %s", e)
                         if decision == "STOP":
@@ -483,12 +296,12 @@ class MCPAgent(ABC):
                             break
                         else:
                             logger.info("Continuing execution")
-                            messages.append(await self.create_user_message(decision))
+                            messages.extend(await self.format_message(decision))
                             continue
 
                     # 2. Execute tools
                     tool_calls = response.tool_calls
-                    tool_results = await self.execute_tools(tool_calls)
+                    tool_results = await self.call_tools(tool_calls)
 
                     # 3. Format tool results and add to messages
                     tool_messages = await self.format_tool_results(tool_calls, tool_results)
@@ -523,23 +336,53 @@ class MCPAgent(ABC):
 
         return trace_result
 
-    @abstractmethod
-    async def create_initial_messages(
-        self, prompt: str, initial_screenshot: bool = False
-    ) -> list[Any]:
+    async def call_tools(
+        self, tool_call: MCPToolCall | list[MCPToolCall] | None = None
+    ) -> list[MCPToolResult]:
         """
-        Create initial messages for the conversation.
+        Call a tool through the MCP client.
 
         Args:
-            prompt: The user's prompt
-            initial_screenshot: Whether to capture initial screenshot
+            tool_call: MCPToolCall or list of MCPToolCall
 
         Returns:
-            List of messages in provider-specific format
+            List of MCPToolResult
         """
+        if tool_call is None:
+            return []
+
+        if isinstance(tool_call, MCPToolCall):
+            tool_call = [tool_call]
+
+        if self.mcp_client is None:
+            raise ValueError("Client is not initialized")
+
+        results: list[MCPToolResult] = []
+        for tc in tool_call:
+            try:
+                logger.info("Calling tool: %s", tc)
+                results.append(await self.mcp_client.call_tool(tc))
+            except TimeoutError as e:
+                logger.error("Tool execution timed out: %s", e)
+                try:
+                    await self.mcp_client.shutdown()
+                except Exception as close_err:
+                    logger.debug("Failed to close MCP client cleanly: %s", close_err)
+                raise
+            except Exception as e:
+                logger.error("Tool execution failed: %s", e)
+                results.append(_format_error_result(str(e)))
+        return results
 
     @abstractmethod
-    async def get_model_response(self, messages: list[Any]) -> AgentResponse:
+    async def get_system_messages(self) -> list[Any]:
+        """
+        Get the system prompt.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_response(self, messages: list[Any]) -> AgentResponse:
         """
         Get response from the model including any tool calls.
 
@@ -552,6 +395,14 @@ class MCPAgent(ABC):
         Returns:
             AgentResponse with content, tool_calls, and done fields
         """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def format_blocks(self, blocks: list[types.ContentBlock]) -> list[Any]:
+        """
+        Format a list of content blocks into a list of messages.
+        """
+        raise NotImplementedError
 
     @abstractmethod
     async def format_tool_results(
@@ -569,23 +420,124 @@ class MCPAgent(ABC):
         """
         raise NotImplementedError
 
-    async def create_user_message(self, text: str) -> Any:
+    async def format_message(
+        self,
+        message: str
+        | list[str]
+        | types.ContentBlock
+        | list[types.ContentBlock]
+        | list[str | types.ContentBlock],
+    ) -> list[Any]:
         """
-        Create a user message in the format expected by the model.
+        Convencience function.
 
-        Default implementation for text-only messages.
-        Subclasses can override for specific formats.
+        Format a single content message into a list of messages for the model.
+        """
+        blocks: list[types.ContentBlock] = []
+        if not isinstance(message, list):
+            message = [message]
+
+        for m in message:
+            if isinstance(m, str):
+                blocks.append(types.TextContent(text=m, type="text"))
+            elif isinstance(m, types.ContentBlock):
+                blocks.append(m)
+            else:
+                raise ValueError(f"Invalid message type: {type(m)}")
+
+        return await self.format_blocks(blocks)
+
+    async def _filter_tools(self) -> None:
+        """Apply tool filtering based on allowed/disallowed lists."""
+        # Get all tools from client
+        if self.mcp_client is None:
+            raise ValueError("MCP client is not initialized")
+
+        all_tools = await self.mcp_client.list_tools()
+
+        # Filter tools
+        self._available_tools = []
+        self._tool_map = {}
+
+        for tool in all_tools:
+            # Check if tool should be included
+            if self.allowed_tools and tool.name not in self.allowed_tools:
+                continue
+            if tool.name in self.disallowed_tools:
+                continue
+
+            self._available_tools.append(tool)
+            # Simplified mapping - just tool name to tool
+            self._tool_map[tool.name] = tool
+
+    async def _setup_config(self, mcp_config: dict[str, dict[str, Any]]) -> None:
+        """Inject metadata into the metadata of the initialize request."""
+        if self.metadata:
+            patch_mcp_config(
+                mcp_config,
+                MCPConfigPatch(meta=self.metadata),
+            )
+        setup_hud_telemetry(mcp_config, auto_trace=self._auto_trace)
+
+    def get_available_tools(self) -> list[types.Tool]:
+        """Get list of available MCP tools for LLM use (excludes lifecycle tools)."""
+        lifecycle_tool_names = self.lifecycle_tools
+        return [tool for tool in self._available_tools if tool.name not in lifecycle_tool_names]
+
+    def get_tool_schemas(self) -> list[dict]:
+        """Get tool schemas in a format suitable for the model."""
+        schemas = []
+        for tool in self.get_available_tools():
+            schema = {
+                "name": tool.name,
+                "description": tool.description,
+            }
+            if tool.inputSchema:
+                schema["parameters"] = tool.inputSchema
+            schemas.append(schema)
+        return schemas
+
+    async def _filter_messages(
+        self,
+        message_list: list[types.ContentBlock],
+        include_types: list[
+            Literal["text", "image", "audio", "resource_link", "embedded_resource"]
+        ],
+    ) -> list[types.ContentBlock]:
+        """
+        Filter a list of messages and return only the messages of the given types.
 
         Args:
-            text: User's text input
+            message_list: The list of messages to filter
+            include_types: List of types to include (None = all types)
 
         Returns:
-            Formatted user message
+            List of messages in provider-specific format
         """
-        return {"role": "user", "content": text}
+        return [message for message in message_list if message.type in include_types]
+
+    async def _cleanup(self) -> None:
+        """Cleanup resources."""
+        if self._auto_created_client and self.mcp_client:
+            try:
+                await self.mcp_client.shutdown()
+                logger.info("Closed auto-created MCPClient")
+            except Exception as e:
+                logger.warning("Failed to close auto-created client: %s", e)
+            finally:
+                self.mcp_client = None
+                self._auto_created_client = False
 
 
-def _find_reward(result: MCPToolResult) -> float:
+def _format_error_result(error_message: str) -> MCPToolResult:
+    return MCPToolResult(content=text_to_blocks(error_message), isError=True)
+
+
+def text_to_blocks(text: str) -> list[types.ContentBlock]:
+    return [types.TextContent(text=text, type="text")]
+
+
+def find_reward(result: MCPToolResult) -> float:
     """Find the reward in the result.
 
     Agent accepts "reward", "grade", "score"
@@ -609,7 +561,7 @@ def _find_reward(result: MCPToolResult) -> float:
     return 0.0
 
 
-def _find_content(result: MCPToolResult) -> str | None:
+def find_content(result: MCPToolResult) -> str | None:
     """Find the content in the result.
 
     Agent accepts "content", "text", "message"

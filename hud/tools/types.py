@@ -6,16 +6,6 @@ from mcp.types import ContentBlock, ImageContent, TextContent
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class SetupResult(BaseModel):
-    """Standard setup result format."""
-
-    content: str | None = Field(default=None, description="Message")
-    info: dict[str, Any] = Field(default_factory=dict, description="Additional information")
-    isError: bool = Field(default=False, description="Whether the setup failed")
-
-    model_config = ConfigDict(extra="allow")
-
-
 class EvaluationResult(BaseModel):
     """Standard evaluation result format."""
 

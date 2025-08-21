@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import json
 import logging
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from abc import abstractmethod
+from typing import TYPE_CHECKING, Any, Protocol, overload, runtime_checkable
+
+from mcp.types import Implementation
+
+from hud.types import MCPToolCall, MCPToolResult
+from hud.utils.mcp import setup_hud_telemetry
+from hud.version import __version__ as hud_version
 
 if TYPE_CHECKING:
     import mcp.types as types
-
-    from hud.types import MCPToolResult
 
 else:
     pass
@@ -21,33 +25,69 @@ logger = logging.getLogger(__name__)
 
 @runtime_checkable
 class AgentMCPClient(Protocol):
-    """Minimal interface for MCP clients used by agents."""
+    """Minimal interface for MCP clients used by agents.
 
-    async def initialize(self) -> None:
-        """Initialize the client - connect and fetch telemetry."""
+    Any custom client must implement this interface.
+
+    Any custom agent can assume that this will be the interaction protocol.
+    """
+
+    _initialized: bool
+
+    @property
+    def mcp_config(self) -> dict[str, dict[str, Any]]:
+        """Get the MCP config."""
+        ...
+
+    @property
+    def is_connected(self) -> bool:
+        """Check if client is connected and initialized."""
+        ...
+
+    async def initialize(self, mcp_config: dict[str, dict[str, Any]] | None = None) -> None:
+        """Initialize the client."""
         ...
 
     async def list_tools(self) -> list[types.Tool]:
         """List all available tools."""
         ...
 
-    async def call_tool(self, name: str, arguments: dict[str, Any] | None = None) -> MCPToolResult:
+    async def call_tool(self, tool_call: MCPToolCall) -> MCPToolResult:
         """Execute a tool by name."""
         ...
 
-    async def close(self) -> None:
-        """Close the client."""
+    async def shutdown(self) -> None:
+        """Shutdown the client."""
         ...
 
 
-class BaseHUDClient(ABC):
-    """Base class with common HUD functionality."""
+class BaseHUDClient(AgentMCPClient):
+    """Base class with common HUD functionality that adds:
+    - Connection management
+    - Tool discovery
+    - Telemetry fetching (hud environment-specific)
+    - Logging
+    - Strict tool output validation (optional)
+    - Environment analysis (optional)
+
+    Any custom client should inherit from this class, and implement:
+    - _connect: Connect to the MCP server
+    - list_tools: List all available tools
+    - list_resources: List all available resources
+    - call_tool: Execute a tool by name
+    - read_resource: Read a resource by URI
+    - _disconnect: Disconnect from the MCP server
+    - any other MCP client methods
+    """
+
+    client_info = Implementation(name="hud-mcp", title="hud MCP Client", version=hud_version)
 
     def __init__(
         self,
-        mcp_config: dict[str, dict[str, Any]],
+        mcp_config: dict[str, dict[str, Any]] | None = None,
         verbose: bool = False,
         strict_validation: bool = False,
+        auto_trace: bool = True,
     ) -> None:
         """
         Initialize base client.
@@ -57,15 +97,131 @@ class BaseHUDClient(ABC):
             verbose: Enable verbose logging
             strict_validation: Enable strict tool output validation
         """
-        self.mcp_config = mcp_config
         self.verbose = verbose
-        self.strict_validation = strict_validation
-        self._telemetry_data: dict[str, Any] = {}
+        self._mcp_config = mcp_config
+        self._strict_validation = strict_validation
+        self._auto_trace = auto_trace
+
         self._initialized = False
-        self._tools: list[types.Tool] = []
 
         if self.verbose:
             self._setup_verbose_logging()
+
+    async def initialize(self, mcp_config: dict[str, dict[str, Any]] | None = None) -> None:
+        """Initialize connection and fetch tools."""
+        if self._initialized:
+            logger.warning(
+                "Client already connected, if you want to reconnect or change the configuration, "
+                "call shutdown() first. This is especially important if you are using an agent."
+            )
+            return
+
+        self._mcp_config = mcp_config or self._mcp_config
+        if self._mcp_config is None:
+            raise ValueError(
+                "An MCP server configuration is required"
+                "Either pass it to the constructor or call initialize with a configuration"
+            )
+
+        setup_hud_telemetry(self._mcp_config, auto_trace=self._auto_trace)
+
+        logger.debug("Initializing MCP client...")
+
+        # Subclasses implement connection
+        await self._connect(self._mcp_config)
+
+        # Common hud behavior - fetch telemetry
+        await self._fetch_telemetry()
+
+        self._initialized = True
+        logger.info("Client initialized")
+
+    async def shutdown(self) -> None:
+        """Disconnect from the MCP server."""
+        if self._initialized:
+            await self._disconnect()
+            self._initialized = False
+            logger.info("Client disconnected")
+        else:
+            logger.warning("Client is not running, cannot disconnect")
+
+    @overload
+    async def call_tool(self, tool_call: MCPToolCall, /) -> MCPToolResult: ...
+    @overload
+    async def call_tool(
+        self,
+        *,
+        name: str,
+        arguments: dict[str, Any] | None = None,
+    ) -> MCPToolResult: ...
+
+    async def call_tool(
+        self,
+        tool_call: MCPToolCall | None = None,
+        *,
+        name: str | None = None,
+        arguments: dict[str, Any] | None = None,
+    ) -> MCPToolResult:
+        if tool_call is not None:
+            return await self._call_tool(tool_call)
+        elif name is not None:
+            return await self._call_tool(MCPToolCall(name=name, arguments=arguments))
+        else:
+            raise TypeError(
+                "call_tool() requires either an MCPToolCall positional arg "
+                "or keyword 'name' (and optional 'arguments')."
+            )
+
+    @abstractmethod
+    async def _connect(self, mcp_config: dict[str, dict[str, Any]]) -> None:
+        """Subclasses implement their connection logic."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_tools(self) -> list[types.Tool]:
+        """List all available tools."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_resources(self) -> list[types.Resource]:
+        """List all available resources."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def _call_tool(self, tool_call: MCPToolCall) -> MCPToolResult:
+        """Execute a tool by name."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def read_resource(self, uri: str) -> types.ReadResourceResult | None:
+        """Read a resource by URI."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def _disconnect(self) -> None:
+        """Subclasses implement their disconnection logic."""
+        raise NotImplementedError
+
+    @property
+    def is_connected(self) -> bool:
+        """Check if client is connected and initialized."""
+        return self._initialized
+
+    @property
+    def mcp_config(self) -> dict[str, dict[str, Any]]:
+        """Get the MCP config."""
+        if self._mcp_config is None:
+            raise ValueError("Please initialize the client with a valid MCP config")
+        return self._mcp_config
+
+    async def __aenter__(self: Any) -> Any:
+        """Async context manager entry."""
+        await self.initialize()
+        return self
+
+    async def __aexit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+        """Async context manager exit."""
+        await self.shutdown()
 
     def _setup_verbose_logging(self) -> None:
         """Configure verbose logging for debugging."""
@@ -80,36 +236,11 @@ class BaseHUDClient(ABC):
             logger.addHandler(handler)
             logger.setLevel(logging.DEBUG)
 
-    async def initialize(self) -> None:
-        """Initialize connection and fetch telemetry."""
-        if self._initialized:
-            return
-
-        logger.debug("Initializing MCP client...")
-
-        # Subclasses implement connection
-        await self._connect()
-
-        # Discover tools
-        self._tools = await self.list_tools()
-        logger.debug("Client discovered %d tools", len(self._tools))
-
-        # Common HUD behavior - fetch telemetry
-        await self._fetch_telemetry()
-
-        self._initialized = True
-        logger.info("Client initialized with %d tools", len(self._tools))
-
-    @abstractmethod
-    async def _connect(self) -> None:
-        """Subclasses implement their connection logic."""
-        raise NotImplementedError
-
     async def _fetch_telemetry(self) -> None:
-        """Common telemetry fetching for all HUD clients."""
+        """Common telemetry fetching for all hud clients."""
         try:
             # Try to read telemetry resource directly
-            result = await self._read_resource_internal("telemetry://live")
+            result = await self.read_resource("telemetry://live")
             if result and result.contents:
                 # Parse telemetry data
                 telemetry_data = json.loads(result.contents[0].text)  # type: ignore
@@ -135,62 +266,6 @@ class BaseHUDClient(ABC):
             if self.verbose:
                 logger.debug("No telemetry available: %s", e)
 
-    @abstractmethod
-    async def _read_resource_internal(self, uri: str) -> types.ReadResourceResult | None:
-        """Internal method to read resources - subclasses implement."""
-        raise NotImplementedError
-
-    def get_telemetry_data(self) -> dict[str, Any]:
-        """Get collected telemetry data."""
-        return self._telemetry_data
-
-    def get_available_tools(self) -> list[types.Tool]:
-        """Get list of discovered tools."""
-        return self._tools
-
-    @property
-    def is_connected(self) -> bool:
-        """Check if client is connected and initialized."""
-        return self._initialized
-
-    @abstractmethod
-    async def list_tools(self) -> list[types.Tool]:
-        """List all available tools."""
-        raise NotImplementedError
-
-    @abstractmethod
-    async def list_resources(self) -> list[types.Resource]:
-        """List all available resources."""
-        raise NotImplementedError
-
-    @abstractmethod
-    async def call_tool(self, name: str, arguments: dict[str, Any] | None = None) -> MCPToolResult:
-        """Execute a tool by name."""
-        raise NotImplementedError
-
-    async def get_hub_tools(self, hub_name: str) -> list[str]:
-        """Get all subtools for a specific hub (setup/evaluate).
-
-        Args:
-            hub_name: Name of the hub (e.g., "setup", "evaluate")
-
-        Returns:
-            List of available function names for the hub
-        """
-        try:
-            # Read the hub's functions catalogue resource
-            result = await self._read_resource_internal(f"file:///{hub_name}/functions")
-            if result and result.contents:
-                # Parse the JSON list of function names
-                import json
-
-                functions = json.loads(result.contents[0].text)  # type: ignore
-                return functions
-        except Exception as e:
-            if self.verbose:
-                logger.debug("Could not read hub functions for '%s': %s", hub_name, e)
-        return []
-
     async def analyze_environment(self) -> dict[str, Any]:
         """Complete analysis of the MCP environment.
 
@@ -202,13 +277,16 @@ class BaseHUDClient(ABC):
             - resources: All available resources
             - metadata: Environment metadata
         """
+        if not self._initialized:
+            raise ValueError("Client must be initialized before analyzing the environment")
+
         analysis: dict[str, Any] = {
             "tools": [],
             "hub_tools": {},
             "telemetry": self._telemetry_data,
             "resources": [],
             "metadata": {
-                "servers": list(self.mcp_config.keys()),
+                "servers": list(self._mcp_config.keys()),  # type: ignore
                 "initialized": self._initialized,
             },
         }
@@ -250,3 +328,26 @@ class BaseHUDClient(ABC):
                 logger.debug("Could not list resources: %s", e)
 
         return analysis
+
+    async def get_hub_tools(self, hub_name: str) -> list[str]:
+        """Get all subtools for a specific hub (setup/evaluate).
+
+        Args:
+            hub_name: Name of the hub (e.g., "setup", "evaluate")
+
+        Returns:
+            List of available function names for the hub
+        """
+        try:
+            # Read the hub's functions catalogue resource
+            result = await self.read_resource(f"file:///{hub_name}/functions")
+            if result and result.contents:
+                # Parse the JSON list of function names
+                import json
+
+                functions = json.loads(result.contents[0].text)  # type: ignore
+                return functions
+        except Exception as e:
+            if self.verbose:
+                logger.debug("Could not read hub functions for '%s': %s", hub_name, e)
+        return []

@@ -41,22 +41,31 @@ class TestOperatorAgent:
         assert agent.openai_client == mock_model_client
 
     @pytest.mark.asyncio
-    async def test_create_initial_messages(self, mock_mcp_client):
-        """Test creating initial messages."""
+    async def test_format_blocks(self, mock_mcp_client):
+        """Test formatting content blocks."""
         mock_model_client = MagicMock()
         agent = OperatorAgent(mcp_client=mock_mcp_client, model_client=mock_model_client)
 
-        # Test with text only
-        messages = await agent.create_initial_messages("Hello, GPT!")
-        assert len(messages) == 1
-        assert messages[0]["prompt"] == "Hello, GPT!"
-        assert messages[0]["screenshot"] is None
+        # Test with text blocks
+        blocks: list[types.ContentBlock] = [
+            types.TextContent(type="text", text="Hello, GPT!"),
+            types.TextContent(type="text", text="Another message"),
+        ]
 
-        # Test with screenshot
-        messages = await agent.create_initial_messages("Look at this", screenshot="base64data")
+        messages = await agent.format_blocks(blocks)
+        assert len(messages) == 2
+        assert messages[0] == {"type": "user_input", "text": "Hello, GPT!"}
+        assert messages[1] == {"type": "user_input", "text": "Another message"}
+
+        # Test with mixed content (non-text blocks should be filtered)
+        blocks = [
+            types.TextContent(type="text", text="Text content"),
+            types.ImageContent(type="image", data="base64data", mimeType="image/png"),
+        ]
+
+        messages = await agent.format_blocks(blocks)
         assert len(messages) == 1
-        assert messages[0]["prompt"] == "Look at this"
-        assert messages[0]["screenshot"] == "base64data"
+        assert messages[0] == {"type": "user_input", "text": "Text content"}
 
     @pytest.mark.asyncio
     async def test_format_tool_results(self, mock_mcp_client, mock_openai):
@@ -125,7 +134,7 @@ class TestOperatorAgent:
         ]
 
         messages = [{"prompt": "What's on the screen?", "screenshot": None}]
-        response = await agent.get_model_response(messages)
+        response = await agent.get_response(messages)
 
         assert response.content == "No computer use tools available"
         assert response.tool_calls == []
@@ -140,7 +149,7 @@ class TestOperatorAgent:
         agent._available_tools = []
 
         messages = [{"prompt": "Hi", "screenshot": None}]
-        response = await agent.get_model_response(messages)
+        response = await agent.get_response(messages)
 
         assert response.content == "No computer use tools available"
         assert response.tool_calls == []
@@ -188,8 +197,8 @@ class TestOperatorAgent:
         )
 
         # Mock tool execution
-        agent.mcp_client.call_tool = AsyncMock(
-            return_value=types.CallToolResult(
+        mock_mcp_client.call_tool = AsyncMock(
+            return_value=MCPToolResult(
                 content=[types.TextContent(type="text", text="Search results...")], isError=False
             )
         )
@@ -221,7 +230,7 @@ class TestOperatorAgent:
         mock_openai.responses.create = AsyncMock(return_value=mock_response)
 
         messages = [{"prompt": "Hi", "screenshot": None}]
-        response = await agent.get_model_response(messages)
+        response = await agent.get_response(messages)
 
         assert response.content == ""
         assert response.tool_calls == []

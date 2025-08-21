@@ -10,7 +10,7 @@ from mcp import types
 from hud.clients.base import AgentMCPClient, BaseHUDClient
 from hud.clients.fastmcp import FastMCPHUDClient
 from hud.clients.mcp_use import MCPUseHUDClient
-from hud.types import MCPToolResult
+from hud.types import MCPToolCall, MCPToolResult
 
 
 class MockClient(BaseHUDClient):
@@ -27,7 +27,7 @@ class MockClient(BaseHUDClient):
             )
         ]
 
-    async def _connect(self) -> None:
+    async def _connect(self, mcp_config: dict[str, dict[str, Any]]) -> None:
         self._connected = True
 
     async def list_tools(self) -> list[types.Tool]:
@@ -39,14 +39,14 @@ class MockClient(BaseHUDClient):
         """Minimal list_resources for protocol satisfaction in tests."""
         return []
 
-    async def call_tool(self, name: str, arguments: dict[str, Any] | None = None) -> MCPToolResult:
-        if name == "test_tool":
+    async def _call_tool(self, tool_call: MCPToolCall) -> MCPToolResult:
+        if tool_call.name == "test_tool":
             return MCPToolResult(
                 content=[types.TextContent(type="text", text="Success")], isError=False
             )
-        raise ValueError(f"Tool {name} not found")
+        raise ValueError(f"Tool {tool_call.name} not found")
 
-    async def _read_resource_internal(self, uri: str) -> types.ReadResourceResult | None:
+    async def read_resource(self, uri: str) -> types.ReadResourceResult | None:
         if uri == "telemetry://live":
             from pydantic import AnyUrl
 
@@ -61,17 +61,9 @@ class MockClient(BaseHUDClient):
             )
         return None
 
-    async def close(self) -> None:
-        """Close the connection."""
+    async def _disconnect(self) -> None:
+        """Disconnect from the MCP server."""
         self._connected = False
-        self._initialized = False
-
-    async def __aenter__(self):
-        await self.initialize()
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.close()
 
 
 class TestProtocol:
@@ -99,15 +91,16 @@ class TestProtocol:
 
         # Not initialized yet
         assert not client._initialized
-        assert len(client.get_available_tools()) == 0  # Should be empty before init
+        # Can't call list_tools before initialization, it would raise an error
 
         # Initialize
         await client.initialize()
 
         # Should be initialized with tools discovered
         assert client._initialized
-        assert len(client.get_available_tools()) == 1
-        assert client.get_available_tools()[0].name == "test_tool"
+        tools = await client.list_tools()
+        assert len(tools) == 1
+        assert tools[0].name == "test_tool"
 
     @pytest.mark.asyncio
     async def test_telemetry_fetching(self):
@@ -115,15 +108,14 @@ class TestProtocol:
         client = MockClient()
 
         # No telemetry before initialization
-        assert client.get_telemetry_data() == {}
+        assert client._telemetry_data == {}
 
         # Initialize
         await client.initialize()
 
         # Should have telemetry
-        telemetry = client.get_telemetry_data()
-        assert telemetry["status"] == "healthy"
-        assert telemetry["services"]["api"] == "running"
+        assert client._telemetry_data["status"] == "healthy"
+        assert client._telemetry_data["services"]["api"] == "running"
 
     @pytest.mark.asyncio
     async def test_context_manager(self):
@@ -135,7 +127,8 @@ class TestProtocol:
             tools = await client.list_tools()
             assert len(tools) == 1
 
-        # Note: MockClient doesn't implement close() so it stays initialized
+        # Should be closed after exiting context
+        assert not client._initialized
 
     @pytest.mark.asyncio
     async def test_tool_execution(self):
@@ -144,14 +137,22 @@ class TestProtocol:
 
         await client.initialize()
 
-        # Execute a tool
-        result = await client.call_tool("test_tool", {"arg": "value"})
+        # Execute a tool - test both call signatures
+        # Test with MCPToolCall
+        tool_call = MCPToolCall(name="test_tool", arguments={"arg": "value"})
+        result = await client.call_tool(tool_call)
 
         assert isinstance(result, MCPToolResult)
         assert not result.isError
         from mcp.types import TextContent
 
         assert isinstance(result.content[0], TextContent) and result.content[0].text == "Success"
+
+        # Test with name/arguments
+        result2 = await client.call_tool(name="test_tool", arguments={"arg": "value"})
+        assert isinstance(result2, MCPToolResult)
+        assert not result2.isError
+        assert isinstance(result2.content[0], TextContent) and result2.content[0].text == "Success"
 
     @pytest.mark.asyncio
     async def test_tool_not_found(self):
@@ -162,7 +163,7 @@ class TestProtocol:
 
         # Try to execute non-existent tool
         with pytest.raises(ValueError, match="Tool unknown_tool not found"):
-            await client.call_tool("unknown_tool", {})
+            await client.call_tool(name="unknown_tool", arguments={})
 
 
 class TestClientCompatibility:

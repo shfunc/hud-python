@@ -15,13 +15,13 @@ Configuration in pyproject.toml:
     [tool.hud.clone]
     title = "🚀 My Project"  # Optional title for the message panel
     style = "blue"           # Optional border style (any Rich color)
-    
+
     # Option 1: Plain text message with Rich markup support
     message = "[bold]Welcome![/bold] Run [cyan]pip install -e .[/cyan] to start."
-    
+
     # Option 2: Markdown formatted message
     markdown = "## Welcome\\n\\nThis supports **markdown** formatting."
-    
+
     # Option 3: Step-by-step instructions
     steps = [
         "Install dependencies: [green]pip install -e .[/green]",
@@ -35,12 +35,13 @@ Rich Markup Examples:
     - Combined: [bold cyan]text[/bold cyan]
     - Background: [on red]text[/on red]
     - Links: [link=https://example.com]clickable[/link]
-    
+
 See Rich documentation for more markup options: https://rich.readthedocs.io/en/stable/markup.html
 """
 
 from __future__ import annotations
 
+import logging
 import subprocess
 import tomllib
 from pathlib import Path
@@ -50,6 +51,8 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.text import Text
+
+logger = logging.getLogger(__name__)
 
 console = Console()
 
@@ -74,7 +77,7 @@ def clone_repository(url: str) -> tuple[bool, str]:
 
     try:
         # Run git clone with quiet flag
-        result = subprocess.run(
+        subprocess.run(  # noqa: S603
             cmd,
             capture_output=True,
             text=True,
@@ -117,14 +120,12 @@ def get_clone_message(clone_path: str) -> dict[str, Any] | None:
                 if "tool" in data and "hud" in data["tool"] and "clone" in data["tool"]["hud"]:
                     return data["tool"]["hud"]["clone"]
         except Exception:
-            pass
+            logger.warning("Failed to load clone config from %s", pyproject_path)
 
     return None
 
 
-def print_tutorial(
-    clone_config: dict[str, Any] | None = None
-) -> None:
+def print_tutorial(clone_config: dict[str, Any] | None = None) -> None:
     """Print a rich formatted success message with optional tutorial."""
     # Display custom message if configured
     if clone_config:

@@ -5,11 +5,13 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from mcp import Implementation
 from mcp.shared.exceptions import McpError
 from mcp_use.client import MCPClient as MCPUseClient
 from pydantic import AnyUrl
 
-from hud.types import MCPToolResult
+from hud.types import MCPToolCall, MCPToolResult
+from hud.version import __version__ as hud_version
 
 from .base import BaseHUDClient
 
@@ -23,7 +25,11 @@ logger = logging.getLogger(__name__)
 class MCPUseHUDClient(BaseHUDClient):
     """MCP-use based implementation of HUD MCP client."""
 
-    def __init__(self, mcp_config: dict[str, dict[str, Any]], **kwargs: Any) -> None:
+    client_info = Implementation(
+        name="hud-mcp-use", title="hud MCP-use Client", version=hud_version
+    )
+
+    def __init__(self, mcp_config: dict[str, dict[str, Any]] | None = None, **kwargs: Any) -> None:
         """
         Initialize MCP-use client.
 
@@ -31,19 +37,22 @@ class MCPUseHUDClient(BaseHUDClient):
             mcp_config: MCP server configuration dict
             **kwargs: Additional arguments passed to base class
         """
-        super().__init__(mcp_config, **kwargs)
-
-        # Initialize mcp_use client with proper config
-        config = {"mcpServers": mcp_config}
-        self._mcp_client = MCPUseClient.from_dict(config)
+        super().__init__(mcp_config=mcp_config, **kwargs)
 
         self._sessions: dict[str, MCPUseSession] = {}
         self._tool_map: dict[str, tuple[str, types.Tool]] = {}
+        self._client: MCPUseClient | None = None
 
-    async def _connect(self) -> None:
+    async def _connect(self, mcp_config: dict[str, dict[str, Any]]) -> None:
         """Create all sessions for MCP-use client."""
+        if self._client is not None:
+            logger.warning("Client is already connected, cannot connect again")
+            return
+
+        config = {"mcpServers": mcp_config}
+        self._client = MCPUseClient.from_dict(config)
         try:
-            self._sessions = await self._mcp_client.create_all_sessions()
+            self._sessions = await self._client.create_all_sessions()
             logger.info("Created %d MCP sessions", len(self._sessions))
 
             # Configure validation for all sessions based on client setting
@@ -56,7 +65,7 @@ class MCPUseHUDClient(BaseHUDClient):
                     and session.connector.client_session is not None
                 ):
                     session.connector.client_session._validation_options = ValidationOptions(
-                        strict_output_validation=self.strict_validation
+                        strict_output_validation=self._strict_validation
                     )
 
             # Log session details in verbose mode
@@ -81,6 +90,9 @@ class MCPUseHUDClient(BaseHUDClient):
 
     async def list_tools(self) -> list[types.Tool]:
         """List all available tools from all sessions."""
+        if self._client is None or not self._sessions:
+            raise ValueError("Client is not connected, call initialize() first")
+
         all_tools = []
         self._tool_map = {}
 
@@ -128,32 +140,35 @@ class MCPUseHUDClient(BaseHUDClient):
 
         return all_tools
 
-    async def call_tool(self, name: str, arguments: dict[str, Any] | None = None) -> MCPToolResult:
+    async def _call_tool(self, tool_call: MCPToolCall) -> MCPToolResult:
         """Execute a tool by name."""
-        if name not in self._tool_map:
-            raise ValueError(f"Tool '{name}' not found")
+        if self._client is None or not self._initialized:
+            raise ValueError("Client is not connected, call initialize() first")
 
-        server_name, _ = self._tool_map[name]
+        if tool_call.name not in self._tool_map:
+            raise ValueError(f"Tool '{tool_call.name}' not found")
+
+        server_name, _ = self._tool_map[tool_call.name]
         session = self._sessions[server_name]
 
         if self.verbose:
             logger.debug(
                 "Calling tool '%s' on server '%s' with arguments: %s",
-                name,
+                tool_call.name,
                 server_name,
-                arguments,
+                tool_call.arguments,
             )
 
         if session.connector.client_session is None:
             raise ValueError(f"Client session not initialized for {server_name}")
 
         result = await session.connector.client_session.call_tool(
-            name=name,
-            arguments=arguments or {},
+            name=tool_call.name,
+            arguments=tool_call.arguments or {},
         )
 
         if self.verbose:
-            logger.debug("Tool '%s' result: %s", name, result)
+            logger.debug("Tool '%s' result: %s", tool_call.name, result)
 
         # MCP-use already returns the correct type, but we need to ensure it's MCPToolResult
         return MCPToolResult(
@@ -164,6 +179,9 @@ class MCPUseHUDClient(BaseHUDClient):
 
     async def list_resources(self) -> list[types.Resource]:
         """List all available resources."""
+        if self._client is None or not self._sessions:
+            raise ValueError("Client is not connected, call initialize() first")
+
         for server_name, session in self._sessions.items():
             try:
                 if not hasattr(session, "connector") or not hasattr(
@@ -185,8 +203,11 @@ class MCPUseHUDClient(BaseHUDClient):
                 continue
         return []
 
-    async def _read_resource_internal(self, uri: str | AnyUrl) -> types.ReadResourceResult | None:
+    async def read_resource(self, uri: str | AnyUrl) -> types.ReadResourceResult | None:
         """Read a resource by URI from any server that provides it."""
+        if self._client is None or not self._sessions:
+            raise ValueError("Client is not connected, call initialize() first")
+
         for server_name, session in self._sessions.items():
             try:
                 if not hasattr(session, "connector") or not hasattr(
@@ -239,22 +260,17 @@ class MCPUseHUDClient(BaseHUDClient):
 
         return None
 
-    async def close(self) -> None:
+    async def _disconnect(self) -> None:
         """Close all active sessions."""
-        await self._mcp_client.close_all_sessions()
+        if self._client is None:
+            logger.warning("Client is not connected, cannot close")
+            return
+
+        await self._client.close_all_sessions()
         self._sessions = {}
         self._tool_map = {}
         self._initialized = False
-        logger.debug("MCP-use client closed")
-
-    async def __aenter__(self: Any) -> Any:
-        """Async context manager entry."""
-        await self.initialize()
-        return self
-
-    async def __aexit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
-        """Async context manager exit."""
-        await self.close()
+        logger.debug("MCP-use client disconnected")
 
     # Legacy compatibility methods (limited; tests should not rely on these)
     def get_sessions(self) -> dict[str, MCPUseSession]:

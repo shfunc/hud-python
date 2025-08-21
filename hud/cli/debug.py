@@ -239,7 +239,7 @@ async def debug_mcp_stdio(command: list[str], logger: CaptureLogger, max_phase: 
         logger.command(command)
         logger.info("Creating MCP client via hud...")
 
-        client = MCPClient(mcp_config=mcp_config, verbose=False)
+        client = MCPClient(mcp_config=mcp_config, verbose=False, auto_trace=False)
         await client.initialize()
 
         # Wait for initialization
@@ -247,7 +247,7 @@ async def debug_mcp_stdio(command: list[str], logger: CaptureLogger, max_phase: 
         await asyncio.sleep(5)
 
         # Get tools
-        tools = client.get_available_tools()
+        tools = await client.list_tools()
 
         if tools:
             logger.success(f"Found {len(tools)} tools")
@@ -307,7 +307,7 @@ async def debug_mcp_stdio(command: list[str], logger: CaptureLogger, max_phase: 
         if "setup" in tool_names:
             try:
                 logger.info("Testing setup tool...")
-                await client.call_tool("setup", {})
+                await client.call_tool(name="setup", arguments={})
                 logger.success("Setup tool responded")
             except Exception as e:
                 logger.info(f"Setup tool test: {e}")
@@ -315,7 +315,7 @@ async def debug_mcp_stdio(command: list[str], logger: CaptureLogger, max_phase: 
         if "evaluate" in tool_names:
             try:
                 logger.info("Testing evaluate tool...")
-                await client.call_tool("evaluate", {})
+                await client.call_tool(name="evaluate", arguments={})
                 logger.success("Evaluate tool responded")
             except Exception as e:
                 logger.info(f"Evaluate tool test: {e}")
@@ -351,7 +351,9 @@ async def debug_mcp_stdio(command: list[str], logger: CaptureLogger, max_phase: 
                     }
                 }
 
-                concurrent_client = MCPClient(mcp_config=client_config, verbose=False)
+                concurrent_client = MCPClient(
+                    mcp_config=client_config, verbose=False, auto_trace=False
+                )
                 await concurrent_client.initialize()
                 concurrent_clients.append(concurrent_client)
                 logger.info(f"Client {i + 1} connected")
@@ -360,7 +362,7 @@ async def debug_mcp_stdio(command: list[str], logger: CaptureLogger, max_phase: 
 
             # Clean shutdown
             for i, c in enumerate(concurrent_clients):
-                await c.close()
+                await c.shutdown()
                 logger.info(f"Client {i + 1} disconnected")
 
             phases_completed = 5
@@ -370,7 +372,7 @@ async def debug_mcp_stdio(command: list[str], logger: CaptureLogger, max_phase: 
         finally:
             for c in concurrent_clients:
                 try:
-                    await c.close()
+                    await c.shutdown()
                 except Exception as e:
                     logger.error(f"Failed to close client: {e}")
 
@@ -382,7 +384,7 @@ async def debug_mcp_stdio(command: list[str], logger: CaptureLogger, max_phase: 
         # Ensure client is closed even on exceptions
         if client:
             try:
-                await client.close()
+                await client.shutdown()
             except Exception:
                 logger.error("Failed to close client")
 

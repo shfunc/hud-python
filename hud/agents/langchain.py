@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import mcp.types as types
 from langchain.agents import AgentExecutor, create_tool_calling_agent
@@ -31,6 +31,11 @@ class LangChainAgent(MCPAgent):
     This agent wraps any LangChain-compatible LLM and provides
     access to MCP tools through LangChain's tool-calling interface.
     """
+
+    metadata: ClassVar[dict[str, Any]] = {
+        "display_width": 1920,
+        "display_height": 1080,
+    }
 
     def __init__(
         self,
@@ -71,27 +76,18 @@ class LangChainAgent(MCPAgent):
         logger.info("Created %s LangChain tools from MCP tools", len(self._langchain_tools))
         return self._langchain_tools
 
-    async def create_initial_messages(
-        self, prompt: str, screenshot: str | None
-    ) -> list[BaseMessage]:
+    async def get_system_messages(self) -> list[BaseMessage]:
+        """Get system messages for LangChain."""
+        return [SystemMessage(content=self.system_prompt)]
+
+    async def format_blocks(self, blocks: list[types.ContentBlock]) -> list[BaseMessage]:
         """Create initial messages for LangChain."""
         messages = []
-
-        # Add system message
-        system_prompt = self.get_system_prompt()
-        messages.append(SystemMessage(content=system_prompt))
-
-        # Add user message with prompt and optional screenshot
-        if screenshot:
-            # For multimodal models, include the image
-            content = [
-                {"type": "text", "text": prompt},
-                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{screenshot}"}},
-            ]
-            messages.append(HumanMessage(content=content))
-        else:
-            messages.append(HumanMessage(content=prompt))
-
+        for block in blocks:
+            if isinstance(block, types.TextContent):
+                messages.append(HumanMessage(content=block.text))
+            elif isinstance(block, types.ImageContent):
+                messages.append(HumanMessage(content=block.data))
         return messages
 
     @hud.instrument(
@@ -99,7 +95,7 @@ class LangChainAgent(MCPAgent):
         record_args=False,  # Messages can be large
         record_result=True,
     )
-    async def get_model_response(self, messages: list[BaseMessage]) -> AgentResponse:
+    async def get_response(self, messages: list[BaseMessage]) -> AgentResponse:
         """Get response from LangChain model including any tool calls."""
         # Get LangChain tools (created lazily)
         langchain_tools = self._get_langchain_tools()
