@@ -65,7 +65,7 @@ from hud.agents import ClaudeAgent
 from hud.datasets import Task
 
 async def main() -> None:
-    with hud.trace("Quick Start 2048"): # All telemetry works for any MCP agent
+    with hud.trace("Quick Start 2048"): # All telemetry works for any MCP-based agent
         task = Task(
             prompt="Reach 64 in 2048.",
             mcp_config={
@@ -124,7 +124,7 @@ This is an agent running on our proprietary financial analyst benchmark SheetBen
 
 ![Trace screenshot](https://raw.githubusercontent.com/hud-evals/hud-python/l/text-2048/docs/src/images/trace_sheet.gif)
 
-> [See this trace on _app.hud.so_](app.hud.so/trace/9e212e9e-3627-4f1f-9eb5-c6d03c59070a)
+> [See this trace on _app.hud.so_](https://app.hud.so/trace/9e212e9e-3627-4f1f-9eb5-c6d03c59070a)
 
 This example runs the full dataset:
 ```bash
@@ -256,7 +256,7 @@ Using the `run_dataset` function with a HuggingFace dataset automatically assign
 ## Architecture
 
 ```mermaid
-%%{init: { "sequence": { "wrap": true, "width":300 } } }%%
+%%{init: { "sequence": { "width":200 } } }%%
 graph TB
     subgraph "HUD Platform"
         Dashboard["📊 Dashboard<br/>(app.hud.so)"]
