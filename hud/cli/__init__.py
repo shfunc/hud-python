@@ -17,6 +17,7 @@ from .analyze import (
     analyze_environment_from_config,
     analyze_environment_from_mcp_config,
 )
+from .clone import clone_repository, get_clone_message, print_error, print_tutorial
 from .cursor import get_cursor_config_path, list_cursor_servers, parse_cursor_config
 from .debug import debug_mcp_stdio
 from .mcp_server import run_mcp_server
@@ -274,6 +275,53 @@ def mcp() -> None:
     run_mcp_server()
 
 
+@app.command()
+def clone(
+    url: str = typer.Argument(
+        ...,
+        help="Git repository URL to clone",
+    ),
+) -> None:
+    """🚀 Clone a git repository quietly with a pretty output.
+
+    This command wraps 'git clone' with the --quiet flag and displays
+    a rich formatted success message. If the repository contains a clone
+    message in pyproject.toml, it will be displayed as a tutorial.
+
+    Configure clone messages in your repository's pyproject.toml:
+
+    [tool.hud.clone]
+    title = "🚀 My Project"
+    message = "Thanks for cloning! Run 'pip install -e .' to get started."
+
+    # Or use markdown format:
+    # markdown = "## Welcome!\\n\\nHere's how to get started..."
+    # style = "cyan"
+
+    Examples:
+        hud clone https://github.com/user/repo.git
+    """
+    # Run the clone
+    success, result = clone_repository(url)
+
+    if success:
+        # Look for clone message configuration
+        clone_config = get_clone_message(result)
+        print_tutorial(clone_config)
+    else:
+        print_error(result)
+        raise typer.Exit(1)
+
+
+@app.command()
+def quickstart() -> None:
+    """
+    Quickstart with evaluating an agent!
+    """
+    # Just call the clone command with the quickstart URL
+    clone("https://github.com/hud-evals/quickstart.git")
+
+
 def main() -> None:
     """Main entry point for the CLI."""
     # Show header for main help
@@ -285,10 +333,11 @@ def main() -> None:
             )
         )
         console.print("\n[yellow]Quick Start:[/yellow]")
-        console.print("  1. Build your Docker image: [cyan]docker build -t my-mcp-server .[/cyan]")
-        console.print("  2. Debug it: [cyan]hud debug my-mcp-server[/cyan]")
-        console.print("  3. Analyze it: [cyan]hud analyze my-mcp-server[/cyan]")
-        console.print("  4. Use as MCP server: [cyan]hud mcp[/cyan] (for Cursor/Claude)\n")
+        console.print("  1. Get started quickly: [cyan]hud quickstart[/cyan]")
+        console.print("  2. Build your Docker image: [cyan]docker build -t my-mcp-server .[/cyan]")
+        console.print("  3. Debug it: [cyan]hud debug my-mcp-server[/cyan]")
+        console.print("  4. Analyze it: [cyan]hud analyze my-mcp-server[/cyan]")
+        console.print("  5. Use as MCP server: [cyan]hud mcp[/cyan] (for Cursor/Claude)\n")
 
     app()
 

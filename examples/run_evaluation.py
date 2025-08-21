@@ -14,7 +14,7 @@ Usage examples
 # Evaluate the FULL SheetBench dataset with Claude
 python examples/run_evaluation.py hud-evals/SheetBench-50 --full --agent claude
 
-# Run a single OSWorld task with OpenAI Operator agent (default single-task mode)
+# Run a single OSWorld-Verified task with OpenAI Operator agent (default single-task mode)
 python examples/run_evaluation.py hud-evals/OSWorld-Gold-Beta --agent openai
 """
 

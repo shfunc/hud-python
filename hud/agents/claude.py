@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 import logging
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from anthropic import AsyncAnthropic, BadRequestError
 
@@ -32,26 +32,6 @@ from .base import MCPAgent
 logger = logging.getLogger(__name__)
 
 
-def base64_to_content_block(base64: str) -> BetaImageBlockParam:
-    """Convert base64 image to Claude content block."""
-    return {
-        "type": "image",
-        "source": {"type": "base64", "media_type": "image/png", "data": base64},
-    }
-
-
-def text_to_content_block(text: str) -> BetaTextBlockParam:
-    """Convert text to Claude content block."""
-    return {"type": "text", "text": text}
-
-
-def tool_use_content_block(
-    tool_use_id: str, content: list[BetaTextBlockParam | BetaImageBlockParam]
-) -> BetaToolResultBlockParam:
-    """Create tool result content block."""
-    return {"type": "tool_result", "tool_use_id": tool_use_id, "content": content}
-
-
 class ClaudeAgent(MCPAgent):
     """
     Claude agent that uses MCP servers for tool execution.
@@ -60,13 +40,16 @@ class ClaudeAgent(MCPAgent):
     tools through MCP servers instead of direct implementation.
     """
 
+    metadata: ClassVar[dict[str, Any]] = {
+        "display_width": computer_settings.ANTHROPIC_COMPUTER_WIDTH,
+        "display_height": computer_settings.ANTHROPIC_COMPUTER_HEIGHT,
+    }
+
     def __init__(
         self,
         model_client: AsyncAnthropic | None = None,
         model: str = "claude-3-7-sonnet-20250219",
         max_tokens: int = 4096,
-        display_width: int = computer_settings.ANTHROPIC_COMPUTER_WIDTH,
-        display_height: int = computer_settings.ANTHROPIC_COMPUTER_HEIGHT,
         use_computer_beta: bool = True,
         **kwargs: Any,
     ) -> None:
@@ -77,8 +60,6 @@ class ClaudeAgent(MCPAgent):
             model_client: AsyncAnthropic client (created if not provided)
             model: Claude model to use
             max_tokens: Maximum tokens for response
-            display_width: Display width for computer use tools
-            display_height: Display height for computer use tools
             use_computer_beta: Whether to use computer-use beta features
             **kwargs: Additional arguments passed to BaseMCPAgent (including mcp_client)
         """
@@ -94,8 +75,6 @@ class ClaudeAgent(MCPAgent):
         self.anthropic_client = model_client
         self.model = model
         self.max_tokens = max_tokens
-        self.display_width = display_width
-        self.display_height = display_height
         self.use_computer_beta = use_computer_beta
 
         self.model_name = self.model
@@ -104,7 +83,7 @@ class ClaudeAgent(MCPAgent):
         self._claude_to_mcp_tool_map: dict[str, str] = {}
 
         # Base system prompt for autonomous operation
-        self.base_system_prompt = """
+        self.system_prompt = """
         You are Claude, an AI assistant created by Anthropic. You are helpful, harmless, and honest.
         
         When working on tasks:
@@ -117,82 +96,34 @@ class ClaudeAgent(MCPAgent):
         Remember: You are expected to complete tasks autonomously. The user trusts you to accomplish what they asked.
         """.strip()  # noqa: E501
 
-        # Log if dataset system prompt is being used
-        if hasattr(self, "dataset_system_prompt") and self.dataset_system_prompt:
-            logger.info(
-                "ClaudeAgent using dataset system prompt (length: %d chars)",
-                len(self.dataset_system_prompt),
-            )
-
     async def initialize(self, task: str | Task | None = None) -> None:
         """Initialize the agent and build tool mappings."""
         await super().initialize(task)
         # Build tool mappings after tools are discovered
         self._convert_tools_for_claude()
 
-    async def create_initial_messages(
-        self, prompt: str, screenshot: str | None = None
-    ) -> list[BetaMessageParam]:
-        """Create initial messages for Claude."""
-        user_content: list[BetaImageBlockParam | BetaTextBlockParam] = []
+    async def get_system_messages(self) -> list[Any]:
+        """No system messages for Claude because applied in get_response"""
+        return []
 
-        # Add prompt text
-        user_content.append(text_to_content_block(prompt))
-
-        # Add screenshot if available
-        if screenshot:
-            user_content.append(base64_to_content_block(screenshot))
-
-        # Return initial user message
+    async def format_blocks(self, blocks: list[types.ContentBlock]) -> list[Any]:
+        """Format messages for Claude."""
         return [
             cast(
                 "BetaMessageParam",
                 {
                     "role": "user",
-                    "content": user_content,
+                    "content": blocks,
                 },
             )
         ]
-
-    def get_system_prompt(self) -> str:
-        """Generate system prompt by combining base/custom with dataset prompt.
-
-        Returns: (base OR custom) + dataset_prompt
-        """
-        # Start with base or custom prompt
-        if self.custom_system_prompt:
-            prompt = self.custom_system_prompt
-        else:
-            prompt = self.base_system_prompt
-
-        # Append dataset prompt if available
-        if hasattr(self, "dataset_system_prompt") and self.dataset_system_prompt:
-            prompt = f"{prompt}\n\n{self.dataset_system_prompt}"
-
-        # Append tool descriptions if enabled
-        if self.append_tool_system_prompt and self._available_tools:
-            tool_descriptions = []
-            for tool in self._available_tools:
-                if tool.name not in self.lifecycle_tools:
-                    desc = f"- {tool.name}: {tool.description}"
-                    if tool.inputSchema:
-                        desc += f" (parameters: {tool.inputSchema})"
-                    tool_descriptions.append(desc)
-
-            if tool_descriptions:
-                tools_prompt = "\n\nYou have access to the following tools:\n" + "\n".join(
-                    tool_descriptions
-                )
-                prompt = prompt + tools_prompt
-
-        return prompt
 
     @hud.instrument(
         span_type="agent",
         record_args=False,  # Messages can be large
         record_result=True,
     )
-    async def get_model_response(self, messages: list[BetaMessageParam]) -> AgentResponse:
+    async def get_response(self, messages: list[BetaMessageParam]) -> AgentResponse:
         """Get response from Claude including any tool calls."""
         # Get Claude tools
         claude_tools = self._convert_tools_for_claude()
@@ -207,7 +138,7 @@ class ClaudeAgent(MCPAgent):
             create_kwargs = {
                 "model": self.model,
                 "max_tokens": self.max_tokens,
-                "system": self.get_system_prompt(),
+                "system": self.system_prompt,
                 "messages": messages_cached,
                 "tools": claude_tools,
                 "tool_choice": {"type": "auto", "disable_parallel_tool_use": True},
@@ -341,8 +272,8 @@ class ClaudeAgent(MCPAgent):
                 claude_tool = {
                     "type": "computer_20250124",
                     "name": "computer",
-                    "display_width_px": self.display_width,
-                    "display_height_px": self.display_height,
+                    "display_width_px": self.metadata["display_width"],
+                    "display_height_px": self.metadata["display_height"],
                 }
                 # Map Claude's "computer" back to the actual MCP tool name
                 self._claude_to_mcp_tool_map["computer"] = tool.name
@@ -380,3 +311,23 @@ class ClaudeAgent(MCPAgent):
                         block["cache_control"] = cache_control  # type: ignore[reportGeneralTypeIssues]
 
         return messages_cached
+
+
+def base64_to_content_block(base64: str) -> BetaImageBlockParam:
+    """Convert base64 image to Claude content block."""
+    return {
+        "type": "image",
+        "source": {"type": "base64", "media_type": "image/png", "data": base64},
+    }
+
+
+def text_to_content_block(text: str) -> BetaTextBlockParam:
+    """Convert text to Claude content block."""
+    return {"type": "text", "text": text}
+
+
+def tool_use_content_block(
+    tool_use_id: str, content: list[BetaTextBlockParam | BetaImageBlockParam]
+) -> BetaToolResultBlockParam:
+    """Create tool result content block."""
+    return {"type": "tool_result", "tool_use_id": tool_use_id, "content": content}
