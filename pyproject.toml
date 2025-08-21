@@ -43,10 +43,26 @@ classifiers = [
 
 [project.scripts]
 hud = "hud.cli:main"
+hud-python = "hud.cli:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hud.clone]
+title = "🚀 Welcome to HUD SDK!"
+message = """[bold cyan]Thanks for cloning the HUD SDK![/bold cyan]
+
+[yellow]Quick Start:[/yellow]
+• Install in development mode: [green]pip install -e .[/green]
+• Try the CLI: [green]hud --help[/green]
+• Analyze an MCP server: [green]hud analyze hud-text-2048:latest[/green]
+• Read the docs: [green]docs/[/green]
+
+[dim]For more examples, check out the [cyan]examples/[/cyan] directory.[/dim]
+
+[bold]Happy coding! 🎉[/bold]"""
+style = "blue"
 
 [tool.hatch.metadata]
 allow-direct-references = true
