@@ -13,7 +13,6 @@ uv.lock
 # Media files
 *.jpg
 *.jpeg
-*.gif
 *.bmp
 *.tiff
 *.ico
