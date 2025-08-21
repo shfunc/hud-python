@@ -21,14 +21,14 @@ Evaluate and improve agents. Wrap software as environments, run benchmarks, and 
 
 ## Highlights
 
-- 🚀 **MCP-native connectivity** – any language model can call any hud environment.
+- 🚀 **MCP-native connectivity** – any agent can call any hud environment.
 - ⚡️ **Live telemetry** – inspect every tool call, observation, and reward in real time.
 - 🗂️ **Public benchmarks** – OSWorld-Verified, SheetBench-50, and more.
-- 🌱 **Reinforcement learning built-in** – Verifiers gym and ART pipelines for training.
-- 🌐 **Cloud browsers** – AnchorBrowser, Steel, BrowserBase integrations.
+- 🌱 **Reinforcement learning built-in** – Verifiers gym pipelines for GRPO training.
+- 🌐 **Cloud browsers** – AnchorBrowser, Steel, BrowserBase integrations for browser automation.
 - 🛠️ **Hot-reload dev loop** – edit environments live inside Cursor Agent.
 
-> We welcome contributors and feature requests – open an issue or hop on a call to discuss improvements.
+> We welcome contributors and feature requests – open an issue or hop on a call to discuss improvements!
 
 ## Installation
 
@@ -104,7 +104,7 @@ asyncio.run(main())
 
 This is a Qwen-2.5-3B agent training a policy on the `text-2048` environment using Verifiers:
 
-![RL curve](docs/src/images/rl_1.png)
+![RL curve](https://raw.githubusercontent.com/hud-evals/hud-python/l/text-2048/docs/src/images/rl_1.png)
 
 To start training:
 
@@ -122,7 +122,7 @@ Any hud MCP environment and evaluation works with our RL pipeline. Even our remo
 
 This is an agent running on our proprietary financial analyst benchmark SheetBench-50:
 
-![Trace screenshot](docs/src/images/trace_sheet.gif)
+![Trace screenshot](https://raw.githubusercontent.com/hud-evals/hud-python/l/text-2048/docs/src/images/trace_sheet.gif)
 
 > [See this trace on _app.hud.so_](app.hud.so/trace/9e212e9e-3627-4f1f-9eb5-c6d03c59070a)
 
@@ -247,9 +247,11 @@ result = await ClaudeAgent().run({
 
 All leaderboards are publicly available on [app.hud.so/leaderboards](https://app.hud.so/leaderboards)
 
-![Leaderboard](docs/src/images/leaderboards_1.png)
+![Leaderboard](https://raw.githubusercontent.com/hud-evals/hud-python/l/text-2048/docs/src/images/leaderboards_1.png)
 
-Using the `run_dataset` function with a HuggingFace dataset automatically assigns your job to that leaderboards page!
+We use Best@3 and Best@5 evaluations for the most consistent results across multiple jobs.
+
+Using the `run_dataset` function with a HuggingFace dataset automatically assigns your job to that leaderboard page, and allows you to create a scorecard out of it:
 
 ## Architecture
 
