@@ -65,8 +65,8 @@ class ClaudeAgent(MCPAgent):
         model_client: AsyncAnthropic | None = None,
         model: str = "claude-3-7-sonnet-20250219",
         max_tokens: int = 4096,
-        display_width_px: int = computer_settings.ANTHROPIC_COMPUTER_WIDTH,
-        display_height_px: int = computer_settings.ANTHROPIC_COMPUTER_HEIGHT,
+        display_width: int = computer_settings.ANTHROPIC_COMPUTER_WIDTH,
+        display_height: int = computer_settings.ANTHROPIC_COMPUTER_HEIGHT,
         use_computer_beta: bool = True,
         **kwargs: Any,
     ) -> None:
@@ -77,8 +77,8 @@ class ClaudeAgent(MCPAgent):
             model_client: AsyncAnthropic client (created if not provided)
             model: Claude model to use
             max_tokens: Maximum tokens for response
-            display_width_px: Display width for computer use tools
-            display_height_px: Display height for computer use tools
+            display_width: Display width for computer use tools
+            display_height: Display height for computer use tools
             use_computer_beta: Whether to use computer-use beta features
             **kwargs: Additional arguments passed to BaseMCPAgent (including mcp_client)
         """
@@ -94,8 +94,8 @@ class ClaudeAgent(MCPAgent):
         self.anthropic_client = model_client
         self.model = model
         self.max_tokens = max_tokens
-        self.display_width_px = display_width_px
-        self.display_height_px = display_height_px
+        self.display_width = display_width
+        self.display_height = display_height
         self.use_computer_beta = use_computer_beta
 
         self.model_name = self.model
@@ -341,8 +341,8 @@ class ClaudeAgent(MCPAgent):
                 claude_tool = {
                     "type": "computer_20250124",
                     "name": "computer",
-                    "display_width_px": self.display_width_px,
-                    "display_height_px": self.display_height_px,
+                    "display_width_px": self.display_width,
+                    "display_height_px": self.display_height,
                 }
                 # Map Claude's "computer" back to the actual MCP tool name
                 self._claude_to_mcp_tool_map["computer"] = tool.name
