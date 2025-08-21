@@ -17,8 +17,9 @@ The entire flow is wrapped in hud.trace() to provide RUN_ID context.
 import asyncio
 import hud
 from hud.datasets import Task
-from hud.agents import ClaudeAgent
 from hud.clients import MCPClient
+from hud.agents.claude import ClaudeAgent
+from hud.agents.base import text_to_blocks, find_reward, find_content
 
 
 async def main():
@@ -31,9 +32,8 @@ async def main():
                 "hud": {
                     "url": "https://mcp.hud.so/v3/mcp",
                     "headers": {
-                        "Authorization": "Bearer ${HUD_API_KEY}",
+                        "Authorization": "Bearer ${HUD_API_KEY}",  # Automatically filled from env
                         "Mcp-Image": "hudpython/hud-browser:latest",
-                        "Run-Id": "${RUN_ID}",  # Automatically filled from trace
                     },
                 }
             },
@@ -60,20 +60,34 @@ async def main():
 
             # Phase 2: Run setup tool
             print("📋 Running setup...")
-            setup_result = await agent.call_tool(task.setup_tool)
+            setup_result = await agent.call_tools(task.setup_tool)
+            setup_content = setup_result[0].content
             print("✅ Setup complete")
 
-            # Phase 3: Run agent loop
+            # Phase 3: Add context and first messages
             print(f"\n🤖 Running task: {task.prompt}")
-            messages = await agent.create_initial_messages(task.prompt, None)
+            messages = await agent.get_system_messages()
 
+            # Add context
+            context = await agent.format_message(
+                [
+                    *setup_content,
+                    task.prompt,
+                ]
+            )
+
+            messages.extend(context)
+            print(f"Messages: {messages}")
+
+            # Phase 4: Run agent loop
             done = False
             steps = 0
             max_steps = 10
 
+            # Use messages as the state for the agent
             while not done and steps < max_steps:
                 # Get model response
-                response = await agent.get_model_response(messages)
+                response = await agent.get_response(messages)
                 print(f"\n   Step {steps + 1}:")
 
                 if response.content:
@@ -81,16 +95,7 @@ async def main():
 
                 if response.tool_calls:
                     # Execute tool calls
-                    tool_results = []
-                    for tool_call in response.tool_calls:
-                        print(f"   🔧 Calling tool: {tool_call.name}")
-                        result = await agent.call_tool(tool_call)
-                        tool_results.append(result)
-
-                        # Show result preview
-                        if not result.isError:
-                            preview = str(result.content)[:100]
-                            print(f"      ✓ Result: {preview}...")
+                    tool_results = await agent.call_tools(response.tool_calls)
 
                     # Format results back into messages
                     messages.extend(
@@ -104,19 +109,15 @@ async def main():
 
             # Phase 4: Run evaluation
             print("\n📊 Running evaluation...")
-            eval_result = await agent.call_tool(task.evaluate_tool)
+            eval_result = await agent.call_tools(task.evaluate_tool)
 
-            if eval_result.isError:
-                print(f"❌ Evaluation failed: {eval_result.content}")
+            if eval_result[0].isError:
+                print(f"❌ Evaluation failed: {eval_result[0].content}")
             else:
-                # Extract reward from evaluation
-                eval_data = eval_result.content[0] if eval_result.content else {}
-                reward = (
-                    eval_data.get("text", "").split("reward=")[-1].split()[0]
-                    if isinstance(eval_data, dict) and "text" in eval_data
-                    else "unknown"
-                )
+                reward = find_reward(eval_result[0])
+                eval_content = find_content(eval_result[0])
                 print(f"✅ Evaluation complete - Reward: {reward}")
+                print(f"✅ Evaluation complete - Content: {eval_content}")
 
             # Summary
             print("\n📈 Summary:")
@@ -126,7 +127,7 @@ async def main():
         finally:
             # Phase 5: Cleanup
             print("\n🧹 Cleaning up...")
-            await client.close()
+            await client.shutdown()
 
     print("\n✨ Agent lifecycle demo complete!")
 
