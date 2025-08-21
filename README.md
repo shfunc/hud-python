@@ -1,13 +1,19 @@
 <div align="left">
-  <img src="https://raw.githubusercontent.com/hud-evals/hud-python/main/docs/logo/hud_logo.svg" alt="HUD" width="150" style="margin-bottom: 20px;"/>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/hud-evals/hud-python/main/docs/logo/hud_logo_dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/hud-evals/hud-python/main/docs/logo/hud_logo.svg">
+    <img src="https://raw.githubusercontent.com/hud-evals/hud-python/main/docs/logo/hud_logo.svg" alt="HUD" width="150" style="margin-bottom: 20px;"/>
+  </picture>
 </div>
 
 Evaluate and improve agents. Wrap software as environments, run benchmarks, and train with RL – locally or at scale.
 
-[![PyPI version](https://img.shields.io/pypi/v/hud-python)](https://pypi.org/project/hud-python/) 
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE) 
-[![Built on MCP](https://img.shields.io/badge/Built%20on-MCP-blueviolet)](https://modelcontextprotocol.io) 
+[![PyPI version](https://img.shields.io/pypi/v/hud-python?style=flat-square)](https://pypi.org/project/hud-python/)
+[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+[![Built on MCP](https://img.shields.io/badge/Built%20on-MCP-blueviolet?style=flat-square)](https://modelcontextprotocol.io)
+[![Discord](https://img.shields.io/discord/1327447144772407390?label=Discord&logo=discord&style=flat-square)](https://discord.gg/wkjtmHYYjm)
 [![X Follow](https://img.shields.io/twitter/follow/hud_evals?style=social)](https://x.com/intent/user?screen_name=hud_evals)
+[![Shop](https://img.shields.io/badge/shop-white.svg?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAJCAYAAAAywQxIAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAACxMAAAsTAQCanBgAAAF6SURBVChTlZA9ixNhFIWf8yaTpFHRRMXCKpAZhCAYFvwoLHZhwUKw9A9YCJb+Bq0sxGbBQrTxX1j41dvIRAjGZbdwRUUGIzPMeyw2swS3WZ/ynHvP5VylafoAWAd+5Xm+wX+SpukmcMf29RDCZrD9BViz3f53+CjYngKZpD5A2/Y7SQBMJpOkKIprdV1vdzqdHzHGblmW9Ww2+5pl2TmAxWKxmM/nP8fj8cmqqtZijJ9sb0u6ABBWjh0riuIt8CqE8LGu66e2d5MkeQ8QY3xme7fb7T4ZjUbrZVl+jjFuSXoEXGxCDgIl9WzfAO5LSmzvNB771R6vzG4Bx0MIt/M8vwV8aLyDQNt70+n0G1AspaTxVln+aghQluVsKbvxVysflT9NQK/XO7R/SGiQ9Nt2aftElmWXJd1kv0kbeANQVdWl4XB4XtJouXaqNRgMHkrqS+r0+/3XwD1JXdungRfAVWBi+6WkK8D3EMJz22cl3W21WgNgx3YAzvwFd0Chdq03gKUAAAAASUVORK5CYII=&style=flat-square)](https://shop.hud.so)
 
 ### Are you a startup building agents?
 
@@ -15,7 +21,7 @@ Evaluate and improve agents. Wrap software as environments, run benchmarks, and 
 
 ## Highlights
 
-- 🚀 **MCP-native connectivity** – any language model can call any HUD environment.
+- 🚀 **MCP-native connectivity** – any language model can call any hud environment.
 - ⚡️ **Live telemetry** – inspect every tool call, observation, and reward in real time.
 - 🗂️ **Public benchmarks** – SheetBench-50, OSWorld, and more.
 - 🌱 **Reinforcement learning built-in** – Verifiers gym and ART pipelines for training.
@@ -165,11 +171,11 @@ python examples/run_evaluation.py SheetBench-50 --dataset
 
 ## CLI reference
 
-| Command | Purpose |
-|---------|---------|
-| `hud analyze <image>` | Discover tools, resources, and metadata. |
-| `hud debug <image>` | Five-phase health check of an environment. |
-| `hud mcp` | Expose analysis & debug as an MCP server. |
+| Command                 | Purpose                                    |
+| ----------------------- | ------------------------------------------ |
+| `hud analyze <image>` | Discover tools, resources, and metadata.   |
+| `hud debug <image>`   | Five-phase health check of an environment. |
+| `hud mcp`             | Expose analysis & debug as an MCP server.  |
 
 ## Roadmap & community
 
@@ -178,6 +184,18 @@ python examples/run_evaluation.py SheetBench-50 --dataset
 - Native RL training to hud environments.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines. Open a PR or [issue](https://github.com/hud-evals/hud-python/issues).
+
+Thanks to all our contributors!
+
+<a href="https://github.com/hud-evals/hud-python/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=hud-evals/hud-python&max=50" />
+</a>
+
+
+Projects using HUD for agent evaluation and development:
+
+<!-- gh-dependents-info-used-by-start -->
+<!-- gh-dependents-info-used-by-end -->
 
 ## Citation
 

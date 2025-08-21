@@ -1,0 +1,150 @@
+name: Update Dependents Info
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+  # Scheduled: Every Sunday at midnight UTC
+  schedule:
+    - cron: "0 0 * * 0"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  update-dependents:
+    name: Update GitHub Dependents Info
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      # Checkout repository
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      # Setup Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Install github-dependents-info
+      - name: Install github-dependents-info
+        run: pip install -U github-dependents-info
+
+      # Generate and update dependents info
+      - name: Generate GitHub Dependents Info
+        run: |
+          # Get dependents data in JSON format
+          github-dependents-info --repo ${{ github.repository }} --sort stars --minstars 1 --json > dependents.json
+
+          # Check if we have any dependents
+          if [ ! -s dependents.json ] || [ "$(jq -r '.public_dependents_number' dependents.json)" == "0" ]; then
+            echo "No public dependents found yet."
+            # Create a placeholder message
+            cat > dependents_table.md << 'EOF'
+          <p align="center">
+            <i>Be the first to use HUD in your project! 🚀</i>
+          </p>
+          EOF
+          else
+            # Extract statistics
+            TOTAL_REPOS=$(jq -r '.total_dependents_number' dependents.json)
+            PUBLIC_REPOS=$(jq -r '.public_dependents_number' dependents.json)
+            TOTAL_STARS=$(jq -r '[.all_public_dependent_repos[].stars] | add // 0' dependents.json)
+
+            # Create the dependents table with stats
+            cat > dependents_table.md << EOF
+          <div align="center">
+            <img src="https://img.shields.io/badge/Used_by-${PUBLIC_REPOS}_projects-blue?style=flat-square" alt="Used by ${PUBLIC_REPOS} projects"/>
+            <img src="https://img.shields.io/badge/Stars-${TOTAL_STARS}_total-yellow?style=flat-square" alt="${TOTAL_STARS} total stars"/>
+          </div>
+
+          <table>
+            <tr>
+              <th width="400">Repository</th>
+              <th width="100">Stars</th>
+              <th>Description</th>
+            </tr>
+          EOF
+
+            # Add top repositories to the table (limit to top 15)
+            jq -r '.all_public_dependent_repos[:15] | .[] | 
+              "  <tr>\n    <td><a href=\"https://github.com/\(.name)\"><img src=\"\(.img)\" width=\"20\" height=\"20\" style=\"vertical-align: middle; margin-right: 8px;\"><strong>\(.owner)/\(.repo_name)</strong></a></td>\n    <td align=\"center\">⭐ \(.stars)</td>\n    <td>\(.description // \"No description\")</td>\n  </tr>"' dependents.json >> dependents_table.md
+
+            # Close the table and add a link to see all dependents
+            cat >> dependents_table.md << EOF
+          </table>
+
+          <p align="center">
+            <a href="https://github.com/hud-evals/hud-python/network/dependents">View all dependents →</a>
+          </p>
+          EOF
+          fi
+
+          # Update README by replacing content between tags
+          awk '
+          BEGIN { in_section = 0 }
+          /<!-- gh-dependents-info-used-by-start -->/ {
+            print $0
+            print ""
+            system("cat dependents_table.md")
+            print ""
+            in_section = 1
+            next
+          }
+          /<!-- gh-dependents-info-used-by-end -->/ {
+            in_section = 0
+            print $0
+            next
+          }
+          !in_section { print }
+          ' README.md > README_updated.md
+
+          mv README_updated.md README.md
+          rm -f dependents_table.md dependents.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Check for changes
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet README.md; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No changes detected in README.md"
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Changes detected in README.md"
+            git diff --stat README.md
+          fi
+
+      # Create Pull Request if changes exist
+      - name: Create Pull Request
+        if: steps.changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update dependents info (automated)"
+          title: "chore: update dependents info (automated)"
+          body: |
+            This PR updates the README with the latest information about projects using HUD.
+            
+            ### Changes
+            - Updated the "Used By" section with current dependent repositories
+            - Updated statistics (number of projects, total stars)
+            
+            This is an automated update triggered by the weekly schedule or manual workflow dispatch.
+          branch: chore/update-dependents-info-${{ github.run_id }}
+          delete-branch: true
+          labels: |
+            documentation
+            automated
