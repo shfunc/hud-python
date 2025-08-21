@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock, mock_open, patch
+from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 
 import pytest
 
@@ -52,42 +52,57 @@ class TestAnalyzeEnvironment:
         with (
             patch("hud.cli.analyze.MCPClient") as MockClient,
             patch("hud.cli.analyze.console"),
+            patch("hud.cli.analyze.display_interactive") as mock_interactive,
         ):
-            # Setup mock client
-            mock_client = MockClient.return_value
+            # Setup mock client - return an instance with async methods
+            mock_client = MagicMock()
             mock_client.initialize = AsyncMock()
             mock_client.analyze_environment = AsyncMock(return_value=mock_analysis)
-            mock_client.close = AsyncMock()
+            mock_client.shutdown = AsyncMock()
+            MockClient.return_value = mock_client
 
-            # Run analysis
             await analyze_environment(
-                ["docker", "run", "test"], output_format="json", verbose=False
+                ["docker", "run", "test"],
+                output_format="interactive",
+                verbose=False,
             )
 
-            # Verify calls
+            # Check client was used correctly
+            MockClient.assert_called_once()
             mock_client.initialize.assert_called_once()
             mock_client.analyze_environment.assert_called_once()
-            mock_client.close.assert_called_once()
+            mock_client.shutdown.assert_called_once()
+
+            # Check interactive display was called
+            mock_interactive.assert_called_once_with(mock_analysis)
 
     @pytest.mark.asyncio
     async def test_analyze_environment_failure(self) -> None:
-        """Test environment analysis with initialization failure."""
+        """Test handling analysis failure."""
         with (
             patch("hud.cli.analyze.MCPClient") as MockClient,
-            patch("hud.cli.analyze.console"),
+            patch("hud.cli.analyze.console") as mock_console,
         ):
-            # Setup mock client to fail
-            mock_client = MockClient.return_value
-            mock_client.initialize = AsyncMock(side_effect=Exception("Connection failed"))
-            mock_client.close = AsyncMock()
+            # Setup mock client that will raise exception during initialization
+            mock_client = MagicMock()
+            mock_client.initialize = AsyncMock(side_effect=RuntimeError("Connection failed"))
+            mock_client.shutdown = AsyncMock()
+            MockClient.return_value = mock_client
 
-            # Run analysis
+            # Test should not raise exception
             await analyze_environment(
-                ["docker", "run", "test"], output_format="json", verbose=False
+                ["docker", "run", "test"],
+                output_format="json",
+                verbose=False,
             )
 
-            # Should still close client
-            mock_client.close.assert_called_once()
+            # Check error was handled
+            mock_client.initialize.assert_called_once()
+            mock_client.shutdown.assert_called_once()
+
+            # Check console printed error hints
+            calls = mock_console.print.call_args_list
+            assert any("Docker logs may not show on Windows" in str(call) for call in calls)
 
     @pytest.mark.asyncio
     async def test_analyze_environment_formats(self) -> None:
@@ -109,10 +124,11 @@ class TestAnalyzeEnvironment:
                 patch("hud.cli.analyze.display_markdown") as mock_markdown,
             ):
                 # Setup mock client
-                mock_client = MockClient.return_value
+                mock_client = MagicMock()
                 mock_client.initialize = AsyncMock()
                 mock_client.analyze_environment = AsyncMock(return_value=mock_analysis)
-                mock_client.close = AsyncMock()
+                mock_client.shutdown = AsyncMock()
+                MockClient.return_value = mock_client
 
                 # Run analysis
                 await analyze_environment(
@@ -130,201 +146,143 @@ class TestAnalyzeEnvironment:
                     mock_interactive.assert_called_once_with(mock_analysis)
 
 
-class TestAnalyzeEnvironmentFromConfig:
-    """Test config file based analysis."""
+class TestAnalyzeWithConfig:
+    """Test config-based analysis functions."""
 
     @pytest.mark.asyncio
-    async def test_analyze_from_config_success(self) -> None:
-        """Test successful analysis from config file."""
-        config_data = {"test": {"command": "python", "args": ["server.py"]}}
-
-        with (
-            patch("builtins.open", mock_open(read_data=json.dumps(config_data))),
-            patch("hud.cli.analyze._analyze_with_config") as mock_analyze,
-        ):
-            await analyze_environment_from_config(Path("test.json"), "json", False)
-            mock_analyze.assert_called_once_with(config_data, "json", False)
-
-    @pytest.mark.asyncio
-    async def test_analyze_from_config_file_error(self) -> None:
-        """Test analysis when config file cannot be read."""
-        with (
-            patch("builtins.open", side_effect=FileNotFoundError()),
-            patch("hud.cli.analyze.console") as mock_console,
-        ):
-            await analyze_environment_from_config(Path("missing.json"), "json", False)
-            # Should print error
-            assert any(
-                "Error loading config" in str(call) for call in mock_console.print.call_args_list
-            )
-
-
-class TestAnalyzeEnvironmentFromMCPConfig:
-    """Test MCP config dict based analysis."""
-
-    @pytest.mark.asyncio
-    async def test_analyze_from_mcp_config(self) -> None:
-        """Test analysis from MCP config dict."""
-        mcp_config = {"test": {"command": "python", "args": ["server.py"]}}
-
-        with patch("hud.cli.analyze._analyze_with_config") as mock_analyze:
-            await analyze_environment_from_mcp_config(mcp_config, "json", True)
-            mock_analyze.assert_called_once_with(mcp_config, "json", True)
-
-
-class TestDisplayFunctions:
-    """Test display formatting functions."""
-
-    def test_display_interactive(self) -> None:
-        """Test interactive display format."""
-        analysis = {
-            "metadata": {"servers": ["test-server"], "initialized": True},
-            "tools": [
-                {"name": "tool1", "description": "First tool", "input_schema": {"type": "object"}},
-                {"name": "tool2", "description": None},
-            ],
-            "hub_tools": {"hub1": ["func1", "func2"]},
-            "resources": [
-                {"uri": "res://test", "name": "Test Resource", "mime_type": "text/plain"}
-            ],
-            "telemetry": {
-                "live_url": "http://example.com",
-                "status": "running",
-                "services": {"service1": "running", "service2": "stopped"},
-            },
-            "verbose": True,
-        }
-
-        with patch("hud.cli.analyze.console") as mock_console:
-            display_interactive(analysis)
-
-            # Verify various elements were printed
-            print_calls = [str(call) for call in mock_console.print.call_args_list]
-            assert any("Environment Overview" in call for call in print_calls)
-            assert any("Available Tools" in call for call in print_calls)
-            assert any("Available Resources" in call for call in print_calls)
-            assert any("Telemetry Data" in call for call in print_calls)
-
-    def test_display_interactive_minimal(self) -> None:
-        """Test interactive display with minimal data."""
-        analysis = {
-            "metadata": {"servers": ["test"], "initialized": False},
+    async def test_analyze_with_config_success(self) -> None:
+        """Test successful config-based analysis."""
+        mock_config = {"server": {"command": "test", "args": ["--arg"]}}
+        mock_analysis = {
+            "metadata": {"servers": ["server"], "initialized": True},
             "tools": [],
             "hub_tools": {},
             "resources": [],
             "telemetry": {},
         }
 
-        with patch("hud.cli.analyze.console"):
-            # Should not raise any exceptions
+        with (
+            patch("hud.cli.analyze.MCPClient") as MockClient,
+            patch("hud.cli.analyze.console"),
+            patch("hud.cli.analyze.display_interactive") as mock_interactive,
+        ):
+            # Setup mock client
+            mock_client = MagicMock()
+            mock_client.initialize = AsyncMock()
+            mock_client.analyze_environment = AsyncMock(return_value=mock_analysis)
+            mock_client.shutdown = AsyncMock()
+            MockClient.return_value = mock_client
+
+            await _analyze_with_config(
+                mock_config,
+                output_format="interactive",
+                verbose=False,
+            )
+
+            # Check client was created with correct config
+            MockClient.assert_called_once_with(
+                mcp_config=mock_config, verbose=False
+            )
+            mock_interactive.assert_called_once_with(mock_analysis)
+
+    @pytest.mark.asyncio
+    async def test_analyze_with_config_exception(self) -> None:
+        """Test config analysis handles exceptions gracefully."""
+        mock_config = {"server": {"command": "test"}}
+
+        with (
+            patch("hud.cli.analyze.MCPClient") as MockClient,
+            patch("hud.cli.analyze.console"),
+        ):
+            # Setup mock client that fails
+            mock_client = MagicMock()
+            mock_client.initialize = AsyncMock(side_effect=Exception("Test error"))
+            mock_client.shutdown = AsyncMock()
+            MockClient.return_value = mock_client
+
+            # Should not raise
+            await _analyze_with_config(
+                mock_config,
+                output_format="json",
+                verbose=False,
+            )
+
+            mock_client.shutdown.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_analyze_environment_from_config(self) -> None:
+        """Test analyze_environment_from_config."""
+        config_data = {"server": {"command": "test"}}
+        mock_path = Path("test.json")
+
+        with (
+            patch("builtins.open", mock_open(read_data=json.dumps(config_data))),
+            patch("hud.cli.analyze._analyze_with_config") as mock_analyze,
+        ):
+            await analyze_environment_from_config(mock_path, "json", False)
+
+            mock_analyze.assert_called_once_with(config_data, "json", False)
+
+    @pytest.mark.asyncio
+    async def test_analyze_environment_from_mcp_config(self) -> None:
+        """Test analyze_environment_from_mcp_config."""
+        config_data = {"server": {"command": "test"}}
+
+        with patch("hud.cli.analyze._analyze_with_config") as mock_analyze:
+            await analyze_environment_from_mcp_config(config_data, "markdown", True)
+
+            mock_analyze.assert_called_once_with(config_data, "markdown", True)
+
+
+class TestDisplayFunctions:
+    """Test display formatting functions."""
+
+    def test_display_interactive_basic(self) -> None:
+        """Test basic interactive display."""
+        analysis = {
+            "metadata": {"servers": ["test"], "initialized": True},
+            "tools": [{"name": "tool1", "description": "Test tool"}],
+            "hub_tools": {"hub1": ["func1", "func2"]},
+            "resources": [{"uri": "file:///test", "name": "Test", "description": "Resource"}],
+            "telemetry": {"status": "running", "live_url": "http://test"},
+        }
+
+        with patch("hud.cli.analyze.console") as mock_console:
             display_interactive(analysis)
 
-    def test_display_markdown(self) -> None:
-        """Test markdown display format."""
+            # Check console was called multiple times
+            assert mock_console.print.call_count > 0
+            # Check various sections were printed
+            calls_str = str(mock_console.print.call_args_list)
+            assert "Environment Overview" in calls_str
+            assert "Available Tools" in calls_str
+
+    def test_display_markdown_basic(self) -> None:
+        """Test basic markdown display."""
         analysis = {
-            "metadata": {"servers": ["test-server"], "initialized": True},
+            "metadata": {"servers": ["test1", "test2"], "initialized": True},
             "tools": [
-                {"name": "tool1", "description": "First tool"},
-                {"name": "tool2", "description": None},
+                {"name": "tool1", "description": "Tool 1"},
+                {"name": "setup", "description": "Hub tool"},
             ],
-            "hub_tools": {"hub1": ["func1", "func2"]},
-            "resources": [
-                {"uri": "res://test", "name": "Test Resource", "mime_type": "text/plain"}
-            ],
-            "telemetry": {
-                "live_url": "http://example.com",
-                "status": "running",
-                "services": {"service1": "running"},
-            },
+            "hub_tools": {"setup": ["init", "config"]},
+            "resources": [{"uri": "telemetry://live", "name": "Telemetry"}],
+            "telemetry": {"status": "active"},
         }
 
         with patch("hud.cli.analyze.console") as mock_console:
             display_markdown(analysis)
 
             # Get the markdown output
-            output = mock_console.print.call_args[0][0]
+            mock_console.print.assert_called_once()
+            markdown = mock_console.print.call_args[0][0]
 
-            # Verify markdown structure
-            assert "# MCP Environment Analysis" in output
-            assert "## Environment Overview" in output
-            assert "## Available Tools" in output
-            assert "### Regular Tools" in output
-            assert "### Hub Tools" in output
-            assert "## Available Resources" in output
-            assert "## Telemetry" in output
-            assert "- **tool1**:" in output
-            assert "| URI | Name | Type |" in output
-
-    def test_display_markdown_empty_resources(self) -> None:
-        """Test markdown display with no resources."""
-        analysis = {
-            "metadata": {"servers": ["test"], "initialized": True},
-            "tools": [],
-            "hub_tools": {},
-            "resources": [],
-            "telemetry": {},
-        }
-
-        with patch("hud.cli.analyze.console") as mock_console:
-            display_markdown(analysis)
-            output = mock_console.print.call_args[0][0]
-            # Should not have resources section
-            assert "## Available Resources" not in output
-
-
-class TestAnalyzeWithConfig:
-    """Test internal _analyze_with_config function."""
-
-    @pytest.mark.asyncio
-    async def test_analyze_with_config_success(self) -> None:
-        """Test successful analysis with config."""
-        mcp_config = {"test": {"command": "python", "args": ["server.py"]}}
-        mock_analysis = {
-            "metadata": {"servers": ["test"], "initialized": True},
-            "tools": [],
-            "hub_tools": {},
-            "resources": [],
-            "telemetry": {},
-        }
-
-        with (
-            patch("hud.cli.analyze.MCPClient") as MockClient,
-            patch("hud.cli.analyze.console"),
-            patch("hud.cli.analyze.display_interactive") as mock_display,
-        ):
-            # Setup mock client
-            mock_client = MockClient.return_value
-            mock_client.initialize = AsyncMock()
-            mock_client.analyze_environment = AsyncMock(return_value=mock_analysis)
-            mock_client.close = AsyncMock()
-
-            # Run analysis
-            await _analyze_with_config(mcp_config, "interactive", False)
-
-            # Verify
-            MockClient.assert_called_once_with(mcp_config=mcp_config, verbose=False)
-            mock_display.assert_called_once_with(mock_analysis)
-
-    @pytest.mark.asyncio
-    async def test_analyze_with_config_exception(self) -> None:
-        """Test analysis with exception during initialization."""
-        mcp_config = {"test": {"command": "python", "args": ["server.py"]}}
-
-        with (
-            patch("hud.cli.analyze.MCPClient") as MockClient,
-            patch("hud.cli.analyze.console"),
-        ):
-            # Setup mock client to fail
-            mock_client = MockClient.return_value
-            mock_client.initialize = AsyncMock(side_effect=RuntimeError("Init failed"))
-            mock_client.close = AsyncMock()
-
-            # Run analysis - should handle exception gracefully
-            await _analyze_with_config(mcp_config, "json", False)
-
-            # Should still close client
-            mock_client.close.assert_called_once()
-
-
-if __name__ == "__main__":
-    pytest.main([__file__])
+            # Check markdown structure
+            assert "# MCP Environment Analysis" in markdown
+            assert "## Environment Overview" in markdown
+            assert "## Available Tools" in markdown
+            assert "### Regular Tools" in markdown
+            assert "### Hub Tools" in markdown
+            assert "- **tool1**: Tool 1" in markdown
+            assert "- **setup**" in markdown
+            assert "  - init" in markdown

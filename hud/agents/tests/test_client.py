@@ -15,6 +15,7 @@ from hud.types import MCPToolResult
 logger = logging.getLogger(__name__)
 
 
+@patch("hud.clients.base.setup_hud_telemetry")
 class TestMCPClient:
     """Test MCPClient class."""
 
@@ -28,13 +29,12 @@ class TestMCPClient:
         mock_instance.close_all_sessions = AsyncMock()
         mock_instance.get_all_active_sessions = MagicMock(return_value={})
 
-        # Patch MCPUseClient class used by MCP-use backend
-        with patch("hud.clients.mcp_use.MCPUseClient") as mock_class:
-            mock_class.from_dict = MagicMock(return_value=mock_instance)
+        # Patch MCPUseClient.from_dict at the module level
+        with patch("mcp_use.client.MCPClient.from_dict", return_value=mock_instance):
             yield mock_instance
 
     @pytest.mark.asyncio
-    async def test_init_with_config(self):
+    async def test_init_with_config(self, mock_telemetry):
         """Test client initialization with config dictionary."""
         mcp_config = {
             "test_server": {
@@ -44,24 +44,25 @@ class TestMCPClient:
             }
         }
 
-        with patch("hud.clients.mcp_use.MCPUseClient") as mock_use_client:
-            mock_use_client.from_dict.return_value = MagicMock()
+        with patch("mcp_use.client.MCPClient.from_dict") as mock_from_dict:
+            mock_instance = MagicMock()
+            mock_instance.create_all_sessions = AsyncMock(return_value={})
+            mock_from_dict.return_value = mock_instance
             client = MCPClient(mcp_config=mcp_config, verbose=True)
+            # Initialize to trigger connection
+            await client.initialize()
 
             assert client.verbose is True
             # Verify MCPUseClient.from_dict was called with proper config
-            mock_use_client.from_dict.assert_called_once_with({"mcpServers": mcp_config})
+            mock_from_dict.assert_called_once_with({"mcpServers": mcp_config})
 
     @pytest.mark.asyncio
-    async def test_connect_single_server(self, mock_mcp_use_client):
+    async def test_connect_single_server(self, mock_telemetry, mock_mcp_use_client):
         """Test connecting to a single server."""
         config = {"test_server": {"command": "python", "args": ["-m", "test_server"]}}
 
         # Create the MCPClient - the fixture already patches MCPUseClient
         client = MCPClient(mcp_config=config, verbose=True)
-
-        # Internal client created
-        assert hasattr(client, "_mcp_client")
 
         # Mock session
         mock_session = MagicMock()
@@ -87,6 +88,9 @@ class TestMCPClient:
         # Initialize the client (creates sessions and discovers tools)
         await client.initialize()
 
+        # Internal client created
+        assert client._client is not None
+
         # Verify session was created
         mock_mcp_use_client.create_all_sessions.assert_called_once()
 
@@ -96,7 +100,7 @@ class TestMCPClient:
         assert names == {"tool1", "tool2"}
 
     @pytest.mark.asyncio
-    async def test_connect_multiple_servers(self, mock_mcp_use_client):
+    async def test_connect_multiple_servers(self, mock_telemetry, mock_mcp_use_client):
         """Test connecting to multiple servers."""
         config = {
             "server1": {"command": "python", "args": ["-m", "server1"]},
@@ -148,7 +152,7 @@ class TestMCPClient:
         assert names == {"tool1", "tool2"}
 
     @pytest.mark.asyncio
-    async def test_call_tool(self, mock_mcp_use_client):
+    async def test_call_tool(self, mock_telemetry, mock_mcp_use_client):
         """Test calling a tool."""
         config = {"test": {"command": "test"}}
         client = MCPClient(mcp_config=config)
@@ -175,9 +179,16 @@ class TestMCPClient:
 
         mock_session.connector.client_session.call_tool = AsyncMock(return_value=mock_call_result)
 
+        # Set up the mock to return the session both when creating and when getting sessions
         mock_mcp_use_client.create_all_sessions = AsyncMock(return_value={"test": mock_session})
+        mock_mcp_use_client.get_all_active_sessions = MagicMock(return_value={"test": mock_session})
 
         await client.initialize()
+
+        # First discover tools by calling list_tools
+        tools = await client.list_tools()
+        assert len(tools) == 1
+        assert tools[0].name == "calculator"
 
         # Call the tool
         result = await client.call_tool(
@@ -192,7 +203,7 @@ class TestMCPClient:
         )
 
     @pytest.mark.asyncio
-    async def test_call_tool_not_found(self, mock_mcp_use_client):
+    async def test_call_tool_not_found(self, mock_telemetry, mock_mcp_use_client):
         """Test calling a non-existent tool."""
         config = {"test": {"command": "test"}}
         client = MCPClient(mcp_config=config)
@@ -213,7 +224,7 @@ class TestMCPClient:
             await client.call_tool(name="nonexistent", arguments={})
 
     @pytest.mark.asyncio
-    async def test_get_telemetry_data(self, mock_mcp_use_client):
+    async def test_get_telemetry_data(self, mock_telemetry, mock_mcp_use_client):
         """Test getting telemetry data."""
         config = {"test": {"command": "test"}}
         client = MCPClient(mcp_config=config)
@@ -250,7 +261,7 @@ class TestMCPClient:
         assert isinstance(telemetry_data, dict)
 
     @pytest.mark.asyncio
-    async def test_close(self, mock_mcp_use_client):
+    async def test_close(self, mock_telemetry, mock_mcp_use_client):
         """Test closing client connections."""
         config = {"test": {"command": "test"}}
         client = MCPClient(mcp_config=config)
@@ -263,7 +274,7 @@ class TestMCPClient:
             return types.ListToolsResult(tools=[])
 
         mock_session.connector.client_session.list_tools = mock_list_tools
-        mock_mcp_use_client.create_session = AsyncMock(return_value=mock_session)
+        mock_mcp_use_client.create_all_sessions = AsyncMock(return_value={"test": mock_session})
         mock_mcp_use_client.close_all_sessions = AsyncMock()
 
         await client.initialize()
@@ -272,7 +283,7 @@ class TestMCPClient:
         mock_mcp_use_client.close_all_sessions.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_context_manager(self, mock_mcp_use_client):
+    async def test_context_manager(self, mock_telemetry, mock_mcp_use_client):
         """Test using client as context manager."""
         mock_session = MagicMock()
         mock_session.connector = MagicMock()
@@ -288,15 +299,15 @@ class TestMCPClient:
         config = {"test": {"command": "test"}}
         # The fixture already patches MCPUseClient
         async with MCPClient(mcp_config=config) as client:
-            assert client._mcp_client is not None
+            assert client._client is not None
             # Verify that the client uses our mock
-            assert client._mcp_client == mock_mcp_use_client
+            assert client._client == mock_mcp_use_client
 
         # Verify cleanup was called
         mock_mcp_use_client.close_all_sessions.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_get_available_tools(self, mock_mcp_use_client):
+    async def test_get_available_tools(self, mock_telemetry, mock_mcp_use_client):
         """Test getting available tools."""
         config = {"test": {"command": "test"}}
         client = MCPClient(mcp_config=config)
@@ -305,20 +316,26 @@ class TestMCPClient:
         tool1 = types.Tool(name="tool1", description="Tool 1", inputSchema={"type": "object"})
         tool2 = types.Tool(name="tool2", description="Tool 2", inputSchema={"type": "object"})
 
-        # Mock the client's list_tools method
-        mock_mcp_use_client.list_tools.return_value = [tool1, tool2]
-
-        # Setup client's internal state
-        client._client = mock_mcp_use_client
-        client._initialized = True
-        client._tool_map = {"tool1": ("test", tool1), "tool2": ("test", tool2)}
+        # Setup mock session with tools
+        mock_session = MagicMock()
+        mock_session.connector = MagicMock()
+        mock_session.connector.client_session = MagicMock()
+        
+        async def mock_list_tools():
+            return types.ListToolsResult(tools=[tool1, tool2])
+        
+        mock_session.connector.client_session.list_tools = mock_list_tools
+        mock_mcp_use_client.create_all_sessions = AsyncMock(return_value={"test": mock_session})
+        
+        # Initialize to populate tools
+        await client.initialize()
 
         tools = await client.list_tools()
         names = {t.name for t in tools}
         assert names == {"tool1", "tool2"}
 
     @pytest.mark.asyncio
-    async def test_get_tool_map(self, mock_mcp_use_client):
+    async def test_get_tool_map(self, mock_telemetry, mock_mcp_use_client):
         """Test getting tool map."""
         config = {"test": {"command": "test"}}
         client = MCPClient(mcp_config=config)
@@ -327,13 +344,19 @@ class TestMCPClient:
         tool1 = types.Tool(name="tool1", description="Tool 1", inputSchema={"type": "object"})
         tool2 = types.Tool(name="tool2", description="Tool 2", inputSchema={"type": "object"})
 
-        # Mock the client's list_tools method
-        mock_mcp_use_client.list_tools.return_value = [tool1, tool2]
-
-        # Setup client's internal state
-        client._client = mock_mcp_use_client
-        client._initialized = True
-        client._tool_map = {"tool1": ("test", tool1), "tool2": ("test", tool2)}
+        # Setup mock session with tools  
+        mock_session = MagicMock()
+        mock_session.connector = MagicMock()
+        mock_session.connector.client_session = MagicMock()
+        
+        async def mock_list_tools():
+            return types.ListToolsResult(tools=[tool1, tool2])
+        
+        mock_session.connector.client_session.list_tools = mock_list_tools
+        mock_mcp_use_client.create_all_sessions = AsyncMock(return_value={"test": mock_session})
+        
+        # Initialize to populate tools
+        await client.initialize()
 
         tools = await client.list_tools()
         names = {t.name for t in tools}

@@ -211,9 +211,9 @@ class TestDebugMCPStdio:
         ):
             mock_client = MockClient.return_value
             mock_client.initialize = AsyncMock()
-            mock_client.get_available_tools = Mock(return_value=mock_tools)
+            mock_client.list_tools = AsyncMock(return_value=mock_tools)
             mock_client.list_resources = AsyncMock(return_value=[])
-            mock_client.close = AsyncMock()
+            mock_client.shutdown = AsyncMock()
 
             phases = await debug_mcp_stdio(["test-cmd"], logger, max_phase=3)
             assert phases == 3
@@ -244,8 +244,8 @@ class TestDebugMCPStdio:
         ):
             mock_client = MockClient.return_value
             mock_client.initialize = AsyncMock()
-            mock_client.get_available_tools = Mock(return_value=[])
-            mock_client.close = AsyncMock()
+            mock_client.list_tools = AsyncMock(return_value=[])
+            mock_client.shutdown = AsyncMock()
 
             phases = await debug_mcp_stdio(["test-cmd"], logger, max_phase=5)
             assert phases == 2
@@ -281,10 +281,10 @@ class TestDebugMCPStdio:
         ):
             mock_client = MockClient.return_value
             mock_client.initialize = AsyncMock()
-            mock_client.get_available_tools = Mock(return_value=mock_tools)
+            mock_client.list_tools = AsyncMock(return_value=mock_tools)
             mock_client.list_resources = AsyncMock(return_value=[])
             mock_client.call_tool = AsyncMock()
-            mock_client.close = AsyncMock()
+            mock_client.shutdown = AsyncMock()
 
             with patch("time.time", side_effect=[0, 5, 5, 5, 5]):  # Start at 0, then 5 for the rest
                 phases = await debug_mcp_stdio(["test-cmd"], logger, max_phase=4)
@@ -318,9 +318,9 @@ class TestDebugMCPStdio:
             # Create proper mock tool
             test_tool = Mock()
             test_tool.name = "test"
-            mock_client.get_available_tools = Mock(return_value=[test_tool])
+            mock_client.list_tools = AsyncMock(return_value=[test_tool])
             mock_client.list_resources = AsyncMock(return_value=[])
-            mock_client.close = AsyncMock()
+            mock_client.shutdown = AsyncMock()
 
             # Simulate slow init (>30s)
             # time.time() is called at start and after phase 3
@@ -359,9 +359,9 @@ class TestDebugMCPStdio:
                 # Create proper mock tool
                 test_tool = Mock()
                 test_tool.name = "test"
-                mock_client.get_available_tools = Mock(return_value=[test_tool])
+                mock_client.list_tools = AsyncMock(return_value=[test_tool])
                 mock_client.list_resources = AsyncMock(return_value=[])
-                mock_client.close = AsyncMock()
+                mock_client.shutdown = AsyncMock()
                 mock_clients.append(mock_client)
 
             MockClient.side_effect = mock_clients

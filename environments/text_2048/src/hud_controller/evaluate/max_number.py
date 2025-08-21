@@ -1,13 +1,12 @@
 """Evaluator for highest tile."""
 
 import math
-from fastmcp import Context
 from hud.tools.types import EvaluationResult
 from . import evaluate
 
 
 @evaluate.tool("max_number")
-async def evaluate_max_number(ctx: Context, target: int):
+async def evaluate_max_number(target: int):
     game = evaluate.env
     highest_tile = game.get_state().get("highest_tile", 0)
 

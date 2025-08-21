@@ -76,29 +76,34 @@ class TestClientIntegration:
     @pytest.mark.asyncio
     async def test_context_manager_usage(self):
         """Test that both clients work as context managers."""
+        from unittest.mock import patch, AsyncMock
+        
         config = {"server": {"url": "http://localhost:8080"}}
 
-        # Test FastMCP client
+        # Test FastMCP client with mocked initialization
         fastmcp_client = FastMCPHUDClient(config)
         assert not fastmcp_client.is_connected
 
-        # We can't actually connect without a real server, but we can test the pattern
-        try:
+        with patch.object(fastmcp_client, 'initialize', new_callable=AsyncMock) as mock_init, \
+             patch.object(fastmcp_client, 'shutdown', new_callable=AsyncMock) as mock_shutdown:
+            
             async with fastmcp_client:
-                # This will fail to connect, but that's expected
-                pass
-        except Exception:
-            # Expected - no server running
-            pass
+                # Verify initialization was called
+                mock_init.assert_called_once()
+            
+            # Verify shutdown was called
+            mock_shutdown.assert_called_once()
 
-        # Test MCP-use client
+        # Test MCP-use client with mocked initialization  
         mcp_use_client = MCPUseHUDClient(config)
         assert not mcp_use_client.is_connected
 
-        try:
+        with patch.object(mcp_use_client, 'initialize', new_callable=AsyncMock) as mock_init, \
+             patch.object(mcp_use_client, 'shutdown', new_callable=AsyncMock) as mock_shutdown:
+            
             async with mcp_use_client:
-                # This will fail to connect, but that's expected
-                pass
-        except Exception:
-            # Expected - no server running
-            pass
+                # Verify initialization was called
+                mock_init.assert_called_once()
+            
+            # Verify shutdown was called
+            mock_shutdown.assert_called_once()

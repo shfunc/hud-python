@@ -100,9 +100,11 @@ def clone_repository(url: str) -> tuple[bool, str]:
 
 def get_clone_message(clone_path: str) -> dict[str, Any] | None:
     """
-    Look for a clone message configuration in the repository's pyproject.toml.
+    Look for a clone message configuration in the repository's pyproject.toml or .hud.toml.
 
-    Checks for [tool.hud.clone] section in pyproject.toml
+    Checks for:
+    1. [tool.hud.clone] section in pyproject.toml
+    2. [clone] section in .hud.toml
 
     Args:
         clone_path: Path to the cloned repository
@@ -111,8 +113,9 @@ def get_clone_message(clone_path: str) -> dict[str, Any] | None:
         Dictionary with message configuration or None
     """
     repo_path = Path(clone_path)
+    
+    # Check pyproject.toml first
     pyproject_path = repo_path / "pyproject.toml"
-
     if pyproject_path.exists():
         try:
             with open(pyproject_path, "rb") as f:
@@ -121,6 +124,17 @@ def get_clone_message(clone_path: str) -> dict[str, Any] | None:
                     return data["tool"]["hud"]["clone"]
         except Exception:
             logger.warning("Failed to load clone config from %s", pyproject_path)
+    
+    # Check .hud.toml as fallback
+    hud_toml_path = repo_path / ".hud.toml"
+    if hud_toml_path.exists():
+        try:
+            with open(hud_toml_path, "rb") as f:
+                data = tomllib.load(f)
+                if "clone" in data:
+                    return data["clone"]
+        except Exception:
+            logger.warning("Failed to load clone config from %s", hud_toml_path)
 
     return None
 

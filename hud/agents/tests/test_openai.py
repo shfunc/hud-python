@@ -218,7 +218,7 @@ class TestOperatorAgent:
 
         # Set up available tools
         agent._available_tools = [
-            types.Tool(name="computer_openai", description="Computer tool", inputSchema={})
+            types.Tool(name="openai_computer", description="Computer tool", inputSchema={})
         ]
 
         # Mock empty response

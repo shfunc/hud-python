@@ -41,14 +41,26 @@ class TestHudEnrichmentProcessor:
         span = MagicMock()
         span.set_attribute = MagicMock()
         span.is_recording.return_value = True
+        span.name = "test_span"
+        
+        # Set up attributes to return None (not matching any step type)
+        span.attributes = {}
 
         # Mock baggage to return None
         parent_context = {}
         with patch("hud.otel.processors.baggage.get_baggage", return_value=None):
             processor.on_start(span, parent_context)
 
-        # Verify no attributes were set
-        span.set_attribute.assert_not_called()
+        # Verify only step count attributes were set (no run_id or job_id)
+        calls = span.set_attribute.call_args_list
+        set_attrs = {call[0][0] for call in calls}
+        
+        # Should have step counts but not run_id/job_id
+        assert "hud.task_run_id" not in set_attrs
+        assert "hud.job_id" not in set_attrs
+        assert "hud.base_mcp_steps" in set_attrs
+        assert "hud.mcp_tool_steps" in set_attrs
+        assert "hud.agent_steps" in set_attrs
 
     def test_on_end(self):
         """Test on_end does nothing."""

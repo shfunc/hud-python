@@ -1,12 +1,11 @@
 """Board-size setup function for 2048."""
 
-from fastmcp import Context
 from mcp.types import TextContent, ContentBlock
 from . import setup
 
 
 @setup.tool("board")
-async def setup_board(ctx: Context, board_size: int = 4) -> list[ContentBlock]:
+async def setup_board(board_size: int = 4) -> list[ContentBlock]:
     """Initialize a new game with the specified board size."""
     game = setup.env
     game.reset(size=board_size)

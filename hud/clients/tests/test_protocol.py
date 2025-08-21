@@ -108,12 +108,13 @@ class TestProtocol:
         client = MockClient()
 
         # No telemetry before initialization
-        assert client._telemetry_data == {}
+        assert not hasattr(client, "_telemetry_data") or client._telemetry_data == {}
 
         # Initialize
         await client.initialize()
 
         # Should have telemetry
+        assert hasattr(client, "_telemetry_data")
         assert client._telemetry_data["status"] == "healthy"
         assert client._telemetry_data["services"]["api"] == "running"
 

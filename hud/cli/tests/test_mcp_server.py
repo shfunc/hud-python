@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from mcp.types import TextContent
 
-from hud.cli.mcp_server import create_mcp_server, run_mcp_server
+from hud.cli.mcp_server import create_proxy_server, run_mcp_dev_server
 
 
 class TestCreateMCPServer:
@@ -16,8 +16,8 @@ class TestCreateMCPServer:
 
     def test_create_mcp_server(self) -> None:
         """Test that MCP server is created with correct configuration."""
-        mcp = create_mcp_server()
-        assert mcp._mcp_server.name == "hud-cli"
+        mcp = create_proxy_server(".", "test-image:latest")
+        assert mcp._mcp_server.name == "HUD Dev Proxy - test-image:latest"
         # Version is no longer exposed directly
 
         # Check that tools are registered
@@ -32,7 +32,7 @@ class TestDebugTools:
     @pytest.mark.asyncio
     async def test_debug_docker_image(self) -> None:
         """Test debug_docker_image tool."""
-        mcp = create_mcp_server()
+        mcp = create_proxy_server(".", "test-image:latest")
         tool = mcp._tool_manager._tools["debug_docker_image"]
         tool_func = tool.fn
 
@@ -64,7 +64,7 @@ class TestDebugTools:
     @pytest.mark.asyncio
     async def test_debug_docker_image_no_args(self) -> None:
         """Test debug_docker_image with no docker args."""
-        mcp = create_mcp_server()
+        mcp = create_proxy_server(".", "test-image:latest")
         tool = mcp._tool_manager._tools["debug_docker_image"]
         tool_func = tool.fn
 
@@ -79,7 +79,7 @@ class TestDebugTools:
     @pytest.mark.asyncio
     async def test_debug_cursor_config_success(self) -> None:
         """Test debug_cursor_config tool success."""
-        mcp = create_mcp_server()
+        mcp = create_proxy_server(".", "test-image:latest")
         tool = mcp._tool_manager._tools["debug_cursor_config"]
         tool_func = tool.fn
 
@@ -97,7 +97,7 @@ class TestDebugTools:
     @pytest.mark.asyncio
     async def test_debug_cursor_config_error(self) -> None:
         """Test debug_cursor_config with parse error."""
-        mcp = create_mcp_server()
+        mcp = create_proxy_server(".", "test-image:latest")
         tool = mcp._tool_manager._tools["debug_cursor_config"]
         tool_func = tool.fn
 
@@ -112,7 +112,7 @@ class TestDebugTools:
     @pytest.mark.asyncio
     async def test_debug_config(self) -> None:
         """Test debug_config tool."""
-        mcp = create_mcp_server()
+        mcp = create_proxy_server(".", "test-image:latest")
         tool = mcp._tool_manager._tools["debug_config"]
         tool_func = tool.fn
 
@@ -136,7 +136,7 @@ class TestAnalyzeTools:
     @pytest.mark.asyncio
     async def test_analyze_docker_image_success(self) -> None:
         """Test analyze_docker_image tool success."""
-        mcp = create_mcp_server()
+        mcp = create_proxy_server(".", "test-image:latest")
         tool = mcp._tool_manager._tools["analyze_docker_image"]
         tool_func = tool.fn
 
@@ -165,7 +165,7 @@ class TestAnalyzeTools:
     @pytest.mark.asyncio
     async def test_analyze_docker_image_failure(self) -> None:
         """Test analyze_docker_image tool failure."""
-        mcp = create_mcp_server()
+        mcp = create_proxy_server(".", "test-image:latest")
         tool = mcp._tool_manager._tools["analyze_docker_image"]
         tool_func = tool.fn
 
@@ -181,7 +181,7 @@ class TestAnalyzeTools:
     @pytest.mark.asyncio
     async def test_analyze_cursor_config_success(self) -> None:
         """Test analyze_cursor_config tool success."""
-        mcp = create_mcp_server()
+        mcp = create_proxy_server(".", "test-image:latest")
         tool = mcp._tool_manager._tools["analyze_cursor_config"]
         tool_func = tool.fn
 
@@ -205,7 +205,7 @@ class TestAnalyzeTools:
     @pytest.mark.asyncio
     async def test_analyze_cursor_config_parse_error(self) -> None:
         """Test analyze_cursor_config with parse error."""
-        mcp = create_mcp_server()
+        mcp = create_proxy_server(".", "test-image:latest")
         tool = mcp._tool_manager._tools["analyze_cursor_config"]
         tool_func = tool.fn
 
@@ -219,7 +219,7 @@ class TestAnalyzeTools:
     @pytest.mark.asyncio
     async def test_analyze_config(self) -> None:
         """Test analyze_config tool."""
-        mcp = create_mcp_server()
+        mcp = create_proxy_server(".", "test-image:latest")
         tool = mcp._tool_manager._tools["analyze_config"]
         tool_func = tool.fn
 
@@ -244,7 +244,7 @@ class TestListCursorServers:
     @pytest.mark.asyncio
     async def test_list_cursor_servers_success(self) -> None:
         """Test listing Cursor servers successfully."""
-        mcp = create_mcp_server()
+        mcp = create_proxy_server(".", "test-image:latest")
         tool = mcp._tool_manager._tools["list_cursor_servers"]
         tool_func = tool.fn
 
@@ -261,7 +261,7 @@ class TestListCursorServers:
     @pytest.mark.asyncio
     async def test_list_cursor_servers_empty(self) -> None:
         """Test listing when no servers found."""
-        mcp = create_mcp_server()
+        mcp = create_proxy_server(".", "test-image:latest")
         tool = mcp._tool_manager._tools["list_cursor_servers"]
         tool_func = tool.fn
 
@@ -275,7 +275,7 @@ class TestListCursorServers:
     @pytest.mark.asyncio
     async def test_list_cursor_servers_error(self) -> None:
         """Test listing with error."""
-        mcp = create_mcp_server()
+        mcp = create_proxy_server(".", "test-image:latest")
         tool = mcp._tool_manager._tools["list_cursor_servers"]
         tool_func = tool.fn
 
@@ -291,15 +291,18 @@ class TestRunMCPServer:
     """Test run_mcp_server function."""
 
     def test_run_mcp_server(self) -> None:
-        """Test that run_mcp_server creates and runs server."""
-        with patch("hud.cli.mcp_server.create_mcp_server") as mock_create:
-            mock_mcp = MagicMock()
-            mock_create.return_value = mock_mcp
+        """Test that run_mcp_dev_server works with mocked components."""
+        with patch("hud.cli.mcp_server.get_image_name") as mock_get_image, \
+             patch("hud.cli.mcp_server.image_exists") as mock_exists, \
+             patch("asyncio.run") as mock_run:
+            
+            mock_get_image.return_value = ("test-image:latest", "cache")
+            mock_exists.return_value = True
 
-            run_mcp_server()
+            run_mcp_dev_server(".")
 
-            mock_create.assert_called_once()
-            mock_mcp.run.assert_called_once()
+            mock_get_image.assert_called_once()
+            mock_run.assert_called_once()
 
 
 if __name__ == "__main__":

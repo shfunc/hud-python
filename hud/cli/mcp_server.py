@@ -1,264 +1,266 @@
-"""MCP Server mode for HUD CLI - exposes debug and analyze as MCP tools."""
+"""MCP Development Proxy - Hot-reload environments with MCP over HTTP."""
 
 from __future__ import annotations
 
+import asyncio
+import base64
 import json
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
 
-from mcp.server.fastmcp import FastMCP
-from mcp.types import TextContent
-
-from .cursor import parse_cursor_config
-from .debug import debug_mcp_stdio
-from .utils import CaptureLogger
+import click
+import toml
+from fastmcp import FastMCP
 
 
-def create_mcp_server() -> FastMCP:
-    """Create and configure the HUD MCP server."""
-    mcp = FastMCP(
-        name="hud-cli",
+def get_image_name(directory: str | Path, image_override: str | None = None) -> tuple[str, str]:
+    """
+    Resolve image name with source tracking.
+    
+    Returns:
+        Tuple of (image_name, source) where source is "override", "cache", or "auto"
+    """
+    if image_override:
+        return image_override, "override"
+    
+    # Check pyproject.toml
+    pyproject_path = Path(directory) / "pyproject.toml"
+    if pyproject_path.exists():
+        try:
+            with open(pyproject_path) as f:
+                config = toml.load(f)
+            if config.get("tool", {}).get("hud", {}).get("image"):
+                return config["tool"]["hud"]["image"], "cache"
+        except Exception:
+            pass  # Fall through to auto-generation
+    
+    # Auto-generate with :dev tag
+    dir_path = Path(directory).resolve()  # Get absolute path first
+    dir_name = dir_path.name
+    if not dir_name or dir_name == '.':
+        # If we're in root or have empty name, use parent directory
+        dir_name = dir_path.parent.name
+    clean_name = dir_name.replace("_", "-")
+    return f"hud-{clean_name}:dev", "auto"
+
+
+def update_pyproject_toml(directory: str | Path, image_name: str) -> None:
+    """Update pyproject.toml with image name."""
+    pyproject_path = Path(directory) / "pyproject.toml"
+    if pyproject_path.exists():
+        try:
+            with open(pyproject_path) as f:
+                config = toml.load(f)
+            
+            # Ensure [tool.hud] exists
+            if "tool" not in config:
+                config["tool"] = {}
+            if "hud" not in config["tool"]:
+                config["tool"]["hud"] = {}
+            
+            # Update image name
+            config["tool"]["hud"]["image"] = image_name
+            
+            # Write back
+            with open(pyproject_path, "w") as f:
+                toml.dump(config, f)
+            
+            click.echo(f"✅ Updated pyproject.toml with image: {image_name}")
+        except Exception as e:
+            click.echo(f"⚠️  Could not update pyproject.toml: {e}")
+
+
+def build_and_update(directory: str | Path, image_name: str, no_cache: bool = False) -> None:
+    """Build Docker image and update pyproject.toml."""
+    build_cmd = ["docker", "build", "-t", image_name]
+    if no_cache:
+        build_cmd.append("--no-cache")
+    build_cmd.append(str(directory))
+    
+    click.echo(f"🔨 Building image: {image_name}{' (no cache)' if no_cache else ''}")
+    
+    result = subprocess.run(build_cmd, capture_output=True, text=True)
+    if result.returncode == 0:
+        click.echo("✅ Build successful!")
+        # Update pyproject.toml
+        update_pyproject_toml(directory, image_name)
+    else:
+        click.echo(f"❌ Build failed:\n{result.stderr}")
+        raise click.Abort()
+
+
+def image_exists(image_name: str) -> bool:
+    """Check if a Docker image exists locally."""
+    result = subprocess.run(
+        ["docker", "image", "inspect", image_name],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
     )
+    return result.returncode == 0
 
-    @mcp.tool()
-    async def debug_docker_image(
-        image: str, docker_args: list[str] | None = None, max_phase: int = 5
-    ) -> list[TextContent]:
-        """
-        Debug a Docker-based MCP environment.
 
-        Args:
-            image: Docker image name (e.g., 'hud-text-2048:latest')
-            docker_args: Additional docker arguments (e.g., ['-e', 'KEY=value'])
-            max_phase: Maximum phase to run (1-5, default 5)
-
-        Returns:
-            Debug output showing test phases
-        """
-        # Build docker command
-        command = ["docker", "run", "--rm", "-i"] + (docker_args or []) + [image]
-
-        # Create logger in capture mode
-        logger = CaptureLogger(print_output=False)
-
-        # Run debug
-        phases_completed = await debug_mcp_stdio(command, logger, max_phase=max_phase)
-
-        # Add summary
-        output = logger.get_output()
-        output += f"\n\n✅ Completed {phases_completed}/{max_phase} phases successfully"
-
-        return [TextContent(text=output, type="text")]
-
-    @mcp.tool()
-    async def debug_cursor_config(server_name: str, max_phase: int = 5) -> list[TextContent]:
-        """
-        Debug a server from Cursor's MCP configuration.
-
-        Args:
-            server_name: Name of server in .cursor/mcp.json
-            max_phase: Maximum phase to run (1-5, default 5)
-
-        Returns:
-            Debug output showing test phases
-        """
-        # Parse cursor config
-        command, error = parse_cursor_config(server_name)
-
-        if error or command is None:
-            return [TextContent(text=f"❌ {error or 'Failed to parse cursor config'}", type="text")]
-
-        # Create logger in capture mode
-        logger = CaptureLogger(print_output=False)
-
-        # Run debug
-        phases_completed = await debug_mcp_stdio(command, logger, max_phase=max_phase)
-
-        # Add summary
-        output = logger.get_output()
-        output += f"\n\n✅ Completed {phases_completed}/{max_phase} phases successfully"
-
-        return [TextContent(text=output, type="text")]
-
-    @mcp.tool()
-    async def debug_config(config: dict, max_phase: int = 5) -> list[TextContent]:
-        """
-        Debug an MCP environment from a configuration object.
-
-        Args:
-            config: MCP configuration dict with server definitions
-            max_phase: Maximum phase to run (1-5, default 5)
-
-        Returns:
-            Debug output showing test phases
-        """
-        # Extract command from first server in config
-        server_name = next(iter(config.keys()))
-        server_config = config[server_name]
-        command = [server_config["command"], *server_config.get("args", [])]
-
-        # Create logger in capture mode
-        logger = CaptureLogger(print_output=False)
-
-        # Run debug
-        phases_completed = await debug_mcp_stdio(command, logger, max_phase=max_phase)
-
-        # Add summary
-        output = logger.get_output()
-        output += f"\n\n✅ Completed {phases_completed}/{max_phase} phases successfully"
-
-        return [TextContent(text=output, type="text")]
-
-    @mcp.tool()
-    async def analyze_docker_image(
-        image: str, docker_args: list[str] | None = None, verbose: bool = False
-    ) -> list[TextContent]:
-        """
-        Analyze a Docker-based MCP environment to discover tools and resources.
-        Note: The environment must pass debug phase 3 (Tool Discovery) for this to work.
-
-        Args:
-            image: Docker image name (e.g., 'hud-text-2048:latest')
-            docker_args: Additional docker arguments (e.g., ['-e', 'KEY=value'])
-            verbose: Include detailed tool schemas
-
-        Returns:
-            Analysis results as JSON
-        """
-        # Build docker command
-        docker_cmd = ["docker", "run", "--rm", "-i"] + (docker_args or []) + [image]
-
-        # Convert to MCP config
-        mcp_config = {
-            "local": {
-                "command": docker_cmd[0],
-                "args": docker_cmd[1:] if len(docker_cmd) > 1 else [],
+def create_proxy_server(
+    directory: str | Path,
+    image_name: str,
+    no_reload: bool = False
+) -> FastMCP:
+    """Create an HTTP proxy server that forwards to stdio reloaderoo+docker."""
+    # Build the command that will be proxied
+    cmd = []
+    if not no_reload:
+        import shutil
+        npx_cmd = shutil.which("npx")
+        if not npx_cmd:
+            # Fallback to npx if shutil.which fails (shouldn't happen if we got here)
+            npx_cmd = "npx"
+        cmd.extend([npx_cmd, "reloaderoo", "--"])
+    
+    src_path = Path(directory) / "src"
+    cmd.extend([
+        "docker", "run", "--rm", "-i",
+        "-v", f"{src_path.absolute()}:/app/src:rw",
+        "-e", "PYTHONPATH=/app/src",
+        image_name
+    ])
+    
+    # Create configuration following MCPConfig schema
+    config = {
+        "mcpServers": {
+            "default": {
+                "command": cmd[0],
+                "args": cmd[1:] if len(cmd) > 1 else []
+                # transport defaults to stdio
             }
         }
-
-        try:
-            # Note: This is a bit of a hack - we're calling the internal function
-            # In a real implementation, we'd refactor to have a shared core function
-            from hud.clients import MCPClient
-
-            client = MCPClient(mcp_config=mcp_config, verbose=verbose)
-            await client.initialize()
-            analysis = await client.analyze_environment()
-            await client.shutdown()
-
-            # Return as JSON
-            return [TextContent(text=json.dumps(analysis, indent=2), type="text")]
-
-        except Exception as e:
-            return [
-                TextContent(
-                    text=f"❌ Analysis failed: {e}\n\nMake sure the environment passes debug phase 3 first.",  # noqa: E501
-                    type="text",
-                )
-            ]
-
-    @mcp.tool()
-    async def analyze_cursor_config(server_name: str, verbose: bool = False) -> list[TextContent]:
-        """
-        Analyze a server from Cursor's MCP configuration.
-        Note: The environment must pass debug phase 3 (Tool Discovery) for this to work.
-
-        Args:
-            server_name: Name of server in .cursor/mcp.json
-            verbose: Include detailed tool schemas
-
-        Returns:
-            Analysis results as JSON
-        """
-        # Parse cursor config
-        command, error = parse_cursor_config(server_name)
-
-        if error or command is None:
-            return [TextContent(text=f"❌ {error or 'Failed to parse cursor config'}", type="text")]
-
-        # Convert to MCP config
-        mcp_config = {
-            "local": {"command": command[0], "args": command[1:] if len(command) > 1 else []}
-        }
-
-        try:
-            from hud.clients import MCPClient
-
-            client = MCPClient(mcp_config=mcp_config, verbose=verbose)
-            await client.initialize()
-            analysis = await client.analyze_environment()
-            await client.shutdown()
-
-            # Return as JSON
-            return [TextContent(text=json.dumps(analysis, indent=2), type="text")]
-
-        except Exception as e:
-            return [
-                TextContent(
-                    text=f"❌ Analysis failed: {e}\n\nMake sure the environment passes debug phase 3 first.",  # noqa: E501
-                    type="text",
-                )
-            ]
-
-    @mcp.tool()
-    async def analyze_config(config: dict, verbose: bool = False) -> list[TextContent]:
-        """
-        Analyze an MCP environment from a configuration object.
-        Note: The environment must pass debug phase 3 (Tool Discovery) for this to work.
-
-        Args:
-            config: MCP configuration dict with server definitions
-            verbose: Include detailed tool schemas
-
-        Returns:
-            Analysis results as JSON
-        """
-        try:
-            from hud.clients import MCPClient
-
-            client = MCPClient(mcp_config=config, verbose=verbose)
-            await client.initialize()
-            analysis = await client.analyze_environment()
-            await client.shutdown()
-
-            # Return as JSON
-            return [TextContent(text=json.dumps(analysis, indent=2), type="text")]
-
-        except Exception as e:
-            return [
-                TextContent(
-                    text=f"❌ Analysis failed: {e}\n\nMake sure the environment passes debug phase 3 first.",  # noqa: E501
-                    type="text",
-                )
-            ]
-
-    @mcp.tool()
-    async def list_cursor_servers() -> list[TextContent]:
-        """
-        List all MCP servers configured in Cursor.
-
-        Returns:
-            List of available server names
-        """
-        from .cursor import list_cursor_servers as _list_cursor_servers
-
-        servers, error = _list_cursor_servers()
-
-        if error is not None:
-            return [TextContent(text=f"❌ {error}", type="text")]
-
-        if not servers:
-            return [TextContent(text="No servers found in Cursor config", type="text")]
-
-        # Format as a nice list
-        output = "📋 Available Cursor MCP Servers:\n\n"
-        for server in servers:
-            output += f"  • {server}\n"
-
-        return [TextContent(text=output, type="text")]
-
-    return mcp
+    }
+    
+    # Create the HTTP proxy server using config
+    proxy = FastMCP.as_proxy(
+        config,
+        name=f"HUD Dev Proxy - {image_name}"
+    )
+    
+    return proxy
 
 
-def run_mcp_server() -> None:
-    """Run the HUD MCP server."""
-    mcp = create_mcp_server()
-    mcp.run()
+async def start_mcp_proxy(
+    directory: str | Path,
+    image_name: str,
+    port: int,
+    no_reload: bool = False
+) -> None:
+    """Start the MCP development proxy server."""
+    # Ensure src directory exists
+    src_path = Path(directory) / "src"
+    if not src_path.exists():
+        click.echo(f"❌ Source directory not found: {src_path}")
+        raise click.Abort()
+    
+    # Create the proxy server
+    proxy = create_proxy_server(directory, image_name, no_reload)
+    
+    # Run the HTTP server
+    click.echo(f"\n🌐 Starting HTTP proxy on port {port}...")
+    click.echo(f"🔄 Files in {src_path} will trigger reload")
+    click.echo(f"\n📡 Proxy is ready! Press Ctrl+C to stop.\n")
+    
+    try:
+        # Run the proxy with HTTP transport
+        await proxy.run_async(
+            transport="http",
+            host="0.0.0.0",
+            port=port,
+            path="/mcp"  # Serve at /mcp endpoint
+        )
+    except KeyboardInterrupt:
+        click.echo("\n👋 Shutting down...")
+
+
+def run_mcp_dev_server(
+    directory: str = '.',
+    image: str | None = None,
+    build: bool = False,
+    no_cache: bool = False,
+    port: int = 8765,
+    no_reload: bool = False
+) -> None:
+    """Run MCP development server with hot-reload.
+    
+    This command starts a development proxy that:
+    - Auto-detects or builds Docker images
+    - Mounts local source code for hot-reload
+    - Exposes an HTTP endpoint for MCP clients
+    
+    Examples:
+        hud mcp .                    # Auto-detect image from directory
+        hud mcp . --build            # Build image first
+        hud mcp . --image custom:tag # Use specific image
+        hud mcp . --no-cache         # Force clean rebuild
+    """
+    # Ensure directory exists
+    if not Path(directory).exists():
+        click.echo(f"❌ Directory not found: {directory}")
+        raise click.Abort()
+        
+    # Check if reloaderoo is available (unless --no-reload)
+    if not no_reload:
+        import shutil
+        npx_cmd = shutil.which("npx")
+        if not npx_cmd:
+            click.echo("❌ npx not found. Install Node.js or use --no-reload")
+            click.echo("💡 To install: https://nodejs.org/")
+            click.echo("💡 Or use: hud mcp . --no-reload")
+            raise click.Abort()
+        
+        # Verify it works
+        result = subprocess.run([npx_cmd, "--version"], capture_output=True)
+        if result.returncode != 0:
+            click.echo("❌ npx found but not working properly")
+            raise click.Abort()
+    
+    # Resolve image name
+    resolved_image, source = get_image_name(directory, image)
+    
+    if source == "cache":
+        click.echo(f"📦 Using cached image from pyproject.toml: {resolved_image}")
+    elif source == "auto":
+        click.echo(f"🔧 Auto-generated image name: {resolved_image}")
+        # Update pyproject.toml with auto-generated name
+        update_pyproject_toml(directory, resolved_image)
+    elif source == "override":
+        click.echo(f"🎯 Using specified image: {resolved_image}")
+    
+    # Build if requested
+    if build or no_cache:
+        build_and_update(directory, resolved_image, no_cache)
+    
+    # Check if image exists
+    if not image_exists(resolved_image) and not build:
+        if click.confirm(f"Image {resolved_image} not found. Build it now?"):
+            build_and_update(directory, resolved_image)
+        else:
+            raise click.Abort()
+    
+    # Generate server name from image
+    server_name = resolved_image.split(':')[0] if ':' in resolved_image else resolved_image
+    
+    # Start the server
+    click.echo(f"📁 Source: {directory}/src → /app/src")
+    click.echo(f"🔄 Hot-reload: {'enabled (reloaderoo)' if not no_reload else 'disabled'}")
+    
+    # Show config
+    config = {"url": f"http://localhost:{port}/mcp"}
+    config_json = json.dumps(config, indent=2)
+    config_base64 = base64.b64encode(config_json.encode()).decode()
+    
+    click.echo(f"\n✨ Add to Cursor:\n")
+    click.echo(f'"{server_name}": {config_json}')
+    
+    # Generate deeplink
+    deeplink = f"cursor://anysphere.cursor-deeplink/mcp/install?name={server_name}&config={config_base64}"
+    click.echo(f"🔗 Quick install: {deeplink}\n")
+    
+    # Start the proxy
+    asyncio.run(start_mcp_proxy(directory, resolved_image, port, no_reload))

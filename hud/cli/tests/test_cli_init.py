@@ -58,7 +58,8 @@ class TestCLICommands:
                 json.dump({"test": {"command": "python", "args": ["server.py"]}}, f)
 
             with patch("hud.cli.asyncio.run") as mock_run:
-                result = runner.invoke(app, ["analyze", "--config", temp_path])
+                # Need to provide a dummy positional arg since params is required
+                result = runner.invoke(app, ["analyze", "dummy", "--config", temp_path])
                 assert result.exit_code == 0
                 mock_run.assert_called_once()
                 coro = mock_run.call_args[0][0]
@@ -74,7 +75,8 @@ class TestCLICommands:
         with patch("hud.cli.parse_cursor_config") as mock_parse:
             mock_parse.return_value = (["python", "server.py"], None)
             with patch("hud.cli.asyncio.run") as mock_run:
-                result = runner.invoke(app, ["analyze", "--cursor", "test-server"])
+                # Need to provide a dummy positional arg since params is required
+                result = runner.invoke(app, ["analyze", "dummy", "--cursor", "test-server"])
                 assert result.exit_code == 0
                 mock_run.assert_called_once()
 
@@ -83,7 +85,7 @@ class TestCLICommands:
         with patch("hud.cli.parse_cursor_config") as mock_parse:
             mock_parse.return_value = (None, "Server 'test' not found")
             result = runner.invoke(app, ["analyze", "--cursor", "test"])
-            assert result.exit_code == 1
+            assert result.exit_code == 2
             assert "Server 'test' not found" in result.output
 
     def test_analyze_no_arguments_shows_error(self) -> None:
@@ -125,7 +127,8 @@ class TestCLICommands:
 
             with patch("hud.cli.asyncio.run") as mock_run:
                 mock_run.return_value = 5
-                result = runner.invoke(app, ["debug", "--config", temp_path])
+                # Need to provide a dummy positional arg since params is required
+                result = runner.invoke(app, ["debug", "dummy", "--config", temp_path])
                 assert result.exit_code == 0
         finally:
             try:
@@ -139,7 +142,8 @@ class TestCLICommands:
             mock_parse.return_value = (["python", "server.py"], None)
             with patch("hud.cli.asyncio.run") as mock_run:
                 mock_run.return_value = 5
-                result = runner.invoke(app, ["debug", "--cursor", "test-server"])
+                # Need to provide a dummy positional arg since params is required
+                result = runner.invoke(app, ["debug", "dummy", "--cursor", "test-server"])
                 assert result.exit_code == 0
 
     def test_debug_no_arguments_shows_error(self) -> None:

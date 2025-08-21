@@ -103,6 +103,7 @@ class BaseHUDClient(AgentMCPClient):
         self._auto_trace = auto_trace
 
         self._initialized = False
+        self._telemetry_data = {}  # Initialize telemetry data
 
         if self.verbose:
             self._setup_verbose_logging()

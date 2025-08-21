@@ -20,7 +20,7 @@ from .analyze import (
 from .clone import clone_repository, get_clone_message, print_error, print_tutorial
 from .cursor import get_cursor_config_path, list_cursor_servers, parse_cursor_config
 from .debug import debug_mcp_stdio
-from .mcp_server import run_mcp_server
+from .mcp_server import run_mcp_dev_server
 from .utils import CaptureLogger
 
 # Create the main Typer app
@@ -243,36 +243,29 @@ def version() -> None:
 
 
 @app.command()
-def mcp() -> None:
-    """🤖 Run HUD as an MCP server - expose debug/analyze tools to other MCP clients.
+def mcp(
+    directory: str = typer.Argument(".", help="Environment directory (default: current)"),
+    image: str | None = typer.Option(None, "--image", "-i", help="Docker image name (overrides auto-detection)"),
+    build: bool = typer.Option(False, "--build", "-b", help="Build image before starting"),
+    no_cache: bool = typer.Option(False, "--no-cache", help="Force rebuild without cache"),
+    port: int = typer.Option(8765, "--port", "-p", help="HTTP server port"),
+    no_reload: bool = typer.Option(False, "--no-reload", help="Disable hot-reload"),
+) -> None:
+    """🔥 Run MCP development proxy with hot-reload.
 
-    This allows you to use HUD's debugging and analysis capabilities from:
-    - Cursor (add to .cursor/mcp.json)
-    - Claude Desktop
-    - Any other MCP client
+    This command starts a development server that:
+    - Auto-detects or builds Docker images
+    - Mounts local source code for hot-reload
+    - Exposes an HTTP endpoint for MCP clients
 
-    Example Cursor config:
-    {
-      "mcpServers": {
-        "hud-cli": {
-          "command": "hud",
-          "args": ["mcp"]
-        }
-      }
-    }
+    Examples:
+        hud mcp                      # Auto-detect in current directory
+        hud mcp environments/browser # Specific directory
+        hud mcp . --build            # Build image first
+        hud mcp . --image custom:tag # Use specific image
+        hud mcp . --no-cache         # Force clean rebuild
     """
-    console.print(
-        Panel.fit(
-            "[bold cyan]🤖 Starting HUD MCP Server[/bold cyan]\n"
-            "Exposing debug and analyze tools via MCP protocol",
-            border_style="cyan",
-        )
-    )
-    console.print("\n[dim]Server starting on stdio...[/dim]")
-    console.print("[dim]Add to your MCP client config to use.[/dim]\n")
-
-    # Run the MCP server
-    run_mcp_server()
+    run_mcp_dev_server(directory, image, build, no_cache, port, no_reload)
 
 
 @app.command()
@@ -337,7 +330,7 @@ def main() -> None:
         console.print("  2. Build your Docker image: [cyan]docker build -t my-mcp-server .[/cyan]")
         console.print("  3. Debug it: [cyan]hud debug my-mcp-server[/cyan]")
         console.print("  4. Analyze it: [cyan]hud analyze my-mcp-server[/cyan]")
-        console.print("  5. Use as MCP server: [cyan]hud mcp[/cyan] (for Cursor/Claude)\n")
+        console.print("  5. Dev mode with hot-reload: [cyan]hud mcp . --build[/cyan]\n")
 
     app()
 

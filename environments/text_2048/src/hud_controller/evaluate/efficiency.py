@@ -1,12 +1,11 @@
 """Evaluator for move efficiency."""
 
-from fastmcp import Context
 from hud.tools.types import EvaluationResult
 from . import evaluate
 
 
 @evaluate.tool(name="efficiency", description="Evaluate game efficiency based on score/moves ratio")
-async def evaluate_efficiency(ctx: Context, min_ratio: float):
+async def evaluate_efficiency(min_ratio: float):
     game = evaluate.env
     state = game.get_state()
     score = state.get("score", 0)
