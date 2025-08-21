@@ -87,16 +87,16 @@ async def run_single_task(
     print("📊 Loading dataset…")
     dataset = load_dataset(dataset_name, split="train")
 
-    # Get first task from dataset
-    first_task = dataset[0]  # type: ignore[index]
-    task_prompt = first_task.get("prompt", f"Task {first_task.get('id', 0)}")  # type: ignore[attr-defined]
+    # Get a simple task from dataset (Open last tab task)
+    sample_task = dataset[155]  # type: ignore[index]
+    task_prompt = sample_task.get("prompt", f"Task {sample_task.get('id', 0)}")  # type: ignore[attr-defined]
 
     # Get hud official system prompt for this dataset
     dataset_system_prompt = await fetch_system_prompt_from_dataset(dataset_name)
 
     with hud.trace(name=task_prompt):
-        task = Task(**first_task)  # type: ignore[arg-type]
-        client = MCPClient(mcp_config=task.mcp_config)
+        task = Task(**sample_task)  # type: ignore[arg-type]
+
         agent = _build_agent(
             agent_type,
             model=model,
