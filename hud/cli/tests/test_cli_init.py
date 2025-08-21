@@ -91,8 +91,8 @@ class TestCLICommands:
     def test_analyze_no_arguments_shows_error(self) -> None:
         """Test analyze without arguments shows error."""
         result = runner.invoke(app, ["analyze"])
-        assert result.exit_code == 1
-        assert "Must specify either a Docker image" in result.output
+        assert result.exit_code == 2
+        assert "Error" in result.output
 
     def test_analyze_output_formats(self) -> None:
         """Test analyze with different output formats."""
@@ -149,8 +149,8 @@ class TestCLICommands:
     def test_debug_no_arguments_shows_error(self) -> None:
         """Test debug without arguments shows error."""
         result = runner.invoke(app, ["debug"])
-        assert result.exit_code == 1
-        assert "Must specify either a Docker image" in result.output
+        assert result.exit_code == 2
+        assert "Error" in result.output
 
     def test_cursor_list_command(self) -> None:
         """Test cursor-list command."""

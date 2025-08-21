@@ -161,11 +161,6 @@ async def start_mcp_proxy(
     # Create the proxy server
     proxy = create_proxy_server(directory, image_name, no_reload)
     
-    # Run the HTTP server
-    click.echo(f"\n🌐 Starting HTTP proxy on port {port}...")
-    click.echo(f"🔄 Files in {src_path} will trigger reload")
-    click.echo(f"\n📡 Proxy is ready! Press Ctrl+C to stop.\n")
-    
     try:
         # Run the proxy with HTTP transport
         await proxy.run_async(
@@ -246,21 +241,16 @@ def run_mcp_dev_server(
     # Generate server name from image
     server_name = resolved_image.split(':')[0] if ':' in resolved_image else resolved_image
     
-    # Start the server
-    click.echo(f"📁 Source: {directory}/src → /app/src")
-    click.echo(f"🔄 Hot-reload: {'enabled (reloaderoo)' if not no_reload else 'disabled'}")
-    
     # Show config
     config = {"url": f"http://localhost:{port}/mcp"}
     config_json = json.dumps(config, indent=2)
     config_base64 = base64.b64encode(config_json.encode()).decode()
     
-    click.echo(f"\n✨ Add to Cursor:\n")
     click.echo(f'"{server_name}": {config_json}')
     
     # Generate deeplink
     deeplink = f"cursor://anysphere.cursor-deeplink/mcp/install?name={server_name}&config={config_base64}"
-    click.echo(f"🔗 Quick install: {deeplink}\n")
+    click.echo(f"✨ Add to Cursor: {deeplink}")
     
     # Start the proxy
     asyncio.run(start_mcp_proxy(directory, resolved_image, port, no_reload))
