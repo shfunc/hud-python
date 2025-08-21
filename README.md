@@ -48,7 +48,7 @@ git clone https://github.com/hud-evals/hud-python
 pip install -e "hud-python[dev]"
 ```
 
-> See [docs.hud.so](https://docs.hud.so), or add server to any MCP client:
+> See [docs.hud.so](https://docs.hud.so), or add docs to any MCP client:
 > `claude mcp add docs-hud https://docs.hud.so/mcp`
 
 ## Quickstart
@@ -106,7 +106,7 @@ asyncio.run(main())
 
 ## Reinforcement Learning with GRPO
 
-This is a Qwen-2.5-3B agent training a policy on the [`text-2048` environment](environments/text_2048/) using [Verifiers](rl/verifiers/):
+This is a Qwen-2.5-3B agent training a policy on the [`text-2048`](environments/text_2048/) environment using [Verifiers](rl/verifiers/):
 
 ![RL curve](https://raw.githubusercontent.com/hud-evals/hud-python/l/text-2048/docs/src/images/rl_1.png)
 
@@ -124,7 +124,7 @@ Any hud MCP environment and evaluation works with our RL pipeline. Even our remo
 
 ## Benchmarking Agents
 
-This is an agent running on our proprietary financial analyst benchmark [SheetBench-50](https://huggingface.co/datasets/hud-evals/SheetBench-50):
+This is Claude Computer Use running on our proprietary financial analyst benchmark [SheetBench-50](https://huggingface.co/datasets/hud-evals/SheetBench-50):
 
 ![Trace screenshot](https://raw.githubusercontent.com/hud-evals/hud-python/l/text-2048/docs/src/images/trace_sheet.gif)
 
@@ -158,7 +158,7 @@ print(f"Average reward: {sum(r.reward for r in results) / len(results):.2f}")
 
 ## Building Environments (MCP)
 
-This is how you can make any environment into an interactable one in 5 steps (see [complete guide](environments/README.md)):
+This is how you can make any environment into an interactable one in 5 steps:
 
 1. Define MCP server layer using [`MCPServer`](https://docs.hud.so/reference/environments)
 
@@ -180,7 +180,7 @@ if __name__ == "__main__":
     mcp.run()
 ```
 
-2. Write a simple Dockerfile that installs packages and runs (see [examples](environments/)):
+2. Write a simple Dockerfile that installs packages and runs:
 
 ```python
 CMD ["python", "-m", "hud_controller.server"]
@@ -274,17 +274,17 @@ Using the [`run_dataset`](https://docs.hud.so/reference/tasks#run_dataset) funct
 ## Architecture
 
 ```mermaid
-%%{init: { "sequence": { "width":200 } } }%%
-graph TB
-    subgraph "HUD Platform"
-        Dashboard["📊 Dashboard<br/>(app.hud.so)"]
-        API["🔌 HUD MCP<br/>(Remote Orchestrator)"]
+%%{init: {"theme": "neutral", "themeVariables": {"fontSize": "14px"}} }%%
+graph LR
+    subgraph "Platform"
+        Dashboard["📊 app.hud.so"]
+        API["🔌 mcp.hud.so"]
     end
   
-    subgraph "Your Code"
-        Agent["🤖 Agent<br/>(Claude/Operator)"]
-        Task["📋 Task<br/>(Prompt + Evaluation)"]
-        SDK["📦 HUD SDK"]
+    subgraph "hud"
+        Agent["🤖 Agent"]
+        Task["📋 Task"]
+        SDK["📦 SDK"]
     end
   
     subgraph "Environments"
@@ -292,8 +292,8 @@ graph TB
         RemoteEnv["☁️ Remote Docker<br/>(100s Parallel)"]
     end
   
-    subgraph "Telemetry"
-        Trace["📡 OpenTelemetry<br/>(Traces & Metrics)"]
+    subgraph "otel"
+        Trace["📡 Traces & Metrics"]
     end
   
     Dataset["📚 Dataset<br/>(HuggingFace)"]

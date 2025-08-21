@@ -10,15 +10,15 @@ HUD is built as a thin orchestration layer on top of MCP, providing structure fo
 
 ```mermaid
 graph TB
-    subgraph "HUD Platform"
+    subgraph "Remote"
         Dashboard["📊 Dashboard<br/>(app.hud.so)"]
-        API["🔌 HUD MCP<br/>(Remote Orchestrator)"]
+        API["🔌 MCP Orchestrator<br/>(mcp.hud.so)"]
     end
     
     subgraph "Your Code"
         Agent["🤖 Agent<br/>(Claude/Operator)"]
         Task["📋 Task<br/>(Prompt + Evaluation)"]
-        SDK["📦 HUD SDK"]
+        SDK["📦 hud-python"]
     end
     
     subgraph "Environments"
@@ -26,8 +26,8 @@ graph TB
         RemoteEnv["☁️ Remote Docker<br/>(100s Parallel)"]
     end
     
-    subgraph "Telemetry"
-        Trace["📡 OpenTelemetry<br/>(Traces & Metrics)"]
+    subgraph "OpenTelemetry"
+        Trace["📡 Traces & Metrics"]
     end
     
     Dataset["📚 Dataset<br/>(HuggingFace)"]
@@ -40,7 +40,7 @@ graph TB
     SDK <-->|"MCP"| LocalEnv
     SDK <-->|"MCP"| API
     API  <-->|"MCP"| RemoteEnv
-    SDK  --> Trace
+    SDK  -->|"hud.trace"| Trace
     Trace --> Dashboard
     AnyMCP -->|"MCP"| API
     
