@@ -1,294 +1,145 @@
 ---
-title: 'Quickstart'
-icon: 'bolt'
+title: "Quickstart"
+description: "Run your first agent evaluation in 3 minutes"
+icon: "bolt"
 ---
 
-## 1. Installation
+Get up and running with HUD in minutes. This guide walks you through installation, basic setup, and running your first agent evaluation.
 
-Install the hud SDK:
+## Quick Clone
 
+The fastest way to get started:
+
+```bash
+# Clone a complete example project with uv
+uvx hud-python quickstart
+```
+
+This sets you up with a working agent evaluation example you can run immediately.
+
+## Installation
+
+<Tabs>
+<Tab title="Basic Install">
 ```bash
 pip install hud-python
 ```
+</Tab>
 
-See [Installation](/installation) for more details on development setup.
+<Tab title="Agent Install">
+```bash
+# Includes AI providers and telemetry
+pip install "hud-python[agent]"
+```
+</Tab>
 
-## 2. API Key Setup
+<Tab title="CLI Tools">
+```bash
+# Install CLI in isolated environment
+uv tool install hud-python
+```
+</Tab>
+</Tabs>
 
-Set your API keys in a `.env` file (get your HUD API key from [app.hud.so](https://app.hud.so)):
+## API Keys
+
+Set your API keys as environment variables:
 
 ```bash
-HUD_API_KEY=sk-hud-...
-ANTHROPIC_API_KEY=sk-ant-...  # For Claude agents
-OPENAI_API_KEY=sk-...         # For OpenAI agents
+export HUD_API_KEY="sk-hud-..."      # Get from app.hud.so
+export ANTHROPIC_API_KEY="sk-ant-..." # For Claude agents
+export OPENAI_API_KEY="sk-..."        # For OpenAI agents
 ```
 
-## 3. Your First Task
+<Tip>
+Create a `.env` file in your project root to manage API keys locally
+</Tip>
+
+## Your First Agent
+
+Run an agent on the 2048 game environment:
 
 ```python
-import asyncio
-from hud import gym
-from hud.task import Task
-from hud.agent import ClaudeAgent
+import asyncio, os
+import hud
+from hud import Task
+from hud.agents import ClaudeAgent
 
 async def main():
-    # Define what the agent should do
-    task = Task(
-        prompt="Search for information about artificial intelligence",
-        gym="hud-browser",
-        setup=("goto", "google.com"),
-        evaluate=("contains_text", "artificial intelligence")
-    )
+    # The trace context captures ALL agent interactions within a "task run"
+    # Everything inside this context shows up as one trace on app.hud.so
+    with hud.trace("quickstart-2048"):
+        # Define task with remote MCP environment
+        task = Task(
+            prompt="Win a game of 2048 by reaching the 128 tile",
+            mcp_config={
+                "hud": {
+                    "url": "https://mcp.hud.so",
+                    "headers": {
+                        "Authorization": f"Bearer {os.getenv('HUD_API_KEY')}",
+                        "Mcp-Image": "hudpython/hud-text-2048:v1.1"
+                    }
+                }
+            },
+            setup_tool={"name": "setup", "arguments": {"name": "board", "board_size": 4}},
+            evaluate_tool={"name": "evaluate", "arguments": {"name": "max_number", "target": 128}}
+        )
+        
+        # Run agent (auto-creates MCP client from task.mcp_config)
+        agent = ClaudeAgent()
+        result = await agent.run(task)
+        print(f"Max tile reached: {result.reward}")
 
-    # Create environment and agent
-    env = await gym.make(task)
-    agent = ClaudeAgent()
-
-    # Run the task
-    result = await env.run(agent)
-    print(f"Evaluation: {result}")
-
-    await env.close()
-
-if __name__ == "__main__":
-    asyncio.run(main())
+asyncio.run(main())
 ```
 
-Each gym (`hud-browser`, `OSWorld-Ubuntu`, custom) has it's own set of setup and evaluate funcitons, and you can define your own.
-See [setup](/environments/browser#setup-functions-initial-state) and [evalutors](/environments/browser#evaluation-functions) for more info on available functions.
+<Check>
+The trace context ensures that the entire task run - from setup through evaluation - appears as one coherent trace on the platform
+</Check>
 
-### Manual Agent Loop
-```python
-env = await gym.make(task)
-agent = ClaudeAgent()
+## What just happened?
 
-# Reset the environment to get the initial observation
-obs, _ = await env.reset()
+1. **Task Definition**: We created a `Task` with:
+   - A prompt telling the agent what to do
+   - An `mcp_config` pointing to a remote MCP environment
+   - Setup and evaluation tools to initialize and score the game
 
-for i in range(10):
-    # Get the next action from the agent
-    action, done = await agent.predict(obs)
+2. **Auto Client**: The agent automatically created an MCP client from `task.mcp_config`
 
-    # Take the action in the environment
-    obs, reward, terminated, info = await env.step(action)
+3. **Telemetry**: The `trace` context captured all interactions for debugging
 
-    # If the episode is done, break
-    if done or terminated:
-        break
-
-# Evaluate the agent's performance
-result = await env.evaluate()
-```
-
-## 4. Browser Interaction Patterns
-
-### Live Streaming
-```python
-# View the browser session live
-env = await gym.make(task)
-await env.stream()  # Opens live view in notebook/browser
-```
-
-
-### Browser Use Integration through CDP
-```python
-from browser_use import Agent, Browser, BrowserConfig
-from langchain_openai import ChatOpenAI
-
-# Get CDP URL from HUD environment
-env = await gym.make(task)
-
-# Connect browser_use to the same browser
-browser = Browser(config=BrowserConfig(cdp_url=env.url))
-agent = Agent(task=task.prompt, llm=ChatOpenAI(model="gpt-4o"), browser=browser)
-
-# Run the task
-result = await agent.run()
-
-# Evaluate the agent's performance
-evaluation = await env.evaluate()
-print(f"Evaluation: {evaluation}")
-```
-
-## 5. TaskSet Evaluation
-
-Evaluate your agent on pre-built TaskSets:
-
-```python
-from hud import load_taskset, run_job, ClaudeAgent
-
-# Load a TaskSet
-taskset = await load_taskset("hud-samples")  # Start here
-# taskset = await load_taskset("WebVoyager")  # Web navigation  
-# taskset = await load_taskset("GAIA")        # Question answering
-
-# Run evaluation
-job = await run_job(ClaudeAgent, taskset, "my-evaluation")
-print(f"Job ID: {job.id}")
-
-# View results at app.hud.so/jobs/{job.id}
-analytics = await job.get_analytics()
-print(f"Success rate: {analytics['success_rate']}")
-```
-
-## 6. MCP Telemetry Integration
-
-HUD automatically captures MCP tool calls for debugging:
-
-```python
-from mcp_use import MCPAgent, MCPClient
-from langchain_openai import ChatOpenAI
-import hud
-from hud import gym, Response
-
-# Configure MCP server
-config = {
-    "mcpServers": {
-        "airbnb": {
-            "command": "npx",
-            "args": ["-y", "@openbnb/mcp-server-airbnb"]
-        }
-    }
-}
-
-client = MCPClient.from_dict(config)
-llm = ChatOpenAI(model="gpt-4o")
-agent = MCPAgent(llm=llm, client=client, max_steps=5)
-
-# MCP calls are automatically traced
-with hud.trace("airbnb-search"):
-    task = Task(
-        prompt="Find a nice place to stay in Barcelona with good reviews",
-        gym="qa", # since this agent doesn't use a browser, we use the qa environment
-        evaluate=("response_includes", "airbnb")
-    )
-    env = await gym.make(task)
-    
-    # Run MCP agent (tool calls captured automatically)
-    result = await agent.run(
-        task.prompt
-    )
-    
-    # Submit final answer
-    await env.step(Response(text=result))
-    
-    # Evaluate the agent's performance
-    evaluation = await env.evaluate()
-    print(f"Evaluation: {evaluation}")
-
-# View trace with MCP calls at app.hud.so/jobs/traces/{trace_id}
-```
-
-**What's Captured**:
-- Tool invocations and responses
-- Error states and retries  
-- Performance data
-- Request/response payloads
-
-## 7. Common Task Patterns
-
-### Question Answering
-```python
-Task(
-    prompt="What is the current population of Tokyo?",
-    gym="hud-browser",
-    setup=("goto", "google.com"),
-    evaluate=("response_includes", "million")
-)
-```
-
-### Form Interaction
-```python
-Task(
-    prompt="Search for laptops and add the first result to cart",
-    gym="hud-browser",
-    setup=("goto", "https://shop.example.com"),
-    evaluate=("contains_text", "Added to cart")
-)
-```
-
-### Spreadsheet Tasks
-```python
-Task(
-    prompt="Open the Excel file and verify cell A1 contains 'Total'",
-    gym="hud-browser",
-    setup=("sheets_from_xlsx", "https://example.com/data.xlsx"),
-    evaluate=("sheets_cell_values", {"A1": "Total"})
-)
-```
-
-### Response-Only Tasks (No Browser)
-```python
-Task(
-    prompt="What is the capital of France?",
-    gym="qa",  # No browser environment needed if the agent doesn't interact with it
-    evaluate=("response_includes", "Paris")
-)
-```
+4. **Evaluation**: The `evaluate_max_tile` tool returned the highest tile as reward
 
 ## Next Steps
 
-- **[Task Creation Guide](/task-creation)**: Deep dive into building custom evaluation scenarios
-- **[Custom Environments](/environment-creation)**: Create Docker-based environments for your applications
-- **[Browser Environment](/environments/browser)**: Learn browser-specific features  
-- **[Examples](/examples)**: Browse runnable notebooks
+<CardGroup cols={3}>
+<Card title="Understand MCP" icon="book" href="/core-concepts/mcp-protocol">
+  Learn how agents connect to environments
+</Card>
 
----
+<Card title="Run Benchmarks" icon="chart-line" href="/evaluate-agents/run-benchmarks">
+  Test on SheetBench and OSWorld
+</Card>
 
-## Custom Installation & Setup
+<Card title="Build Environments" icon="cube" href="/build-environments/quickstart-todo">
+  Create your own MCP environment
+</Card>
+</CardGroup>
 
-If you haven't installed the SDK yet, here's how:
-
-### Standard Installation
-Install the HUD SDK using pip:
-
-```bash
-# Install the latest stable release
-pip install hud-python
-
-# Or, to get the very latest pre-release version:
-pip install --pre hud-python
-```
-
-### Requirements
-
-*   **Python:** 3.10 or higher
-*   **API Keys:** 
-    *   `HUD_API_KEY` (required for platform features like job/trace uploading, loading remote TaskSets).
-    *   `OPENAI_API_KEY` (optional, required if using `OperatorAgent` or other OpenAI-based agents).
-    *   `ANTHROPIC_API_KEY` (optional, required if using `ClaudeAgent` or other Anthropic-based agents).
-
-### API Key Configuration
-
-The SDK automatically loads API keys from environment variables or a `.env` file located in your project's root directory.
-
-Create a `.env` file in your project root:
-```
-# .env example
-HUD_API_KEY="your_hud_api_key_here"
-OPENAI_API_KEY="your_openai_api_key_here"   # Only if using OpenAI models
-ANTHROPIC_API_KEY="your_anthropic_api_key_here" # Only if using Anthropic models
-```
-Alternatively, export them as environment variables in your shell.
-
-### Development Installation (for Contributors)
-
-If you plan to contribute to the SDK or need an editable install:
+## CLI Quick Reference
 
 ```bash
-# Clone the repository
-git clone https://github.com/hud-evals/hud-sdk.git # Corrected repo URL
-cd hud-sdk
+# Analyze any MCP environment
+hud analyze hudpython/hud-text-2048:v1.1
 
-# Create and activate a virtual environment (uv is recommended)
-# python -m venv .venv  # Standard venv
-# source .venv/bin/activate # Or .\venv\Scripts\activate on Windows
+# Debug environment initialization
+hud debug hudpython/hud-text-2048:v1.1
 
-uv venv # If using uv
-source .venv/bin/activate # Or .venv\Scripts\activate.bat or .venv\Scripts\Activate.ps1
-
-# Install in editable mode with development dependencies
-pip install -e ".[dev]"
+# Run HUD as an MCP server (for Cursor/Claude)
+hud mcp
 ```
 
-With the SDK installed and API keys configured, you're ready to explore all examples and build your own agent evaluations!
+<Note>
+See the [CLI Reference](/reference/cli/overview) for detailed command documentation
+</Note>
+

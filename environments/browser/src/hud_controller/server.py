@@ -38,22 +38,36 @@ mcp = MCPServer(
 )
 
 
-# The decorator intercepts the MCP initialization to provide session and progress_token
+# The decorator intercepts the MCP initialization to provide RequestContext
 @mcp.initialize
-async def initialize_environment(session=None, progress_token=None):
+async def initialize_environment(ctx):
     """Initialize the browser environment with clean startup sequence."""
-    import logging
+    # Extract client info for logging
+    client_info = ctx.session.client_params.clientInfo if ctx.session.client_params else None
+    if client_info:
+        logger.info(f"Client connected: {client_info.name} v{client_info.version}")
 
-    logger = logging.getLogger(__name__)
-    logger.info(
-        f"initialize_environment called! session={session}, progress_token={progress_token}"
-    )
+    # Extract progress token from context
+    metadata = ctx.meta
+    progress_token = metadata.get("progressToken", None)
+
+    # Create and register computer tools
+    tool_kwargs: dict[str, Any] = {}
+
+    # Add display dimensions if provided
+    width = metadata.get("display_width", None) if metadata else None
+    height = metadata.get("display_height", None) if metadata else None
+
+    if width and height:
+        logger.info(f"Overriding display dimensions: {width}x{height}")
+        tool_kwargs["width"] = width
+        tool_kwargs["height"] = height
 
     async def send_progress(progress: float, message: str):
         """Send progress notification through the session."""
-        if progress_token and session:
+        if progress_token:
             logger.info(f"Sending progress: {progress}% - {message}")
-            await session.send_progress_notification(
+            await ctx.session.send_progress_notification(
                 progress_token=progress_token, progress=progress, total=100, message=message
             )
         else:
@@ -102,17 +116,17 @@ async def initialize_environment(session=None, progress_token=None):
         await send_progress(80, "Tools registered...")
 
         # Register interaction tools
-        mcp.add_tool(HudComputerTool())
-        mcp.add_tool(AnthropicComputerTool())
-        mcp.add_tool(OpenAIComputerTool())
+        mcp.add_tool(HudComputerTool(**tool_kwargs))
+        mcp.add_tool(AnthropicComputerTool(**tool_kwargs))
+        mcp.add_tool(OpenAIComputerTool(**tool_kwargs))
         mcp.add_tool(playwright_tool)
 
         await send_progress(100, "Environment ready!")
 
     except Exception as e:
         logger.error(f"Initialization failed: {e}")
-        if progress_token and session:
-            await session.send_progress_notification(
+        if progress_token:
+            await ctx.session.send_progress_notification(
                 progress_token=progress_token,
                 progress=0,
                 total=100,

@@ -4,7 +4,7 @@ import sys
 import logging
 import os
 from datetime import datetime
-from typing import Optional, TypedDict
+from typing import Optional, TypedDict, Any
 
 # Configure stderr logging
 logging.basicConfig(
@@ -94,13 +94,17 @@ async def get_telemetry_resource() -> Telemetry:
 
 
 @mcp.initialize
-async def initialize_environment(session=None, progress_token=None):
+async def initialize_environment(ctx):
     """Initialize the remote browser environment with progress reporting."""
     global browser_provider, playwright_tool, browser_executor
 
+    # Extract progress token from context
+    metadata = ctx.meta
+    progress_token = metadata.get("progressToken", None)
+
     async def send_progress(progress: int, message: str):
-        if progress_token and session:
-            await session.send_progress_notification(
+        if progress_token:
+            await ctx.session.send_progress_notification(
                 progress_token=progress_token,
                 progress=progress,
                 total=100,
@@ -183,9 +187,21 @@ async def initialize_environment(session=None, progress_token=None):
         await send_progress(75, "Browser executor initialized")
 
         # Create and register computer tools
-        mcp.add_tool(HudComputerTool(executor=browser_executor))
-        mcp.add_tool(AnthropicComputerTool(executor=browser_executor))
-        mcp.add_tool(OpenAIComputerTool(executor=browser_executor))
+        tool_kwargs: dict[str, Any] = {"executor": browser_executor}
+
+        # Add display dimensions if provided
+        width = metadata.get("display_width", None) if metadata else None
+        height = metadata.get("display_height", None) if metadata else None
+
+        if width and height:
+            logger.info(f"Overriding display dimensions: {width}x{height}")
+            tool_kwargs["width"] = width
+            tool_kwargs["height"] = height
+
+        # Register all computer tools with the same kwargs
+        mcp.add_tool(HudComputerTool(**tool_kwargs))
+        mcp.add_tool(AnthropicComputerTool(**tool_kwargs))
+        mcp.add_tool(OpenAIComputerTool(**tool_kwargs))
         await send_progress(80, "Registered hud computer tools")
 
         # Set the playwright_tool as environment for setup and evaluate hubs
@@ -207,8 +223,8 @@ async def initialize_environment(session=None, progress_token=None):
         await send_progress(100, "Remote browser environment ready!")
 
     except Exception as e:
-        if progress_token and session:
-            await session.send_progress_notification(
+        if progress_token:
+            await ctx.session.send_progress_notification(
                 progress_token=progress_token,
                 progress=0,
                 total=100,

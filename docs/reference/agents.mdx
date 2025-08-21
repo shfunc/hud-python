@@ -1,0 +1,388 @@
+---
+title: "Agents"
+description: "SDK reference for HUD agent classes"
+icon: "robot"
+---
+
+The HUD SDK provides a base `MCPAgent` class and several pre-built agent implementations for interacting with MCP environments.
+
+## Base Class
+
+### MCPAgent
+
+```python
+from hud.agents import MCPAgent
+```
+
+Abstract base class for all MCP-enabled agents. Handles tool discovery, filtering, and execution flow.
+
+**Constructor Parameters:**
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `mcp_client` | `AgentMCPClient` | MCP client for server connections | `None` |
+| `allowed_tools` | `list[str]` | List of tool names to allow | `None` (all) |
+| `disallowed_tools` | `list[str]` | List of tool names to disallow | `[]` |
+| `lifecycle_tools` | `list[str]` | Tools hidden from agent (setup/evaluate) | `[]` |
+| `initial_screenshot` | `bool` | Capture screenshot before first prompt | `False` |
+| `system_prompt` | `str` | System prompt to use | Default prompt |
+| `append_tool_system_prompt` | `bool` | Append available tools to system | `False` |
+| `append_setup_content` | `bool` | Append setup content to prompt | `False` |
+| `model_name` | `str` | Model name for telemetry | `"mcp-agent"` |
+| `response_agent` | `ResponseAgent` | Optional auto-response handler | `None` |
+| `auto_trace` | `bool` | Enable automatic telemetry | `True` |
+
+**Key Methods:**
+
+```python
+async def initialize(task: str | Task | None = None) -> None
+    """Initialize agent with task-specific configuration."""
+
+async def run(prompt_or_task: str | Task | dict[str, Any], max_steps: int = 10) -> Trace
+    """Run agent with prompt or task. Returns Trace with results."""
+
+async def call_tools(tool_call: MCPToolCall | list[MCPToolCall]) -> list[MCPToolResult]
+    """Execute tool calls through MCP client."""
+
+def get_available_tools() -> list[types.Tool]
+    """Get filtered list of available tools (excludes lifecycle)."""
+
+def get_tool_schemas() -> list[dict]
+    """Get tool schemas formatted for the model."""
+```
+
+**Abstract Methods (must implement):**
+
+```python
+async def get_system_messages() -> list[Any]
+    """Get system prompt formatted for the model."""
+
+async def get_response(messages: list[Any]) -> AgentResponse
+    """Get model response including tool calls."""
+
+async def format_blocks(blocks: list[ContentBlock]) -> list[Any]
+    """Format content blocks into model messages."""
+
+async def format_tool_results(tool_calls: list[MCPToolCall], 
+                            tool_results: list[MCPToolResult]) -> list[Any]
+    """Format tool results for the model."""
+```
+
+**Class Variables:**
+- `metadata: dict[str, Any]` - Metadata injected into MCP initialize request
+
+**Auto-Client Creation:**
+If no `mcp_client` is provided but a `Task` with `mcp_config` is passed to `run()`, an MCPClient is automatically created and cleaned up.
+
+## Pre-built Agents
+
+### ClaudeAgent
+
+```python
+from hud.agents import ClaudeAgent
+```
+
+Claude-specific implementation using Anthropic's API.
+
+**Constructor Parameters:**
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `model_client` | `AsyncAnthropic` | Anthropic client | Auto-created |
+| `model` | `str` | Claude model to use | `"claude-3-7-sonnet-20250219"` |
+| `max_tokens` | `int` | Maximum response tokens | `4096` |
+| `use_computer_beta` | `bool` | Use computer-use beta | `True` |
+
+**Features:**
+- Native Claude tool calling
+- Automatic prompt caching
+- Computer-use beta support
+- Display metadata injection (1280x720)
+
+**Example:**
+```python
+agent = ClaudeAgent(
+    model="claude-3-5-sonnet-20241022",
+    max_tokens=8192
+)
+
+result = await agent.run(
+    Task(
+        prompt="Navigate to example.com",
+        mcp_config={"server": {...}},
+        evaluate_tool={"name": "evaluate", "arguments": {...}}
+    )
+)
+```
+
+### OperatorAgent
+
+```python
+from hud.agents import OperatorAgent
+```
+
+OpenAI's Operator agent implementation.
+
+**Constructor Parameters:**
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `model_client` | `AsyncOpenAI` | OpenAI client | Auto-created |
+| `model` | `str` | Model to use | `"gpt-4o-realtime-preview"` |
+| `max_tokens` | `int` | Maximum response tokens | `4096` |
+
+**Features:**
+- OpenAI function calling
+- Operator system prompt
+- Display metadata injection (1920x1080)
+
+### GenericOpenAIChatAgent
+
+```python
+from hud.agents import GenericOpenAIChatAgent
+```
+
+Generic OpenAI chat completion agent for any OpenAI-compatible API.
+
+**Constructor Parameters:**
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `model_client` | `AsyncOpenAI` | OpenAI-compatible client | Required |
+| `model` | `str` | Model name | Required |
+| `max_tokens` | `int` | Maximum response tokens | `4096` |
+
+**Example:**
+```python
+# Use with local LLM
+from openai import AsyncOpenAI
+
+client = AsyncOpenAI(
+    base_url="http://localhost:11434/v1",  # Ollama
+    api_key="not-needed"
+)
+
+agent = GenericOpenAIChatAgent(
+    model_client=client,
+    model="llama3.1"
+)
+```
+
+### LangChainAgent
+
+```python
+from hud.agents import LangChainAgent
+```
+
+LangChain integration for using any LangChain-compatible model.
+
+**Constructor Parameters:**
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `model` | `BaseChatModel` | LangChain chat model | Required |
+
+**Example:**
+```python
+from langchain_anthropic import ChatAnthropic
+
+model = ChatAnthropic(model="claude-3-opus-20240229")
+agent = LangChainAgent(model=model)
+```
+
+### ArtHUDAgent
+
+```python
+from hud.agents import ArtHUDAgent
+```
+
+Integration with ART (Automatic Reasoning and Tool-use) models.
+
+**Constructor Parameters:**
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `art_model` | `ArtModel` | ART model instance | Required |
+| `max_tokens` | `int` | Maximum response tokens | `4096` |
+
+**Features:**
+- Built-in Chain-of-Thought reasoning
+- Structured reasoning traces
+- Tool use optimization
+
+## Helper Classes
+
+### ResponseAgent
+
+Base class for auto-response handlers that decide when to continue or stop.
+
+```python
+from hud.agents.misc import ResponseAgent
+
+class MyResponseAgent(ResponseAgent):
+    async def determine_response(self, agent_output: str) -> str:
+        if "task complete" in agent_output.lower():
+            return "STOP"
+        return "Continue with the next step"
+```
+
+## Common Types
+
+### AgentResponse
+
+```python
+from hud.types import AgentResponse
+
+@dataclass
+class AgentResponse:
+    content: str | None = None
+    tool_calls: list[MCPToolCall] | None = None
+    done: bool = False
+```
+
+### MCPToolCall
+
+```python
+from hud.types import MCPToolCall
+
+class MCPToolCall(BaseModel):
+    name: str
+    arguments: dict[str, Any] = {}
+```
+
+### MCPToolResult
+
+```python
+from hud.types import MCPToolResult
+
+class MCPToolResult(BaseModel):
+    content: list[ContentBlock]
+    structuredContent: dict[str, Any] | None = None
+    isError: bool = False
+```
+
+### Trace
+
+```python
+from hud.types import Trace
+
+class Trace(BaseModel):
+    reward: float = 0.0
+    done: bool = True
+    content: str | None = None
+    isError: bool = False
+    info: dict[str, Any] = {}
+    steps: list[TraceStep] = []
+```
+
+## Usage Examples
+
+### Simple Prompt Execution
+
+```python
+from hud.agents import ClaudeAgent
+from hud.clients import MCPClient
+
+# Manual client creation
+client = MCPClient({
+    "server": {
+        "command": "docker",
+        "args": ["run", "-i", "my-env:latest"]
+    }
+})
+
+agent = ClaudeAgent(mcp_client=client)
+await agent.initialize()
+
+# Run with string prompt
+result = await agent.run("Click the submit button", max_steps=5)
+print(f"Result: {result.content}")
+print(f"Success: {not result.isError}")
+```
+
+### Task Execution with Auto-Client
+
+```python
+from hud.agents import OperatorAgent
+from hud.datasets import Task
+
+# No client needed - auto-created from task
+agent = OperatorAgent()
+
+task = Task(
+    prompt="Find the price of the product",
+    mcp_config={
+        "browser": {
+            "url": "mcp://mcp.hud.so/v3/mcp",
+            "headers": {
+                "Authorization": "Bearer ${HUD_API_KEY}",
+                "Mcp-Image": "hudpython/hud-browser:latest"
+            }
+        }
+    },
+    setup_tool={
+        "name": "setup",
+        "arguments": {"url": "https://example.com"}
+    },
+    evaluate_tool={
+        "name": "evaluate", 
+        "arguments": {"check": "price_found"}
+    }
+)
+
+# Client created automatically
+result = await agent.run(task, max_steps=20)
+print(f"Reward: {result.reward}")
+```
+
+### Custom Agent Implementation
+
+```python
+from hud.agents import MCPAgent
+from hud.types import AgentResponse
+import hud
+
+class MyCustomAgent(MCPAgent):
+    metadata = {"custom": "metadata"}
+    
+    async def get_system_messages(self) -> list[dict]:
+        return [{
+            "role": "system",
+            "content": self.system_prompt
+        }]
+    
+    @hud.instrument(span_type="agent", record_args=False, record_result=True)
+    async def get_response(self, messages: list[dict]) -> AgentResponse:
+        # Your LLM call here
+        response = await self.llm.chat(messages)
+        
+        return AgentResponse(
+            content=response.content,
+            tool_calls=[
+                MCPToolCall(name=tc.name, arguments=tc.args)
+                for tc in response.tool_calls
+            ],
+            done=response.stop_reason == "stop"
+        )
+    
+    async def format_blocks(self, blocks: list[ContentBlock]) -> list[dict]:
+        content = []
+        for block in blocks:
+            if block.type == "text":
+                content.append({"type": "text", "text": block.text})
+            elif block.type == "image":
+                content.append({
+                    "type": "image",
+                    "image": {"data": block.data, "format": "png"}
+                })
+        
+        return [{"role": "user", "content": content}]
+    
+    async def format_tool_results(self, tool_calls, tool_results) -> list[dict]:
+        return [{
+            "role": "tool",
+            "content": result.content,
+            "tool_call_id": call.name
+        } for call, result in zip(tool_calls, tool_results)]
+```
+
+## See Also
+
+- [Create Agents](/evaluate-agents/create-agents) - Tutorial on building agents
+- [Tasks](/reference/tasks) - Task configuration reference
+- [Architecture](/core-concepts/architecture) - How agents fit in HUD
+

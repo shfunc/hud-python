@@ -304,7 +304,6 @@ For simple environments with just a few setup/evaluate functions, you can use di
 
 ```python
 from hud.server import MCPServer
-from hud.tools.helper import mcp_intialize_wrapper
 from hud.tools import HudComputerTool
 
 mcp = MCPServer(name="my-environment")
@@ -426,18 +425,19 @@ async def task_complete(expected_count: int):
 # In server.py
 from .setup import setup as setup_hub
 from .evaluate import evaluate as evaluate_hub
-from hud.tools.helper import mcp_intialize_wrapper
 
 # Create MCP server
 mcp = MCPServer(name="my-environment")
 
 @mcp.initialize
-async def initialize_environment(session=None, progress_token=None):
+async def initialize_environment(ctx):
     """Initialize the environment with progress notifications."""
+    # Extract progress token from context
+    progress_token = getattr(ctx.meta, "progressToken", None) if ctx.meta else None
     # Send progress updates if available
     async def send_progress(progress: int, message: str):
-        if progress_token and session:
-            await session.send_progress_notification(
+        if progress_token:
+            await ctx.session.send_progress_notification(
                 progress_token=progress_token,
                 progress=progress,
                 total=100,

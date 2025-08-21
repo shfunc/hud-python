@@ -162,7 +162,7 @@ Set these in your environment/Docker configuration:
 
 5. **Progress notifications not working**
    - Ensure `progressToken` is provided in `InitializeRequest`
-   - Use `@mcp_intialize_wrapper` decorator correctly
+   - Use `@mcp.initialize` decorator correctly
    - Send progress updates between 0-100 with meaningful messages
 
 ### Architecture Pattern

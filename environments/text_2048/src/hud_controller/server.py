@@ -33,13 +33,16 @@ mcp = MCPServer(name="text-2048")
 
 
 @mcp.initialize
-async def initialize_environment(session=None, progress_token=None):
+async def initialize_environment(ctx):
     """Initialize the 2048 environment with progress notifications."""
     global game
 
+    # Extract progress token from context
+    progress_token = getattr(ctx.meta, "progressToken", None) if ctx.meta else None
+
     async def send_progress(progress: int, message: str):
-        if session and progress_token:
-            await session.send_progress_notification(
+        if progress_token:
+            await ctx.session.send_progress_notification(
                 progress_token=progress_token,
                 progress=progress,
                 total=100,

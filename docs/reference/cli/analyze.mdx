@@ -1,0 +1,185 @@
+---
+title: "hud analyze"
+description: "Discover tools, resources, and capabilities of MCP environments"
+icon: "magnifying-glass"
+---
+
+The `hud analyze` command explores MCP environments to discover their available tools and capabilities.
+
+## Synopsis
+
+```bash
+hud analyze [OPTIONS] IMAGE [DOCKER_ARGS...]
+hud analyze --command COMMAND [ARGS...]
+hud analyze --cursor SERVER_NAME
+```
+
+## Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--format` | Output format: `interactive`, `json`, `markdown` | interactive |
+| `--verbose` | Show full tool schemas | false |
+| `--command` | Analyze a command instead of Docker | - |
+| `--cursor` | Analyze a Cursor MCP server | - |
+| `--timeout` | Timeout in seconds | 30 |
+| `-e, --env` | Set environment variables | - |
+
+## Output Formats
+
+### Interactive (Default)
+```
+🔍 Analyzing MCP environment: hudpython/hud-text-2048:v1.1
+
+✓ Connected successfully
+✓ Found 6 tools
+
+📦 Available Tools:
+  
+  🎮 move
+     Move tiles in the specified direction
+     Parameters: direction (string)
+  
+  🔄 reset_board
+     Reset the game board to initial state
+```
+
+### JSON
+```bash
+hud analyze my-env --format json
+
+{
+  "server_info": {
+    "name": "hud-text-2048",
+    "version": "1.1.0"
+  },
+  "tools": [{
+    "name": "move",
+    "description": "Move tiles in the specified direction",
+    "inputSchema": {...}
+  }]
+}
+```
+
+### Markdown
+```bash
+hud analyze my-env --format markdown > docs/tools.md
+```
+
+## Examples
+
+### Basic Usage
+```bash
+# Analyze Docker image
+hud analyze my-server:latest
+
+# With environment variables
+hud analyze my-server -e API_KEY=test -e DEBUG=true
+
+# Verbose mode for full schemas
+hud analyze my-server --verbose
+
+# Remote images
+hud analyze hudpython/hud-browser:latest
+```
+
+### Development
+```bash
+# Local script
+hud analyze --command "python my_server.py"
+
+# Cursor server
+hud analyze --cursor my-dev-env
+```
+
+### Documentation
+```bash
+# Generate markdown docs
+hud analyze my-env --format markdown > README.md
+
+# Extract tool list
+hud analyze my-env --format json | jq -r '.tools[].name'
+```
+
+## Advanced Usage
+
+### Comparing Versions
+```bash
+# Compare tools between versions
+hud analyze v1:latest --format json > v1.json
+hud analyze v2:latest --format json > v2.json
+
+# Find differences
+diff <(jq -r '.tools[].name' v1.json | sort) \
+     <(jq -r '.tools[].name' v2.json | sort)
+```
+
+### CI Integration
+```python
+#!/usr/bin/env python3
+import subprocess
+import json
+
+def verify_tools(image, required):
+    """Verify environment has required tools"""
+    result = subprocess.run(
+        ["hud", "analyze", image, "--format", "json"],
+        capture_output=True, text=True, check=True
+    )
+    
+    data = json.loads(result.stdout)
+    available = {tool["name"] for tool in data["tools"]}
+    missing = set(required) - available
+    
+    if missing:
+        print(f"Missing tools: {missing}")
+        return False
+    return True
+
+# Usage
+verify_tools("my-env:latest", ["setup", "evaluate"])
+```
+
+## Tool Schema
+
+With `--verbose`, full schemas are shown:
+
+```json
+{
+  "name": "click",
+  "description": "Click at coordinates",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "x": {"type": "integer"},
+      "y": {"type": "integer"}
+    },
+    "required": ["x", "y"]
+  }
+}
+```
+
+## Troubleshooting
+
+- **No tools found**: Run `hud debug` first
+- **Timeout errors**: Use `--timeout 60`
+- **JSON errors**: Check stdout is clean
+- **Empty output**: Verify environment is running
+
+## Best Practices
+
+1. Always run `hud debug` before `analyze`
+2. Use JSON format for scripting
+3. Generate docs with markdown format
+4. Track tool changes in version control
+5. Validate in CI/CD pipelines
+
+<Note>
+Analyze only shows what's available. Use `hud debug` to verify tools work.
+</Note>
+
+## Next Step
+
+<Card title="MCP Server Mode" icon="server" href="/reference/cli/mcp-server">
+  Use HUD itself as an MCP server
+</Card>

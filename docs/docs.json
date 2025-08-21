@@ -1,82 +1,103 @@
 {
-  "$schema": "https://mintlify.com/docs.json",
-  "theme": "willow",
-  "name": "hud SDK",
-  "colors": {
-    "primary": "#4F46E5",
-    "light": "#818CF8",
-    "dark": "#3730A3"
-  },
-  "favicon": "/favicon.png",
-  "navigation": {
-    "groups": [
-    {
-      "group": "Getting Started",
-      "pages": [
-        "quickstart",
-        "task-creation",
-        "environment-creation",
-        "running-your-agent"
-      ]
-    },
-    {
-      "group": "Examples",
-      "pages": [
-        "examples/benchmarking-agents",
-        "examples/alignment-evaluation",
-        "examples/web-mocks",
-        "examples/custom-os-env",
-        "examples/mcp-agent-tracing",
-        "examples/web-app-testing"
-      ]
-    },
-    {
-      "group": "Features",
-      "pages": [
-        "advanced/tracing",
-        "advanced/cla-details",
-        "advanced/environment-control",
-        "advanced/uploading"
-      ]
-    },
-    {
-      "group": "Concepts",
-      "pages": [
-        "concepts/agent",
-        "concepts/adapter",
-        "concepts/environment",
-        "concepts/job",
-        "concepts/task",
-        "concepts/trajectory"
-      ]
-    },
-    {
-      "group": "Environments",
-      "pages": [
-        "environments/browser",
-        "environments/custom", 
-        "environments/qa",
-        "environments/osworld-ubuntu"
-      ]
-    }
-    ]
-  },
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "HUD",
+  "theme": "maple",
   "logo": {
     "light": "/logo/hud_logo.svg",
     "dark": "/logo/hud_logo_dark.svg"
   },
-  "navbar": {
-    "links": [
+  "favicon": "/favicon.ico",
+  "colors": {
+    "primary": "#c0960c",
+    "light": "#ffffff",
+    "dark": "#5b21b6"
+  },
+  "topbarLinks": [
+    {
+      "name": "GitHub",
+      "url": "https://github.com/hud-evals/hud-python"
+    },
+    {
+      "name": "Discord",
+      "url": "https://discord.gg/wkjtmHYYjm"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Dashboard",
+    "url": "https://app.hud.so"
+  },
+  "navigation": {
+    "groups": [
       {
-        "label": "GitHub",
-        "href": "https://github.com/hud-evals/hud-sdk"
+        "group": "Get Started",
+        "pages": ["index", "quickstart"]
+      },
+      {
+        "group": "Core Concepts",
+        "pages": [
+          "core-concepts/mcp-protocol",
+          "core-concepts/architecture", 
+          "core-concepts/task-system"
+        ]
+      },
+              {
+          "group": "Evaluate Agents",
+          "pages": [
+            "evaluate-agents/index",
+            "evaluate-agents/create-agents",
+            "evaluate-agents/leaderboards",
+            "evaluate-agents/create-benchmarks"
+          ]
+        },
+      {
+        "group": "Build Environments",
+        "pages": [
+          "build-environments/index",
+          "build-environments/quickstart-todo",
+          "build-environments/docker-to-mcp",
+          "build-environments/registry"
+        ]
+      },
+      {
+        "group": "Train Agents",
+        "pages": [
+          "train-agents/index",
+          "train-agents/rl-quickstart",
+          "train-agents/verifiers-gym",
+          "train-agents/datasets"
+        ]
+                          },
+                    {
+        "group": "CLI Reference",
+        "pages": [
+          "reference/cli/overview",
+          "reference/cli/debug",
+          "reference/cli/analyze",
+          "reference/cli/mcp-server"
+        ]
+      },
+            {
+        "group": "SDK Reference",
+        "pages": [
+          "reference/tools",
+          "reference/agents",
+          "reference/environments",
+          "reference/tasks"
+        ]
       }
     ]
   },
-  "footer": {
-    "socials": {
-      "github": "https://github.com/hud-evals/hud-sdk",
-      "website": "https://hud.so"
+  "footerSocials": {
+    "github": "https://github.com/hud-evals/hud-python",
+    "discord": "https://discord.gg/wkjtmHYYjm",
+    "x": "https://x.com/hud_evals"
+  },
+  "analytics": {
+    "ga4": {
+      "measurementId": "G-XXXXXXXXXX"
     }
+  },
+  "seo": {
+    "indexHiddenPages": false
   }
 }

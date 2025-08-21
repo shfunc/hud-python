@@ -76,4 +76,4 @@ When contributing new environments, follow the comprehensive guide in [`environm
 - Look at similar code in the repository
 - Ask questions in your PR
 
-> | By contributing, you agree that your contributions will be licensed under the MIT License.
+> By contributing, you agree that your contributions will be licensed under the MIT License.

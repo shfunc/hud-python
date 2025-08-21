@@ -1,0 +1,107 @@
+---
+title: "hud mcp"
+description: "Run HUD as an MCP server (experimental)"
+icon: "server"
+---
+
+<Warning>
+This feature is experimental and still in development. APIs and functionality may change.
+</Warning>
+
+The `hud mcp` command turns HUD's debugging and analysis capabilities into MCP tools for use with Cursor and other MCP clients.
+
+## Synopsis
+
+```bash
+hud mcp
+```
+
+## Available Tools
+
+- `debug_environment` - Run debug checks on MCP environments
+- `analyze_environment` - Discover tools and capabilities  
+- `test_tool` - Execute specific tools for testing
+
+## Cursor Setup
+
+Add to `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "hud-cli": {
+      "command": "hud",
+      "args": ["mcp"],
+      "env": {
+        "PYTHONUNBUFFERED": "1"
+      }
+    }
+  }
+}
+```
+
+Restart Cursor and use natural language:
+```
+Debug my Docker environment called my-env:latest
+Analyze what tools are available in browser-env
+```
+
+## Claude Desktop Setup
+
+<Tabs>
+<Tab title="macOS">
+```json
+// ~/Library/Application Support/Claude/claude_desktop_config.json
+{
+  "mcpServers": {
+    "hud-cli": {
+      "command": "/usr/local/bin/hud",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+</Tab>
+
+<Tab title="Windows">
+```json
+// %APPDATA%\Claude\claude_desktop_config.json
+{
+  "mcpServers": {
+    "hud-cli": {
+      "command": "C:\\Python311\\Scripts\\hud.exe",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+</Tab>
+</Tabs>
+
+## Usage Example
+
+```
+You: Debug my browser automation environment
+
+Cursor: I'll help debug that. Let me check your environment.
+
+*Calls debug_environment({ image: "browser-env:latest" })*
+
+Cursor: The environment is failing at phase 3. Let me analyze the available tools...
+```
+
+## Troubleshooting
+
+- **Not starting**: Check HUD is installed with `which hud`
+- **No response**: Ensure `PYTHONUNBUFFERED=1` is set
+- **Docker errors**: Verify Docker is running and accessible
+
+<Note>
+This feature is actively being developed. Report issues on GitHub.
+</Note>
+
+## Next Step
+
+<Card title="CLI Overview" icon="terminal" href="/reference/cli/overview">
+  Back to CLI reference
+</Card>

@@ -1,0 +1,425 @@
+---
+title: "Tools"
+description: "SDK reference for HUD tools and executors"
+icon: "wrench"
+---
+
+The HUD SDK provides a comprehensive set of tools for environment interaction. All tools inherit from `BaseTool` and return standardized MCP content blocks.
+
+## Base Classes
+
+### BaseTool
+
+```python
+from hud.tools import BaseTool
+```
+
+Abstract base class for all MCP tools. Provides standardized output formatting and MCP registration.
+
+**Constructor Parameters:**
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `env` | `Any` | Optional stateful context (game, executor, browser) | `None` |
+| `name` | `str` | Tool name for MCP registration | Auto from class |
+| `title` | `str` | Human-readable display name | Auto from class |
+| `description` | `str` | Tool description | Auto from docstring |
+
+**Abstract Methods:**
+```python
+async def __call__(self, **kwargs: Any) -> list[ContentBlock]
+```
+
+**Properties:**
+- `mcp` - FastMCP FunctionTool wrapper for registration
+
+**Usage:**
+```python
+class MyTool(BaseTool):
+    async def __call__(self, param: str) -> list[ContentBlock]:
+        result = await self.env.do_something(param)
+        return [TextContent(text=result, type="text")]
+
+# MCPServer automatically handles BaseTool instances
+tool = MyTool(env=my_context)
+mcp_server.add_tool(tool)  # No need for .mcp property
+```
+
+### BaseHub
+
+```python
+from hud.tools import BaseHub
+```
+
+A composition-friendly FastMCP server for organizing tools into nested namespaces.
+
+**Key Features:**
+- Internal tool dispatcher pattern
+- Automatic resource catalog generation
+- Hidden internal tools from MCP clients
+
+**Usage:**
+```python
+hub = BaseHub("evaluators")
+
+@hub.tool()  # Internal tool, hidden from agents
+async def url_match(url: str) -> EvaluationResult:
+    return EvaluationResult(reward=1.0, done=True)
+
+# Access via dispatcher when mounted on server
+# Agents call: evaluators(name="url_match", arguments={"url": "..."})
+```
+
+## Core Tools
+
+### BashTool
+
+```python
+from hud.tools import BashTool
+```
+
+Execute bash commands in a persistent shell session.
+
+**Constructor Parameters:**
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `session` | `_BashSession` | Pre-configured bash session | `None` |
+
+**Tool Parameters:**
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `command` | `str` | Bash command to execute | Required |
+| `restart` | `bool` | Restart the bash session | `False` |
+
+**Example:**
+```python
+bash = BashTool()
+result = await bash(command="ls -la")
+# Returns: [TextContent(text="file1.txt\nfile2.txt", type="text")]
+
+# Restart session
+await bash(restart=True)
+```
+
+### EditTool
+
+```python
+from hud.tools import EditTool
+```
+
+File system editor with undo support.
+
+**Constructor Parameters:**
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `file_history` | `dict[Path, list[str]]` | Edit history per file | `None` |
+
+**Commands:**
+| Command | Parameters | Description |
+|---------|-----------|-------------|
+| `view` | `path`, `view_range` | View file or directory contents |
+| `create` | `path`, `file_text` | Create new file |
+| `str_replace` | `path`, `old_str`, `new_str` | Replace string in file |
+| `insert` | `path`, `insert_line`, `new_str` | Insert text at line |
+| `undo_edit` | `path` | Undo last edit |
+
+**Example:**
+```python
+editor = EditTool()
+
+# View file
+await editor(command="view", path="/path/to/file.py", view_range=[1, 20])
+
+# Create file
+await editor(command="create", path="/new/file.py", file_text="print('hello')")
+
+# Replace text
+await editor(command="str_replace", path="/file.py", 
+            old_str="old_text", new_str="new_text")
+```
+
+### PlaywrightTool
+
+```python
+from hud.tools import PlaywrightTool
+```
+
+Web automation using Playwright browser.
+
+**Constructor Parameters:**
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `page` | `Page` | Existing Playwright page | `None` |
+| `cdp_url` | `str` | Chrome DevTools Protocol URL | `None` |
+
+**Actions:**
+| Action | Parameters | Description |
+|--------|-----------|-------------|
+| `navigate` | `url`, `wait_for_load_state` | Navigate to URL |
+| `screenshot` | - | Capture page screenshot |
+| `click` | `selector` | Click element |
+| `type` | `selector`, `text` | Type text in element |
+| `get_page_info` | - | Get page title and URL |
+| `wait_for_element` | `selector` | Wait for element to appear |
+
+**Example:**
+```python
+tool = PlaywrightTool()
+
+# Navigate
+await tool(action="navigate", url="https://example.com")
+
+# Click button
+await tool(action="click", selector="button.submit")
+
+# Type text
+await tool(action="type", selector="input#search", text="query")
+```
+
+## Computer Control Tools
+
+### HudComputerTool
+
+```python
+from hud.tools import HudComputerTool
+```
+
+Universal computer control with automatic scaling and executor selection.
+
+**Constructor Parameters:**
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `executor` | `BaseExecutor` | Executor to use | Auto-detect |
+| `platform_type` | `"auto"`, `"xdo"`, `"pyautogui"` | Executor type | `"auto"` |
+| `display_num` | `int` | X display number | From env |
+| `width` | `int` | Agent screen width | 1280 |
+| `height` | `int` | Agent screen height | 720 |
+| `rescale_images` | `bool` | Rescale screenshots | `True` |
+
+**Actions:**
+| Action | Parameters | Description |
+|--------|-----------|-------------|
+| `screenshot` | - | Capture screen |
+| `click` | `x`, `y`, `button`, `pattern`, `hold_keys` | Mouse click |
+| `write` | `text`, `enter_after`, `delay` | Type text |
+| `press` | `keys` | Press key combination |
+| `scroll` | `x`, `y`, `scroll_x`, `scroll_y` | Scroll |
+| `drag` | `start_x`, `start_y`, `end_x`, `end_y` | Drag mouse |
+
+**Example:**
+```python
+computer = HudComputerTool()
+
+# Take screenshot
+await computer(action="screenshot")
+
+# Click at coordinates
+await computer(action="click", x=100, y=200)
+
+# Type text
+await computer(action="write", text="Hello World", enter_after=True)
+
+# Press hotkey
+await computer(action="press", keys=["ctrl", "c"])
+```
+
+### AnthropicComputerTool
+
+```python
+from hud.tools import AnthropicComputerTool
+```
+
+Computer control optimized for Anthropic's Claude models.
+
+**Features:**
+- Pre-configured for 1280x720 resolution
+- Optimized action names for Claude
+- Built-in screenshot scaling
+
+### OpenAIComputerTool
+
+```python
+from hud.tools import OpenAIComputerTool
+```
+
+Computer control optimized for OpenAI models.
+
+**Features:**
+- Pre-configured for 1920x1080 resolution
+- Simplified action interface
+- No automatic screenshot scaling
+
+## Executors
+
+Executors provide platform-specific implementations for computer control actions.
+
+### BaseExecutor
+
+```python
+from hud.tools.executors import BaseExecutor
+```
+
+Abstract base providing simulation mode for all actions.
+
+**Core Methods:**
+- `click(x, y, button, pattern, hold_keys)` - Mouse click
+- `write(text, enter_after, delay)` - Type text
+- `press(keys)` - Press key combination
+- `scroll(x, y, scroll_x, scroll_y)` - Scroll
+- `drag(start_x, start_y, end_x, end_y)` - Drag mouse
+- `screenshot()` - Capture screen
+- `get_screen_size()` - Get display dimensions
+
+### PyAutoGUIExecutor
+
+```python
+from hud.tools.executors import PyAutoGUIExecutor
+```
+
+Cross-platform executor using PyAutoGUI library.
+
+**Features:**
+- Works on Windows, macOS, Linux
+- Real mouse/keyboard control
+- Screenshot capture
+- Automatic failsafe
+
+**Example:**
+```python
+executor = PyAutoGUIExecutor()
+computer = HudComputerTool(executor=executor)
+```
+
+### XDOExecutor
+
+```python
+from hud.tools.executors import XDOExecutor
+```
+
+Linux/X11 executor using xdotool.
+
+**Features:**
+- Native X11 integration
+- Faster than PyAutoGUI on Linux
+- Support for X display selection
+- Window management capabilities
+
+**Example:**
+```python
+executor = XDOExecutor(display_num=1)
+computer = HudComputerTool(executor=executor)
+```
+
+## Common Types
+
+### ContentBlock
+
+MCP standard output format (from `mcp.types`):
+
+```python
+from mcp.types import TextContent, ImageContent
+
+# Text output
+TextContent(text="Operation complete", type="text")
+
+# Image output  
+ImageContent(data="base64_data", mimeType="image/png", type="image")
+```
+
+### EvaluationResult
+
+```python
+from hud.tools.types import EvaluationResult
+
+result = EvaluationResult(
+    reward=0.8,        # Score 0-1
+    done=True,         # Task complete
+    content="Details", # Optional text
+    info={"score": 80} # Metadata
+)
+```
+
+### ContentResult
+
+```python
+from hud.tools.types import ContentResult
+
+# Helper for building complex outputs
+result = ContentResult(
+    output="Success message",
+    error="Error if any",
+    base64_image="screenshot_data",
+    system="System message"
+)
+
+# Convert to ContentBlocks
+blocks = result.to_content_blocks()
+```
+
+## Integration Examples
+
+### Adding Tools to Environment
+
+```python
+from hud.server import MCPServer
+from hud.tools import BashTool, EditTool
+
+mcp = MCPServer(name="my-env")
+
+# MCPServer handles BaseTool instances automatically
+bash = BashTool()
+mcp.add_tool(bash)  # Internally uses bash.mcp
+
+editor = EditTool()
+mcp.add_tool(editor)  # Same here
+```
+
+### Custom Tool Implementation
+
+```python
+from hud.tools import BaseTool
+from mcp.types import TextContent
+
+class DatabaseTool(BaseTool):
+    def __init__(self, db_connection):
+        super().__init__(
+            env=db_connection,
+            name="database",
+            title="Database Query Tool",
+            description="Execute SQL queries"
+        )
+    
+    async def __call__(self, query: str) -> list[ContentBlock]:
+        try:
+            results = await self.env.execute(query)
+            return [TextContent(text=str(results), type="text")]
+        except Exception as e:
+            return [TextContent(text=f"Error: {e}", type="text")]
+```
+
+### Hub Pattern for Evaluators
+
+```python
+from hud.tools import BaseHub
+from hud.tools.types import EvaluationResult
+
+evaluators = BaseHub("evaluate")
+
+@evaluators.tool("text_contains")
+async def check_text(text: str, target: str) -> EvaluationResult:
+    return EvaluationResult(
+        reward=1.0 if target in text else 0.0,
+        done=True,
+        content=f"Checking if '{target}' in text"
+    )
+
+# Use in environment
+@mcp.tool()
+async def evaluate(name: str, **kwargs):
+    return await evaluators.call_tool(name, kwargs)
+```
+
+## See Also
+
+- [Build Environments](/build-environments) - Using tools in environments
+- [Architecture](/core-concepts/architecture) - How tools fit in HUD
+- [Adapting Software](/build-environments/adapting-software) - Tool patterns
