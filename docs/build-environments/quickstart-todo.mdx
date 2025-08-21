@@ -264,6 +264,8 @@ CMD ["python", "-m", "hud_controller.server"]
 
 ## Step 6: Build and Test
 
+### Option 1: Traditional Build & Test
+
 Build your Docker image:
 
 ```bash
@@ -279,6 +281,20 @@ hud debug todo-env
 # If that passes, analyze the tools
 hud analyze todo-env
 ```
+
+### Option 2: Hot-Reload Development (Recommended)
+
+Use the development proxy for instant feedback:
+
+```bash
+# Start development server with hot-reload
+hud mcp . --build
+
+# In another terminal, test your environment
+hud analyze hud-todo-env:dev
+```
+
+Now you can edit `src/hud_controller/server.py` and see changes instantly without rebuilding!
 
 <Check>
 Your environment should pass all 5 debug phases and show the available tools

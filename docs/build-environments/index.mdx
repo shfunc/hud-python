@@ -289,6 +289,7 @@ Study these examples:
 
 ### Testing Your Environment
 
+#### Traditional Testing
 ```bash
 # Debug all phases
 hud debug my-environment:latest
@@ -296,6 +297,22 @@ hud debug my-environment:latest
 # Analyze available tools
 hud analyze my-environment:latest
 ```
+
+#### Hot-Reload Development
+```bash
+# Start development proxy with live reload
+hud mcp . --build
+
+# Edit src/ files - changes reload automatically
+# Test in another terminal
+hud analyze hud-my-environment:dev
+```
+
+The `hud mcp` command:
+- Mounts your `src/` directory into the container
+- Watches for file changes and auto-restarts
+- Provides HTTP endpoint for Cursor integration
+- Eliminates rebuild cycles during development
 
 ## SDK Reference
 

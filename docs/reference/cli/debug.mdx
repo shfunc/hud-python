@@ -66,6 +66,10 @@ Checks: Tools callable, return valid responses
 ```
 Checks: Overall health, state persistence
 
+<Note>
+Once your environment passes Phase 5, consider using `hud mcp` for hot-reload development. This eliminates rebuild cycles and speeds up iteration.
+</Note>
+
 ## Examples
 
 ### Docker Debug
@@ -119,6 +123,17 @@ for phase in 1 2 3 4 5; do
     echo "Testing phase $phase..."
     hud debug my-env:latest --max-phase $phase || break
 done
+```
+
+### Development Mode
+```bash
+# Once debug passes, use hot-reload for development
+cd environments/my-env
+hud mcp . --build
+
+# Make changes to src/ files
+# Test changes without rebuilding
+hud analyze hud-my-env:dev
 ```
 
 ### Parallel Testing

@@ -57,7 +57,26 @@ The agent will play 2048 and try to reach a target tile using the available tool
 
 ## Development Mode
 
-For hot-reload development with volume mounting:
+### Option 1: Using `hud mcp` (Recommended)
+
+The easiest way to develop with hot-reload:
+
+```bash
+# Start development proxy
+hud mcp . --build
+
+# This will:
+# - Build/use hud-text-2048:dev image
+# - Mount ./src for hot-reload
+# - Provide HTTP endpoint for Cursor
+# - Auto-restart on file changes
+```
+
+Add the URL from output to Cursor or click the deeplink.
+
+### Option 2: Manual Setup
+
+For manual control over the development environment:
 
 1. Build dev image:
 ```bash

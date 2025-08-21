@@ -605,11 +605,54 @@ Once all of the above works you can unleash *hundreds* of concurrent agents on y
 
 ---
 
-## Phase 5 – Takeoff: Automatic environment improvement with Cursor Agent
+## Phase 5 – Hot-Reload Development with Cursor Agent
 
-To enable rapid development without Docker rebuilds, we can mount the dockerfile and expose the live MCP server to Cursor Agent or any other MCP client. We can combine this approach with a package like [reloaderoo](https://github.com/cameroncooke/reloaderoo) that is a proxy to allow dynamic reloading of the MCP connection, so the entire agent loop can happen asynchronously.
+To enable rapid development without Docker rebuilds, we can mount the source code and use hot-reload. The HUD SDK provides two approaches:
 
-### Setting up Development Mode
+### Option 1: Using `hud mcp` (Recommended)
+
+The HUD CLI provides a built-in development proxy that handles all the complexity:
+
+```bash
+# Navigate to your environment directory
+cd environments/my-environment
+
+# Start the development proxy with hot-reload
+hud mcp . --build
+
+# Output:
+# 📦 Using cached image: hud-my-environment:dev
+# "hud-my-environment": {
+#   "url": "http://localhost:8765/mcp"
+# }
+# ✨ Add to Cursor: cursor://anysphere.cursor-deeplink/mcp/install?name=...
+# 🌐 Reloading proxy live, press Ctrl+C to stop
+```
+
+This command:
+- Auto-detects or builds your Docker image with `:dev` tag
+- Mounts `./src` to `/app/src` for instant code updates
+- Runs reloaderoo to watch file changes and restart automatically
+- Exposes an HTTP endpoint for Cursor integration
+- Caches the image name in `pyproject.toml` for faster subsequent runs
+
+#### Quick Cursor Setup
+
+Either click the deeplink URL from the output, or manually add to `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "hud-my-environment": {
+      "url": "http://localhost:8765/mcp"
+    }
+  }
+}
+```
+
+### Option 2: Manual Configuration
+
+If you prefer manual control or need custom settings, configure Cursor directly with [reloaderoo](https://github.com/cameroncooke/reloaderoo):
 
 #### 1. Build for Development
 
@@ -631,11 +674,11 @@ docker build -t my-environment:dev .
 
 #### 3. Configure Cursor Agent for development with hot-reload
 
-Add a development configuration to `.cursor/mcp.json` using [reloaderoo](https://github.com/cameroncooke/reloaderoo):
+Add a development configuration to `.cursor/mcp.json`:
 
 ```jsonc
 {
-  "mcp_config": {
+  "mcpServers": {
     // If your production config looks like this,
     "my-environment": {
       "command": "docker",

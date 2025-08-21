@@ -135,7 +135,10 @@ hud analyze hudpython/hud-text-2048:v1.1
 # Debug environment initialization
 hud debug hudpython/hud-text-2048:v1.1
 
-# Run HUD as an MCP server (for Cursor/Claude)
+# Start hot-reload development server
+hud mcp . --build
+
+# Run HUD tools as MCP server (for Cursor/Claude)
 hud mcp
 ```
 

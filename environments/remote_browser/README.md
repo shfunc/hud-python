@@ -32,7 +32,33 @@ docker run --rm -i \
 
 ### Running in Development Mode (Hot Reload)
 
-Development mode allows you to edit code locally and see changes immediately without rebuilding:
+Development mode allows you to edit code locally and see changes immediately without rebuilding.
+
+#### Option 1: Using `hud mcp` (Recommended)
+
+The easiest way to develop with hot-reload:
+
+```bash
+# Set required environment variables
+export BROWSER_PROVIDER=anchorbrowser
+export ANCHOR_API_KEY=your-api-key
+
+# Start development proxy
+hud mcp . --build
+
+# This will:
+# - Build/use hud-remote-browser:dev image
+# - Mount ./src for hot-reload
+# - Provide HTTP endpoint for Cursor
+# - Auto-restart on file changes
+# - Pass through environment variables
+```
+
+Add the URL from output to Cursor or click the deeplink.
+
+#### Option 2: Manual Docker Run
+
+For direct control over the development environment:
 
 ```bash
 # Windows

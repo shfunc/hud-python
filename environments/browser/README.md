@@ -205,6 +205,28 @@ browser/
 
 ## Development Workflow
 
+### Hot-Reload Development with `hud mcp`
+
+For rapid iteration without Docker rebuilds:
+
+```bash
+# Navigate to the environment directory
+cd environments/browser
+
+# Start hot-reload development proxy
+hud mcp . --build
+
+# This will:
+# - Build/use hud-browser:dev image
+# - Mount ./src for instant code updates
+# - Run with reloaderoo for auto-restart
+# - Provide HTTP endpoint for Cursor
+```
+
+Add the URL from output to Cursor settings or click the deeplink. Now you can edit code in `src/` and changes apply instantly!
+
+### Traditional Development Steps
+
 1. **Start with apps** - Build your web applications independently
 2. **Add evaluation APIs** - Extend app backends with `/api/eval/*` endpoints
 3. **Create evaluators** - Build `@evaluator` classes that consume app APIs

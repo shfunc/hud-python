@@ -27,7 +27,7 @@ Evaluate and improve agents. Wrap software as environments, run benchmarks, and 
 - 🗂️ **[Public benchmarks](https://app.hud.so/leaderboards)** – OSWorld-Verified, SheetBench-50, and more.
 - 🌱 **[Reinforcement learning built-in](rl/)** – Verifiers gym pipelines for GRPO training.
 - 🌐 **[Cloud browsers](environments/remote_browser/)** – AnchorBrowser, Steel, BrowserBase integrations for browser automation.
-- 🛠️ **[Hot-reload dev loop](environments/README.md#phase-5-hot-reload-development-with-cursor-agent)** – edit environments live inside Cursor Agent.
+- 🛠️ **[Hot-reload dev loop](environments/README.md#phase-5-hot-reload-development-with-cursor-agent)** – `hud mcp` for instant code updates without rebuilds.
 
 > We welcome contributors and feature requests – open an issue or hop on a call to discuss improvements!
 
@@ -322,6 +322,7 @@ graph LR
 | ----------------------- | ------------------------------------------ | ---- |
 | [`hud analyze <image>`](https://docs.hud.so/reference/cli/analyze) | Discover tools, resources, and metadata.   | [📖](https://docs.hud.so/reference/cli/analyze) |
 | [`hud debug <image>`](https://docs.hud.so/reference/cli/debug)   | Five-phase health check of an environment. | [📖](https://docs.hud.so/reference/cli/debug) |
+| [`hud mcp <directory>`](https://docs.hud.so/reference/cli/mcp-server)  | Run hot-reload development proxy.          | [📖](https://docs.hud.so/reference/cli/mcp-server) |
 | [`hud mcp`](https://docs.hud.so/reference/cli/mcp-server)             | Expose analysis & debug as an MCP server.  | [📖](https://docs.hud.so/reference/cli/mcp-server) |
 
 ## Roadmap

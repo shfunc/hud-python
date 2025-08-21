@@ -21,6 +21,7 @@ dependencies = [
     # CLI dependencies
     "typer>=0.9.0",
     "rich>=13.0.0",
+    "toml>=0.10.2",
     # Telemetry
     "opentelemetry-instrumentation-mcp>=0.44.1",
     "opentelemetry-api>=1.34.1",
@@ -121,7 +122,6 @@ dev = [
     "inspect-ai>=0.3.80",
     # Other utilities
     "aiodocker>=0.24.0",
-    "toml>=0.10.2",
     "setuptools",
 ]
 

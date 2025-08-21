@@ -31,7 +31,7 @@ hud --version
 |---------|-------------|---------|
 | `hud debug` | Test MCP environment in 5 phases | `hud debug my-env:latest` |
 | `hud analyze` | Discover tools and capabilities | `hud analyze my-env --verbose` |
-| `hud mcp` | Run HUD as MCP server | `hud mcp` |
+| `hud mcp` | Run hot-reload development proxy | `hud mcp . --build` |
 | `hud cursor-list` | List Cursor MCP servers | `hud cursor-list` |
 | `hud version` | Show version info | `hud version` |
 
@@ -103,6 +103,7 @@ hud analyze my-env --format markdown > docs/tools.md
 
 ## Development Workflow
 
+### Traditional Approach
 ```bash
 # 1. Build
 docker build -t my-env .
@@ -116,6 +117,18 @@ hud debug my-env
 
 # 4. Document
 hud analyze my-env --format markdown > docs/tools.md
+```
+
+### Hot-Reload Development
+```bash
+# 1. Start development proxy
+cd environments/my-env
+hud mcp . --build
+
+# 2. Add to Cursor (copy from output)
+# 3. Edit src/ files - changes reload automatically!
+# 4. Test in another terminal
+hud analyze hud-my-env:dev
 ```
 
 ## CI/CD Example
