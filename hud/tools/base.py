@@ -257,7 +257,7 @@ class BaseHub(FastMCP):
                 for tool_name, tool in sorted(internal_tools):
                     # Add tool name and description
                     tool_desc = tool.description or "No description"
-                    desc_lines.append(f"• {tool_name}: {tool_desc}")
+                    desc_lines.append(f"• Name: {tool_name} ({tool_desc})")
                     
                     # Build schema for this specific tool call
                     tool_schema = {
@@ -288,7 +288,7 @@ class BaseHub(FastMCP):
                                     types = [t.get('type', 'unknown') for t in prop_info['anyOf'] if isinstance(t, dict)]
                                     prop_type = ' | '.join(types) if types else 'any'
                                 
-                                param_str = f"{prop_name}: {prop_type}"
+                                param_str = f"{prop_name} ({prop_type})"
                                 if prop_name not in required:
                                     param_str += " (optional)"
                                 params.append(param_str)
