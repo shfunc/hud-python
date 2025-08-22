@@ -211,15 +211,11 @@ async def run_dataset(
     import hud
 
     dataset_link = None
-    dataset_system_prompt = None
 
     # Load dataset from string if needed
     if isinstance(dataset, str):
         logger.info("Loading dataset %s from HuggingFace...", dataset)
         dataset_link = dataset
-
-        # Always try to fetch system prompt from dataset
-        dataset_system_prompt = await fetch_system_prompt_from_dataset(dataset)
 
         # Load dataset from HuggingFace
         dataset = cast("Dataset", load_dataset(dataset, split=split))
@@ -245,9 +241,11 @@ async def run_dataset(
             async with sem:
                 # Create trace for this task
                 task_name = task_dict.get("prompt") or f"Task {index}"
+                if "system_prompt" not in task_dict:
+                    task_dict["system_prompt"] = custom_system_prompt
                 with hud.trace(task_name, job_id=job_obj.id, task_id=task_dict.get("id")):
                     # Convert dict to Task here, at trace level
-                    task = Task(**task_dict, system_prompt=dataset_system_prompt)
+                    task = Task(**task_dict)
 
                     agent = agent_class(**(agent_config or {}))
 
