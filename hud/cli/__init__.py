@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 from pathlib import Path  # noqa: TC003
 
@@ -248,7 +249,8 @@ def dev(
     image: str | None = typer.Option(None, "--image", "-i", help="Docker image name (overrides auto-detection)"),
     build: bool = typer.Option(False, "--build", "-b", help="Build image before starting"),
     no_cache: bool = typer.Option(False, "--no-cache", help="Force rebuild without cache"),
-    port: int = typer.Option(8765, "--port", "-p", help="HTTP server port"),
+    transport: str = typer.Option("http", "--transport", "-t", help="Transport protocol: http (default) or stdio"),
+    port: int = typer.Option(8765, "--port", "-p", help="HTTP server port (ignored for stdio)"),
     no_reload: bool = typer.Option(False, "--no-reload", help="Disable hot-reload"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show server logs"),
 ) -> None:
@@ -266,8 +268,107 @@ def dev(
         hud dev . --image custom:tag # Use specific image
         hud dev . --no-cache         # Force clean rebuild
         hud dev . --verbose          # Show detailed logs
+        hud dev . --transport stdio  # Use stdio proxy for multiple connections
     """
-    run_mcp_dev_server(directory, image, build, no_cache, port, no_reload, verbose)
+    run_mcp_dev_server(directory, image, build, no_cache, transport, port, no_reload, verbose)
+
+
+@app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
+def run(
+    params: list[str] = typer.Argument(  # type: ignore[arg-type]  # noqa: B008
+        None,
+        help="Docker image followed by optional arguments (e.g., 'hud-image:latest -e KEY=value')",
+    ),
+    local: bool = typer.Option(
+        False,
+        "--local",
+        help="Run locally with Docker (default: remote via mcp.hud.so)",
+    ),
+    remote: bool = typer.Option(
+        False,
+        "--remote",
+        help="Run remotely via mcp.hud.so (default)",
+    ),
+    transport: str = typer.Option(
+        "stdio",
+        "--transport",
+        "-t",
+        help="Transport protocol: stdio (default) or http",
+    ),
+    port: int = typer.Option(
+        8765,
+        "--port",
+        "-p",
+        help="Port for HTTP transport (ignored for stdio)",
+    ),
+    url: str = typer.Option(
+        None,
+        "--url",
+        help="Remote MCP server URL (default: HUD_MCP_URL or mcp.hud.so)",
+    ),
+    api_key: str | None = typer.Option(
+        None,
+        "--api-key",
+        help="API key for remote server (default: HUD_API_KEY env var)",
+    ),
+    run_id: str | None = typer.Option(
+        None,
+        "--run-id",
+        help="Run ID for tracking (remote only)",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Show detailed output",
+    ),
+) -> None:
+    """🚀 Run MCP server locally or remotely.
+    
+    By default, runs remotely via mcp.hud.so. Use --local for Docker.
+    
+    Remote Examples:
+        hud run hud-text-2048:latest
+        hud run my-server:v1 -e API_KEY=xxx -h Run-Id:abc123
+        hud run my-server:v1 --transport http --port 9000
+    
+    Local Examples:
+        hud run --local hud-text-2048:latest
+        hud run --local my-server:v1 -e API_KEY=xxx
+        hud run --local my-server:v1 --transport http
+    """
+    if not params:
+        typer.echo("❌ Docker image is required")
+        raise typer.Exit(1)
+    
+    # Parse image and args
+    image = params[0]
+    docker_args = params[1:] if len(params) > 1 else []
+    
+    # Handle conflicting flags
+    if local and remote:
+        typer.echo("❌ Cannot use both --local and --remote")
+        raise typer.Exit(1)
+    
+    # Default to remote if not explicitly local
+    is_local = local and not remote
+    
+    if is_local:
+        # Local Docker execution
+        from .runner import run_mcp_server
+        run_mcp_server(image, docker_args, transport, port, verbose)
+    else:
+        # Remote execution via proxy
+        from .remote_runner import run_remote_server
+        
+        # Get URL from options or environment
+        if not url:
+            url = os.getenv("HUD_MCP_URL", "https://mcp.hud.so/v3/mcp")
+        
+        run_remote_server(
+            image, docker_args, transport, port,
+            url, api_key, run_id, verbose
+        )
 
 
 @app.command()

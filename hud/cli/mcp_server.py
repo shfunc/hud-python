@@ -79,7 +79,7 @@ def build_and_update(directory: str | Path, image_name: str, no_cache: bool = Fa
     
     click.echo(f"🔨 Building image: {image_name}{' (no cache)' if no_cache else ''}")
     
-    result = subprocess.run(build_cmd, capture_output=True, text=True)
+    result = subprocess.run(build_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
     if result.returncode == 0:
         click.echo("✅ Build successful!")
         # Update pyproject.toml
@@ -107,9 +107,13 @@ def create_proxy_server(
         click.echo(f"⚠️  Could not extract CMD from {image_name}, using default")
         original_cmd = ["python", "-m", "hud_controller.server"]
     
+    # Generate container name from image
+    container_name = f"{image_name.replace(':', '-').replace('/', '-')}"
+    
     # Build the docker run command
     docker_cmd = [
         "docker", "run", "--rm", "-i",
+        "--name", container_name,
         "-v", f"{src_path.absolute()}:/app/src:rw",
         "-e", "PYTHONPATH=/app/src",
     ]
@@ -137,14 +141,12 @@ def create_proxy_server(
     
     # Debug output
     if not no_reload:
-        click.echo(f"🔧 Container will run with watchfiles hot-reload")
-        click.echo(f"📁 Watching: /app/src for changes")
-        click.echo(f"⚡ Using: {modified_cmd[0] if modified_cmd else 'watchfiles'}")
+        click.echo(f"🔧 Container will run with watchfiles hot-reload", err=True)
+        click.echo(f"📁 Watching: /app/src for changes", err=True)
+        click.echo(f"📊 docker logs -f {container_name}", err=True)
     else:
-        click.echo(f"🔧 Container will run without hot-reload")
-    
-    if verbose:
-        click.echo(f"🐳 Docker command: {' '.join(docker_cmd[:10])}{'...' if len(docker_cmd) > 10 else ''}")
+        click.echo(f"🔧 Container will run without hot-reload", err=True)
+        click.echo(f"📊 docker logs -f {container_name}", err=True)
     
     # Create the HTTP proxy server using config
     proxy = FastMCP.as_proxy(
@@ -158,46 +160,94 @@ def create_proxy_server(
 async def start_mcp_proxy(
     directory: str | Path,
     image_name: str,
+    transport: str,
     port: int,
     no_reload: bool = False,
     verbose: bool = False
 ) -> None:
     """Start the MCP development proxy server."""
-    # Ensure src directory exists
+    # Suppress FastMCP's verbose output FIRST
+    import logging
+    import os
+    import sys
+    from .utils import find_free_port
+    
+    # Always disable the banner - we have our own output
+    os.environ["FASTMCP_DISABLE_BANNER"] = "1"
+    
+    # CRITICAL: For stdio transport, ALL output must go to stderr
+    if transport == "stdio":
+        # Configure root logger to use stderr
+        root_logger = logging.getLogger()
+        root_logger.handlers.clear()
+        stderr_handler = logging.StreamHandler(sys.stderr)
+        root_logger.addHandler(stderr_handler)
+        
+        if not verbose:
+            root_logger.setLevel(logging.CRITICAL)
+            stderr_handler.setLevel(logging.CRITICAL)
+        else:
+            root_logger.setLevel(logging.INFO)
+            stderr_handler.setLevel(logging.INFO)
+    
+    if not verbose:
+        # Suppress all FastMCP and related logs
+        logging.getLogger("fastmcp").setLevel(logging.ERROR)
+        logging.getLogger("mcp").setLevel(logging.ERROR)
+        logging.getLogger("uvicorn").setLevel(logging.ERROR)
+        logging.getLogger("uvicorn.access").setLevel(logging.ERROR)
+        logging.getLogger("uvicorn.error").setLevel(logging.ERROR)
+        
+        # Suppress websockets deprecation warnings
+        import warnings
+        warnings.filterwarnings("ignore", category=DeprecationWarning, module="websockets")
+        warnings.filterwarnings("ignore", category=DeprecationWarning, module="uvicorn")
+    
+    # Now check for src directory
     src_path = Path(directory) / "src"
     if not src_path.exists():
-        click.echo(f"❌ Source directory not found: {src_path}")
+        click.echo(f"❌ Source directory not found: {src_path}", err=(transport == "stdio"))
         raise click.Abort()
     
-    # Create the proxy server
+    # Create the proxy server after logging is configured
     proxy = create_proxy_server(directory, image_name, no_reload)
-    
-    # Suppress FastMCP's verbose output in quiet mode
-    import logging
-    if not verbose:
-        # Suppress uvicorn logs
-        logging.getLogger("uvicorn").setLevel(logging.WARNING)
-        logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
-        # Suppress FastMCP banner by setting environment variable
-        import os
-        os.environ["FASTMCP_DISABLE_BANNER"] = "1"
 
-    click.echo(f"🌐 Reloading proxy live, press Ctrl+C to stop")
+    if transport == "stdio":
+        click.echo(f"🔌 Starting stdio proxy (each connection gets its own container)", err=True)
+        click.echo(f"🌐 Reloading proxy live, press Ctrl+C to stop", err=True)
+    else:
+        # Find available port for HTTP
+        actual_port = find_free_port(port)
+        if actual_port is None:
+            click.echo(f"❌ No available ports found starting from {port}")
+            raise click.Abort()
+        
+        if actual_port != port:
+            click.echo(f"⚠️  Port {port} in use, using port {actual_port} instead")
+        
+        click.echo(f"🌐 Reloading proxy live on port {actual_port}, press Ctrl+C to stop")
     
     try:
-        # Run the proxy with HTTP transport
-        await proxy.run_async(
-            transport="http",
-            host="0.0.0.0",
-            port=port,
-            path="/mcp",  # Serve at /mcp endpoint
-            log_level="warning" if not verbose else "info"
-        )
+        if transport == "stdio":
+            # Run with stdio transport
+            await proxy.run_async(
+                transport="stdio",
+                log_level="error" if not verbose else "info"
+            )
+        else:
+            # Run with HTTP transport
+            await proxy.run_async(
+                transport="http",
+                host="0.0.0.0",
+                port=actual_port,
+                path="/mcp",  # Serve at /mcp endpoint
+                log_level="error" if not verbose else "info"
+            )
     except KeyboardInterrupt:
         if not verbose:
-            click.echo("\n👋 Shutting down...")
+            click.echo("\n👋 Shutting down...", err=(transport == "stdio"))
         else:
-            click.echo("\n✅ MCP proxy stopped")
+            click.echo("\n✅ MCP proxy stopped", err=(transport == "stdio"))
 
 
 def run_mcp_dev_server(
@@ -205,6 +255,7 @@ def run_mcp_dev_server(
     image: str | None = None,
     build: bool = False,
     no_cache: bool = False,
+    transport: str = 'http',
     port: int = 8765,
     no_reload: bool = False,
     verbose: bool = False
@@ -255,8 +306,22 @@ def run_mcp_dev_server(
     # Generate server name from image
     server_name = resolved_image.split(':')[0] if ':' in resolved_image else resolved_image
     
+    # For HTTP transport, find available port first
+    actual_port = port
+    if transport == "http":
+        from .utils import find_free_port
+        actual_port = find_free_port(port)
+        if actual_port is None:
+            click.echo(f"❌ No available ports found starting from {port}")
+            raise click.Abort()
+        if actual_port != port:
+            click.echo(f"⚠️  Port {port} in use, will use port {actual_port}")
+    
     # Show config
-    config = {"url": f"http://localhost:{port}/mcp"}
+    if transport == "stdio":
+        config = {"command": "hud", "args": ["dev", directory, "--transport", "stdio"]}
+    else:
+        config = {"url": f"http://localhost:{actual_port}/mcp"}
     config_json = json.dumps(config, indent=2)
     config_base64 = base64.b64encode(config_json.encode()).decode()
     
@@ -266,5 +331,5 @@ def run_mcp_dev_server(
     deeplink = f"cursor://anysphere.cursor-deeplink/mcp/install?name={server_name}&config={config_base64}"
     click.echo(f"✨ Add to Cursor: {deeplink}")
     
-    # Start the proxy
-    asyncio.run(start_mcp_proxy(directory, resolved_image, port, no_reload, verbose))
+    # Start the proxy (pass original port, start_mcp_proxy will find actual port again)
+    asyncio.run(start_mcp_proxy(directory, resolved_image, transport, port, no_reload, verbose))

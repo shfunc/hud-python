@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-Text 2048 Example - Two ways to run the environment:
+Text 2048 Example - Four ways to run the environment:
 
 1. Direct Python (no Docker) - Runs in your current environment
 2. Docker container - Simpler config but requires building the image first
+3. Docker container - Runs in a local container (with hud helper)
+4. Remote container - Runs in a remote container (with hud helper)
 """
 
 import asyncio
@@ -16,8 +18,11 @@ from hud.clients import MCPClient
 
 
 async def main():
-    # THERE ARE TWO WAYS TO RUN THE LOCAL ENVIRONMENT
+    # THERE ARE A FEW WAYS TO RUN THE LOCAL ENVIRONMENT
+
     # OPTION 1: Direct Python execution (Not recommended for production use)
+    # This is the most basic way to run any MCP server
+    # However, it works on your host machine, not in a container
     text_2048 = Path(__file__).parent.parent / "environments/text_2048"
     mcp_config = {
         "local": {
@@ -28,14 +33,33 @@ async def main():
         }
     }
 
-    # OPTION 2: Needs: docker build -t hud-text-2048 environments/text_2048
-    # But this allows for running an arbitrary environment in the same way!
+    # OPTION 2: Needs: docker build -t hudpython/hud-text-2048:latest environments/text_2048
+    # OR: docker pull hudpython/hud-text-2048:latest
+    # This builds the image and allows you to run it directly
     # mcp_config = {
     #     "local": {
     #         "command": "docker",
-    #         "args": ["run", "--rm", "-i", "hud-text-2048"]
+    #         "args": ["run", "--rm", "-i", "hudpython/hud-text-2048:latest"]
     #     }
     # }
+    
+    # OPTION 3: This is an alias helper for running the above
+    # mcp_config = {
+    #     "local": {
+    #         "command": "hud",
+    #         "args": ["run", "hudpython/hud-text-2048:latest", "--local"]
+    #     }
+    # }
+    
+    # OPTION 4: And allows you to easily switch to remote!
+    # However, if you are using your own image, make sure to push it to docker hub:
+    # (docker push your-username/image-name:latest)
+    mcp_config = {
+        "remote": {
+            "command": "hud",
+            "args": ["run", "hudpython/hud-text-2048:latest", "--verbose"] # this can spin up 100s of remote containers!
+        }
+    }
 
     task_dict = {
         "prompt": "Play 2048 and get the highest score possible.",
@@ -52,7 +76,7 @@ async def main():
     # All of our environments use MCP as a generalizeable interface to interact with the environment
     client = MCPClient(mcp_config=task.mcp_config)
 
-    # Define the agent that uses a VLM and can call tools via the client
+    # Define the agent that can call tools via the client
     agent = ClaudeAgent(mcp_client=client, allowed_tools=["move"])
 
     with hud.trace("Hello 2048 Game"):

@@ -7,7 +7,7 @@ import logging
 
 from hud.server import MCPServer
 
-from .game import Game2048
+from .context import get_game
 from .tools import MoveTool
 
 # Configure logging to stderr
@@ -55,12 +55,16 @@ async def initialize_environment(ctx):
     # Create and initialize the game
     await send_progress(30, "Creating game instance...")
 
-    game = Game2048()
+    # Use persistent game that survives hot-reloads
+    game = get_game()
 
     await send_progress(50, "Setting up game board...")
-
-    # Initialize game state
-    game.reset()
+    
+    # Log whether we're resuming or starting fresh
+    if game.moves_made > 0:
+        logger.info(f"Resuming game - Score: {game.score}, Moves: {game.moves_made}")
+    else:
+        logger.info("Starting fresh game")
 
     # Set up the game instance on hubs and tools
     await send_progress(70, "Configuring tools and hubs...")

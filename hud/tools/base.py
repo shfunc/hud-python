@@ -140,7 +140,7 @@ class BaseHub(FastMCP):
         # Register dispatcher manually with FunctionTool
         async def _dispatch(  # noqa: ANN202
             name: str,
-            arguments: dict | None = None,
+            arguments: dict | str | None = None,
             ctx=None,  # noqa: ANN001
         ):
             """Gateway to hidden tools.
@@ -149,14 +149,23 @@ class BaseHub(FastMCP):
             ----------
             name : str
                 Internal function name *without* prefix.
-            arguments : dict | None
-                Arguments forwarded to the internal tool.
+            arguments : dict | str | None
+                Arguments forwarded to the internal tool. Can be dict or JSON string.
             ctx : Context
                 Injected by FastMCP; can be the custom subclass.
             """
 
+            # Handle JSON string inputs
+            if isinstance(arguments, str):
+                import json
+                try:
+                    arguments = json.loads(arguments)
+                except json.JSONDecodeError:
+                    # If it's not valid JSON, treat as empty dict
+                    arguments = {}
+            
             # Use the tool manager to call internal tools
-            return await self._tool_manager.call_tool(self._prefix_fn(name), arguments or {})
+            return await self._tool_manager.call_tool(self._prefix_fn(name), arguments or {}) # type: ignore
 
         from fastmcp.tools.tool import FunctionTool
 
@@ -197,6 +206,10 @@ class BaseHub(FastMCP):
             # This only happens in phase 2 of decorator application
             # The name was already prefixed in phase 1, just pass through
             result = super().tool(name_or_fn, **kwargs)
+            
+            # Update dispatcher description after registering tool
+            self._update_dispatcher_description()
+            
             return cast("Callable[..., Any]", result)
 
         # Handle the name from either positional or keyword argument
@@ -218,6 +231,23 @@ class BaseHub(FastMCP):
             return super().tool(new_name, **kwargs, tags=tags)
         else:
             return super().tool(**kwargs, tags=tags)
+    
+    def _update_dispatcher_description(self) -> None:
+        """Update the dispatcher tool's description with available tools."""
+        # Get list of internal tools
+        internal_tools = [
+            key.removeprefix(_INTERNAL_PREFIX)
+            for key in self._tool_manager._tools
+            if key.startswith(_INTERNAL_PREFIX)
+        ]
+        
+        if internal_tools:
+            # Update the dispatcher tool's description
+            dispatcher_name = self.name
+            if dispatcher_name in self._tool_manager._tools:
+                dispatcher_tool = self._tool_manager._tools[dispatcher_name]
+                tool_list = ", ".join(sorted(internal_tools))
+                dispatcher_tool.description = f"Call internal '{self.name}' functions. Available: {tool_list}"
 
     # Override _list_tools to hide internal tools when mounted
     async def _list_tools(self) -> list[Tool]:

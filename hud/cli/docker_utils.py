@@ -48,26 +48,27 @@ def inject_supervisor(cmd: list[str]) -> list[str]:
     if not cmd:
         return cmd
     
-    # Handle shell commands
+    # Handle shell commands that might have background processes
     if cmd[0] in ["sh", "bash"] and len(cmd) >= 3 and cmd[1] == "-c":
         shell_cmd = cmd[2]
         
-        # Look for 'exec' in the shell command
+        # Look for 'exec' in the shell command - this is the last command
         if " exec " in shell_cmd:
-            # Replace the last 'exec' with 'exec watchfiles'
+            # Replace only the exec'd command with watchfiles
             parts = shell_cmd.rsplit(" exec ", 1)
             if len(parts) == 2:
-                # Use watchfiles CLI to run the last command
-                new_shell_cmd = f"{parts[0]} exec watchfiles '{parts[1]}' /app/src --non-recursive"
+                # Extract the actual command after exec
+                last_cmd = parts[1].strip()
+                # Use watchfiles with logs redirected to stderr (which won't interfere with MCP on stdout)
+                new_shell_cmd = f"{parts[0]} exec watchfiles --verbose '{last_cmd}' /app/src"
                 return [cmd[0], cmd[1], new_shell_cmd]
         else:
-            # No exec, wrap the whole command
-            return [cmd[0], cmd[1], f"watchfiles '{shell_cmd}' /app/src --non-recursive"]
+            # No exec, the whole thing is the command
+            return ["sh", "-c", f"watchfiles --verbose '{shell_cmd}' /app/src"]
     
-    # Direct command - use watchfiles CLI
-    # Quote the command to handle spaces properly
-    quoted_cmd = ' '.join(f'"{arg}"' if ' ' in arg else arg for arg in cmd)
-    return ["watchfiles", quoted_cmd, "/app/src", "--non-recursive"]
+    # Direct command - wrap with watchfiles
+    watchfiles_cmd = ' '.join(cmd)
+    return ["sh", "-c", f"watchfiles --verbose '{watchfiles_cmd}' /app/src"]
 
 
 def image_exists(image_name: str) -> bool:

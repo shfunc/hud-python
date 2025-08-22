@@ -10,12 +10,12 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import mcp.types as types
 
-from hud.datasets import Task
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult, Trace
 from hud.utils.mcp import MCPConfigPatch, patch_mcp_config, setup_hud_telemetry
 
 if TYPE_CHECKING:
     from hud.clients.base import AgentMCPClient
+    from hud.datasets import Task
 
     from .misc import ResponseAgent
 
@@ -91,6 +91,8 @@ class MCPAgent(ABC):
 
     async def initialize(self, task: str | Task | None = None) -> None:
         """Initialize the agent with task-specific configuration."""
+        from hud.datasets import Task
+
         # Create client if needed
         if self.mcp_client is None and isinstance(task, Task) and task.mcp_config:
             from hud.clients import MCPClient
