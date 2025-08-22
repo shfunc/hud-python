@@ -242,32 +242,50 @@ def version() -> None:
         console.print("HUD CLI version: [cyan]unknown[/cyan]")
 
 
-@app.command()
-def mcp(
-    directory: str = typer.Argument(".", help="Environment directory (default: current)"),
+@app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
+def dev(
+    ctx: typer.Context,
+    directory: str | None = typer.Argument(None, help="Environment directory (supervisor mode if followed by --)"),
     image: str | None = typer.Option(None, "--image", "-i", help="Docker image name (overrides auto-detection)"),
     build: bool = typer.Option(False, "--build", "-b", help="Build image before starting"),
     no_cache: bool = typer.Option(False, "--no-cache", help="Force rebuild without cache"),
     port: int = typer.Option(8765, "--port", "-p", help="HTTP server port"),
     no_reload: bool = typer.Option(False, "--no-reload", help="Disable hot-reload"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show server logs"),
+    watch: str = typer.Option("/app/src", "--watch", "-w", help="Directory to watch (supervisor mode)"),
 ) -> None:
-    """🔥 Run MCP development proxy with hot-reload.
+    """🔥 Development mode with hot-reload.
 
-    This command starts a development server that:
-    - Auto-detects or builds Docker images
-    - Mounts local source code for hot-reload
-    - Exposes an HTTP endpoint for MCP clients
+    This command works in two modes:
+
+    1. Container Mode (default):
+       Runs your MCP environment in Docker with hot-reload
+       
+    2. Supervisor Mode (with -- separator):
+       Acts as a file watcher that restarts commands on changes
 
     Examples:
-        hud mcp                      # Auto-detect in current directory
-        hud mcp environments/browser # Specific directory
-        hud mcp . --build            # Build image first
-        hud mcp . --image custom:tag # Use specific image
-        hud mcp . --no-cache         # Force clean rebuild
-        hud mcp . --verbose          # Show server logs
+        # Container mode
+        hud dev                      # Auto-detect in current directory
+        hud dev environments/browser # Specific directory
+        hud dev . --build            # Build image first
+        hud dev . --image custom:tag # Use specific image
+
+        # Supervisor mode (inside Docker)
+        hud dev -- python server.py
+        hud dev -- fastmcp run server.py
+        hud dev --watch /app -- node index.js
     """
-    run_mcp_dev_server(directory, image, build, no_cache, port, no_reload, verbose)
+    # Check if we have extra args after -- (supervisor mode)
+    if ctx.args:
+        # Supervisor mode - run command with file watching
+        from .dev_supervisor import run_supervisor
+        run_supervisor(ctx.args, watch)
+    else:
+        # Container mode - run Docker with hot-reload
+        if directory is None:
+            directory = "."
+        run_mcp_dev_server(directory, image, build, no_cache, port, no_reload, verbose)
 
 
 @app.command()
@@ -332,7 +350,7 @@ def main() -> None:
         console.print("  2. Build your Docker image: [cyan]docker build -t my-mcp-server .[/cyan]")
         console.print("  3. Debug it: [cyan]hud debug my-mcp-server[/cyan]")
         console.print("  4. Analyze it: [cyan]hud analyze my-mcp-server[/cyan]")
-        console.print("  5. Dev mode with hot-reload: [cyan]hud mcp . --build[/cyan]\n")
+        console.print("  5. Dev mode with hot-reload: [cyan]hud dev . --build[/cyan]\n")
 
     app()
 

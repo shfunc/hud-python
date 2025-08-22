@@ -91,14 +91,7 @@ def build_and_update(directory: str | Path, image_name: str, no_cache: bool = Fa
         raise click.Abort()
 
 
-def image_exists(image_name: str) -> bool:
-    """Check if a Docker image exists locally."""
-    result = subprocess.run(
-        ["docker", "image", "inspect", image_name],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
-    )
-    return result.returncode == 0
+from .docker_utils import get_docker_cmd, inject_supervisor, image_exists
 
 
 def create_proxy_server(
@@ -106,31 +99,38 @@ def create_proxy_server(
     image_name: str,
     no_reload: bool = False
 ) -> FastMCP:
-    """Create an HTTP proxy server that forwards to stdio reloaderoo+docker."""
-    # Build the command that will be proxied
-    cmd = []
-    if not no_reload:
-        import shutil
-        npx_cmd = shutil.which("npx")
-        if not npx_cmd:
-            # Fallback to npx if shutil.which fails (shouldn't happen if we got here)
-            npx_cmd = "npx"
-        cmd.extend([npx_cmd, "reloaderoo", "--"])
-    
+    """Create an HTTP proxy server that forwards to Docker container with hot-reload."""
     src_path = Path(directory) / "src"
-    cmd.extend([
+    
+    # Get the original CMD from the image
+    original_cmd = get_docker_cmd(image_name)
+    if not original_cmd:
+        click.echo(f"⚠️  Could not extract CMD from {image_name}, using default")
+        original_cmd = ["python", "-m", "hud_controller.server"]
+    
+    # Build the docker run command
+    docker_cmd = [
         "docker", "run", "--rm", "-i",
         "-v", f"{src_path.absolute()}:/app/src:rw",
         "-e", "PYTHONPATH=/app/src",
-        image_name
-    ])
+    ]
+    
+    if not no_reload:
+        # Inject our supervisor into the CMD
+        modified_cmd = inject_supervisor(original_cmd)
+        docker_cmd.extend(["--entrypoint", modified_cmd[0]])
+        docker_cmd.append(image_name)
+        docker_cmd.extend(modified_cmd[1:])
+    else:
+        # No reload - use original CMD
+        docker_cmd.append(image_name)
     
     # Create configuration following MCPConfig schema
     config = {
         "mcpServers": {
             "default": {
-                "command": cmd[0],
-                "args": cmd[1:] if len(cmd) > 1 else []
+                "command": docker_cmd[0],
+                "args": docker_cmd[1:] if len(docker_cmd) > 1 else []
                 # transport defaults to stdio
             }
         }
@@ -207,31 +207,17 @@ def run_mcp_dev_server(
     - Exposes an HTTP endpoint for MCP clients
     
     Examples:
-        hud mcp .                    # Auto-detect image from directory
-        hud mcp . --build            # Build image first
-        hud mcp . --image custom:tag # Use specific image
-        hud mcp . --no-cache         # Force clean rebuild
+        hud dev .                    # Auto-detect image from directory
+        hud dev . --build            # Build image first
+        hud dev . --image custom:tag # Use specific image
+        hud dev . --no-cache         # Force clean rebuild
     """
     # Ensure directory exists
     if not Path(directory).exists():
         click.echo(f"❌ Directory not found: {directory}")
         raise click.Abort()
         
-    # Check if reloaderoo is available (unless --no-reload)
-    if not no_reload:
-        import shutil
-        npx_cmd = shutil.which("npx")
-        if not npx_cmd:
-            click.echo("❌ npx not found. Install Node.js or use --no-reload")
-            click.echo("💡 To install: https://nodejs.org/")
-            click.echo("💡 Or use: hud mcp . --no-reload")
-            raise click.Abort()
-        
-        # Verify it works
-        result = subprocess.run([npx_cmd, "--version"], capture_output=True)
-        if result.returncode != 0:
-            click.echo("❌ npx found but not working properly")
-            raise click.Abort()
+    # No external dependencies needed for hot-reload anymore!
     
     # Resolve image name
     resolved_image, source = get_image_name(directory, image)
