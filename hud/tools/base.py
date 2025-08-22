@@ -234,20 +234,59 @@ class BaseHub(FastMCP):
     
     def _update_dispatcher_description(self) -> None:
         """Update the dispatcher tool's description with available tools."""
-        # Get list of internal tools
-        internal_tools = [
-            key.removeprefix(_INTERNAL_PREFIX)
-            for key in self._tool_manager._tools
-            if key.startswith(_INTERNAL_PREFIX)
-        ]
+        # Get list of internal tools with their details
+        internal_tools = []
+        for key, tool in self._tool_manager._tools.items():
+            if key.startswith(_INTERNAL_PREFIX):
+                tool_name = key.removeprefix(_INTERNAL_PREFIX)
+                internal_tools.append((tool_name, tool))
         
         if internal_tools:
             # Update the dispatcher tool's description
             dispatcher_name = self.name
             if dispatcher_name in self._tool_manager._tools:
                 dispatcher_tool = self._tool_manager._tools[dispatcher_name]
-                tool_list = ", ".join(sorted(internal_tools))
-                dispatcher_tool.description = f"Call internal '{self.name}' functions. Available: {tool_list}"
+                
+                # Build detailed description
+                desc_lines = [f"Call internal '{self.name}' functions. Available tools:"]
+                desc_lines.append("")  # Empty line for readability
+                
+                for tool_name, tool in sorted(internal_tools):
+                    # Add tool name and description
+                    tool_desc = tool.description or "No description"
+                    desc_lines.append(f"• {tool_name}: {tool_desc}")
+                    
+                    # Add parameters if available
+                    if hasattr(tool, 'input_schema') and tool.input_schema:
+                        schema = tool.input_schema
+                        if hasattr(schema, 'model_fields'):
+                            # Pydantic model
+                            params = []
+                            for field_name, field_info in schema.model_fields.items():
+                                field_type = field_info.annotation.__name__ if hasattr(field_info.annotation, '__name__') else str(field_info.annotation)
+                                required = field_info.is_required()
+                                param_str = f"{field_name}: {field_type}"
+                                if not required:
+                                    param_str += " (optional)"
+                                params.append(param_str)
+                            if params:
+                                desc_lines.append(f"  Arguments: {', '.join(params)}")
+                        elif isinstance(schema, dict) and 'properties' in schema:
+                            # JSON schema
+                            params = []
+                            required = schema.get('required', [])
+                            for prop_name, prop_info in schema['properties'].items():
+                                prop_type = prop_info.get('type', 'any')
+                                param_str = f"{prop_name}: {prop_type}"
+                                if prop_name not in required:
+                                    param_str += " (optional)"
+                                params.append(param_str)
+                            if params:
+                                desc_lines.append(f"  Arguments: {', '.join(params)}")
+                    
+                    desc_lines.append("")  # Empty line between tools
+                
+                dispatcher_tool.description = "\n".join(desc_lines).strip()
 
     # Override _list_tools to hide internal tools when mounted
     async def _list_tools(self) -> list[Tool]:
