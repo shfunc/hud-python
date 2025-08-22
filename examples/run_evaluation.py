@@ -45,7 +45,6 @@ def _build_agent(
     *,
     model: str | None = None,
     allowed_tools: list[str] | None = None,
-    dataset_system_prompt: str | None = None,
 ) -> ClaudeAgent | OperatorAgent:
     """Create and return the requested agent type."""
 
@@ -54,7 +53,6 @@ def _build_agent(
 
         return OperatorAgent(
             allowed_tools=allowed_tools,
-            dataset_system_prompt=dataset_system_prompt,
             response_agent=ResponseAgent(),
         )
 
@@ -65,7 +63,6 @@ def _build_agent(
     return ClaudeAgent(
         model=model,
         allowed_tools=allowed_tools,
-        dataset_system_prompt=dataset_system_prompt,
         response_agent=ResponseAgent(),
     )
 
@@ -88,11 +85,8 @@ async def run_single_task(
     dataset = load_dataset(dataset_name, split="train")
 
     # Get a simple task from dataset (Open last tab task)
-    sample_task = dataset[155]  # type: ignore[index]
+    sample_task = dataset[1]  # type: ignore[index]
     task_prompt = sample_task.get("prompt", f"Task {sample_task.get('id', 0)}")  # type: ignore[attr-defined]
-
-    # Get hud official system prompt for this dataset
-    dataset_system_prompt = await fetch_system_prompt_from_dataset(dataset_name)
 
     with hud.trace(name=task_prompt):
         task = Task(**sample_task)  # type: ignore[arg-type]
@@ -101,10 +95,9 @@ async def run_single_task(
             agent_type,
             model=model,
             allowed_tools=allowed_tools,
-            dataset_system_prompt=dataset_system_prompt,
         )
         print(task.prompt)
-        result = await agent.run(task, max_steps=40)
+        result = await agent.run(task, max_steps=10)
         print("✅ Reward:", result.reward)
 
 
@@ -119,8 +112,8 @@ async def run_full_dataset(
     agent_type: Literal["claude", "openai"] = "claude",
     model: str | None = None,
     allowed_tools: list[str] | None = None,
-    max_concurrent: int = 50,
-    max_steps: int = 150,
+    max_concurrent: int = 30,
+    max_steps: int = 50,
 ) -> list[Any]:
     """Run evaluation across the entire dataset using hud.datasets.run_dataset."""
 
