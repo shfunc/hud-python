@@ -242,50 +242,32 @@ def version() -> None:
         console.print("HUD CLI version: [cyan]unknown[/cyan]")
 
 
-@app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
+@app.command()
 def dev(
-    ctx: typer.Context,
-    directory: str | None = typer.Argument(None, help="Environment directory (supervisor mode if followed by --)"),
+    directory: str = typer.Argument(".", help="Environment directory (default: current)"),
     image: str | None = typer.Option(None, "--image", "-i", help="Docker image name (overrides auto-detection)"),
     build: bool = typer.Option(False, "--build", "-b", help="Build image before starting"),
     no_cache: bool = typer.Option(False, "--no-cache", help="Force rebuild without cache"),
     port: int = typer.Option(8765, "--port", "-p", help="HTTP server port"),
     no_reload: bool = typer.Option(False, "--no-reload", help="Disable hot-reload"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show server logs"),
-    watch: str = typer.Option("/app/src", "--watch", "-w", help="Directory to watch (supervisor mode)"),
 ) -> None:
     """🔥 Development mode with hot-reload.
 
-    This command works in two modes:
-
-    1. Container Mode (default):
-       Runs your MCP environment in Docker with hot-reload
-       
-    2. Supervisor Mode (with -- separator):
-       Acts as a file watcher that restarts commands on changes
+    Runs your MCP environment in Docker with automatic restart on file changes.
+    
+    The container's last command (typically the MCP server) will be wrapped
+    with watchfiles for hot-reload functionality.
 
     Examples:
-        # Container mode
         hud dev                      # Auto-detect in current directory
         hud dev environments/browser # Specific directory
         hud dev . --build            # Build image first
         hud dev . --image custom:tag # Use specific image
-
-        # Supervisor mode (inside Docker)
-        hud dev -- python server.py
-        hud dev -- fastmcp run server.py
-        hud dev --watch /app -- node index.js
+        hud dev . --no-cache         # Force clean rebuild
+        hud dev . --verbose          # Show detailed logs
     """
-    # Check if we have extra args after -- (supervisor mode)
-    if ctx.args:
-        # Supervisor mode - run command with file watching
-        from .dev_supervisor import run_supervisor
-        run_supervisor(ctx.args, watch)
-    else:
-        # Container mode - run Docker with hot-reload
-        if directory is None:
-            directory = "."
-        run_mcp_dev_server(directory, image, build, no_cache, port, no_reload, verbose)
+    run_mcp_dev_server(directory, image, build, no_cache, port, no_reload, verbose)
 
 
 @app.command()

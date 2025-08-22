@@ -34,7 +34,7 @@ def get_docker_cmd(image: str) -> list[str] | None:
 
 def inject_supervisor(cmd: list[str]) -> list[str]:
     """
-    Inject HUD dev supervisor into a Docker CMD.
+    Inject watchfiles CLI supervisor into a Docker CMD.
     
     For shell commands, we inject before the last exec command.
     For direct commands, we wrap the entire command.
@@ -43,7 +43,7 @@ def inject_supervisor(cmd: list[str]) -> list[str]:
         cmd: Original Docker CMD
         
     Returns:
-        Modified CMD with supervisor injected
+        Modified CMD with watchfiles supervisor injected
     """
     if not cmd:
         return cmd
@@ -54,17 +54,20 @@ def inject_supervisor(cmd: list[str]) -> list[str]:
         
         # Look for 'exec' in the shell command
         if " exec " in shell_cmd:
-            # Replace the last 'exec' with 'exec hud dev --'
+            # Replace the last 'exec' with 'exec watchfiles'
             parts = shell_cmd.rsplit(" exec ", 1)
             if len(parts) == 2:
-                new_shell_cmd = f"{parts[0]} exec hud dev -- {parts[1]}"
+                # Use watchfiles CLI to run the last command
+                new_shell_cmd = f"{parts[0]} exec watchfiles '{parts[1]}' /app/src --non-recursive"
                 return [cmd[0], cmd[1], new_shell_cmd]
         else:
             # No exec, wrap the whole command
-            return [cmd[0], cmd[1], f"hud dev -- {shell_cmd}"]
+            return [cmd[0], cmd[1], f"watchfiles '{shell_cmd}' /app/src --non-recursive"]
     
-    # Direct command - wrap it
-    return ["hud", "dev", "--"] + cmd
+    # Direct command - use watchfiles CLI
+    # Quote the command to handle spaces properly
+    quoted_cmd = ' '.join(f'"{arg}"' if ' ' in arg else arg for arg in cmd)
+    return ["watchfiles", quoted_cmd, "/app/src", "--non-recursive"]
 
 
 def image_exists(image_name: str) -> bool:

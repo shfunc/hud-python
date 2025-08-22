@@ -6,9 +6,7 @@ import asyncio
 import base64
 import json
 import subprocess
-import sys
 from pathlib import Path
-from typing import Any
 
 import click
 import toml
@@ -97,7 +95,8 @@ from .docker_utils import get_docker_cmd, inject_supervisor, image_exists
 def create_proxy_server(
     directory: str | Path,
     image_name: str,
-    no_reload: bool = False
+    no_reload: bool = False,
+    verbose: bool = False
 ) -> FastMCP:
     """Create an HTTP proxy server that forwards to Docker container with hot-reload."""
     src_path = Path(directory) / "src"
@@ -135,6 +134,17 @@ def create_proxy_server(
             }
         }
     }
+    
+    # Debug output
+    if not no_reload:
+        click.echo(f"🔧 Container will run with watchfiles hot-reload")
+        click.echo(f"📁 Watching: /app/src for changes")
+        click.echo(f"⚡ Using: {modified_cmd[0] if modified_cmd else 'watchfiles'}")
+    else:
+        click.echo(f"🔧 Container will run without hot-reload")
+    
+    if verbose:
+        click.echo(f"🐳 Docker command: {' '.join(docker_cmd[:10])}{'...' if len(docker_cmd) > 10 else ''}")
     
     # Create the HTTP proxy server using config
     proxy = FastMCP.as_proxy(
