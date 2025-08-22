@@ -241,6 +241,7 @@ class OperatorAgent(MCPAgent):
                 input=input_param_followup,
                 instructions=self.system_prompt,
                 truncation="auto",
+                reasoning={"summary": "auto"},  # type: ignore[arg-type]
             )
 
         # Store response ID for next call
