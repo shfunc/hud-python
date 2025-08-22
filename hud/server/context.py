@@ -85,7 +85,7 @@ def attach_context(
     manager = ContextManager(address=sock_path, authkey=authkey)
     manager.connect()
     
-    return manager.get_context()
+    return manager.get_context()  # type: ignore
 
 
 async def run_context_server(
