@@ -8,11 +8,14 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from anthropic import AsyncAnthropic, BadRequestError
 
+from anthropic.types.beta import BetaContentBlockParam, BetaTextBlockParam, BetaImageBlockParam
+
 import hud
 
 if TYPE_CHECKING:
     from anthropic.types.beta import (
         BetaCacheControlEphemeralParam,
+        BetaContentBlockParam,
         BetaImageBlockParam,
         BetaMessageParam,
         BetaTextBlockParam,
@@ -81,6 +84,7 @@ class ClaudeAgent(MCPAgent):
 
         # Track mapping from Claude tool names to MCP tool names
         self._claude_to_mcp_tool_map: dict[str, str] = {}
+        self.claude_tools: list[dict] = []
 
         # Base system prompt for autonomous operation
         self.system_prompt = """
@@ -105,18 +109,45 @@ class ClaudeAgent(MCPAgent):
     async def get_system_messages(self) -> list[Any]:
         """No system messages for Claude because applied in get_response"""
         return []
+    
 
     async def format_blocks(self, blocks: list[types.ContentBlock]) -> list[Any]:
         """Format messages for Claude."""
+        # Convert MCP content types to Anthropic content types
+        anthropic_blocks: list[BetaContentBlockParam] = []
+        
+        for block in blocks:
+            if isinstance(block, types.TextContent):
+                # Only include fields that Anthropic expects
+                anthropic_blocks.append(cast(BetaTextBlockParam, {
+                    "type": "text",
+                    "text": block.text,
+                }))
+            elif isinstance(block, types.ImageContent):
+                # Convert MCP ImageContent to Anthropic format
+                anthropic_blocks.append(cast(BetaImageBlockParam, {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": block.mimeType,
+                        "data": block.data,
+                    },
+                }))
+            else:
+                # For other types, try to cast but log a warning
+                logger.warning(f"Unknown content block type: {type(block)}")
+                anthropic_blocks.append(cast(BetaContentBlockParam, block))
+        
         return [
             cast(
                 "BetaMessageParam",
                 {
                     "role": "user",
-                    "content": blocks,
+                    "content": anthropic_blocks,
                 },
             )
         ]
+
 
     @hud.instrument(
         span_type="agent",
@@ -125,9 +156,7 @@ class ClaudeAgent(MCPAgent):
     )
     async def get_response(self, messages: list[BetaMessageParam]) -> AgentResponse:
         """Get response from Claude including any tool calls."""
-        # Get Claude tools
-        claude_tools = self._convert_tools_for_claude()
-
+        
         # Make API call with retry for prompt length
         current_messages = messages.copy()
 
@@ -140,13 +169,13 @@ class ClaudeAgent(MCPAgent):
                 "max_tokens": self.max_tokens,
                 "system": self.system_prompt,
                 "messages": messages_cached,
-                "tools": claude_tools,
+                "tools": self.claude_tools,
                 "tool_choice": {"type": "auto", "disable_parallel_tool_use": True},
             }
 
             # Add beta features if using computer tools
             if self.use_computer_beta and any(
-                t.get("type") == "computer_20250124" for t in claude_tools
+                tool.get("type") == "computer_20250124" for tool in self.claude_tools
             ):
                 create_kwargs["betas"] = ["computer-use-2025-01-24"]
 
@@ -295,6 +324,7 @@ class ClaudeAgent(MCPAgent):
 
             claude_tools.append(claude_tool)
 
+        self.claude_tools = claude_tools
         return claude_tools
 
     def _add_prompt_caching(self, messages: list[BetaMessageParam]) -> list[BetaMessageParam]:
@@ -304,9 +334,12 @@ class ClaudeAgent(MCPAgent):
         # Mark last user message with cache control
         if messages_cached and messages_cached[-1].get("role") == "user":
             last_content = messages_cached[-1]["content"]
+            # Content is formatted to be list of ContentBlock in format_blocks and format_message
             if isinstance(last_content, list):
                 for block in last_content:
-                    if block.get("type") not in ["thinking", "redacted_thinking"]:
+                    # Only add cache control to block types that support it
+                    block_type = block.get("type")
+                    if block_type in ["text", "image", "tool_use", "tool_result"]:
                         cache_control: BetaCacheControlEphemeralParam = {"type": "ephemeral"}
                         block["cache_control"] = cache_control  # type: ignore[reportGeneralTypeIssues]
 
