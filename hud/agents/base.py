@@ -578,8 +578,18 @@ def find_content(result: MCPToolResult) -> str | None:
 
     If not found, return 0.0
     """
-    accept_keys = ["content", "logs", "text", "message"]
+    accept_keys = ["content", "text", "message", "logs"]
     for key in accept_keys:
         if isinstance(result.structuredContent, dict) and key in result.structuredContent:
             return result.structuredContent[key]
-    return None
+    if isinstance(result.content, list):
+        for content in result.content:
+            if isinstance(content, types.TextContent):
+                try:
+                    json_content = json.loads(content.text)
+                    for key, value in json_content.items():
+                        if key in accept_keys:
+                            return value
+                except json.JSONDecodeError:
+                    pass
+    return ""
