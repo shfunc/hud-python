@@ -44,10 +44,9 @@ class MCPAgent(ABC):
         disallowed_tools: list[str] | None = None,
         lifecycle_tools: list[str] | None = None,
         # Messages
-        initial_screenshot: bool = False,
         system_prompt: str = GLOBAL_SYSTEM_PROMPT,
-        append_tool_system_prompt: bool = False,
-        append_setup_content: bool = False,
+        append_setup_output: bool = True,
+        initial_screenshot: bool = True,
         # Misc
         model_name: str = "mcp-agent",
         response_agent: ResponseAgent | None = None,
@@ -63,8 +62,7 @@ class MCPAgent(ABC):
             lifecycle_tools: List of tool names to use for lifecycle tools
             initial_screenshot: Whether to capture screenshot before first prompt
             system_prompt: System prompt to use
-            append_tool_system_prompt: Whether to append available tools to system prompt
-            append_setup_content: Whether to append setup content to system prompt
+            append_setup_output: Whether to append setup tool output to initial messages
         """
 
         self.mcp_client = mcp_client
@@ -79,8 +77,7 @@ class MCPAgent(ABC):
 
         # Messages
         self.system_prompt = system_prompt
-        self.append_tool_system_prompt = append_tool_system_prompt
-        self.append_setup_content = append_setup_content
+        self.append_setup_output = append_setup_output
         self.initial_screenshot = initial_screenshot
 
         # Initialize these here so methods can be called before initialize()
@@ -156,6 +153,7 @@ class MCPAgent(ABC):
             prompt_or_task = Task(**prompt_or_task)
 
         try:
+            # Establish the connection with the MCP server/Environment
             if len(self._available_tools) == 0:
                 await self.initialize(prompt_or_task)
 
@@ -190,20 +188,24 @@ class MCPAgent(ABC):
         try:
             # Setup phase
             start_context: list[types.ContentBlock] = []
+
+            # Extract the initial task information
             if task.prompt:
                 start_context.extend(text_to_blocks(task.prompt))
+
+            # Execute the setup tool and append the initial observation to the context
             if task.setup_tool is not None:
                 logger.info("Setting up tool phase: %s", task.setup_tool)
                 results = await self.call_tools(task.setup_tool)
                 if any(result.isError for result in results):
                     raise RuntimeError(f"{results}")
 
-                if self.append_setup_content and isinstance(results[0].content, list):
+                if self.append_setup_output and isinstance(results[0].content, list):
                     start_context.extend(results[0].content)
             if not self.initial_screenshot:
                 start_context = await self._filter_messages(start_context, include_types=["text"])
 
-            # Execute the task
+            # Execute the task (agent loop) - this returns a empty trace object with the final response
             prompt_result = await self._run_context(start_context, max_steps=max_steps)
 
         except Exception as e:
@@ -228,8 +230,14 @@ class MCPAgent(ABC):
 
                     # Update the prompt result with evaluation reward
                     prompt_result.reward = reward
+
+                    # Update the prompt result with evaluation content (if available)
                     if eval_content:
-                        prompt_result.content = eval_content
+                        # Prompt result may already have final response content, so we append to it
+                        if prompt_result.content:
+                            prompt_result.content += "\n\n" + eval_content
+                        else:
+                            prompt_result.content = eval_content
 
             except Exception as e:
                 logger.error("Evaluation phase failed: %s", e)
@@ -382,7 +390,7 @@ class MCPAgent(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_response(self, messages: list[Any]) -> AgentResponse:
+    async def get_response(self, messages: list[Any]) -> AgentResponse: # maybe type messages as list[types.ContentBlock]
         """
         Get response from the model including any tool calls.
 
@@ -427,7 +435,7 @@ class MCPAgent(ABC):
         | types.ContentBlock
         | list[types.ContentBlock]
         | list[str | types.ContentBlock],
-    ) -> list[Any]:
+    ) -> list[Any]: # maybe type messages as list[types.ContentBlock]
         """
         Convencience function.
 
@@ -564,11 +572,11 @@ def find_reward(result: MCPToolResult) -> float:
 def find_content(result: MCPToolResult) -> str | None:
     """Find the content in the result.
 
-    Agent accepts "content", "text", "message"
+    Agent accepts "content", "text", "message", or "logs"
 
     If not found, return 0.0
     """
-    accept_keys = ["content", "logs"]
+    accept_keys = ["content", "logs", "text", "message"]
     for key in accept_keys:
         if isinstance(result.structuredContent, dict) and key in result.structuredContent:
             return result.structuredContent[key]

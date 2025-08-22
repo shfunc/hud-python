@@ -17,7 +17,7 @@ from hud.agents.base import MCPAgent
 ```python
 MCPAgent(
     mcp_client: AgentMCPClient | None = None,
-    append_setup_content: bool = True
+    append_setup_output: bool = True
 )
 ```
 
@@ -25,7 +25,7 @@ MCPAgent(
   MCP client instance. If not provided, can be auto-created from task.mcp_config
 </ParamField>
 
-<ParamField body="append_setup_content" type="bool" default="true">
+<ParamField body="append_setup_output" type="bool" default="true">
   Whether to append setup tool output to the initial prompt
 </ParamField>
 

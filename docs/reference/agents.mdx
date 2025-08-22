@@ -26,7 +26,7 @@ Abstract base class for all MCP-enabled agents. Handles tool discovery, filterin
 | `initial_screenshot` | `bool` | Capture screenshot before first prompt | `False` |
 | `system_prompt` | `str` | System prompt to use | Default prompt |
 | `append_tool_system_prompt` | `bool` | Append available tools to system | `False` |
-| `append_setup_content` | `bool` | Append setup content to prompt | `False` |
+| `append_setup_output` | `bool` | Append setup tool output to initial prompt | `False` |
 | `model_name` | `str` | Model name for telemetry | `"mcp-agent"` |
 | `response_agent` | `ResponseAgent` | Optional auto-response handler | `None` |
 | `auto_trace` | `bool` | Enable automatic telemetry | `True` |

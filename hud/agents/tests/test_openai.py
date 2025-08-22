@@ -54,8 +54,8 @@ class TestOperatorAgent:
 
         messages = await agent.format_blocks(blocks)
         assert len(messages) == 2
-        assert messages[0] == {"type": "user_input", "text": "Hello, GPT!"}
-        assert messages[1] == {"type": "user_input", "text": "Another message"}
+        assert messages[0] == {"type": "input_text", "text": "Hello, GPT!"}
+        assert messages[1] == {"type": "input_text", "text": "Another message"}
 
         # Test with mixed content (non-text blocks should be filtered)
         blocks = [
@@ -65,7 +65,7 @@ class TestOperatorAgent:
 
         messages = await agent.format_blocks(blocks)
         assert len(messages) == 1
-        assert messages[0] == {"type": "user_input", "text": "Text content"}
+        assert messages[0] == {"type": "input_text", "text": "Text content"}
 
     @pytest.mark.asyncio
     async def test_format_tool_results(self, mock_mcp_client, mock_openai):

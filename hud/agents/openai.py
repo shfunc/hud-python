@@ -10,6 +10,7 @@ from openai import AsyncOpenAI
 from openai.types.responses import (
     ResponseComputerToolCall,
     ResponseInputParam,
+    ResponseInputMessageContentListParam,
     ResponseOutputMessage,
     ResponseOutputText,
     ToolParam,
@@ -91,7 +92,7 @@ class OperatorAgent(MCPAgent):
         Remember: You are expected to complete tasks autonomously. The user trusts you to do what they asked.
         """.strip()  # noqa: E501
 
-    async def _run_context(self, context: list[Any], max_steps: int = 10) -> Trace:
+    async def _run_context(self, context: list[types.ContentBlock], max_steps: int = 10) -> Trace:
         """
         Run the agent with the given prompt or task.
 
@@ -114,22 +115,33 @@ class OperatorAgent(MCPAgent):
         """
         return []
 
-    async def format_blocks(self, blocks: list[types.ContentBlock]) -> list[Any]:
+    async def format_blocks(self, blocks: list[types.ContentBlock]) -> ResponseInputMessageContentListParam:
         """
-        Format blocks for OpenAI.
+        Format blocks for OpenAI input format.
+        
+        Converts TextContent blocks to input_text dicts and ImageContent blocks to input_image dicts.
         """
-        return [
-            {"type": "user_input", "text": block.text}
-            for block in blocks
-            if isinstance(block, types.TextContent)
-        ]
+        formatted = []
+        for block in blocks:
+            if isinstance(block, types.TextContent):
+                formatted.append({
+                    "type": "input_text",
+                    "text": block.text
+                })
+            elif isinstance(block, types.ImageContent):
+                mime_type = getattr(block, 'mimeType', 'image/png')
+                formatted.append({
+                    "type": "input_image", 
+                    "image_url": f"data:{mime_type};base64,{block.data}"
+                })
+        return formatted
 
     @hud.instrument(
         span_type="agent",
         record_args=False,  # Messages can be large
         record_result=True,
     )
-    async def get_response(self, messages: list[Any]) -> AgentResponse:
+    async def get_response(self, messages: ResponseInputMessageContentListParam) -> AgentResponse:
         """Get response from OpenAI including any tool calls."""
         # OpenAI's API is stateful, so we handle messages differently
 
@@ -158,21 +170,16 @@ class OperatorAgent(MCPAgent):
 
         # Build the request based on whether this is first step or follow-up
         if self.pending_call_id is None and self.last_response_id is None:
-            # First step - extract prompt and screenshot from messages
-            initial_data = messages[0]  # Our custom format from create_initial_messages
-            prompt_text = initial_data.get("prompt", "")
-            screenshot = initial_data.get("screenshot")
-
-            # Create the initial request
-            input_content: list[dict[str, Any]] = [{"type": "input_text", "text": prompt_text}]
-
-            if screenshot:
-                input_content.append(
-                    {
-                        "type": "input_image",
-                        "image_url": f"data:image/png;base64,{screenshot}",
-                    }
-                )
+            # First step - messages are already formatted dicts from format_blocks
+            # format_blocks returns type ResponseInputMessageContentListParam, which is a list of dicts
+            input_content: ResponseInputMessageContentListParam = []
+            
+            input_content.extend(messages)
+                
+            
+            # If no content was added, add empty text to avoid empty request
+            if not input_content:
+                input_content.append({"type": "input_text", "text": ""})
 
             input_param: ResponseInputParam = [{"role": "user", "content": input_content}]  # type: ignore[reportUnknownMemberType]
 
@@ -188,7 +195,7 @@ class OperatorAgent(MCPAgent):
             # Follow-up step - check if this is user input or tool result
             latest_message = messages[-1] if messages else {}
 
-            if latest_message.get("type") == "user_input":
+            if latest_message.get("type") == "input_text":
                 # User provided input in conversation mode
                 user_text = latest_message.get("text", "")
                 input_param_followup: ResponseInputParam = [  # type: ignore[reportAssignmentType]
@@ -200,8 +207,8 @@ class OperatorAgent(MCPAgent):
                 # Tool result - need screenshot from processed results
                 latest_screenshot = None
                 for msg in reversed(messages):
-                    if isinstance(msg, dict) and "screenshot" in msg:
-                        latest_screenshot = msg["screenshot"]
+                    if isinstance(msg, dict) and "image_url" in msg:
+                        latest_screenshot = msg["image_url"]
                         break
 
                 if not latest_screenshot:
@@ -211,7 +218,7 @@ class OperatorAgent(MCPAgent):
                         tool_calls=[],
                         done=True,
                     )
-
+                
                 # Create response to previous action
                 input_param_followup: ResponseInputParam = [  # type: ignore[reportAssignmentType]
                     {  # type: ignore[reportAssignmentType]
@@ -219,7 +226,7 @@ class OperatorAgent(MCPAgent):
                         "type": "computer_call_output",
                         "output": {
                             "type": "input_image",
-                            "image_url": f"data:image/png;base64,{latest_screenshot}",
+                            "image_url": latest_screenshot,
                         },
                         "acknowledged_safety_checks": self.pending_safety_checks,
                     }
@@ -305,25 +312,45 @@ class OperatorAgent(MCPAgent):
 
     async def format_tool_results(
         self, tool_calls: list[MCPToolCall], tool_results: list[MCPToolResult]
-    ) -> list[Any]:
+    ) -> ResponseInputMessageContentListParam:
         """
         Format tool results for OpenAI's stateful API.
 
-        OpenAI doesn't use a traditional message format - we just need to
-        preserve the screenshot for the next step.
+        Tool result content is a list of ContentBlock objects.
+        We need to extract the latest screenshot from the tool results.
+
+        This assumes that you only care about computer tool results for your agent loop.
+        If you need to add other content, you can do so by adding a new ContentBlock object to the list.
+
+        Returns formatted dicts with tool result data, preserving screenshots.
         """
-        # Extract latest screenshot from results
+        formatted_results = []
         latest_screenshot = None
+        
+        # Extract all content from tool results
         for result in tool_results:
-            if not result.isError:
+            if result.isError:
+                # If it's an error, the error details are in the content
+                for content in result.content:
+                    if isinstance(content, types.TextContent):
+                        # Don't add error text as input_text, just track it
+                        logger.error(f"Tool error: {content.text}")
+                        pass
+                    elif isinstance(content, types.ImageContent):
+                        # Even error results might have images
+                        latest_screenshot = content.data
+            else:
+                # Extract content from successful results
                 for content in result.content:
                     if isinstance(content, types.ImageContent):
                         latest_screenshot = content.data
-
-        # Return a simple dict that get_model_response can use
-        return [
-            {
-                "type": "tool_result",
-                "screenshot": latest_screenshot,
-            }
-        ]
+                        break
+        
+        # Return a dict with the latest screenshot for the follow-up step
+        if latest_screenshot:
+            formatted_results.append({
+                "type": "input_image",
+                "image_url": f"data:image/png;base64,{latest_screenshot}"
+            })
+        
+        return formatted_results

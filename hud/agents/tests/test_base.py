@@ -96,7 +96,6 @@ class TestBaseMCPAgent:
         assert agent.allowed_tools is None
         assert agent.disallowed_tools == []
         assert agent.initial_screenshot is False
-        assert agent.append_tool_system_prompt is False  # Default is False
         assert agent.system_prompt is not None  # Default system prompt is set
         assert agent.lifecycle_tools == []
 
@@ -108,7 +107,6 @@ class TestBaseMCPAgent:
             allowed_tools=["tool1", "tool2"],
             disallowed_tools=["bad_tool"],
             initial_screenshot=True,
-            append_tool_system_prompt=True,
             system_prompt="Custom prompt",
             lifecycle_tools=["custom_setup", "custom_eval"],
         )
@@ -117,7 +115,6 @@ class TestBaseMCPAgent:
         assert agent.allowed_tools == ["tool1", "tool2"]
         assert agent.disallowed_tools == ["bad_tool"]
         assert agent.initial_screenshot is True
-        assert agent.append_tool_system_prompt is True
         assert agent.system_prompt == "Custom prompt"
         assert agent.lifecycle_tools == ["custom_setup", "custom_eval"]
 
@@ -686,36 +683,6 @@ class TestMCPAgentExtended:
         """Test run with invalid prompt type raises TypeError."""
         with pytest.raises(TypeError, match="prompt_or_task must be str or Task"):
             await agent_with_tools.run(123)  # Invalid type
-
-    # These tests are commented out as get_system_prompt doesn't exist in the base class
-    # @pytest.mark.asyncio
-    # async def test_system_prompt_generation(self, agent_with_tools):
-    #     """Test system prompt generation with custom and tool prompts."""
-    #     # Initialize to populate available tools
-    #     await agent_with_tools.initialize()
-
-    #     agent_with_tools.system_prompt = "Custom instructions."
-    #     agent_with_tools.append_tool_system_prompt = True
-
-    #     system_prompt = agent_with_tools.get_system_prompt()
-
-    #     assert "Custom instructions." in system_prompt
-    #     assert "You have access to the following tools:" in system_prompt
-    #     assert "screenshot" in system_prompt
-
-    # @pytest.mark.asyncio
-    # async def test_system_prompt_without_tools(self, mock_client):
-    #     """Test system prompt when append_tool_system_prompt is False."""
-    #     agent = MockAgentExtended(
-    #         mcp_client=mock_client,
-    #         system_prompt="Only custom.",
-    #         append_tool_system_prompt=False,
-    #     )
-
-    #     system_prompt = agent.get_system_prompt()
-
-    #     assert system_prompt == "Only custom."
-    #     assert "Available tools:" not in system_prompt
 
     @pytest.mark.asyncio
     async def test_evaluate_phase_with_multiple_tools(self, agent_with_tools):
