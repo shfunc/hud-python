@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Optional
 
+import requests
+import yaml
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -13,11 +16,11 @@ from rich.table import Table
 from rich.tree import Tree
 
 from hud.clients import MCPClient
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from hud.settings import settings
+from hud.utils.design import HUDDesign
 
 console = Console()
+design = HUDDesign()
 
 
 def parse_docker_command(docker_cmd: list[str]) -> dict:
@@ -29,15 +32,14 @@ def parse_docker_command(docker_cmd: list[str]) -> dict:
 
 async def analyze_environment(docker_cmd: list[str], output_format: str, verbose: bool) -> None:
     """Analyze MCP environment and display results."""
-    console.print(
-        Panel.fit("🔍 [bold cyan]MCP Environment Analysis[/bold cyan]", border_style="cyan")
-    )
+    design.header("MCP Environment Analysis", icon="🔍")
 
     # Convert Docker command to MCP config
     mcp_config = parse_docker_command(docker_cmd)
 
     # Display command being analyzed
-    console.print(f"[dim]Command: {' '.join(docker_cmd)}[/dim]\n")
+    design.dim_info("Command:", ' '.join(docker_cmd))
+    design.info("")  # Empty line
 
     # Create client
     with Progress(
@@ -87,52 +89,96 @@ async def analyze_environment(docker_cmd: list[str], output_format: str, verbose
 def display_interactive(analysis: dict) -> None:
     """Display analysis results in interactive format."""
     # Server metadata
-    console.print("\n[bold cyan]📊 Environment Overview[/bold cyan]")
+    design.section_title("📊 Environment Overview")
     meta_table = Table(show_header=False, box=None)
     meta_table.add_column("Property", style="dim")
     meta_table.add_column("Value")
 
-    for server in analysis["metadata"]["servers"]:
-        meta_table.add_row("Server", f"[green]{server}[/green]")
-    meta_table.add_row(
-        "Initialized", "[green]✓[/green]" if analysis["metadata"]["initialized"] else "[red]✗[/red]"
-    )
+    # Check if this is a live analysis (has metadata) or metadata-only analysis
+    if "metadata" in analysis:
+        # Live analysis format
+        for server in analysis["metadata"]["servers"]:
+            meta_table.add_row("Server", f"[green]{server}[/green]")
+        meta_table.add_row(
+            "Initialized", "[green]✓[/green]" if analysis["metadata"]["initialized"] else "[red]✗[/red]"
+        )
+    else:
+        # Metadata-only format
+        if "image" in analysis:
+            # Show simple name in table
+            image = analysis["image"]
+            if ":" in image and "@" in image:
+                display_ref = image.split("@")[0]
+            else:
+                display_ref = image
+            meta_table.add_row("Image", f"[green]{display_ref}[/green]")
+        
+        if "status" in analysis:
+            meta_table.add_row("Source", analysis.get("source", analysis["status"]).title())
+        
+        if "build_info" in analysis:
+            meta_table.add_row("Built", analysis["build_info"].get("generatedAt", "Unknown"))
+            meta_table.add_row("HUD Version", analysis["build_info"].get("hudVersion", "Unknown"))
+        
+        if "push_info" in analysis:
+            meta_table.add_row("Pushed", analysis["push_info"].get("pushedAt", "Unknown"))
+        
+        if "init_time" in analysis:
+            meta_table.add_row("Init Time", f"{analysis['init_time']} ms")
+        
+        if "tool_count" in analysis:
+            meta_table.add_row("Tools", str(analysis["tool_count"]))
 
     console.print(meta_table)
 
     # Tools
-    console.print("\n[bold cyan]🔧 Available Tools[/bold cyan]")
+    design.section_title("🔧 Available Tools")
     tools_tree = Tree("Tools")
 
-    # Regular tools
-    regular_tools = tools_tree.add("Regular Tools")
-    for tool in analysis["tools"]:
-        if tool["name"] not in analysis["hub_tools"]:
-            tool_node = regular_tools.add(f"[cyan]{tool['name']}[/cyan]")
-            if tool["description"]:
-                tool_node.add(f"[dim]{tool['description']}[/dim]")
+    # Check if we have hub_tools info (live analysis) or not (metadata-only)
+    if "hub_tools" in analysis:
+        # Live analysis format - separate regular and hub tools
+        # Regular tools
+        regular_tools = tools_tree.add("Regular Tools")
+        for tool in analysis["tools"]:
+            if tool["name"] not in analysis["hub_tools"]:
+                tool_node = regular_tools.add(f"[default]{tool['name']}[/default]")
+                if tool["description"]:
+                    tool_node.add(f"[dim]{tool['description']}[/dim]")
 
+                # Show input schema if verbose
+                if analysis.get("verbose") and tool.get("input_schema"):
+                    schema_str = json.dumps(tool["input_schema"], indent=2)
+                    syntax = Syntax(schema_str, "json", theme="monokai", line_numbers=False)
+                    tool_node.add(syntax)
+
+        # Hub tools
+        if analysis["hub_tools"]:
+            hub_tools = tools_tree.add("Hub Tools")
+            for hub_name, functions in analysis["hub_tools"].items():
+                hub_node = hub_tools.add(f"[yellow]{hub_name}[/yellow]")
+                for func in functions:
+                    hub_node.add(f"[default]{func}[/default]")
+    else:
+        # Metadata-only format - just list all tools
+        for tool in analysis["tools"]:
+            tool_node = tools_tree.add(f"[default]{tool['name']}[/default]")
+            if tool.get("description"):
+                tool_node.add(f"[dim]{tool['description']}[/dim]")
+            
             # Show input schema if verbose
-            if analysis.get("verbose") and tool.get("input_schema"):
-                schema_str = json.dumps(tool["input_schema"], indent=2)
+            if tool.get("inputSchema"):
+                schema_str = json.dumps(tool["inputSchema"], indent=2)
                 syntax = Syntax(schema_str, "json", theme="monokai", line_numbers=False)
                 tool_node.add(syntax)
-
-    # Hub tools
-    if analysis["hub_tools"]:
-        hub_tools = tools_tree.add("Hub Tools")
-        for hub_name, functions in analysis["hub_tools"].items():
-            hub_node = hub_tools.add(f"[yellow]{hub_name}[/yellow]")
-            for func in functions:
-                hub_node.add(f"[cyan]{func}[/cyan]")
 
     console.print(tools_tree)
 
     # Resources
     if analysis["resources"]:
-        console.print("\n[bold cyan]📚 Available Resources[/bold cyan]")
+        design.section_title("📚 Available Resources")
         resources_table = Table()
-        resources_table.add_column("URI", style="cyan")
+        resources_table.add_column("URI", style="default")
         resources_table.add_column("Name", style="white")
         resources_table.add_column("Type", style="dim")
 
@@ -146,9 +192,9 @@ def display_interactive(analysis: dict) -> None:
         if len(analysis["resources"]) > 10:
             console.print(f"[dim]... and {len(analysis['resources']) - 10} more resources[/dim]")
 
-    # Telemetry
-    if analysis["telemetry"]:
-        console.print("\n[bold cyan]📡 Telemetry Data[/bold cyan]")
+    # Telemetry (only for live analysis)
+    if analysis.get("telemetry"):
+        design.section_title("📡 Telemetry Data")
         telemetry_table = Table(show_header=False, box=None)
         telemetry_table.add_column("Key", style="dim")
         telemetry_table.add_column("Value")
@@ -163,6 +209,20 @@ def display_interactive(analysis: dict) -> None:
             telemetry_table.add_row("Services", f"{running}/{len(services)} running")
 
         console.print(telemetry_table)
+    
+    # Environment variables (for metadata-only analysis)
+    if analysis.get("env_vars"):
+        design.section_title("🔑 Environment Variables")
+        env_table = Table(show_header=False, box=None)
+        env_table.add_column("Type", style="dim")
+        env_table.add_column("Variables")
+        
+        if analysis["env_vars"].get("required"):
+            env_table.add_row("Required", ", ".join(analysis["env_vars"]["required"]))
+        if analysis["env_vars"].get("optional"):
+            env_table.add_row("Optional", ", ".join(analysis["env_vars"]["optional"]))
+        
+        console.print(env_table)
 
 
 def display_markdown(analysis: dict) -> None:
@@ -172,27 +232,48 @@ def display_markdown(analysis: dict) -> None:
 
     # Metadata
     md.append("## Environment Overview")
-    md.append(f"- **Servers**: {', '.join(analysis['metadata']['servers'])}")
-    md.append(f"- **Initialized**: {'✓' if analysis['metadata']['initialized'] else '✗'}")
+    
+    # Check if this is live analysis or metadata-only
+    if "metadata" in analysis:
+        md.append(f"- **Servers**: {', '.join(analysis['metadata']['servers'])}")
+        md.append(f"- **Initialized**: {'✓' if analysis['metadata']['initialized'] else '✗'}")
+    else:
+        # Metadata-only format
+        if "image" in analysis:
+            md.append(f"- **Image**: {analysis['image']}")
+        if "source" in analysis:
+            md.append(f"- **Source**: {analysis['source']}")
+        if "build_info" in analysis:
+            md.append(f"- **Built**: {analysis['build_info'].get('generatedAt', 'Unknown')}")
+        if "tool_count" in analysis:
+            md.append(f"- **Tools**: {analysis['tool_count']}")
+    
     md.append("")
 
     # Tools
     md.append("## Available Tools\n")
 
-    # Regular tools
-    md.append("### Regular Tools")
-    for tool in analysis["tools"]:
-        if tool["name"] not in analysis["hub_tools"]:
-            md.extend([f"- **{tool['name']}**: {tool.get('description', 'No description')}"])
-    md.append("")
+    # Check if we have hub_tools info (live analysis) or not (metadata-only)
+    if "hub_tools" in analysis:
+        # Regular tools
+        md.append("### Regular Tools")
+        for tool in analysis["tools"]:
+            if tool["name"] not in analysis["hub_tools"]:
+                md.extend([f"- **{tool['name']}**: {tool.get('description', 'No description')}"])
+        md.append("")
 
-    # Hub tools
-    if analysis["hub_tools"]:
-        md.append("### Hub Tools")
-        for hub_name, functions in analysis["hub_tools"].items():
-            md.extend([f"- **{hub_name}**"])
-            for func in functions:
-                md.extend([f"  - {func}"])
+        # Hub tools
+        if analysis["hub_tools"]:
+            md.append("### Hub Tools")
+            for hub_name, functions in analysis["hub_tools"].items():
+                md.extend([f"- **{hub_name}**"])
+                for func in functions:
+                    md.extend([f"  - {func}"])
+            md.append("")
+    else:
+        # Metadata-only format - just list all tools
+        for tool in analysis["tools"]:
+            md.extend([f"- **{tool['name']}**: {tool.get('description', 'No description')}"])
         md.append("")
 
     # Resources
@@ -207,8 +288,8 @@ def display_markdown(analysis: dict) -> None:
             md.extend([f"| {uri} | {name} | {mime_type} |"])
         md.append("")
 
-    # Telemetry
-    if analysis["telemetry"]:
+    # Telemetry (only for live analysis)
+    if analysis.get("telemetry"):
         md.append("## Telemetry")
         if "live_url" in analysis["telemetry"]:
             md.extend([f"- **Live URL**: {analysis['telemetry']['live_url']}"])
@@ -216,6 +297,15 @@ def display_markdown(analysis: dict) -> None:
             md.extend([f"- **Status**: {analysis['telemetry']['status']}"])
         if "services" in analysis["telemetry"]:
             md.extend([f"- **Services**: {analysis['telemetry']['services']}"])
+        md.append("")
+    
+    # Environment variables (for metadata-only analysis)
+    if analysis.get("env_vars"):
+        md.append("## Environment Variables")
+        if analysis["env_vars"].get("required"):
+            md.extend([f"- **Required**: {', '.join(analysis['env_vars']['required'])}"])
+        if analysis["env_vars"].get("optional"):
+            md.extend([f"- **Optional**: {', '.join(analysis['env_vars']['optional'])}"])
         md.append("")
 
     console.print("\n".join(md))
@@ -225,9 +315,7 @@ async def analyze_environment_from_config(
     config_path: Path, output_format: str, verbose: bool
 ) -> None:
     """Analyze MCP environment from a JSON config file."""
-    console.print(
-        Panel.fit("🔍 [bold cyan]MCP Environment Analysis[/bold cyan]", border_style="cyan")
-    )
+    design.header("MCP Environment Analysis", icon="🔍")
 
     # Load config from file
     try:
@@ -245,9 +333,7 @@ async def analyze_environment_from_mcp_config(
     mcp_config: dict[str, Any], output_format: str, verbose: bool
 ) -> None:
     """Analyze MCP environment from MCP config dict."""
-    console.print(
-        Panel.fit("🔍 [bold cyan]MCP Environment Analysis[/bold cyan]", border_style="cyan")
-    )
+    design.header("MCP Environment Analysis", icon="🔍")
     await _analyze_with_config(mcp_config, output_format, verbose)
 
 

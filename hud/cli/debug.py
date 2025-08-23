@@ -12,6 +12,7 @@ import time
 from rich.console import Console
 
 from hud.clients import MCPClient
+from hud.utils.design import HUDDesign
 
 from .utils import CaptureLogger, Colors, analyze_error_for_hints
 
@@ -30,22 +31,21 @@ async def debug_mcp_stdio(command: list[str], logger: CaptureLogger, max_phase: 
     Returns:
         Number of phases completed (0-5)
     """
-    logger._log("\n🔍 MCP Server Debugger", Colors.BOLD if logger.print_output else "")
-    logger._log(f"Command: {' '.join(command)}", Colors.GRAY if logger.print_output else "")
-    logger._log(
-        f"Time: {time.strftime('%Y-%m-%d %H:%M:%S')}",
-        Colors.GRAY if logger.print_output else "",
-    )
-
-    # Explain color coding (only in print mode)
+    # Create design instance for initial output (before logger takes over)
     if logger.print_output:
-        logger._log("\nColor Key:", Colors.BOLD if logger.print_output else "")
-        logger._log(f"  {Colors.BOLD}■{Colors.ENDC} Commands (bold)")
-        logger._log(f"  {Colors.GOLD}■{Colors.ENDC} STDIO (MCP protocol)")
-        logger._log(f"  {Colors.GRAY}■{Colors.ENDC} STDERR (server logs)")
-        logger._log(f"  {Colors.GREEN}■{Colors.ENDC} Success messages")
-        logger._log(f"  {Colors.RED}■{Colors.ENDC} Error messages")
-        logger._log("  ■ Info messages")
+        design = HUDDesign()
+        design.header("MCP Server Debugger", icon="🔍")
+        design.dim_info("Command:", ' '.join(command))
+        design.dim_info("Time:", time.strftime('%Y-%m-%d %H:%M:%S'))
+        
+        # Explain color coding using Rich formatting
+        design.info("\nColor Key:")
+        console.print("  [bold]■[/bold] Commands (bold)")
+        console.print("  [rgb(192,150,12)]■[/rgb(192,150,12)] STDIO (MCP protocol)")
+        console.print("  [dim]■[/dim] STDERR (server logs)")
+        console.print("  [green]■[/green] Success messages")
+        console.print("  [red]■[/red] Error messages")
+        console.print("  ■ Info messages")
 
     phases_completed = 0
     total_phases = 5

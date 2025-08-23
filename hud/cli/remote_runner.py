@@ -258,7 +258,8 @@ async def run_remote_http(
             host="0.0.0.0",
             port=actual_port,
             path="/mcp",
-            log_level="error" if not verbose else "info"
+            log_level="error" if not verbose else "info",
+            show_banner=False
         )
     except KeyboardInterrupt:
         click.echo("\n👋 Shutting down...")

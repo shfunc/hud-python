@@ -59,11 +59,11 @@ class CaptureLogger:
 
     def phase(self, phase_num: int, title: str) -> None:
         """Log a phase header."""
-        self._log(f"\n{'=' * 80}", Colors.CYAN if self.print_output else "")
+        self._log(f"\n{'=' * 80}", Colors.GOLD if self.print_output else "")
         self._log(
-            f"PHASE {phase_num}: {title}", Colors.BOLD + Colors.CYAN if self.print_output else ""
+            f"PHASE {phase_num}: {title}", Colors.BOLD + Colors.GOLD if self.print_output else ""
         )
-        self._log(f"{'=' * 80}\n", Colors.CYAN if self.print_output else "")
+        self._log(f"{'=' * 80}\n", Colors.GOLD if self.print_output else "")
 
     def command(self, cmd: list) -> None:
         """Log the command being executed."""

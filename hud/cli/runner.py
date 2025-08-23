@@ -8,24 +8,28 @@ from pathlib import Path
 import click
 from fastmcp import FastMCP
 
+from hud.utils.design import HUDDesign
+
 
 def run_stdio_server(image: str, docker_args: list[str], verbose: bool) -> None:
     """Run Docker image as stdio MCP server (direct passthrough)."""
+    design = HUDDesign(stderr=True)  # Use stderr for stdio mode
+    
     # Build docker command
     docker_cmd = ["docker", "run", "--rm", "-i"] + docker_args + [image]
     
     if verbose:
-        click.echo(f"🐳 Running: {' '.join(docker_cmd)}")
+        design.info(f"🐳 Running: {' '.join(docker_cmd)}")
     
     # Run docker directly with stdio passthrough
     try:
         result = subprocess.run(docker_cmd, stdin=sys.stdin)
         sys.exit(result.returncode)
     except KeyboardInterrupt:
-        click.echo("\n👋 Shutting down...")
+        design.info("\n👋 Shutting down...")
         sys.exit(0)
     except Exception as e:
-        click.echo(f"❌ Error: {e}")
+        design.error(f"Error: {e}")
         sys.exit(1)
 
 
@@ -33,17 +37,30 @@ async def run_http_server(image: str, docker_args: list[str], port: int, verbose
     """Run Docker image as HTTP MCP server (proxy mode)."""
     from .utils import find_free_port
     
+    design = HUDDesign()
+    
     # Find available port
     actual_port = find_free_port(port)
     if actual_port is None:
-        click.echo(f"❌ No available ports found starting from {port}")
+        design.error(f"No available ports found starting from {port}")
         return
     
     if actual_port != port:
-        click.echo(f"⚠️  Port {port} in use, using port {actual_port} instead")
+        design.warning(f"Port {port} in use, using port {actual_port} instead")
     
     # Generate container name
     container_name = f"run-{image.replace(':', '-').replace('/', '-')}"
+    
+    # Remove any existing container with the same name
+    try:
+        subprocess.run(
+            ["docker", "rm", "-f", container_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False  # Don't raise error if container doesn't exist
+        )
+    except Exception:
+        pass  # Ignore errors if container doesn't exist
     
     # Build docker command for stdio container
     docker_cmd = [
@@ -84,10 +101,17 @@ async def run_http_server(image: str, docker_args: list[str], port: int, verbose
         name=f"HUD Run - {image}"
     )
     
-    click.echo(f"🌐 Starting HTTP proxy on port {actual_port}")
-    click.echo(f"🔗 Server URL: http://localhost:{actual_port}/mcp")
-    click.echo(f"📊 docker logs -f {container_name}")
-    click.echo(f"⏹️  Press Ctrl+C to stop")
+    # Show header
+    design.info("")  # Empty line
+    design.header("HUD MCP Server", icon="🌐")
+    
+    # Show configuration
+    design.section_title("Server Information")
+    design.info(f"Port: {actual_port}")
+    design.info(f"URL: http://localhost:{actual_port}/mcp")
+    design.info(f"Container: {container_name}")
+    design.info("")
+    design.progress_message("Press Ctrl+C to stop")
     
     try:
         await proxy.run_async(
@@ -95,10 +119,11 @@ async def run_http_server(image: str, docker_args: list[str], port: int, verbose
             host="0.0.0.0",
             port=actual_port,
             path="/mcp",
-            log_level="error" if not verbose else "info"
+            log_level="error" if not verbose else "info",
+            show_banner=False
         )
     except KeyboardInterrupt:
-        click.echo("\n👋 Shutting down...")
+        design.info("\n👋 Shutting down...")
 
 
 def run_mcp_server(image: str, docker_args: list[str], transport: str, port: int, verbose: bool) -> None:
@@ -106,7 +131,18 @@ def run_mcp_server(image: str, docker_args: list[str], transport: str, port: int
     if transport == "stdio":
         run_stdio_server(image, docker_args, verbose)
     elif transport == "http":
-        asyncio.run(run_http_server(image, docker_args, port, verbose))
+        try:
+            asyncio.run(run_http_server(image, docker_args, port, verbose))
+        except Exception as e:
+            # Suppress the graceful shutdown errors
+            if not any(x in str(e) for x in [
+                "timeout graceful shutdown exceeded",
+                "Cancel 0 running task(s)",
+                "Application shutdown complete"
+            ]):
+                design = HUDDesign()
+                design.error(f"Unexpected error: {e}")
     else:
-        click.echo(f"❌ Unknown transport: {transport}")
+        design = HUDDesign()
+        design.error(f"Unknown transport: {transport}")
         sys.exit(1)
