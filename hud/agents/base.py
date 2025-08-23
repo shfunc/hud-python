@@ -85,6 +85,7 @@ class MCPAgent(ABC):
         self._tool_map: dict[str, types.Tool] = {}  # Simplified: just name to tool
         self.screenshot_history: list[str] = []
         self._auto_trace = auto_trace
+        self.initialization_complete = False
 
         # Response agent to automatically interact with the model
         self.response_agent = response_agent
@@ -156,8 +157,9 @@ class MCPAgent(ABC):
 
         try:
             # Establish the connection with the MCP server/Environment
-            if len(self._available_tools) == 0:
+            if not self.initialization_complete:
                 await self.initialize(prompt_or_task)
+                self.initialization_complete = True
 
             # Handle Task objects with full lifecycle
             if isinstance(prompt_or_task, Task):
