@@ -609,7 +609,7 @@ Once all of the above works you can unleash *hundreds* of concurrent agents on y
 
 To enable rapid development without Docker rebuilds, we can mount the source code and use hot-reload. The HUD SDK provides two approaches:
 
-### Option 1: Using `hud mcp` (Recommended)
+### Option 1: Using `hud dev` (Recommended)
 
 The HUD CLI provides a built-in development proxy that handles all the complexity:
 
@@ -618,7 +618,7 @@ The HUD CLI provides a built-in development proxy that handles all the complexit
 cd environments/my-environment
 
 # Start the development proxy with hot-reload
-hud mcp . --build
+hud dev --build
 
 # Output:
 # 📦 Using cached image: hud-my-environment:dev
@@ -632,7 +632,7 @@ hud mcp . --build
 This command:
 - Auto-detects or builds your Docker image with `:dev` tag
 - Mounts `./src` to `/app/src` for instant code updates
-- Runs reloaderoo to watch file changes and restart automatically
+- Uses watchfiles to monitor file changes and restart automatically
 - Exposes an HTTP endpoint for Cursor integration
 - Caches the image name in `pyproject.toml` for faster subsequent runs
 
@@ -705,30 +705,6 @@ Now you can edit code and call `restart_server` to reload without restarting the
 
 2. Follow the cursor rules below: rebuild, refresh, test, reflect, repeat.
 3. Keep the agent open for any messages or issues.
-
-### 3.5. Debug MCP servers directly from Cursor (Optional)
-
-Add this to your `.cursor/mcp.json`:
-
-```jsonc
-{
-  "mcpServers": {
-    "hud-cli": {
-      "command": "hud",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-
-You can use the "debug_cursor_config" tool to test another mcp server by name (like the one defined in 3.)
-
-Example usage in Cursor:
-```
-Use the debug_docker_image tool to test if my-environment:dev starts correctly with max_phase=3
-```
-
-This is incredibly useful for rapid debugging without leaving your IDE!
 
 ### 4. Cursor rules – paste this once
 

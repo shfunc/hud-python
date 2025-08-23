@@ -175,6 +175,19 @@ class Game2048:
             "won": bool(2048 in self.board),
             "highest_tile": int(self.board.max()),
         }
+    
+    # Proxy-friendly getter methods for multiprocessing.Manager
+    def get_score(self) -> int:
+        """Get current score (proxy-friendly method)."""
+        return self.score
+    
+    def get_moves_made(self) -> int:
+        """Get number of moves made (proxy-friendly method)."""
+        return self.moves_made
+    
+    def get_size(self) -> int:
+        """Get board size (proxy-friendly method)."""
+        return self.size
 
     def reset(self, size: int = 4):
         """Reset the game to initial state

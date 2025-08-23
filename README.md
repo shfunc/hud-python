@@ -27,7 +27,7 @@ Evaluate and improve agents. Wrap software as environments, run benchmarks, and 
 - 🗂️ **[Public benchmarks](https://app.hud.so/leaderboards)** – OSWorld-Verified, SheetBench-50, and more.
 - 🌱 **[Reinforcement learning built-in](rl/)** – Verifiers gym pipelines for GRPO training.
 - 🌐 **[Cloud browsers](environments/remote_browser/)** – AnchorBrowser, Steel, BrowserBase integrations for browser automation.
-- 🛠️ **[Hot-reload dev loop](environments/README.md#phase-5-hot-reload-development-with-cursor-agent)** – `hud mcp` for instant code updates without rebuilds.
+- 🛠️ **[Hot-reload dev loop](environments/README.md#phase-5-hot-reload-development-with-cursor-agent)** – `hud dev` for instant code updates without rebuilds.
 
 > We welcome contributors and feature requests – open an issue or hop on a call to discuss improvements!
 
@@ -207,6 +207,32 @@ Progress: [█████████████████████] 5/5 
 ✅ All phases completed successfully!
 ```
 
+4. **Hot-reload development** with instant code updates:
+
+```console
+$ hud dev
+
+🔨 Building image: hud-my-environment:dev
+✅ Build successful!
+
+═══════════════════════════════════════
+         HUD Development Server
+═══════════════════════════════════════
+
+Configuration:
+{
+  "hud-my-environment": {
+    "url": "http://localhost:8765/mcp"
+  }
+}
+
+Connect to Cursor:
+cursor://anysphere.cursor-deeplink/mcp/install?name=hud-my-environment&config=...
+
+# Edit src/ files - changes are immediately reflected!
+# No rebuild required for code changes
+```
+
 Analyze it to see if all tools appear:
 
 ```console
@@ -236,7 +262,7 @@ Tools
 4. When the tests pass, push it up to the docker registry:
 
 ```bash
-docker push my-name/my-environment:latest
+hud push . --image my-name/my-environment:latest
 ```
 
 5. Now you can use `mcp.hud.so` to launch 100s of instances of this environment in parallel with any agent, and see everything live on [app.hud.so](https://app.hud.so):
@@ -251,7 +277,7 @@ result = await ClaudeAgent().run({  # See all agents: https://docs.hud.so/refere
             "url": "https://mcp.hud.so",
             "headers": {
                 "Authorization": f"Bearer {os.getenv('HUD_API_KEY')}",
-                "Mcp-Image": "my-name/my-environment"
+                "Mcp-Image": "my-name/my-environment:latest"
             }
         }
     }
@@ -320,10 +346,14 @@ graph LR
 
 | Command                 | Purpose                                    | Docs |
 | ----------------------- | ------------------------------------------ | ---- |
+| [`hud init`](https://docs.hud.so/reference/cli/init)            | Create new environment with boilerplate.  | [📖](https://docs.hud.so/reference/cli/init) |
+| [`hud dev`](https://docs.hud.so/reference/cli/dev)              | Hot-reload development with Docker.        | [📖](https://docs.hud.so/reference/cli/dev) |
+| [`hud build`](https://docs.hud.so/reference/cli/build)          | Build image and generate lock file.       | [📖](https://docs.hud.so/reference/cli/build) |
+| [`hud push`](https://docs.hud.so/reference/cli/push)            | Share environment to registry.            | [📖](https://docs.hud.so/reference/cli/push) |
+| [`hud pull <target>`](https://docs.hud.so/reference/cli/pull)   | Get environment from registry.            | [📖](https://docs.hud.so/reference/cli/pull) |
 | [`hud analyze <image>`](https://docs.hud.so/reference/cli/analyze) | Discover tools, resources, and metadata.   | [📖](https://docs.hud.so/reference/cli/analyze) |
 | [`hud debug <image>`](https://docs.hud.so/reference/cli/debug)   | Five-phase health check of an environment. | [📖](https://docs.hud.so/reference/cli/debug) |
-| [`hud mcp <directory>`](https://docs.hud.so/reference/cli/mcp-server)  | Run hot-reload development proxy.          | [📖](https://docs.hud.so/reference/cli/mcp-server) |
-| [`hud mcp`](https://docs.hud.so/reference/cli/mcp-server)             | Expose analysis & debug as an MCP server.  | [📖](https://docs.hud.so/reference/cli/mcp-server) |
+| [`hud run <image>`](https://docs.hud.so/reference/cli/run)       | Run MCP server locally or remotely.       | [📖](https://docs.hud.so/reference/cli/run) |
 
 ## Roadmap
 

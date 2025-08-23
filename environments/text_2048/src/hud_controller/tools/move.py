@@ -60,7 +60,7 @@ class MoveTool(BaseTool):
         board_str = self.env.get_board_ascii()
         import datetime
         text = f"✨ HOT RELOAD WORKS! v{datetime.datetime.now().second} - Moved {direction.upper()} ✨\n"
-        text += f"Updated at {datetime.datetime.now().strftime('%H:%M:%S')} - State preserved: Score={self.env.score}\n"
+        text += f"Updated at {datetime.datetime.now().strftime('%H:%M:%S')} - State preserved: Score={self.env.get_score()}\n"
         text += f"{board_str}"
 
         if state["game_over"]:

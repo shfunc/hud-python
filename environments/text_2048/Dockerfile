@@ -18,5 +18,10 @@ ENV HUD_LOG_STREAM=stderr
 # Install dependencies in editable mode
 RUN pip install --no-cache-dir -e .
 
-# Run as a module to ensure proper package imports
-CMD ["python", "-m", "hud_controller.server"]
+# Start context server in background, then run MCP server
+# The context server persists game state across hot-reloads when running hud dev
+CMD ["sh", "-c", "\
+    python -m hud_controller.context & \
+    sleep 1 && \
+    exec python -m hud_controller.server \
+"]

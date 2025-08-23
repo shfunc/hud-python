@@ -23,6 +23,7 @@ dependencies = [
     "rich>=13.0.0",
     "toml>=0.10.2",
     "watchfiles>=0.21.0",
+    "questionary>=1.10.0",
     # Telemetry
     "opentelemetry-instrumentation-mcp>=0.44.1",
     "opentelemetry-api>=1.34.1",
