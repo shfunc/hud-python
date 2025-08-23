@@ -4,7 +4,25 @@ description: "Complete reference for HUD command-line tools"
 icon: "terminal"
 ---
 
-The HUD CLI provides essential tools for debugging, analyzing, and working with MCP environments.
+The HUD CLI provides a complete toolkit for creating, developing, and running MCP environments. Commands are organized into two main workflows:
+
+<CardGroup cols={2}>
+<Card title="Building Environments" icon="hammer" color="#6b21a8">
+  **Directory-based commands** for creating and sharing environments:
+  - `hud init` - Create new environment
+  - `hud dev` - Develop with hot-reload
+  - `hud build` - Build and generate lock file
+  - `hud push` - Share to registry
+</Card>
+
+<Card title="Running Environments" icon="play" color="#0891b2">
+  **Target-based commands** for consuming environments:
+  - `hud pull` - Get from registry
+  - `hud analyze` - Inspect capabilities
+  - `hud debug` - Test compliance
+  - `hud run` - Execute locally/remotely
+</Card>
+</CardGroup>
 
 ## Installation
 
@@ -27,11 +45,26 @@ hud --version
 
 ## Commands
 
+### Building Workflow
+| Command | Input | Description | Example |
+|---------|-------|-------------|---------|
+| `hud init` | Directory | Create new environment | `hud init my-env` |
+| `hud dev` | Directory | Hot-reload development | `hud dev . --interactive` |
+| `hud build` | Directory | Build image & lock file | `hud build . --tag v1.0` |
+| `hud push` | Directory | Share to registry | `hud push . --tag prod` |
+
+### Running Workflow
+| Command | Input | Description | Example |
+|---------|-------|-------------|---------|
+| `hud pull` | Target | Get environment from registry | `hud pull org/env:latest` |
+| `hud analyze` | Target | Inspect tools & capabilities | `hud analyze org/env` |
+| `hud debug` | Target | Test MCP compliance | `hud debug my-env:latest` |
+| `hud run` | Target | Execute server | `hud run my-env --local` |
+
+### Utilities
 | Command | Description | Example |
 |---------|-------------|---------|
-| `hud debug` | Test MCP environment in 5 phases | `hud debug my-env:latest` |
-| `hud analyze` | Discover tools and capabilities | `hud analyze my-env --verbose` |
-| `hud mcp` | Run hot-reload development proxy | `hud mcp . --build` |
+| `hud quickstart` | Clone quickstart repository | `hud quickstart` |
 | `hud cursor-list` | List Cursor MCP servers | `hud cursor-list` |
 | `hud version` | Show version info | `hud version` |
 
@@ -101,35 +134,79 @@ hud analyze my-env --format json
 hud analyze my-env --format markdown > docs/tools.md
 ```
 
-## Development Workflow
+## Complete Workflows
 
-### Traditional Approach
+### Building an Environment
+
+<Steps>
+<Step title="Initialize">
+Create a new HUD environment with minimal boilerplate:
 ```bash
-# 1. Build
-docker build -t my-env .
-
-# 2. Incremental debug
-hud debug my-env --max-phase 1  # Startup only
-hud debug my-env --max-phase 3  # Up to tools
-
-# 3. Full validation
-hud debug my-env
-
-# 4. Document
-hud analyze my-env --format markdown > docs/tools.md
+hud init my-env && cd my-env
 ```
+Creates `Dockerfile`, `pyproject.toml`, and minimal MCP server with context.
+</Step>
 
-### Hot-Reload Development
+<Step title="Develop">
+Run with hot-reload and interactive testing:
 ```bash
-# 1. Start development proxy
-cd environments/my-env
-hud mcp . --build
-
-# 2. Add to Cursor (copy from output)
-# 3. Edit src/ files - changes reload automatically!
-# 4. Test in another terminal
-hud analyze hud-my-env:dev
+hud dev . --interactive
 ```
+Your changes reload automatically. Test tools interactively with arrow keys.
+</Step>
+
+<Step title="Build">
+Create production image and lock file:
+```bash
+hud build
+```
+Generates `hud.lock.yaml` with metadata and labels image for reproducibility.
+</Step>
+
+<Step title="Push">
+Share to Docker and HUD registries:
+```bash
+hud push
+```
+Requires `HUD_API_KEY`. Auto-detects registry from Docker login.
+</Step>
+</Steps>
+
+### Running an Environment
+
+<Steps>
+<Step title="Pull">
+Get environment with metadata preview:
+```bash
+hud pull hudpython/text_init:latest
+```
+Shows tools, env vars, and build info before downloading.
+</Step>
+
+<Step title="Analyze">
+Quick inspection without running:
+```bash
+hud analyze hudpython/text_init    # Fast (from metadata)
+hud analyze hudpython/text_init --live  # Full (runs container)
+```
+</Step>
+
+<Step title="Debug">
+Test MCP protocol compliance:
+```bash
+hud debug hudpython/text_init:latest
+```
+Validates through 5 phases of initialization.
+</Step>
+
+<Step title="Run">
+Execute in production mode:
+```bash
+hud run hudpython/text_init:latest        # Remote (default)
+hud run hudpython/text_init:latest --local  # Local Docker
+```
+</Step>
+</Steps>
 
 ## CI/CD Example
 
@@ -195,16 +272,40 @@ export ANCHOR_API_KEY=...
 
 ## Next Steps
 
-<CardGroup cols={3}>
-<Card title="Debug Command" icon="bug" href="/reference/cli/debug">
-  Test environments step-by-step
+### Building Commands
+<CardGroup cols={2}>
+<Card title="Init Command" icon="sparkles" href="/reference/cli/init">
+  Create new environments from scratch
+</Card>
+
+<Card title="Dev Command" icon="code" href="/reference/cli/dev">
+  Develop with hot-reload and interactive testing
+</Card>
+
+<Card title="Build Command" icon="hammer" href="/reference/cli/build">
+  Build images and generate lock files
+</Card>
+
+<Card title="Push Command" icon="upload" href="/reference/cli/push">
+  Share environments to registry
+</Card>
+</CardGroup>
+
+### Running Commands
+<CardGroup cols={2}>
+<Card title="Pull Command" icon="download" href="/reference/cli/pull">
+  Get environments with metadata preview
 </Card>
 
 <Card title="Analyze Command" icon="magnifying-glass" href="/reference/cli/analyze">
-  Discover tools and resources
+  Inspect tools and capabilities
 </Card>
 
-<Card title="MCP Server Mode" icon="server" href="/reference/cli/mcp-server">
-  Use HUD as MCP server
+<Card title="Debug Command" icon="bug" href="/reference/cli/debug">
+  Test MCP protocol compliance
+</Card>
+
+<Card title="Run Command" icon="play" href="/reference/cli/run">
+  Execute servers locally or remotely
 </Card>
 </CardGroup>

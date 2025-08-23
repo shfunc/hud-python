@@ -66,14 +66,19 @@
           "train-agents/verifiers-gym",
           "train-agents/datasets"
         ]
-                          },
-                    {
+      },
+      {
         "group": "CLI Reference",
         "pages": [
           "reference/cli/overview",
-          "reference/cli/debug",
+          "reference/cli/init",
+          "reference/cli/dev",
+          "reference/cli/build",
+          "reference/cli/push",
+          "reference/cli/pull",
           "reference/cli/analyze",
-          "reference/cli/mcp-server"
+          "reference/cli/debug",
+          "reference/cli/run"
         ]
       },
             {

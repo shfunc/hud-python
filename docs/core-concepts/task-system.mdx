@@ -47,9 +47,9 @@ task = Task(
     id=str(uuid.uuid4()),  # Required for HuggingFace datasets
     system_prompt="You are an expert web automation agent. Always verify page loads before interacting with elements.",
     setup_tool={
-        "name": "setup",
+        "name": "playwright",
         "arguments": {
-            "name": "goto",
+            "action": "navigate",
             "url": "https://example.com"
         }
     },
@@ -175,7 +175,7 @@ task_dicts = [
                 "headers": {"Authorization": "Bearer ${HUD_API_KEY}"}
             }
         },
-        "setup_tool": {"name": "goto", "arguments": {"url": "https://example.com"}},
+        "setup_tool": {"name": "playwright", "arguments": {"action": "navigate", "url": "https://example.com"}},
         "evaluate_tool": {"name": "url_match", "arguments": {"pattern": ".*/login"}}
     },
     # More task dicts...

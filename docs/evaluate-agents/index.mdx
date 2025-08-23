@@ -29,9 +29,9 @@ with hud.trace("eval-demo"):
             }
         },
         setup_tool={
-            "name": "setup",
+            "name": "playwright",
             "arguments": {
-                "name": "navigate",
+                "action": "navigate",
                 "url": "https://sheets.google.com"
             }
         },
@@ -167,7 +167,7 @@ $ hud analyze hudpython/hud-browser:latest
 └── Resources: 3 available
 
 🛠️ Tools:
-├── goto(url: str) - Navigate to URL
+├── playwright(action: str, **kwargs) - Browser automation actions
 ├── click(selector: str) - Click element
 ├── type(selector: str, text: str) - Type text
 └── ... 12 more tools

@@ -22,9 +22,9 @@ Common browser/UI navigation tools:
   </thead>
   <tbody>
     <tr>
-      <td>`goto`</td>
-      <td>`url: string`</td>
-      <td>Navigate to URL</td>
+      <td>`playwright`</td>
+      <td>`action: string, **kwargs`</td>
+      <td>Browser automation actions</td>
     </tr>
     <tr>
       <td>`back`</td>
@@ -224,16 +224,20 @@ def load_scenario(scenario_id: str) -> dict:
 ### Navigation Setup
 
 ```python
-@hub.register_setup("goto_app")
-def goto_app(section: str = "home") -> dict:
-    """Navigate to app section"""
+@hub.register_setup("navigate_to_app")
+def navigate_to_app(section: str = "home") -> dict:
+    """Navigate to app section using playwright"""
     urls = {
-        "home": "https://app.example.com",
+        "home": "https://app.example.com", 
         "dashboard": "https://app.example.com/dashboard",
         "settings": "https://app.example.com/settings"
     }
-    navigate(urls[section])
-    return {"message": f"Navigated to {section}"}
+    # Call playwright tool for navigation
+    playwright_result = call_tool("playwright", {
+        "action": "navigate",
+        "url": urls[section]
+    })
+    return {"message": f"Navigated to {section}", "url": urls[section]}
 ```
 
 ### Data Setup
@@ -348,7 +352,7 @@ class AdvancedEnvironment:
         # Interaction
         "click", "type", "select", "drag",
         # Navigation  
-        "goto", "back", "forward", "refresh",
+        "playwright", "back", "forward", "refresh",
         # State
         "screenshot", "get_text", "get_html",
         # Advanced

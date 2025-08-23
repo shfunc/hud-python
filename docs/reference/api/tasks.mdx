@@ -282,15 +282,30 @@ task = Task(
     mcp_config={"hudpython/hud-browser:latest": {}}
 )
 
-# With setup and evaluation
+# With setup and evaluation (using MCPToolCall)
 task = Task(
     prompt="Create a spreadsheet with sales data",
     mcp_config={"hudpython/hud-browser:latest": {}},
-    setup_tool=MCPToolCall(name="goto_sheets"),
+    setup_tool=MCPToolCall(name="playwright", arguments={"action": "navigate", "url": "https://sheets.google.com"}),
     evaluate_tool=MCPToolCall(
         name="check_spreadsheet",
         arguments={"has_data": True, "has_chart": True}
     ),
+    metadata={
+        "category": "spreadsheet",
+        "difficulty": "medium"
+    }
+)
+
+# Or using simple dictionaries (recommended)
+task = Task(
+    prompt="Create a spreadsheet with sales data",
+    mcp_config={"hudpython/hud-browser:latest": {}},
+    setup_tool={"name": "playwright", "arguments": {"action": "navigate", "url": "https://sheets.google.com"}},
+    evaluate_tool={
+        "name": "check_spreadsheet",
+        "arguments": {"has_data": True, "has_chart": True}
+    },
     metadata={
         "category": "spreadsheet",
         "difficulty": "medium"

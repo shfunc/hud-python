@@ -1,0 +1,297 @@
+---
+title: "hud build"
+description: "Build production images and generate lock files for reproducible environments"
+icon: "hammer"
+---
+
+The `hud build` command creates production Docker images and generates `hud.lock.yaml` files that capture all metadata needed for reproducible deployments.
+
+## Usage
+
+```bash
+hud build [DIRECTORY] [OPTIONS]
+```
+
+## Arguments
+
+<ParamField path="directory" type="string" default=".">
+  Environment directory containing Dockerfile and pyproject.toml
+</ParamField>
+
+## Options
+
+<ParamField path="--tag" type="string" default="auto">
+  Docker image tag. Auto-generates based on directory name if not specified. Short: `-t`
+</ParamField>
+
+<ParamField path="--no-cache" type="boolean" default="false">
+  Build without using Docker cache
+</ParamField>
+
+<ParamField path="--verbose" type="boolean" default="false">
+  Show detailed build output. Short: `-v`
+</ParamField>
+
+## What It Does
+
+The build command performs several critical steps:
+
+<Steps>
+<Step title="Build Docker Image">
+Runs `docker build` with appropriate tags and build arguments
+</Step>
+
+<Step title="Analyze Environment">
+Connects to the built image and analyzes:
+- Initialization time
+- Available tools and descriptions
+- Required/optional environment variables
+- Protocol capabilities
+</Step>
+
+<Step title="Generate Lock File">
+Creates `hud.lock.yaml` with:
+- Image digest (sha256 hash)
+- Build metadata
+- Tool summaries
+- Environment requirements
+</Step>
+
+<Step title="Label Image">
+Adds metadata labels to the Docker image for tracking
+</Step>
+</Steps>
+
+## Lock File Structure
+
+The generated `hud.lock.yaml` contains:
+
+```yaml
+version: "1.0"
+image: "my-env:latest@sha256:abc123..."
+build:
+  generatedAt: "2024-01-15T10:30:00Z"
+  hudVersion: "0.1.0"
+  directory: "my-env"
+environment:
+  initializeMs: 450
+  toolCount: 12
+  variables:
+    required: ["API_KEY", "DATABASE_URL"]
+    optional: ["DEBUG", "LOG_LEVEL"]
+tools:
+  - name: "setup"
+    description: "Initialize environment"
+  - name: "evaluate"
+    description: "Return environment state"
+  - name: "process_data"
+    description: "Process input data with advanced algorithms..."
+```
+
+## Examples
+
+### Basic Build
+
+Build with auto-generated tag:
+
+```bash
+hud build
+# Creates: hud-my-env:latest
+```
+
+### Custom Tag
+
+Specify version tag:
+
+```bash
+hud build . --tag v1.2.0
+# Creates: hud-my-env:v1.2.0
+```
+
+### Clean Build
+
+Force rebuild without cache:
+
+```bash
+hud build . --no-cache --verbose
+```
+
+### CI/CD Build
+
+Build with specific naming:
+
+```bash
+hud build . --tag "prod-$(git rev-parse --short HEAD)"
+# Creates: hud-my-env:prod-abc123f
+```
+
+## Image Naming
+
+If no tag is specified via `--tag`, the command:
+
+1. Checks `pyproject.toml` for `[tool.hud.image]`
+2. Auto-generates: `hud-{directory-name}:latest`
+3. Converts underscores to hyphens for Docker compatibility
+
+Examples:
+- Directory `my_tool` → Image `hud-my-tool:latest`
+- Directory `browser-env` → Image `hud-browser-env:latest`
+
+## Build Process
+
+### Dockerfile Detection
+
+The command expects a `Dockerfile` in the environment directory:
+
+```dockerfile
+FROM python:3.10-slim
+RUN pip install uv
+WORKDIR /app
+COPY pyproject.toml .
+RUN uv pip install --system -e .
+COPY src/ src/
+CMD ["python", "-m", "my_package.server"]
+```
+
+### Environment Variables
+
+Automatically extracts from Dockerfile:
+- `ENV` declarations → Optional variables
+- `ARG` with no default → Required variables
+
+```dockerfile
+# Detected as required
+ARG API_KEY
+
+# Detected as optional
+ENV DEBUG=false
+ENV LOG_LEVEL=info
+```
+
+### Build Arguments
+
+Passes through Docker build arguments:
+
+```bash
+hud build . --build-arg API_VERSION=v2
+```
+
+## Lock File Usage
+
+The generated `hud.lock.yaml` enables:
+
+<CardGroup cols={2}>
+<Card title="Reproducible Builds" icon="arrows-rotate">
+  Exact image reference with digest ensures identical deployment
+</Card>
+
+<Card title="Quick Analysis" icon="gauge">
+  Tool information available without running container
+</Card>
+
+<Card title="Registry Sharing" icon="share">
+  Metadata for `hud push` to share environments
+</Card>
+
+<Card title="Dependency Tracking" icon="link">
+  Version tracking for debugging and updates
+</Card>
+</CardGroup>
+
+## Integration
+
+### With hud push
+
+After building, share your environment:
+
+```bash
+hud build . --tag v1.0.0
+hud push
+```
+
+### With CI/CD
+
+```yaml
+# GitHub Actions example
+- name: Build HUD environment
+  run: |
+    hud build . --tag "${{ github.sha }}"
+    
+- name: Verify build
+  run: |
+    hud debug "hud-my-env:${{ github.sha }}"
+    
+- name: Push to registry
+  run: |
+    hud push
+```
+
+### Version Management
+
+```bash
+# Semantic versioning
+hud build . --tag v1.0.0
+hud build . --tag v1.1.0-beta
+
+# Date-based
+hud build . --tag "$(date +%Y%m%d)"
+
+# Git-based
+hud build . --tag "$(git describe --tags --always)"
+```
+
+## Troubleshooting
+
+### Build Failures
+
+<AccordionGroup>
+<Accordion title="Docker build error">
+Check Dockerfile syntax and ensure all files are present:
+```bash
+docker build . --no-cache
+```
+</Accordion>
+
+<Accordion title="Analysis timeout">
+The environment may be taking too long to initialize:
+```bash
+hud build . --verbose  # See detailed logs
+```
+</Accordion>
+
+<Accordion title="Lock file not generated">
+Ensure the environment implements required tools:
+- `setup()` - Must exist
+- `evaluate()` - Must return a dictionary
+</Accordion>
+</AccordionGroup>
+
+### Performance Tips
+
+<Tip>
+Structure your Dockerfile to maximize layer caching:
+1. Install system dependencies first
+2. Copy dependency files (pyproject.toml)
+3. Install Python dependencies
+4. Copy source code last
+</Tip>
+
+<Warning>
+Using `--no-cache` significantly increases build time. Only use when necessary.
+</Warning>
+
+## Best Practices
+
+1. **Tag Consistently**: Use semantic versioning or git-based tags
+2. **Cache Wisely**: Structure Dockerfile for optimal caching
+3. **Test Builds**: Always run `hud debug` after building
+4. **Document Variables**: Clearly indicate required vs optional env vars
+5. **Keep Images Small**: Use slim base images and multi-stage builds
+
+## See Also
+
+- [`hud init`](/reference/cli/init) - Create new environments
+- [`hud dev`](/reference/cli/dev) - Development with hot-reload
+- [`hud push`](/reference/cli/push) - Share to registry
+- [`hud analyze`](/reference/cli/analyze) - Inspect built images
+- [Build Environments](/build-environments) - Complete guide

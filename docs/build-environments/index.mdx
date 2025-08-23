@@ -300,17 +300,17 @@ hud analyze my-environment:latest
 
 #### Hot-Reload Development
 ```bash
-# Start development proxy with live reload
-hud mcp . --build
+# Start development server with live reload
+hud dev --build
 
-# Edit src/ files - changes reload automatically
+# Edit src/ files - changes are immediately reflected
 # Test in another terminal
 hud analyze hud-my-environment:dev
 ```
 
-The `hud mcp` command:
-- Mounts your `src/` directory into the container
-- Watches for file changes and auto-restarts
+The `hud dev` command:
+- Mounts your `src/` directory into containers
+- Auto-detects or builds Docker images
 - Provides HTTP endpoint for Cursor integration
 - Eliminates rebuild cycles during development
 
