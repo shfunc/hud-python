@@ -105,14 +105,6 @@ async def run_context_server(
     
     print(f"[Context Server] Starting on {sock_path}...")
     
-    # Call startup if it exists
-    if hasattr(context_instance, 'startup'):
-        startup = getattr(context_instance, 'startup')
-        if asyncio.iscoroutinefunction(startup):
-            await startup()
-        else:
-            startup()
-    
     # Start the manager
     manager = serve_context(context_instance, sock_path, authkey)
     print("[Context Server] Ready")

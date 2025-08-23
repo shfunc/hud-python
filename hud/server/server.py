@@ -26,15 +26,19 @@ logger = logging.getLogger(__name__)
 
 
 def _run_with_sigterm(coro_fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
-    """Run *coro_fn* via anyio.run() and cancel on SIGTERM (POSIX)."""
+    """Run *coro_fn* via anyio.run() and cancel on SIGTERM or SIGINT (POSIX)."""
 
     async def _runner() -> None:
         stop_evt: asyncio.Event | None = None
         if sys.platform != "win32" and os.getenv("FASTMCP_DISABLE_SIGTERM_HANDLER") != "1":
+            loop = asyncio.get_running_loop()
+            stop_evt = asyncio.Event()
+            
+            # Handle both SIGTERM and SIGINT for graceful shutdown
             if signal.getsignal(signal.SIGTERM) is signal.SIG_DFL:
-                loop = asyncio.get_running_loop()
-                stop_evt = asyncio.Event()
                 loop.add_signal_handler(signal.SIGTERM, stop_evt.set)
+            if signal.getsignal(signal.SIGINT) is signal.SIG_DFL:
+                loop.add_signal_handler(signal.SIGINT, stop_evt.set)
 
         async with anyio.create_task_group() as tg:
             tg.start_soon(coro_fn, *args, **kwargs)
@@ -42,8 +46,9 @@ def _run_with_sigterm(coro_fn: Callable[..., Any], *args: Any, **kwargs: Any) ->
             if stop_evt is not None:
 
                 async def _watch() -> None:
-                    logger.info("Waiting for SIGTERM")
+                    logger.info("Waiting for SIGTERM or SIGINT")
                     await stop_evt.wait()
+                    logger.debug("Received shutdown signal, cancelling tasks...")
                     tg.cancel_scope.cancel()
 
                 tg.start_soon(_watch)
