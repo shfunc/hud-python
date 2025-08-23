@@ -207,7 +207,7 @@ class MCPAgent(ABC):
             if not self.initial_screenshot:
                 start_context = await self._filter_messages(start_context, include_types=["text"])
 
-            # Execute the task (agent loop) - this returns a empty trace object with the final response
+            # Execute the task (agent loop) - this returns a empty trace object with the final response  # noqa: E501
             prompt_result = await self._run_context(start_context, max_steps=max_steps)
 
         except Exception as e:
@@ -392,7 +392,9 @@ class MCPAgent(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_response(self, messages: list[Any]) -> AgentResponse: # maybe type messages as list[types.ContentBlock]
+    async def get_response(
+        self, messages: list[Any]
+    ) -> AgentResponse:  # maybe type messages as list[types.ContentBlock]
         """
         Get response from the model including any tool calls.
 
@@ -437,7 +439,7 @@ class MCPAgent(ABC):
         | types.ContentBlock
         | list[types.ContentBlock]
         | list[str | types.ContentBlock],
-    ) -> list[Any]: # maybe type messages as list[types.ContentBlock]
+    ) -> list[Any]:  # maybe type messages as list[types.ContentBlock]
         """
         Convencience function.
 

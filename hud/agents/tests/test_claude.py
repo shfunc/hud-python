@@ -117,8 +117,8 @@ class TestClaudeAgent:
         content = messages[0]["content"]
         assert isinstance(content, list)
         assert len(content) == 1
-        assert content[0].type == "text"
-        assert content[0].text == "Hello, Claude!"
+        assert content[0]["type"] == "text"
+        assert content[0]["text"] == "Hello, Claude!"
 
         # Test with screenshot
         image_blocks: list[types.ContentBlock] = [
@@ -132,10 +132,10 @@ class TestClaudeAgent:
         assert isinstance(content, list)
         assert len(content) == 2
         # Content blocks are in order
-        assert content[0].type == "text"
-        assert content[0].text == "Look at this"
-        assert content[1].type == "image"
-        assert content[1].data == "base64data"
+        assert content[0]["type"] == "text"
+        assert content[0]["text"] == "Look at this"
+        assert content[1]["type"] == "image"
+        assert content[1]["source"]["data"] == "base64data"
 
     @pytest.mark.asyncio
     async def test_format_tool_results_method(self, mock_mcp_client):

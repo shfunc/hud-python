@@ -220,21 +220,21 @@ def analyze_error_for_hints(error_text: str | None) -> str | None:
 
 def find_free_port(start_port: int = 8765, max_attempts: int = 100) -> int | None:
     """Find a free port starting from the given port.
-    
+
     Args:
         start_port: Port to start searching from
         max_attempts: Maximum number of ports to try
-        
+
     Returns:
         Available port number or None if no ports found
     """
     import socket
-    
+
     for port in range(start_port, start_port + max_attempts):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             try:
                 # Try to bind to the port
-                s.bind(('', port))
+                s.bind(("", port))
                 s.close()
                 return port
             except OSError:
@@ -245,18 +245,18 @@ def find_free_port(start_port: int = 8765, max_attempts: int = 100) -> int | Non
 
 def is_port_free(port: int) -> bool:
     """Check if a specific port is free.
-    
+
     Args:
         port: Port number to check
-        
+
     Returns:
         True if port is free, False otherwise
     """
     import socket
-    
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
-            s.bind(('', port))
+            s.bind(("", port))
             s.close()
             return True
         except OSError:

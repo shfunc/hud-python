@@ -35,9 +35,9 @@ async def debug_mcp_stdio(command: list[str], logger: CaptureLogger, max_phase: 
     if logger.print_output:
         design = HUDDesign()
         design.header("MCP Server Debugger", icon="🔍")
-        design.dim_info("Command:", ' '.join(command))
-        design.dim_info("Time:", time.strftime('%Y-%m-%d %H:%M:%S'))
-        
+        design.dim_info("Command:", " ".join(command))
+        design.dim_info("Time:", time.strftime("%Y-%m-%d %H:%M:%S"))
+
         # Explain color coding using Rich formatting
         design.info("\nColor Key:")
         console.print("  [bold]■[/bold] Commands (bold)")

@@ -33,7 +33,7 @@ def _run_with_sigterm(coro_fn: Callable[..., Any], *args: Any, **kwargs: Any) ->
         if sys.platform != "win32" and os.getenv("FASTMCP_DISABLE_SIGTERM_HANDLER") != "1":
             loop = asyncio.get_running_loop()
             stop_evt = asyncio.Event()
-            
+
             # Handle both SIGTERM and SIGINT for graceful shutdown
             if signal.getsignal(signal.SIGTERM) is signal.SIG_DFL:
                 loop.add_signal_handler(signal.SIGTERM, stop_evt.set)
@@ -47,7 +47,8 @@ def _run_with_sigterm(coro_fn: Callable[..., Any], *args: Any, **kwargs: Any) ->
 
                 async def _watch() -> None:
                     logger.info("Waiting for SIGTERM or SIGINT")
-                    await stop_evt.wait()
+                    if stop_evt is not None:
+                        await stop_evt.wait()
                     logger.debug("Received shutdown signal, cancelling tasks...")
                     tg.cancel_scope.cancel()
 
@@ -105,7 +106,7 @@ class MCPServer(FastMCP):
         # Save the old server's handlers before replacing it
         old_request_handlers = self._mcp_server.request_handlers
         old_notification_handlers = self._mcp_server.notification_handlers
-        
+
         self._mcp_server = LowLevelServerWithInit(
             name=self.name,
             version=self.version,
@@ -113,7 +114,7 @@ class MCPServer(FastMCP):
             lifespan=self._mcp_server.lifespan,  # reuse the existing lifespan
             init_fn=_run_init,
         )
-        
+
         # Copy handlers from the old server to the new one
         self._mcp_server.request_handlers = old_request_handlers
         self._mcp_server.notification_handlers = old_notification_handlers

@@ -1,7 +1,9 @@
 """Initialize new HUD environments with minimal templates."""
-import os
+
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Optional
+
 import typer
 from rich.console import Console
 from rich.panel import Panel
@@ -10,7 +12,7 @@ from rich.syntax import Syntax
 console = Console()
 
 # Embedded templates
-DOCKERFILE_TEMPLATE = '''FROM python:3.11-slim
+DOCKERFILE_TEMPLATE = """FROM python:3.11-slim
 
 WORKDIR /app
 
@@ -27,9 +29,9 @@ ENV HUD_LOG_STREAM=stderr
 
 # Start context server in background, then MCP server
 CMD ["sh", "-c", "python -m hud_controller.context & sleep 1 && exec python -m hud_controller.server"]
-'''
+"""  # noqa: E501
 
-PYPROJECT_TEMPLATE = '''[project]
+PYPROJECT_TEMPLATE = """[project]
 name = "{name}"
 version = "0.1.0"
 description = "A minimal HUD environment"
@@ -50,7 +52,7 @@ allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/hud_controller"]
-'''
+"""
 
 CONTEXT_TEMPLATE = '''"""Minimal context that persists across hot-reloads."""
 from hud.server.context import run_context_server
@@ -98,7 +100,7 @@ async def setup() -> str:
     """Required for HUD environments."""
     return "Ready"
 
-@mcp.tool() 
+@mcp.tool()
 async def evaluate() -> dict:
     """Required for HUD environments."""
     return {{"count": ctx.get_count()}}
@@ -170,12 +172,12 @@ def sanitize_name(name: str) -> str:
     return name.lower()
 
 
-def create_environment(name: Optional[str], directory: str, force: bool) -> None:
+def create_environment(name: str | None, directory: str, force: bool) -> None:
     """Create a new HUD environment from templates."""
     from hud.utils.design import HUDDesign
-    
+
     design = HUDDesign()
-    
+
     # Determine environment name
     if name is None:
         # Use current directory name
@@ -186,12 +188,12 @@ def create_environment(name: Optional[str], directory: str, force: bool) -> None
     else:
         # Create new directory
         target_dir = Path(directory) / name
-    
+
     # Sanitize name for Python package
     package_name = sanitize_name(name)
     if package_name != name:
         design.warning(f"Package name adjusted for Python: {name} → {package_name}")
-    
+
     # Check if directory exists
     if target_dir.exists() and any(target_dir.iterdir()):
         if not force:
@@ -200,57 +202,57 @@ def create_environment(name: Optional[str], directory: str, force: bool) -> None
             raise typer.Exit(1)
         else:
             design.warning(f"Overwriting existing files in {target_dir}")
-    
+
     # Create directory structure
     src_dir = target_dir / "src" / "hud_controller"
     src_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Write files with proper formatting
     files_created = []
-    
+
     # Dockerfile
     dockerfile_path = target_dir / "Dockerfile"
     dockerfile_path.write_text(DOCKERFILE_TEMPLATE.strip() + "\n")
     files_created.append("Dockerfile")
-    
+
     # pyproject.toml
     pyproject_path = target_dir / "pyproject.toml"
     pyproject_content = PYPROJECT_TEMPLATE.format(name=package_name).strip() + "\n"
     pyproject_path.write_text(pyproject_content)
     files_created.append("pyproject.toml")
-    
+
     # README.md
     readme_path = target_dir / "README.md"
     readme_content = README_TEMPLATE.format(name=package_name, title=name).strip() + "\n"
     readme_path.write_text(readme_content)
     files_created.append("README.md")
-    
+
     # Python files
     # __init__.py
     init_path = src_dir / "__init__.py"
     init_path.write_text('"""HUD Controller Package"""\n')
     files_created.append("src/hud_controller/__init__.py")
-    
+
     # context.py
     context_path = src_dir / "context.py"
     context_path.write_text(CONTEXT_TEMPLATE.strip() + "\n")
     files_created.append("src/hud_controller/context.py")
-    
+
     # server.py (need to escape the double braces for .format())
     server_path = src_dir / "server.py"
     server_content = SERVER_TEMPLATE.format(name=package_name).strip() + "\n"
     server_path.write_text(server_content)
     files_created.append("src/hud_controller/server.py")
-    
+
     # Success message
     design.header(f"Created HUD Environment: {name}")
-    
+
     design.section_title("Files created")
     for file in files_created:
         console.print(f"  ✓ {file}")
-    
+
     design.section_title("Next steps")
-    
+
     # Show commands based on where we created the environment
     if target_dir == Path.cwd():
         console.print("1. Start development server:")
@@ -260,20 +262,20 @@ def create_environment(name: Optional[str], directory: str, force: bool) -> None
         console.print(f"   [cyan]cd {target_dir.relative_to(Path.cwd())}[/cyan]")
         console.print("\n2. Start development server:")
         console.print("   [cyan]hud dev[/cyan]")
-    
+
     console.print("\n3. Connect from Cursor:")
     console.print("   Follow the instructions shown by [cyan]hud dev[/cyan]")
-    
+
     console.print("\n4. Customize your environment:")
     console.print("   - Add tools to [cyan]src/hud_controller/server.py[/cyan]")
     console.print("   - Add state to [cyan]src/hud_controller/context.py[/cyan]")
-    
+
     # Show a sample of the server code
     design.section_title("Your MCP server")
     sample_code = '''@mcp.tool()
 async def act() -> str:
     """Perform an action."""
     return f"Action #{ctx.act()}"'''
-    
+
     syntax = Syntax(sample_code, "python", theme="monokai", line_numbers=False)
     console.print(Panel(syntax, border_style="dim"))

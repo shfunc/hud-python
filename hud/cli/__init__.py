@@ -7,7 +7,6 @@ import json
 import os
 import sys
 from pathlib import Path  # noqa: TC003
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -24,7 +23,6 @@ from .clone import clone_repository, get_clone_message, print_error, print_tutor
 from .cursor import get_cursor_config_path, list_cursor_servers, parse_cursor_config
 from .debug import debug_mcp_stdio
 from .init import create_environment
-from .interactive import run_interactive_mode
 from .mcp_server import run_mcp_dev_server
 from .pull import pull_command
 from .push import push_command
@@ -114,6 +112,7 @@ def analyze(
         else:
             # Fast mode - analyze from metadata
             from .analyze_metadata import analyze_from_metadata
+
             asyncio.run(analyze_from_metadata(image, output_format, verbose))
     else:
         console.print("[red]Error: Must specify either a Docker image, --config, or --cursor[/red]")
@@ -201,11 +200,12 @@ def debug(
 
     # Show summary using design system
     from hud.utils.design import HUDDesign
+
     design = HUDDesign()
-    
+
     design.info("")  # Empty line
     design.section_title("Debug Summary")
-    
+
     if phases_completed == max_phase:
         design.success(f"All {max_phase} phases completed successfully!")
         if max_phase == 5:
@@ -213,7 +213,7 @@ def debug(
     else:
         design.warning(f"Completed {phases_completed} out of {max_phase} phases")
         design.info("Check the errors above for troubleshooting.")
-    
+
     # Exit with appropriate code
     if phases_completed < max_phase:
         raise typer.Exit(1)
@@ -284,21 +284,29 @@ def dev(
         None,
         help="Environment directory followed by optional Docker arguments (e.g., '. -e KEY=value')",
     ),
-    image: str | None = typer.Option(None, "--image", "-i", help="Docker image name (overrides auto-detection)"),
+    image: str | None = typer.Option(
+        None, "--image", "-i", help="Docker image name (overrides auto-detection)"
+    ),
     build: bool = typer.Option(False, "--build", "-b", help="Build image before starting"),
     no_cache: bool = typer.Option(False, "--no-cache", help="Force rebuild without cache"),
-    transport: str = typer.Option("http", "--transport", "-t", help="Transport protocol: http (default) or stdio"),
+    transport: str = typer.Option(
+        "http", "--transport", "-t", help="Transport protocol: http (default) or stdio"
+    ),
     port: int = typer.Option(8765, "--port", "-p", help="HTTP server port (ignored for stdio)"),
     no_reload: bool = typer.Option(False, "--no-reload", help="Disable hot-reload"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show server logs"),
-    inspector: bool = typer.Option(False, "--inspector", help="Launch MCP Inspector (HTTP mode only)"),
+    inspector: bool = typer.Option(
+        False, "--inspector", help="Launch MCP Inspector (HTTP mode only)"
+    ),
     no_logs: bool = typer.Option(False, "--no-logs", help="Disable streaming Docker logs"),
-    interactive: bool = typer.Option(False, "--interactive", help="Launch interactive testing mode (HTTP mode only)"),
+    interactive: bool = typer.Option(
+        False, "--interactive", help="Launch interactive testing mode (HTTP mode only)"
+    ),
 ) -> None:
     """🔥 Development mode with hot-reload.
 
     Runs your MCP environment in Docker with automatic restart on file changes.
-    
+
     The container's last command (typically the MCP server) will be wrapped
     with watchfiles for hot-reload functionality.
 
@@ -313,7 +321,7 @@ def dev(
         hud dev . --inspector        # Launch MCP Inspector (HTTP mode only)
         hud dev . --interactive      # Launch interactive testing mode (HTTP mode only)
         hud dev . --no-logs          # Disable Docker log streaming
-        
+
         # With Docker arguments (after all options):
         hud dev . -e BROWSER_PROVIDER=anchorbrowser -e ANCHOR_API_KEY=xxx
         hud dev . -e API_KEY=secret -v /tmp/data:/data --network host
@@ -326,8 +334,21 @@ def dev(
     else:
         directory = "."
         docker_args = []
-    
-    run_mcp_dev_server(directory, image, build, no_cache, transport, port, no_reload, verbose, inspector, no_logs, interactive, docker_args)
+
+    run_mcp_dev_server(
+        directory,
+        image,
+        build,
+        no_cache,
+        transport,
+        port,
+        no_reload,
+        verbose,
+        inspector,
+        no_logs,
+        interactive,
+        docker_args,
+    )
 
 
 @app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
@@ -381,14 +402,14 @@ def run(
     ),
 ) -> None:
     """🚀 Run MCP server locally or remotely.
-    
+
     By default, runs remotely via mcp.hud.so. Use --local for Docker.
-    
+
     Remote Examples:
         hud run hud-text-2048:latest
         hud run my-server:v1 -e API_KEY=xxx -h Run-Id:abc123
         hud run my-server:v1 --transport http --port 9000
-    
+
     Local Examples:
         hud run --local hud-text-2048:latest
         hud run --local my-server:v1 -e API_KEY=xxx
@@ -397,35 +418,33 @@ def run(
     if not params:
         typer.echo("❌ Docker image is required")
         raise typer.Exit(1)
-    
+
     # Parse image and args
     image = params[0]
     docker_args = params[1:] if len(params) > 1 else []
-    
+
     # Handle conflicting flags
     if local and remote:
         typer.echo("❌ Cannot use both --local and --remote")
         raise typer.Exit(1)
-    
+
     # Default to remote if not explicitly local
     is_local = local and not remote
-    
+
     if is_local:
         # Local Docker execution
         from .runner import run_mcp_server
+
         run_mcp_server(image, docker_args, transport, port, verbose)
     else:
         # Remote execution via proxy
         from .remote_runner import run_remote_server
-        
+
         # Get URL from options or environment
         if not url:
             url = os.getenv("HUD_MCP_URL", "https://mcp.hud.so/v3/mcp")
-        
-        run_remote_server(
-            image, docker_args, transport, port,
-            url, api_key, run_id, verbose
-        )
+
+        run_remote_server(image, docker_args, transport, port, url, api_key, run_id, verbose)
 
 
 @app.command()
@@ -469,17 +488,19 @@ def clone(
 @app.command()
 def build(
     directory: str = typer.Argument(".", help="Environment directory to build"),
-    tag: Optional[str] = typer.Option(None, "--tag", "-t", help="Docker image tag (default: from pyproject.toml)"),
+    tag: str | None = typer.Option(
+        None, "--tag", "-t", help="Docker image tag (default: from pyproject.toml)"
+    ),
     no_cache: bool = typer.Option(False, "--no-cache", help="Build without Docker cache"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
 ) -> None:
     """🏗️ Build a HUD environment and generate lock file.
-    
+
     This command:
     - Builds a Docker image from your environment
     - Analyzes the MCP server to extract metadata
     - Generates a hud.lock.yaml file for reproducibility
-    
+
     Examples:
         hud build                    # Build current directory
         hud build environments/text_2048
@@ -492,17 +513,21 @@ def build(
 @app.command()
 def push(
     directory: str = typer.Argument(".", help="Environment directory containing hud.lock.yaml"),
-    image: Optional[str] = typer.Option(None, "--image", "-i", help="Override registry image name"),
-    tag: Optional[str] = typer.Option(None, "--tag", "-t", help="Override tag (e.g., 'v1.0', 'latest')"),
-    sign: bool = typer.Option(False, "--sign", help="Sign the image with cosign (not yet implemented)"),
+    image: str | None = typer.Option(None, "--image", "-i", help="Override registry image name"),
+    tag: str | None = typer.Option(
+        None, "--tag", "-t", help="Override tag (e.g., 'v1.0', 'latest')"
+    ),
+    sign: bool = typer.Option(
+        False, "--sign", help="Sign the image with cosign (not yet implemented)"
+    ),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompts"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
 ) -> None:
     """📤 Push HUD environment to registry.
-    
+
     Reads hud.lock.yaml from the directory and pushes to registry.
     Auto-detects your Docker username if --image not specified.
-    
+
     Examples:
         hud push                     # Push with auto-detected name
         hud push --tag v1.0          # Push with specific tag
@@ -515,15 +540,19 @@ def push(
 @app.command()
 def pull(
     target: str = typer.Argument(..., help="Image reference or lock file to pull"),
-    lock_file: Optional[str] = typer.Option(None, "--lock", "-l", help="Path to lock file (if target is image ref)"),
+    lock_file: str | None = typer.Option(
+        None, "--lock", "-l", help="Path to lock file (if target is image ref)"
+    ),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
-    verify_only: bool = typer.Option(False, "--verify-only", help="Only verify metadata without pulling"),
+    verify_only: bool = typer.Option(
+        False, "--verify-only", help="Only verify metadata without pulling"
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
 ) -> None:
     """📥 Pull HUD environment from registry with metadata preview.
-    
+
     Shows environment details before downloading.
-    
+
     Examples:
         hud pull hud.lock.yaml               # Pull from lock file
         hud pull myuser/myenv:latest        # Pull by image reference
@@ -539,13 +568,13 @@ def init(
     force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing files"),
 ) -> None:
     """🚀 Initialize a new HUD environment with minimal boilerplate.
-    
+
     Creates a working MCP environment with:
     - Dockerfile for containerization
     - pyproject.toml for dependencies
     - Minimal MCP server with context
     - Required setup/evaluate tools
-    
+
     Examples:
         hud init                    # Use current directory name
         hud init my-env             # Create in ./my-env/

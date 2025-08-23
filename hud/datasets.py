@@ -263,10 +263,7 @@ async def run_dataset(
 
 
 def save_tasks(
-    tasks: list[dict[str, Any]], 
-    repo_id: str, 
-    fields: list[str] | None = None,
-    **kwargs: Any
+    tasks: list[dict[str, Any]], repo_id: str, fields: list[str] | None = None, **kwargs: Any
 ) -> None:
     """
     Save data to HuggingFace dataset with JSON string serialization.
@@ -300,19 +297,19 @@ def save_tasks(
                 "This would expose resolved environment variables. "
                 "Please convert to dictionary format with template strings preserved."
             )
-        
+
         row = {}
-        
+
         # Determine which fields to process
         fields_to_process = fields if fields is not None else list(tc_dict.keys())
-        
+
         for field in fields_to_process:
             if field in tc_dict:
                 value = tc_dict[field]
                 # Serialize complex types as JSON strings
-                if isinstance(value, (dict, list)):
+                if isinstance(value, (dict | list)):
                     row[field] = json.dumps(value)
-                elif isinstance(value, (str, int, float, bool, type(None))):
+                elif isinstance(value, (str | int | float | bool | type(None))):
                     row[field] = value if value is not None else ""
                 else:
                     # For other types, convert to string

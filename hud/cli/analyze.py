@@ -3,21 +3,19 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
-import requests
-import yaml
 from rich.console import Console
-from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.syntax import Syntax
 from rich.table import Table
 from rich.tree import Tree
 
 from hud.clients import MCPClient
-from hud.settings import settings
 from hud.utils.design import HUDDesign
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 console = Console()
 design = HUDDesign()
@@ -38,7 +36,7 @@ async def analyze_environment(docker_cmd: list[str], output_format: str, verbose
     mcp_config = parse_docker_command(docker_cmd)
 
     # Display command being analyzed
-    design.dim_info("Command:", ' '.join(docker_cmd))
+    design.dim_info("Command:", " ".join(docker_cmd))
     design.info("")  # Empty line
 
     # Create client
@@ -100,32 +98,30 @@ def display_interactive(analysis: dict) -> None:
         for server in analysis["metadata"]["servers"]:
             meta_table.add_row("Server", f"[green]{server}[/green]")
         meta_table.add_row(
-            "Initialized", "[green]✓[/green]" if analysis["metadata"]["initialized"] else "[red]✗[/red]"
+            "Initialized",
+            "[green]✓[/green]" if analysis["metadata"]["initialized"] else "[red]✗[/red]",
         )
     else:
         # Metadata-only format
         if "image" in analysis:
             # Show simple name in table
             image = analysis["image"]
-            if ":" in image and "@" in image:
-                display_ref = image.split("@")[0]
-            else:
-                display_ref = image
+            display_ref = image.split("@")[0] if ":" in image and "@" in image else image
             meta_table.add_row("Image", f"[green]{display_ref}[/green]")
-        
+
         if "status" in analysis:
             meta_table.add_row("Source", analysis.get("source", analysis["status"]).title())
-        
+
         if "build_info" in analysis:
             meta_table.add_row("Built", analysis["build_info"].get("generatedAt", "Unknown"))
             meta_table.add_row("HUD Version", analysis["build_info"].get("hudVersion", "Unknown"))
-        
+
         if "push_info" in analysis:
             meta_table.add_row("Pushed", analysis["push_info"].get("pushedAt", "Unknown"))
-        
+
         if "init_time" in analysis:
             meta_table.add_row("Init Time", f"{analysis['init_time']} ms")
-        
+
         if "tool_count" in analysis:
             meta_table.add_row("Tools", str(analysis["tool_count"]))
 
@@ -165,7 +161,7 @@ def display_interactive(analysis: dict) -> None:
             tool_node = tools_tree.add(f"[default]{tool['name']}[/default]")
             if tool.get("description"):
                 tool_node.add(f"[dim]{tool['description']}[/dim]")
-            
+
             # Show input schema if verbose
             if tool.get("inputSchema"):
                 schema_str = json.dumps(tool["inputSchema"], indent=2)
@@ -209,19 +205,19 @@ def display_interactive(analysis: dict) -> None:
             telemetry_table.add_row("Services", f"{running}/{len(services)} running")
 
         console.print(telemetry_table)
-    
+
     # Environment variables (for metadata-only analysis)
     if analysis.get("env_vars"):
         design.section_title("🔑 Environment Variables")
         env_table = Table(show_header=False, box=None)
         env_table.add_column("Type", style="dim")
         env_table.add_column("Variables")
-        
+
         if analysis["env_vars"].get("required"):
             env_table.add_row("Required", ", ".join(analysis["env_vars"]["required"]))
         if analysis["env_vars"].get("optional"):
             env_table.add_row("Optional", ", ".join(analysis["env_vars"]["optional"]))
-        
+
         console.print(env_table)
 
 
@@ -232,7 +228,7 @@ def display_markdown(analysis: dict) -> None:
 
     # Metadata
     md.append("## Environment Overview")
-    
+
     # Check if this is live analysis or metadata-only
     if "metadata" in analysis:
         md.append(f"- **Servers**: {', '.join(analysis['metadata']['servers'])}")
@@ -247,7 +243,7 @@ def display_markdown(analysis: dict) -> None:
             md.append(f"- **Built**: {analysis['build_info'].get('generatedAt', 'Unknown')}")
         if "tool_count" in analysis:
             md.append(f"- **Tools**: {analysis['tool_count']}")
-    
+
     md.append("")
 
     # Tools
@@ -298,7 +294,7 @@ def display_markdown(analysis: dict) -> None:
         if "services" in analysis["telemetry"]:
             md.extend([f"- **Services**: {analysis['telemetry']['services']}"])
         md.append("")
-    
+
     # Environment variables (for metadata-only analysis)
     if analysis.get("env_vars"):
         md.append("## Environment Variables")

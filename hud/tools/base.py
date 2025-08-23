@@ -158,14 +158,15 @@ class BaseHub(FastMCP):
             # Handle JSON string inputs
             if isinstance(arguments, str):
                 import json
+
                 try:
                     arguments = json.loads(arguments)
                 except json.JSONDecodeError:
                     # If it's not valid JSON, treat as empty dict
                     arguments = {}
-            
+
             # Use the tool manager to call internal tools
-            return await self._tool_manager.call_tool(self._prefix_fn(name), arguments or {}) # type: ignore
+            return await self._tool_manager.call_tool(self._prefix_fn(name), arguments or {})  # type: ignore
 
         from fastmcp.tools.tool import FunctionTool
 
@@ -206,10 +207,10 @@ class BaseHub(FastMCP):
             # This only happens in phase 2 of decorator application
             # The name was already prefixed in phase 1, just pass through
             result = super().tool(name_or_fn, **kwargs)
-            
+
             # Update dispatcher description after registering tool
             self._update_dispatcher_description()
-            
+
             return cast("Callable[..., Any]", result)
 
         # Handle the name from either positional or keyword argument
@@ -231,7 +232,7 @@ class BaseHub(FastMCP):
             return super().tool(new_name, **kwargs, tags=tags)
         else:
             return super().tool(**kwargs, tags=tags)
-    
+
     def _update_dispatcher_description(self) -> None:
         """Update the dispatcher tool's description and schema with available tools."""
         # Get list of internal tools with their details
@@ -240,25 +241,25 @@ class BaseHub(FastMCP):
             if key.startswith(_INTERNAL_PREFIX):
                 tool_name = key.removeprefix(_INTERNAL_PREFIX)
                 internal_tools.append((tool_name, tool))
-        
+
         if internal_tools:
             # Update the dispatcher tool's description
             dispatcher_name = self.name
             if dispatcher_name in self._tool_manager._tools:
                 dispatcher_tool = self._tool_manager._tools[dispatcher_name]
-                
+
                 # Build detailed description
                 desc_lines = [f"Call internal '{self.name}' functions. Available tools:"]
                 desc_lines.append("")  # Empty line for readability
-                
+
                 # Build tool schemas for oneOf
                 tool_schemas = []
-                
+
                 for tool_name, tool in sorted(internal_tools):
                     # Add tool name and description
                     tool_desc = tool.description or "No description"
                     desc_lines.append(f"• Name: {tool_name} ({tool_desc})")
-                    
+
                     # Build schema for this specific tool call
                     tool_schema = {
                         "type": "object",
@@ -266,83 +267,89 @@ class BaseHub(FastMCP):
                             "name": {
                                 "type": "string",
                                 "const": tool_name,
-                                "description": f"Must be '{tool_name}'"
+                                "description": f"Must be '{tool_name}'",
                             },
-                            "arguments": tool.parameters if hasattr(tool, 'parameters') and tool.parameters else {"type": "object"}
+                            "arguments": tool.parameters
+                            if hasattr(tool, "parameters") and tool.parameters
+                            else {"type": "object"},
                         },
                         "required": ["name", "arguments"],
-                        "additionalProperties": False
+                        "additionalProperties": False,
                     }
                     tool_schemas.append(tool_schema)
-                    
+
                     # Add parameters from the tool's parameters field (JSON schema)
-                    if hasattr(tool, 'parameters') and tool.parameters:
+                    if hasattr(tool, "parameters") and tool.parameters:
                         schema = tool.parameters
-                        if isinstance(schema, dict) and 'properties' in schema:
+                        if isinstance(schema, dict) and "properties" in schema:
                             params = []
-                            required = schema.get('required', [])
-                            for prop_name, prop_info in schema['properties'].items():
-                                prop_type = prop_info.get('type', 'any')
+                            required = schema.get("required", [])
+                            for prop_name, prop_info in schema["properties"].items():
+                                prop_type = prop_info.get("type", "any")
                                 # Check for more detailed type info
-                                if 'anyOf' in prop_info:
-                                    types = [t.get('type', 'unknown') for t in prop_info['anyOf'] if isinstance(t, dict)]
-                                    prop_type = ' | '.join(types) if types else 'any'
-                                
+                                if "anyOf" in prop_info:
+                                    types = [
+                                        t.get("type", "unknown")
+                                        for t in prop_info["anyOf"]
+                                        if isinstance(t, dict)
+                                    ]
+                                    prop_type = " | ".join(types) if types else "any"
+
                                 param_str = f"{prop_name} ({prop_type})"
                                 if prop_name not in required:
                                     param_str += " (optional)"
                                 params.append(param_str)
-                            
+
                             if params:
                                 desc_lines.append(f"  Arguments: {', '.join(params)}")
                             else:
                                 desc_lines.append("  Arguments: none")
                     else:
                         desc_lines.append("  Arguments: none")
-                    
+
                     desc_lines.append("")  # Empty line between tools
-                
+
                 dispatcher_tool.description = "\n".join(desc_lines).strip()
-                
+
                 # Update the input schema to better document available tools
                 # Build examples of tool calls
                 examples = []
                 for tool_name, tool in sorted(internal_tools)[:3]:  # Show first 3 as examples
-                    if hasattr(tool, 'parameters') and tool.parameters:
+                    if hasattr(tool, "parameters") and tool.parameters:
                         schema = tool.parameters
-                        if isinstance(schema, dict) and 'properties' in schema:
+                        if isinstance(schema, dict) and "properties" in schema:
                             example_args = {}
-                            for prop_name, prop_info in schema['properties'].items():
+                            for prop_name, prop_info in schema["properties"].items():
                                 # Generate example value based on type
-                                prop_type = prop_info.get('type', 'any')
-                                if prop_type == 'string':
+                                prop_type = prop_info.get("type", "any")
+                                if prop_type == "string":
                                     example_args[prop_name] = f"<{prop_name}>"
-                                elif prop_type == 'integer' or prop_type == 'number':
+                                elif prop_type == "integer" or prop_type == "number":
                                     example_args[prop_name] = 0
-                                elif prop_type == 'boolean':
+                                elif prop_type == "boolean":
                                     example_args[prop_name] = True
                                 else:
                                     example_args[prop_name] = None
                             examples.append({"name": tool_name, "arguments": example_args})
                     else:
                         examples.append({"name": tool_name, "arguments": {}})
-                
+
                 # Enhanced schema with better documentation
                 dispatcher_tool.parameters = {
                     "type": "object",
                     "properties": {
                         "name": {
                             "type": "string",
-                            "description": f"Name of the internal tool to call. Must be one of: {', '.join(t[0] for t in sorted(internal_tools))}",
-                            "enum": [t[0] for t in sorted(internal_tools)]
+                            "description": f"Name of the internal tool to call. Must be one of: {', '.join(t[0] for t in sorted(internal_tools))}",  # noqa: E501
+                            "enum": [t[0] for t in sorted(internal_tools)],
                         },
                         "arguments": {
                             "type": "object",
-                            "description": "Arguments to pass to the internal tool. See description for details on each tool's parameters."
-                        }
+                            "description": "Arguments to pass to the internal tool. See description for details on each tool's parameters.",  # noqa: E501
+                        },
                     },
                     "required": ["name", "arguments"],
-                    "examples": examples if examples else None
+                    "examples": examples if examples else None,
                 }
 
     # Override _list_tools to hide internal tools when mounted

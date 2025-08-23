@@ -42,7 +42,7 @@ async def main():
     #         "args": ["run", "--rm", "-i", "hudpython/hud-text-2048:latest"]
     #     }
     # }
-    
+
     # OPTION 3: This is an alias helper for running the above
     # mcp_config = {
     #     "local": {
@@ -50,14 +50,18 @@ async def main():
     #         "args": ["run", "hudpython/hud-text-2048:latest", "--local"]
     #     }
     # }
-    
+
     # OPTION 4: And allows you to easily switch to remote!
     # However, if you are using your own image, make sure to push it to docker hub:
     # (docker push your-username/image-name:latest)
     mcp_config = {
         "remote": {
             "command": "hud",
-            "args": ["run", "hudpython/hud-text-2048:latest", "--verbose"] # this can spin up 100s of remote containers!
+            "args": [
+                "run",
+                "hudpython/hud-text-2048:latest",
+                "--verbose",
+            ],  # this can spin up 100s of remote containers!
         }
     }
 

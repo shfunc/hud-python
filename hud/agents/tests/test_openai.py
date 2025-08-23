@@ -57,15 +57,19 @@ class TestOperatorAgent:
         assert messages[0] == {"type": "input_text", "text": "Hello, GPT!"}
         assert messages[1] == {"type": "input_text", "text": "Another message"}
 
-        # Test with mixed content (non-text blocks should be filtered)
+        # Test with mixed content
         blocks = [
             types.TextContent(type="text", text="Text content"),
             types.ImageContent(type="image", data="base64data", mimeType="image/png"),
         ]
 
         messages = await agent.format_blocks(blocks)
-        assert len(messages) == 1
+        assert len(messages) == 2
         assert messages[0] == {"type": "input_text", "text": "Text content"}
+        assert messages[1] == {
+            "type": "input_image",
+            "image_url": "data:image/png;base64,base64data",
+        }
 
     @pytest.mark.asyncio
     async def test_format_tool_results(self, mock_mcp_client, mock_openai):
@@ -87,12 +91,11 @@ class TestOperatorAgent:
 
         messages = await agent.format_tool_results(tool_calls, tool_results)
 
-        # OpenAI's format_tool_results just returns a simple dict with screenshot
+        # OpenAI's format_tool_results returns input_image with screenshot
         assert len(messages) == 1
-        assert messages[0]["type"] == "tool_result"
-        assert (
-            messages[0]["screenshot"] == "base64data"
-        )  # Should extract screenshot from second result
+        assert messages[0]["type"] == "input_image"
+        assert "image_url" in messages[0]
+        assert messages[0]["image_url"] == "data:image/png;base64,base64data"
 
     @pytest.mark.asyncio
     async def test_format_tool_results_with_error(self, mock_mcp_client, mock_openai):
@@ -111,10 +114,8 @@ class TestOperatorAgent:
 
         messages = await agent.format_tool_results(tool_calls, tool_results)
 
-        # Since the result has isError=True, no screenshot should be extracted
-        assert len(messages) == 1
-        assert messages[0]["type"] == "tool_result"
-        assert messages[0]["screenshot"] is None
+        # Since the result has isError=True and no screenshot, returns empty list
+        assert len(messages) == 0
 
     @pytest.mark.asyncio
     async def test_get_model_response(self, mock_mcp_client, mock_openai):

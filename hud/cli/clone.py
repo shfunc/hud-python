@@ -113,7 +113,7 @@ def get_clone_message(clone_path: str) -> dict[str, Any] | None:
         Dictionary with message configuration or None
     """
     repo_path = Path(clone_path)
-    
+
     # Check pyproject.toml first
     pyproject_path = repo_path / "pyproject.toml"
     if pyproject_path.exists():
@@ -124,7 +124,7 @@ def get_clone_message(clone_path: str) -> dict[str, Any] | None:
                     return data["tool"]["hud"]["clone"]
         except Exception:
             logger.warning("Failed to load clone config from %s", pyproject_path)
-    
+
     # Check .hud.toml as fallback
     hud_toml_path = repo_path / ".hud.toml"
     if hud_toml_path.exists():

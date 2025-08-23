@@ -372,9 +372,9 @@ class TestDebugMCPStdio:
             assert "Creating 3 concurrent MCP clients" in output
             assert "All concurrent clients connected" in output
 
-            # Verify all clients were closed
+            # Verify all clients were shut down
             for client in mock_clients:
-                client.close.assert_called()
+                client.shutdown.assert_called()
 
     @pytest.mark.asyncio
     async def test_phase_5_concurrent_failure(self) -> None:
@@ -395,21 +395,29 @@ class TestDebugMCPStdio:
             patch("subprocess.Popen", return_value=mock_proc),
             patch("hud.cli.debug.MCPClient") as MockClient,
         ):
-            # First client succeeds, second fails
-            mock_client1 = MagicMock()
-            mock_client1.initialize = AsyncMock()
-            # Create proper mock tool
+            # Set up for phase 1-4 success first
             test_tool = Mock()
             test_tool.name = "test"
-            mock_client1.get_available_tools = Mock(return_value=[test_tool])
+
+            # Phase 1-4 client
+            phase_client = MagicMock()
+            phase_client.initialize = AsyncMock()
+            phase_client.list_tools = AsyncMock(return_value=[test_tool])
+            phase_client.list_resources = AsyncMock(return_value=[])
+            phase_client.shutdown = AsyncMock()
+
+            # Phase 5 clients - first succeeds, second fails
+            mock_client1 = MagicMock()
+            mock_client1.initialize = AsyncMock()
+            mock_client1.list_tools = AsyncMock(return_value=[test_tool])
             mock_client1.list_resources = AsyncMock(return_value=[])
-            mock_client1.close = AsyncMock()
+            mock_client1.shutdown = AsyncMock()
 
             mock_client2 = MagicMock()
             mock_client2.initialize = AsyncMock(side_effect=Exception("Connection failed"))
-            mock_client2.close = AsyncMock()
+            mock_client2.shutdown = AsyncMock()
 
-            MockClient.side_effect = [mock_client1, mock_client2]
+            MockClient.side_effect = [phase_client, mock_client1, mock_client2]
 
             await debug_mcp_stdio(["test-cmd"], logger, max_phase=5)
             output = logger.get_output()

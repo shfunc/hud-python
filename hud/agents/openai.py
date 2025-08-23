@@ -9,8 +9,8 @@ import mcp.types as types
 from openai import AsyncOpenAI
 from openai.types.responses import (
     ResponseComputerToolCall,
-    ResponseInputParam,
     ResponseInputMessageContentListParam,
+    ResponseInputParam,
     ResponseOutputMessage,
     ResponseOutputText,
     ToolParam,
@@ -115,25 +115,23 @@ class OperatorAgent(MCPAgent):
         """
         return []
 
-    async def format_blocks(self, blocks: list[types.ContentBlock]) -> ResponseInputMessageContentListParam:
+    async def format_blocks(
+        self, blocks: list[types.ContentBlock]
+    ) -> ResponseInputMessageContentListParam:
         """
         Format blocks for OpenAI input format.
-        
+
         Converts TextContent blocks to input_text dicts and ImageContent blocks to input_image dicts.
-        """
+        """  # noqa: E501
         formatted = []
         for block in blocks:
             if isinstance(block, types.TextContent):
-                formatted.append({
-                    "type": "input_text",
-                    "text": block.text
-                })
+                formatted.append({"type": "input_text", "text": block.text})
             elif isinstance(block, types.ImageContent):
-                mime_type = getattr(block, 'mimeType', 'image/png')
-                formatted.append({
-                    "type": "input_image", 
-                    "image_url": f"data:{mime_type};base64,{block.data}"
-                })
+                mime_type = getattr(block, "mimeType", "image/png")
+                formatted.append(
+                    {"type": "input_image", "image_url": f"data:{mime_type};base64,{block.data}"}
+                )
         return formatted
 
     @hud.instrument(
@@ -171,12 +169,11 @@ class OperatorAgent(MCPAgent):
         # Build the request based on whether this is first step or follow-up
         if self.pending_call_id is None and self.last_response_id is None:
             # First step - messages are already formatted dicts from format_blocks
-            # format_blocks returns type ResponseInputMessageContentListParam, which is a list of dicts
+            # format_blocks returns type ResponseInputMessageContentListParam, which is a list of dicts  # noqa: E501
             input_content: ResponseInputMessageContentListParam = []
-            
+
             input_content.extend(messages)
-                
-            
+
             # If no content was added, add empty text to avoid empty request
             if not input_content:
                 input_content.append({"type": "input_text", "text": ""})
@@ -208,7 +205,7 @@ class OperatorAgent(MCPAgent):
                 latest_screenshot = None
                 for msg in reversed(messages):
                     if isinstance(msg, dict) and "image_url" in msg:
-                        latest_screenshot = msg["image_url"]
+                        latest_screenshot = msg["image_url"]  # type: ignore
                         break
 
                 if not latest_screenshot:
@@ -218,7 +215,7 @@ class OperatorAgent(MCPAgent):
                         tool_calls=[],
                         done=True,
                     )
-                
+
                 # Create response to previous action
                 input_param_followup: ResponseInputParam = [  # type: ignore[reportAssignmentType]
                     {  # type: ignore[reportAssignmentType]
@@ -324,10 +321,10 @@ class OperatorAgent(MCPAgent):
         If you need to add other content, you can do so by adding a new ContentBlock object to the list.
 
         Returns formatted dicts with tool result data, preserving screenshots.
-        """
+        """  # noqa: E501
         formatted_results = []
         latest_screenshot = None
-        
+
         # Extract all content from tool results
         for result in tool_results:
             if result.isError:
@@ -335,8 +332,7 @@ class OperatorAgent(MCPAgent):
                 for content in result.content:
                     if isinstance(content, types.TextContent):
                         # Don't add error text as input_text, just track it
-                        logger.error(f"Tool error: {content.text}")
-                        pass
+                        logger.error("Tool error: %s", content.text)
                     elif isinstance(content, types.ImageContent):
                         # Even error results might have images
                         latest_screenshot = content.data
@@ -346,12 +342,11 @@ class OperatorAgent(MCPAgent):
                     if isinstance(content, types.ImageContent):
                         latest_screenshot = content.data
                         break
-        
+
         # Return a dict with the latest screenshot for the follow-up step
         if latest_screenshot:
-            formatted_results.append({
-                "type": "input_image",
-                "image_url": f"data:image/png;base64,{latest_screenshot}"
-            })
-        
+            formatted_results.append(
+                {"type": "input_image", "image_url": f"data:image/png;base64,{latest_screenshot}"}
+            )
+
         return formatted_results

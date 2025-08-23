@@ -7,8 +7,7 @@ import logging
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from anthropic import AsyncAnthropic, BadRequestError
-
-from anthropic.types.beta import BetaContentBlockParam, BetaTextBlockParam, BetaImageBlockParam
+from anthropic.types.beta import BetaContentBlockParam, BetaImageBlockParam, BetaTextBlockParam
 
 import hud
 
@@ -109,35 +108,44 @@ class ClaudeAgent(MCPAgent):
     async def get_system_messages(self) -> list[Any]:
         """No system messages for Claude because applied in get_response"""
         return []
-    
 
     async def format_blocks(self, blocks: list[types.ContentBlock]) -> list[Any]:
         """Format messages for Claude."""
         # Convert MCP content types to Anthropic content types
         anthropic_blocks: list[BetaContentBlockParam] = []
-        
+
         for block in blocks:
             if isinstance(block, types.TextContent):
                 # Only include fields that Anthropic expects
-                anthropic_blocks.append(cast(BetaTextBlockParam, {
-                    "type": "text",
-                    "text": block.text,
-                }))
+                anthropic_blocks.append(
+                    cast(
+                        "BetaTextBlockParam",
+                        {
+                            "type": "text",
+                            "text": block.text,
+                        },
+                    )
+                )
             elif isinstance(block, types.ImageContent):
                 # Convert MCP ImageContent to Anthropic format
-                anthropic_blocks.append(cast(BetaImageBlockParam, {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": block.mimeType,
-                        "data": block.data,
-                    },
-                }))
+                anthropic_blocks.append(
+                    cast(
+                        "BetaImageBlockParam",
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": block.mimeType,
+                                "data": block.data,
+                            },
+                        },
+                    )
+                )
             else:
                 # For other types, try to cast but log a warning
-                logger.warning(f"Unknown content block type: {type(block)}")
-                anthropic_blocks.append(cast(BetaContentBlockParam, block))
-        
+                logger.warning("Unknown content block type: %s", type(block))
+                anthropic_blocks.append(cast("BetaContentBlockParam", block))
+
         return [
             cast(
                 "BetaMessageParam",
@@ -148,7 +156,6 @@ class ClaudeAgent(MCPAgent):
             )
         ]
 
-
     @hud.instrument(
         span_type="agent",
         record_args=False,  # Messages can be large
@@ -156,7 +163,7 @@ class ClaudeAgent(MCPAgent):
     )
     async def get_response(self, messages: list[BetaMessageParam]) -> AgentResponse:
         """Get response from Claude including any tool calls."""
-        
+
         # Make API call with retry for prompt length
         current_messages = messages.copy()
 

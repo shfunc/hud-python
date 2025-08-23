@@ -66,40 +66,39 @@ class TestTaskExtended:
         os.environ["API_KEY"] = "sk-12345"
         os.environ["HUD_TELEMETRY_URL"] = "https://api.example.com"
         os.environ["EMPTY_VAR"] = ""
+        os.environ["RUN_ID"] = "run-789"
 
         try:
-            # Mock get_current_task_run_id at the module level it's used
-            with patch("hud.otel.get_current_task_run_id", return_value="run-789"):
-                task = Task(
-                    prompt="Complex env test",
-                    mcp_config={
-                        "auth": {
-                            "bearer": "Bearer ${API_KEY}",
-                            "empty": "${EMPTY_VAR}",
-                            "missing": "${MISSING_VAR}",
-                        },
-                        "endpoints": [
-                            "${HUD_TELEMETRY_URL}/v1",
-                            "${HUD_TELEMETRY_URL}/v2",
-                            "${MISSING_URL}",
-                        ],
-                        "metadata": {"run_id": "${RUN_ID}", "combined": "${API_KEY}-${RUN_ID}"},
+            task = Task(
+                prompt="Complex env test",
+                mcp_config={
+                    "auth": {
+                        "bearer": "Bearer ${API_KEY}",
+                        "empty": "${EMPTY_VAR}",
+                        "missing": "${MISSING_VAR}",
                     },
-                )
+                    "endpoints": [
+                        "${HUD_TELEMETRY_URL}/v1",
+                        "${HUD_TELEMETRY_URL}/v2",
+                        "${MISSING_URL}",
+                    ],
+                    "metadata": {"run_id": "${RUN_ID}", "combined": "${API_KEY}-${RUN_ID}"},
+                },
+            )
 
-                assert task.mcp_config["auth"]["bearer"] == "Bearer sk-12345"
-                assert task.mcp_config["auth"]["empty"] == ""
-                assert task.mcp_config["auth"]["missing"] == ""
-                assert task.mcp_config["endpoints"][0] == "https://api.example.com/v1"
-                assert task.mcp_config["endpoints"][1] == "https://api.example.com/v2"
-                assert task.mcp_config["endpoints"][2] == ""
-                assert task.mcp_config["metadata"]["run_id"] == "run-789"
-                assert task.mcp_config["metadata"]["combined"] == "sk-12345-run-789"
+            assert task.mcp_config["auth"]["bearer"] == "Bearer sk-12345"
+            assert task.mcp_config["auth"]["empty"] == ""
+            assert task.mcp_config["auth"]["missing"] == ""
+            assert task.mcp_config["endpoints"][0] == "https://api.example.com/v1"
+            assert task.mcp_config["endpoints"][1] == "https://api.example.com/v2"
+            assert task.mcp_config["endpoints"][2] == ""
+            assert task.mcp_config["metadata"]["combined"] == "sk-12345-run-789"
 
         finally:
             del os.environ["API_KEY"]
             del os.environ["HUD_TELEMETRY_URL"]
             del os.environ["EMPTY_VAR"]
+            del os.environ["RUN_ID"]
 
     def test_non_string_values_preserved(self):
         """Test that non-string values are preserved during env resolution."""
@@ -232,7 +231,9 @@ class TestRunDatasetExtended:
                 "agent_config": {"model": "test-model"},
             }
 
-            mock_job_func.assert_called_once_with("metadata_run", metadata=expected_metadata, dataset_link=None)
+            mock_job_func.assert_called_once_with(
+                "metadata_run", metadata=expected_metadata, dataset_link=None
+            )
 
     @pytest.mark.asyncio
     async def test_run_dataset_exception_handling(self):
@@ -320,6 +321,7 @@ class TestRunDatasetExtended:
             if client is None:
                 # Create client if not provided - this simulates real agent behavior
                 from hud.clients import MCPClient
+
                 self.client = MCPClient()  # This will use our mocked version
             else:
                 self.client = client

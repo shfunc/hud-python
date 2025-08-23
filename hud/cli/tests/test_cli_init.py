@@ -36,7 +36,7 @@ class TestCLICommands:
             mock_run.assert_called_once()
             # Get the coroutine that was passed to asyncio.run
             coro = mock_run.call_args[0][0]
-            assert coro.__name__ == "analyze_environment"
+            assert coro.__name__ == "analyze_from_metadata"
 
     def test_analyze_with_docker_args(self) -> None:
         """Test analyze command with additional Docker arguments."""
@@ -208,11 +208,9 @@ class TestCLICommands:
 
     def test_mcp_command(self) -> None:
         """Test mcp server command."""
-        with patch("hud.cli.run_mcp_server") as mock_run:
-            result = runner.invoke(app, ["mcp"])
-            assert result.exit_code == 0
-            mock_run.assert_called_once()
-            assert "Starting HUD MCP Server" in result.output
+        # MCP command has been removed from the CLI
+        result = runner.invoke(app, ["mcp"])
+        assert result.exit_code == 2  # Command not found
 
     def test_help_command(self) -> None:
         """Test help command shows proper info."""
@@ -221,7 +219,7 @@ class TestCLICommands:
         assert "HUD CLI for MCP environment analysis" in result.output
         assert "analyze" in result.output
         assert "debug" in result.output
-        assert "mcp" in result.output
+        # assert "mcp" in result.output  # mcp command has been removed
 
 
 class TestMainFunction:

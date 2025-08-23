@@ -95,7 +95,7 @@ class TestBaseMCPAgent:
         assert agent.mcp_client is not None
         assert agent.allowed_tools is None
         assert agent.disallowed_tools == []
-        assert agent.initial_screenshot is False
+        assert agent.initial_screenshot is True
         assert agent.system_prompt is not None  # Default system prompt is set
         assert agent.lifecycle_tools == []
 

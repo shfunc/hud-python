@@ -42,7 +42,7 @@ async def initialize_environment(ctx):
     # Connect to context server (must be running)
     game = attach_context("/tmp/hud_ctx.sock")
     logger.info("Connected to socket-based game context")
-    
+
     # Log whether we're resuming or starting fresh
     if game.get_moves_made() > 0:
         logger.info(f"Resuming game - Score: {game.get_score()}, Moves: {game.get_moves_made()}")

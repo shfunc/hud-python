@@ -320,13 +320,13 @@ class TestMCPClient:
         mock_session = MagicMock()
         mock_session.connector = MagicMock()
         mock_session.connector.client_session = MagicMock()
-        
+
         async def mock_list_tools():
             return types.ListToolsResult(tools=[tool1, tool2])
-        
+
         mock_session.connector.client_session.list_tools = mock_list_tools
         mock_mcp_use_client.create_all_sessions = AsyncMock(return_value={"test": mock_session})
-        
+
         # Initialize to populate tools
         await client.initialize()
 
@@ -344,17 +344,17 @@ class TestMCPClient:
         tool1 = types.Tool(name="tool1", description="Tool 1", inputSchema={"type": "object"})
         tool2 = types.Tool(name="tool2", description="Tool 2", inputSchema={"type": "object"})
 
-        # Setup mock session with tools  
+        # Setup mock session with tools
         mock_session = MagicMock()
         mock_session.connector = MagicMock()
         mock_session.connector.client_session = MagicMock()
-        
+
         async def mock_list_tools():
             return types.ListToolsResult(tools=[tool1, tool2])
-        
+
         mock_session.connector.client_session.list_tools = mock_list_tools
         mock_mcp_use_client.create_all_sessions = AsyncMock(return_value={"test": mock_session})
-        
+
         # Initialize to populate tools
         await client.initialize()
 
