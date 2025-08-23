@@ -262,16 +262,22 @@ async def run_dataset(
     return results
 
 
-def save_tasks(tasks: list[dict[str, Any]], repo_id: str, **kwargs: Any) -> None:
+def save_tasks(
+    tasks: list[dict[str, Any]], 
+    repo_id: str, 
+    fields: list[str] | None = None,
+    **kwargs: Any
+) -> None:
     """
-    Save Tasks to HuggingFace dataset with JSON string serialization.
+    Save data to HuggingFace dataset with JSON string serialization.
 
-    Complex fields are serialized as JSON strings to maintain clean schema
+    Complex fields (dicts, lists) are serialized as JSON strings to maintain clean schema
     and avoid null value pollution in HuggingFace datasets.
 
     Args:
-        tasks: List of Task dicts (NOT Task objects, to preserve templates)
+        tasks: List of dictionaries to save
         repo_id: HuggingFace repository ID (e.g., "hud-evals/my-tasks")
+        fields: Optional list of fields to save. If None, saves all fields from each dict.
         **kwargs: Additional arguments passed to dataset.push_to_hub()
     """
     from datasets import Dataset
@@ -294,34 +300,23 @@ def save_tasks(tasks: list[dict[str, Any]], repo_id: str, **kwargs: Any) -> None
                 "This would expose resolved environment variables. "
                 "Please convert to dictionary format with template strings preserved."
             )
-        row = {
-            "prompt": tc_dict["prompt"],
-        }
-
-        fields = ["mcp_config", "id", "metadata", "setup_tool", "evaluate_tool"]
-        warnings = set()
-        for field in fields:
+        
+        row = {}
+        
+        # Determine which fields to process
+        fields_to_process = fields if fields is not None else list(tc_dict.keys())
+        
+        for field in fields_to_process:
             if field in tc_dict:
-                if isinstance(tc_dict[field], dict):
-                    row[field] = json.dumps(tc_dict[field])
-                elif isinstance(tc_dict[field], str | int | float | bool):
-                    if field != "id":
-                        try:
-                            json.loads(tc_dict[field])
-                            warnings.add(field)
-                        except json.JSONDecodeError:
-                            raise ValueError(
-                                "Field %s is not a dictionary, make sure it is loadable: %s",
-                                field,
-                                tc_dict[field],
-                            ) from None
-                    row[field] = str(tc_dict[field])
-
-        if warnings:
-            logger.warning(
-                "Please avoid using strings for %s, make sure they are dictionaries on load",
-                warnings,
-            )
+                value = tc_dict[field]
+                # Serialize complex types as JSON strings
+                if isinstance(value, (dict, list)):
+                    row[field] = json.dumps(value)
+                elif isinstance(value, (str, int, float, bool, type(None))):
+                    row[field] = value if value is not None else ""
+                else:
+                    # For other types, convert to string
+                    row[field] = str(value)
 
         data.append(row)
 
