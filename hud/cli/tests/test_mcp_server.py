@@ -46,10 +46,11 @@ class TestDockerUtils:
 
     def test_get_docker_cmd_failure(self) -> None:
         """Test handling when Docker inspect fails."""
+        import subprocess
+
         with patch("subprocess.run") as mock_run:
-            mock_result = MagicMock()
-            mock_result.returncode = 1
-            mock_run.return_value = mock_result
+            # check=True causes CalledProcessError on non-zero return
+            mock_run.side_effect = subprocess.CalledProcessError(1, "docker inspect")
 
             cmd = get_docker_cmd("test-image:latest")
             assert cmd is None
@@ -113,14 +114,16 @@ name = "test"
 class TestRunMCPDevServer:
     """Test the main server runner."""
 
-    @pytest.mark.asyncio
-    async def test_run_dev_server_image_not_found(self) -> None:
+    def test_run_dev_server_image_not_found(self) -> None:
         """Test handling when Docker image doesn't exist."""
+        import click
+
         with (
             patch("hud.cli.mcp_server.image_exists", return_value=False),
             patch("click.confirm", return_value=False),
+            pytest.raises(click.Abort),
         ):
-            result = run_mcp_dev_server(
+            run_mcp_dev_server(
                 directory=".",
                 image="missing:latest",
                 build=False,
@@ -134,4 +137,3 @@ class TestRunMCPDevServer:
                 docker_args=[],
                 interactive=False,
             )
-            assert result is None  # Should exit when user declines to build
