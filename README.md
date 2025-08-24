@@ -70,19 +70,20 @@ from hud.datasets import Task  # See docs: https://docs.hud.so/reference/tasks
 
 async def main() -> None:
     with hud.trace("Quick Start 2048"): # All telemetry works for any MCP-based agent (see https://app.hud.so)
-        task = Task(
-            prompt="Reach 64 in 2048.",
-            mcp_config={
+        task = {
+            "prompt": "Reach 64 in 2048.",
+            "mcp_config": {
                 "hud": {
                     "url": "https://mcp.hud.so/v3/mcp",  # HUD's cloud MCP server (see https://docs.hud.so/core-concepts/architecture)
                     "headers": {
-                        "Authorization": f"Bearer {os.getenv('HUD_API_KEY')}",  # Get your key at https://app.hud.so
+                        "Authorization": f"Bearer {settings.api_key}",  # Get your key at https://app.hud.so
                         "Mcp-Image": "hudpython/hud-text-2048:v1.1"  # Docker image from https://hub.docker.com/u/hudpython
                     }
                 }
             },
-            evaluate_tool={"name": "evaluate", "arguments": {"name": "max_number", "target": 64}},
-        )
+            "evaluate_tool": {"name": "evaluate", "arguments": {"name": "max_number", "target": 64}},
+        }
+        task = Task(**task)
 
         # 1. Define the client explicitly:
         client = MCPClient(mcp_config=task.mcp_config)
@@ -97,7 +98,7 @@ async def main() -> None:
         # result = await ClaudeAgent().run(task)
 
         print(f"Reward: {result.reward}")
-        await client.close()
+        await client.shutdown()
 
 asyncio.run(main())
 ```
