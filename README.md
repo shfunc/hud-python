@@ -42,6 +42,7 @@ pip install "hud-python[agent]"
 
 # CLI utilities
 uv tool install hud-python
+# uv tool update-shell
 
 # From source (latest)
 git clone https://github.com/hud-evals/hud-python
@@ -59,7 +60,7 @@ For a tutorial that explains the agent and evaluation design, run ([see quicksta
 uvx hud-python quickstart
 ```
 
-Or just write your own agent loop (more [examples here](examples/)):
+Or just write your own agent loop (more [examples here](examples/)).
 
 ```python
 import asyncio, hud, os
@@ -103,11 +104,13 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-> Every HUD environment is MCP-based and interactable from anywhere. Requires `HUD_API_KEY` and `ANTHROPIC_API_KEY`.
+The above example let's the agent play 2048 ([See replay](https://app.hud.so/trace/6feed7bd-5f67-4d66-b77f-eb1e3164604f))
+
+![Agent playing 2048](https://raw.githubusercontent.com/hud-evals/hud-python/main/docs/src/images/2048_1.gif)
 
 ## Reinforcement Learning with GRPO
 
-This is a Qwen-2.5-3B agent training a policy on the [`text-2048`](environments/text_2048/) environment using [Verifiers](rl/verifiers/):
+This is a Qwen-2.5-3B agent training a policy on the [`text-2048`](environments/text_2048/) environment (see above) using [Verifiers](rl/verifiers/):
 
 ![RL curve](https://raw.githubusercontent.com/hud-evals/hud-python/main/docs/src/images/rl_2.png)
 

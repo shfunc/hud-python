@@ -37,7 +37,7 @@ version = "0.1.0"
 description = "A minimal HUD environment"
 requires-python = ">=3.11"
 dependencies = [
-    "hud-python @ git+https://github.com/hud-evals/hud-python.git",
+    "hud-python",
 ]
 
 [build-system]
@@ -259,7 +259,7 @@ def create_environment(name: str | None, directory: str, force: bool) -> None:
         console.print("   [cyan]hud dev[/cyan]")
     else:
         console.print("1. Enter the directory:")
-        console.print(f"   [cyan]cd {target_dir.relative_to(Path.cwd())}[/cyan]")
+        console.print(f"   [cyan]cd {target_dir}[/cyan]")
         console.print("\n2. Start development server:")
         console.print("   [cyan]hud dev[/cyan]")
 
