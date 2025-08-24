@@ -97,8 +97,8 @@ async def main():
                 }
             }
         },
-        setup_tool={"name": "setup", "arguments": {"name": "board", "board_size": 4}},
-        evaluate_tool={"name": "evaluate", "arguments": {"name": "max_number", "target": 128}}
+        setup_tool={"name": "setup", "arguments": {"name": "board", "arguments": { "board_size": 4}}},
+        evaluate_tool={"name": "evaluate", "arguments": {"name": "max_number", "arguments": {"target": 64}}}
     )
     
     # Run agent (auto-creates MCP client)
