@@ -4,287 +4,82 @@ description: "Improve agent performance with reinforcement learning"
 icon: "brain"
 ---
 
-HUD integrates with state-of-the-art RL frameworks to help you train better agents. Move beyond simple evaluation to continuous improvement through reinforcement learning.
+Train agents to perform better on specific tasks using reinforcement learning. Small models trained on your tasks can outperform larger general models.
 
-## Why Train Agents?
+## Overview
 
-While foundation models like Claude and GPT-4 are powerful, they can be improved for specific tasks through training:
-
-- **Task-specific optimization**: Fine-tune for your exact use case
-- **Cost reduction**: Smaller trained models can outperform larger general models
-- **Consistency**: Reduce variance in agent behavior
-- **Custom capabilities**: Teach agents domain-specific skills
-
-## Training Overview
-
-<Steps>
-<Step title="Start with Evaluation">
-  Collect baseline performance data on your tasks
-</Step>
-
-<Step title="Configure Training">
-  Set up Verifiers gym with your environment
-</Step>
-
-<Step title="Run GRPO Training">
-  Train with Group Relative Policy Optimization
-</Step>
-
-<Step title="Evaluate Improvements">
-  Compare trained model against baseline
-</Step>
-</Steps>
-
-## Quick Example
-
-Train a 3B model to play 2048:
+HUD integrates with [Verifiers](https://github.com/willccbb/verifiers) for GRPO (Group Relative Policy Optimization) training:
 
 ```python
 import verifiers as vf
 
-# Load 2048 environment with tasks
+# Load environment
 env = vf.load_environment(
     env_id="hud_vf_gym",
     taskset="hud-evals/2048-taskset",
     config_path="./configs/2048.yaml"
 )
 
-# Load base model
+# Train with GRPO
 model, tokenizer = vf.get_model_and_tokenizer("Qwen/Qwen2.5-3B-Instruct")
-
-# Configure training
-args = vf.grpo_defaults(run_name="2048-training")
-args.per_device_train_batch_size = 8
-args.num_generations = 16
-args.max_steps = 100
-
-# Create trainer with LoRA
 trainer = vf.GRPOTrainer(
     model=model,
-    processing_class=tokenizer,
     env=env,
-    args=args,
-    peft_config=vf.lora_defaults()
+    args=vf.grpo_defaults(),
+    peft_config=vf.lora_defaults()  # LoRA for efficiency
 )
-
-# Start training
 trainer.train()
 ```
 
-## Training Frameworks
+## Why Train?
 
-### Verifiers + GRPO
+- **Task Performance**: 3B model can reach 80% success vs 35% baseline
+- **Cost**: Smaller models are cheaper to run
+- **Speed**: Trained models complete tasks faster
+- **Consistency**: Less variance in behavior
 
-The primary training approach uses:
-- **Verifiers**: Environment wrapper for RL
-- **GRPO**: Group Relative Policy Optimization
-- **LoRA**: Parameter-efficient fine-tuning
-
-<Note>
-GRPO trains models by comparing multiple trajectories and learning from relative success
-</Note>
-
-### ART Framework
-
-Advanced agent training with:
-- **Multi-turn reasoning**: Improve chain-of-thought
-- **Tool use optimization**: Better tool selection
-- **Error recovery**: Learn from failures
-
-## Supported Models
+## Requirements
 
 <Table>
   <thead>
     <tr>
       <th>Model Size</th>
-      <th>Base Models</th>
-      <th>Training Time</th>
-      <th>GPU Requirements</th>
+      <th>GPU Memory</th>
+      <th>Training Time (100 steps)</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td>1-3B</td>
-      <td>Qwen2.5, Llama-3.2</td>
-      <td>2-4 hours</td>
-      <td>1x A100 (40GB)</td>
+      <td>3B</td>
+      <td>24GB (1x RTX 4090)</td>
+      <td>30 minutes</td>
     </tr>
     <tr>
-      <td>7-8B</td>
-      <td>Llama-3.1, Mistral</td>
-      <td>6-12 hours</td>
-      <td>2x A100 (80GB)</td>
+      <td>7B</td>
+      <td>40GB (1x A100)</td>
+      <td>1 hour</td>
     </tr>
     <tr>
-      <td>13B+</td>
-      <td>Llama-3.1-70B</td>
-      <td>24+ hours</td>
-      <td>4x A100 (80GB)</td>
+      <td>70B</td>
+      <td>320GB (4x A100)</td>
+      <td>6+ hours</td>
     </tr>
   </tbody>
 </Table>
 
-## Training Pipeline
-
-### 1. Prepare Dataset
-
-Use HuggingFace datasets or create your own:
-
-```python
-from hud.datasets import save_tasks, Task
-
-tasks = [
-    Task(
-        prompt="Complete the 2048 puzzle",
-        mcp_config={"hudpython/hud-text-2048:v1.1": {}},
-        setup_tool="setup_board",
-        evaluate_tool="evaluate_max_tile"
-    )
-    # ... more task variations
-]
-
-save_tasks(tasks, "my-org/2048-training-tasks")
-```
-
-### 2. Configure Environment
-
-Create a config file for your environment:
-
-```yaml configs/my-env.yaml
-system_prompt: |
-  You are an AI assistant that can interact with the environment.
-  
-  Available tools:
-  - move(direction): Move in a direction (up/down/left/right)
-  - get_state(): Get current state
-  - done(): Complete the task
-
-action_mappings:
-  move:
-    _tool: "move"
-    _parser:
-      positional: ["direction"]
-    direction:
-      from_arg: "direction"
-```
-
-### 3. Monitor Training
-
-Track progress with Weights & Biases:
-
-```python
-args = vf.grpo_defaults(
-    run_name="my-training",
-    report_to="wandb",
-    logging_steps=10
-)
-```
-
-## Training Results
-
-Example improvements from GRPO training:
-
-<CardGroup cols={2}>
-<Card title="2048 Game">
-  - Baseline (Qwen-3B): 35% reach 512
-  - After 100 steps: 65% reach 512
-  - After 500 steps: 80% reach 512
-</Card>
-
-<Card title="Web Navigation">
-  - Baseline (Llama-7B): 45% success
-  - After training: 72% success
-  - 3x faster completion time
-</Card>
-</CardGroup>
-
-## Advanced Techniques
-
-### Curriculum Learning
-
-Start with easy tasks and increase difficulty:
-
-```python
-# Stage 1: Simple tasks
-easy_tasks = load_tasks("my-org/navigation-easy")
-trainer.train(easy_tasks, steps=50)
-
-# Stage 2: Medium difficulty
-medium_tasks = load_tasks("my-org/navigation-medium")
-trainer.train(medium_tasks, steps=100)
-
-# Stage 3: Hard tasks
-hard_tasks = load_tasks("my-org/navigation-hard")
-trainer.train(hard_tasks, steps=200)
-```
-
-### Multi-Environment Training
-
-Train on multiple environments simultaneously:
-
-```python
-envs = [
-    vf.load_environment("browser-env", config="browser.yaml"),
-    vf.load_environment("sheets-env", config="sheets.yaml"),
-    vf.load_environment("code-env", config="code.yaml")
-]
-
-# Mix environments during training
-combined_env = vf.MultiEnvironment(envs, sample_weights=[0.5, 0.3, 0.2])
-```
-
-### Reward Shaping
-
-Customize rewards for better learning:
-
-```python
-@server.evaluate_tool()
-def shaped_reward(target_state: dict) -> dict:
-    base_reward = calculate_success()
-    
-    # Bonus for efficiency
-    time_bonus = max(0, 1 - (elapsed_time / max_time))
-    
-    # Penalty for errors
-    error_penalty = error_count * 0.1
-    
-    final_reward = base_reward + time_bonus - error_penalty
-    
-    return {
-        "reward": max(0, min(1, final_reward)),
-        "components": {
-            "base": base_reward,
-            "time_bonus": time_bonus,
-            "error_penalty": error_penalty
-        }
-    }
-```
-
-## Best Practices
-
-1. **Start Small**: Begin with 1-3B models for faster iteration
-2. **Quality Data**: Better tasks lead to better training
-3. **Checkpointing**: Save models frequently during training
-4. **Evaluation**: Test on held-out tasks regularly
-5. **Hyperparameters**: Use provided defaults as starting points
-
-<Warning>
-Training can be expensive. Start with small experiments before scaling up.
-</Warning>
-
-## Next Steps
+## Getting Started
 
 <CardGroup cols={3}>
 <Card title="RL Quickstart" icon="rocket" href="/train-agents/rl-quickstart">
-  Train your first agent with step-by-step guide
+  Train your first agent in 30 minutes
 </Card>
 
-<Card title="Verifiers Gym" icon="dumbbell" href="/train-agents/verifiers-gym">
-  Deep dive into the training framework
+<Card title="Config System" icon="cog" href="/train-agents/verifiers-gym">
+  Configure tools with YAML
 </Card>
 
 <Card title="Datasets" icon="database" href="/train-agents/datasets">
-  Create and manage training datasets
+  Create training datasets
 </Card>
 </CardGroup>
 
