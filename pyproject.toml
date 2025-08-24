@@ -15,7 +15,7 @@ dependencies = [
     "pydantic-settings>=2,<3",
     # MCP dependencies
     "fastmcp>=2.11.2",
-    "mcp @ git+https://github.com/hud-evals/mcp-python-sdk.git",
+    "hud-mcp-python-sdk>=0.1.0",
     "pathspec>=0.12.1",
     "wrapt>=1.14.0",
     # CLI dependencies
@@ -95,7 +95,7 @@ agent = [
     "datasets>=2.14.0",
     "numpy>=1.24.0",
     # Other agent utilities
-    "mcp-use @ git+https://github.com/hud-evals/mcp-use.git",
+    "hud-mcp-use-python-sdk>=0.1.0",
     "dotenv>=0.9.9",
 ]
 
