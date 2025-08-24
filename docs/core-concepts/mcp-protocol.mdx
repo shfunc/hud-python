@@ -103,7 +103,7 @@ Run environments locally for development and debugging using [stdio transport](h
 mcp_config = {
   "hud-text-2048": {
     "command": "docker",
-    "args": ["run", "--rm", "-i", "hudpython/hud-text-2048:v1.1"]
+    "args": ["run", "--rm", "-i", "hudpython/hud-text-2048:v1.2"]
   }
 }
 ```
@@ -126,7 +126,7 @@ mcp_config = {
     "url": "https://mcp.hud.so/v3/mcp",
     "headers": {
       "Authorization": f"Bearer {os.getenv('HUD_API_KEY')}",
-      "Mcp-Image": "hudpython/hud-text-2048:v1.1"
+      "Mcp-Image": "hudpython/hud-text-2048:v1.2"
     }
   }
 }

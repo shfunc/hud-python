@@ -77,7 +77,7 @@ async def main():
                     "url": "https://mcp.hud.so/v3/mcp",
                     "headers": {
                         "Authorization": f"Bearer {os.getenv('HUD_API_KEY')}",
-                        "Mcp-Image": "hudpython/hud-text-2048:v1.1"
+                        "Mcp-Image": "hudpython/hud-text-2048:v1.2"
                     }
                 }
             },
@@ -130,10 +130,10 @@ The trace context ensures that the entire task run - from setup through evaluati
 
 ```bash
 # Analyze any MCP environment
-hud analyze hudpython/hud-text-2048:v1.1
+hud analyze hudpython/hud-text-2048:v1.2
 
 # Debug environment initialization
-hud debug hudpython/hud-text-2048:v1.1
+hud debug hudpython/hud-text-2048:v1.2
 
 # Start hot-reload development server
 hud mcp . --build

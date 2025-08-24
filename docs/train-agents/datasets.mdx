@@ -17,7 +17,7 @@ tasks = []
 for i in range(100):
     tasks.append(Task(
         prompt=f"Reach the {2**(9+i%4)} tile in 2048",
-        mcp_config={"hudpython/hud-text-2048:v1.1": {}},
+        mcp_config={"hudpython/hud-text-2048:v1.2": {}},
         setup_tool="setup_board",
         evaluate_tool=MCPToolCall(
             name="evaluate_max_tile",

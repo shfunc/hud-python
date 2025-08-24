@@ -77,11 +77,11 @@ async def main() -> None:
                     "url": "https://mcp.hud.so/v3/mcp",  # HUD's cloud MCP server (see https://docs.hud.so/core-concepts/architecture)
                     "headers": {
                         "Authorization": f"Bearer {settings.api_key}",  # Get your key at https://app.hud.so
-                        "Mcp-Image": "hudpython/hud-text-2048:v1.1"  # Docker image from https://hub.docker.com/u/hudpython
+                        "Mcp-Image": "hudpython/hud-text-2048:v1.2"  # Docker image from https://hub.docker.com/u/hudpython
                     }
                 }
             },
-            "evaluate_tool": {"name": "evaluate", "arguments": {"name": "max_number", "target": 64}},
+            "evaluate_tool": {"name": "evaluate", "arguments": {"name": "max_number", "arguments": {"target": 64}}},
         }
         task = Task(**task)
 

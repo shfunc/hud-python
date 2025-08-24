@@ -348,15 +348,6 @@ def push_environment(
     console.print("Test locally:")
     console.print(f"  [cyan]hud run {image}[/cyan]\n")
 
-    console.print("Use in MCP configs:")
-    console.print("  Claude Desktop:")
-    console.print(
-        f'    [cyan]{{"docker": {{"image": "{pushed_digest}", "command": "auto"}}}}[/cyan]\n'
-    )
-
-    console.print("  Via HUD (recommended):")
-    console.print(f'    [cyan]{{"hud": {{"registry": "{pushed_digest}"}}}}[/cyan]\n')
-
     console.print("Share environment:")
     console.print(
         "  Share the updated [cyan]hud.lock.yaml[/cyan] for others to reproduce your exact environment"  # noqa: E501
