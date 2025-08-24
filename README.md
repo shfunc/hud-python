@@ -37,7 +37,7 @@ OSS RL environment + evals toolkit. Wrap software as environments, run benchmark
 # Core installation - MCP servers, telemetry, basic tools for environment design
 pip install hud-python
 
-# Agent installation - Adds AI providers, telemetry, datasets
+# Agent installation - Adds AI providers, datasets
 pip install "hud-python[agent]"
 
 # CLI utilities
@@ -74,7 +74,7 @@ async def main() -> None:
             prompt="Reach 64 in 2048.",
             mcp_config={
                 "hud": {
-                    "url": "https://mcp.hud.so",  # HUD's cloud MCP server (see https://docs.hud.so/core-concepts/architecture)
+                    "url": "https://mcp.hud.so/v3/mcp",  # HUD's cloud MCP server (see https://docs.hud.so/core-concepts/architecture)
                     "headers": {
                         "Authorization": f"Bearer {os.getenv('HUD_API_KEY')}",  # Get your key at https://app.hud.so
                         "Mcp-Image": "hudpython/hud-text-2048:v1.1"  # Docker image from https://hub.docker.com/u/hudpython
@@ -254,7 +254,7 @@ result = await ClaudeAgent().run({  # See all agents: https://docs.hud.so/refere
     "prompt": "Please explore this environment",
     "mcp_config": {
         "my-environment": {
-            "url": "https://mcp.hud.so",
+            "url": "https://mcp.hud.so/v3/mcp",
             "headers": {
                 "Authorization": f"Bearer {os.getenv('HUD_API_KEY')}",
                 "Mcp-Image": "my-name/my-environment:latest"

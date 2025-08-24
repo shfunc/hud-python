@@ -41,7 +41,7 @@ import hud
 from hud.clients import MCPClient
 from hud.agents import ClaudeAgent
 
-BASE_URL = "https://mcp.hud.so"
+BASE_URL = "https://mcp.hud.so/v3/mcp"
 HUD_API_KEY = os.getenv("HUD_API_KEY")
 
 async def main():

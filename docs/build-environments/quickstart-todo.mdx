@@ -396,7 +396,7 @@ task = Task(
     prompt="Create 3 todos and complete the urgent ones",
     mcp_config={
         "hud": {
-            "url": "https://mcp.hud.so",
+            "url": "https://mcp.hud.so/v3/mcp",
             "headers": {
                 "Authorization": f"Bearer {os.getenv('HUD_API_KEY')}",
                 "Mcp-Image": "your-dockerhub/todo-env:v1.0"
