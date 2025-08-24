@@ -110,7 +110,7 @@ This is a Qwen-2.5-3B agent training a policy on the [`text-2048`](environments/
 
 ![RL curve](https://raw.githubusercontent.com/hud-evals/hud-python/main/docs/src/images/rl_2.png)
 
-To start training:
+To start training, check out the [`rl/README.md`](rl/README.md) folder:
 
 ```bash
 git clone https://github.com/hud-evals/hud-python
