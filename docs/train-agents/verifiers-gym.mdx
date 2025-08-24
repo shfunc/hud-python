@@ -1,7 +1,7 @@
 ---
 title: "Config System"
 description: "YAML-based tool configuration for training"
-icon: "cog"
+icon: "gear"
 ---
 
 Verifiers Gym uses YAML configs to map agent-facing tools to MCP tools, enabling flexible environment configuration without code changes.
@@ -115,17 +115,18 @@ rubric:
 ```python
 import verifiers as vf
 
-# Use your config
+# Use your config (path relative to where you run the script)
 env = vf.load_environment(
     env_id="hud_vf_gym",
     taskset="your-org/your-taskset",
-    config_path="./configs/your-env.yaml"
+    config_path="verifiers/configs/your-env.yaml"
 )
 ```
 
 ## Examples
 
-- `rl/configs/2048.yaml` - 2048 game with directional moves
-- `rl/configs/default.yaml` - Browser/computer interaction
+Config files are located in the cloned `hud_vf_gym/verifiers/configs/`:
+- `2048.yaml` - 2048 game with directional moves  
+- `default.yaml` - Browser/computer interaction
 
 See the [HUD VF Gym README](https://github.com/hud-evals/hud_vf_gym) for more details.

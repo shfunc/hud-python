@@ -9,8 +9,8 @@ Training datasets are collections of HUD tasks stored on HuggingFace. Each task 
 ## Creating Datasets
 
 ```python
-from hud import Task
-from hud.datasets import save_tasks
+from hud.datasets import Task, save_tasks
+from hud.types import MCPToolCall
 
 # Create task variations
 tasks = []
@@ -90,4 +90,3 @@ save_tasks(create_hard_tasks(), "my-org/2048-stage3")
 
 - [hud-evals/2048-taskset](https://huggingface.co/datasets/hud-evals/2048-taskset) - 2048 game variations
 - [hud-evals/sheetbench-50](https://huggingface.co/datasets/hud-evals/sheetbench-50) - Spreadsheet tasks
-- [hud-evals/browser-100](https://huggingface.co/datasets/hud-evals/browser-100) - Web navigation
