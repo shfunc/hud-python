@@ -1,255 +1,233 @@
 """Todo app evaluators."""
 
 import logging
-from typing import Dict, Any, List
-from .registry import evaluator
+from fastmcp import Context
+from hud.tools.types import EvaluationResult
+from . import evaluate
 
 logger = logging.getLogger(__name__)
 
 
-@evaluator(
-    "todo_completed", app="todo", description="Check if expected number of todos are completed"
-)
-class TodoCompletedEvaluator:
-    """Evaluator that checks if the expected number of todos are completed."""
+@evaluate.tool("todo_completed")
+async def todo_completed(ctx: Context, expected_count: int):
+    """Check if expected number of todos are completed.
 
-    async def __call__(self, context, expected_count: int) -> Dict[str, Any]:
-        """Check if at least expected_count todos are completed."""
-        try:
-            # Use the app-centric approach: call todo backend API
-            stats = await context.call_app_api("todo", "/api/eval/stats")
-            completed_count = stats.get("completed_count", 0)
+    Args:
+        expected_count: The expected number of completed todos
 
-            success = completed_count >= expected_count
-            reward = (
-                1.0
-                if success
-                else (completed_count / expected_count if expected_count > 0 else 0.0)
-            )
+    Returns:
+        Evaluation result
+    """
+    try:
+        # Use the app-centric approach: call todo backend API
+        env = evaluate.env  # Get BrowserEnvironmentContext from hub
+        stats = await env.call_app_api("todo", "/api/eval/stats")
+        completed_count = stats.get("completed_items", 0)
+        total_count = stats.get("total_items", 0)
 
-            return {
-                "reward": reward,
-                "done": True,
-                "info": {
-                    "success": success,
-                    "completed_count": completed_count,
-                    "expected_count": expected_count,
-                    "message": f"Found {completed_count} completed todos (expected {expected_count})",
-                    "evaluator": "todo_completed",
-                },
-            }
-        except Exception as e:
-            logger.error(f"TodoCompletedEvaluator failed: {e}")
-            return {
-                "reward": 0.0,
-                "done": True,
-                "info": {
-                    "success": False,
-                    "error": str(e),
-                    "message": "Failed to evaluate completed todos",
-                    "evaluator": "todo_completed",
-                },
-            }
+        success = completed_count >= expected_count
+        reward = (
+            1.0 if success else (completed_count / expected_count if expected_count > 0 else 0.0)
+        )
 
-
-@evaluator("todo_exists", app="todo", description="Check if todos containing specific text exist")
-class TodoExistsEvaluator:
-    """Evaluator that checks if todos containing specific text exist."""
-
-    async def __call__(self, context, text: str) -> Dict[str, Any]:
-        """Check if any todo contains the specified text."""
-        try:
-            # Use the app-centric approach: call todo backend API
-            exists_response = await context.call_app_api("todo", f"/api/eval/has_todo?text={text}")
-            exists = exists_response.get("exists", False)
-
-            return {
-                "reward": 1.0 if exists else 0.0,
-                "done": True,
-                "info": {
-                    "success": exists,
-                    "search_text": text,
-                    "found": exists,
-                    "message": f"Todo containing '{text}' {'found' if exists else 'not found'}",
-                    "evaluator": "todo_exists",
-                },
-            }
-        except Exception as e:
-            logger.error(f"TodoExistsEvaluator failed: {e}")
-            return {
-                "reward": 0.0,
-                "done": True,
-                "info": {
-                    "success": False,
-                    "error": str(e),
-                    "search_text": text,
-                    "message": f"Failed to check for todo containing '{text}'",
-                    "evaluator": "todo_exists",
-                },
-            }
+        return EvaluationResult(
+            reward=reward,
+            done=success,  # Only done when target is reached
+            info={
+                "success": success,
+                "completed_count": completed_count,
+                "total_count": total_count,
+                "expected_count": expected_count,
+                "message": f"Found {completed_count} completed todos (expected {expected_count})",
+            },
+        )
+    except Exception as e:
+        logger.error(f"todo_completed failed: {e}")
+        return EvaluationResult(
+            reward=0.0,
+            done=True,
+            info={
+                "success": False,
+                "error": str(e),
+                "message": "Failed to evaluate completed todos",
+            },
+        )
 
 
-@evaluator(
-    "todo_completion_rate",
-    app="todo",
-    description="Check if todo completion rate meets minimum threshold",
-)
-class TodoCompletionRateEvaluator:
-    """Evaluator that checks if todo completion rate meets a minimum threshold."""
+@evaluate.tool("todo_exists")
+async def todo_exists(ctx: Context, title: str):
+    """Check if a todo with specific title exists.
 
-    async def __call__(self, context, min_rate: float) -> Dict[str, Any]:
-        """Check if completion rate meets minimum threshold."""
-        try:
-            # Use the app-centric approach: call todo backend API
-            rate_response = await context.call_app_api("todo", "/api/eval/completion_rate")
-            completion_rate = rate_response.get("completion_rate", 0.0)
+    Args:
+        title: The title of the todo to check
 
-            success = completion_rate >= min_rate
-            # Proportional reward based on how close we are to the target
-            reward = min(completion_rate / min_rate, 1.0) if min_rate > 0 else 1.0
+    Returns:
+        Evaluation result
+    """
+    try:
+        # Call the app's API to get all todos
+        env = evaluate.env  # Get BrowserEnvironmentContext from hub
+        todos = await env.call_app_api("todo", "/api/eval/todos")
 
-            return {
-                "reward": reward,
-                "done": True,
-                "info": {
-                    "success": success,
-                    "completion_rate": completion_rate,
-                    "min_rate": min_rate,
-                    "message": f"Completion rate: {completion_rate:.1%} (min: {min_rate:.1%})",
-                    "evaluator": "todo_completion_rate",
-                },
-            }
-        except Exception as e:
-            logger.error(f"TodoCompletionRateEvaluator failed: {e}")
-            return {
-                "reward": 0.0,
-                "done": True,
-                "info": {
-                    "success": False,
-                    "error": str(e),
-                    "min_rate": min_rate,
-                    "message": f"Failed to evaluate completion rate",
-                    "evaluator": "todo_completion_rate",
-                },
-            }
+        # Check if any todo has the expected title
+        exists = any(todo.get("title") == title for todo in todos)
+
+        return EvaluationResult(
+            reward=1.0 if exists else 0.0,
+            done=exists,
+            info={
+                "success": exists,
+                "title": title,
+                "total_todos": len(todos),
+                "message": f"Todo '{title}' {'exists' if exists else 'does not exist'}",
+            },
+        )
+    except Exception as e:
+        logger.error(f"todo_exists failed: {e}")
+        return EvaluationResult(
+            reward=0.0,
+            done=True,
+            info={
+                "success": False,
+                "error": str(e),
+                "message": f"Failed to check if todo '{title}' exists",
+            },
+        )
 
 
-# === ADVANCED EVALUATORS ===
+@evaluate.tool("todo_completion_rate")
+async def todo_completion_rate(ctx: Context, target_rate: float = 0.5):
+    """Check if completion rate meets target.
+
+    Args:
+        target_rate: The target completion rate (default 0.5)
+
+    Returns:
+        Evaluation result
+    """
+    try:
+        # Get stats from the app
+        env = evaluate.env  # Get BrowserEnvironmentContext from hub
+        stats = await env.call_app_api("todo", "/api/eval/stats")
+        total_count = stats.get("total_items", 0)
+        completed_count = stats.get("completed_items", 0)
+
+        if total_count == 0:
+            # No todos, consider this as 0% completion
+            actual_rate = 0.0
+        else:
+            actual_rate = completed_count / total_count
+
+        success = actual_rate >= target_rate
+        reward = min(1.0, actual_rate / target_rate) if target_rate > 0 else 1.0
+
+        return EvaluationResult(
+            reward=reward,
+            done=success,
+            info={
+                "success": success,
+                "actual_rate": actual_rate,
+                "target_rate": target_rate,
+                "completed_count": completed_count,
+                "total_count": total_count,
+                "message": f"Completion rate: {actual_rate:.1%} (target: {target_rate:.1%})",
+            },
+        )
+    except Exception as e:
+        logger.error(f"todo_completion_rate failed: {e}")
+        return EvaluationResult(
+            reward=0.0,
+            done=True,
+            info={
+                "success": False,
+                "error": str(e),
+                "message": "Failed to evaluate completion rate",
+            },
+        )
 
 
-@evaluator("todo_db_direct", app="todo", description="Direct database access evaluator")
-class TodoDbDirectEvaluator:
-    """Evaluator that demonstrates direct database/API access for specific items."""
+@evaluate.tool("todo_total_count")
+async def todo_total_count(ctx: Context, min_count: int = 1):
+    """Check if total todo count meets minimum.
 
-    async def __call__(self, context, todo_id: str, expected_completed: bool) -> Dict[str, Any]:
-        """Check specific todo item state via direct API call."""
-        try:
-            # Direct API call to specific item
-            item_data = await context.call_app_api("todo", f"/api/items/{todo_id}")
-            actual_completed = item_data.get("completed", False)
+    Args:
+        min_count: The minimum number of todos expected (default 1)
 
-            success = actual_completed == expected_completed
+    Returns:
+        Evaluation result
+    """
+    try:
+        # Get stats from the app
+        env = evaluate.env  # Get BrowserEnvironmentContext from hub
+        stats = await env.call_app_api("todo", "/api/eval/stats")
+        total_count = stats.get("total_items", 0)
 
-            return {
-                "reward": 1.0 if success else 0.0,
-                "done": True,
-                "info": {
-                    "success": success,
-                    "todo_id": todo_id,
-                    "expected_completed": expected_completed,
-                    "actual_completed": actual_completed,
-                    "item_data": item_data,
-                    "message": f"Todo {todo_id} completion state: {actual_completed} (expected: {expected_completed})",
-                    "evaluator": "todo_db_direct",
-                },
-            }
-        except Exception as e:
-            logger.error(f"TodoDbDirectEvaluator failed: {e}")
-            return {
-                "reward": 0.0,
-                "done": True,
-                "info": {
-                    "success": False,
-                    "error": str(e),
-                    "todo_id": todo_id,
-                    "expected_completed": expected_completed,
-                    "message": f"Failed to access todo {todo_id}",
-                    "evaluator": "todo_db_direct",
-                },
-            }
+        success = total_count >= min_count
+        reward = 1.0 if success else (total_count / min_count if min_count > 0 else 0.0)
+
+        return EvaluationResult(
+            reward=reward,
+            done=success,
+            info={
+                "success": success,
+                "total_count": total_count,
+                "min_count": min_count,
+                "message": f"Found {total_count} todos (minimum: {min_count})",
+            },
+        )
+    except Exception as e:
+        logger.error(f"todo_total_count failed: {e}")
+        return EvaluationResult(
+            reward=0.0,
+            done=True,
+            info={
+                "success": False,
+                "error": str(e),
+                "message": "Failed to evaluate total count",
+            },
+        )
 
 
-@evaluator(
-    "composite_evaluate",
-    app="todo",
-    description="Composite evaluator with weighted sub-evaluations",
-)
-class CompositeEvaluator:
-    """Evaluator that combines multiple sub-evaluations with weights (like psyop-bench Grade.from_subscores)."""
+@evaluate.tool("todo_all_completed")
+async def todo_all_completed(ctx: Context):
+    """Check if all todos are completed.
 
-    async def __call__(self, context, evaluators: List[Dict]) -> Dict[str, Any]:
-        """Run multiple evaluators and combine their scores with weights.
+    Returns:
+        Evaluation result
+    """
+    try:
+        # Get stats from the app
+        env = evaluate.env  # Get BrowserEnvironmentContext from hub
+        stats = await env.call_app_api("todo", "/api/eval/stats")
+        total_count = stats.get("total_items", 0)
+        completed_count = stats.get("completed_items", 0)
 
-        Args:
-            evaluators: List of evaluator specs with weights
-                [{"function": "todo_completed", "args": {...}, "weight": 0.6}, ...]
-        """
-        try:
-            results = []
-            total_weight = 0.0
-            weighted_score = 0.0
+        if total_count == 0:
+            # No todos, consider this as success
+            success = True
+            message = "No todos exist"
+        else:
+            success = completed_count == total_count
+            message = f"{completed_count}/{total_count} todos completed"
 
-            for eval_spec in evaluators:
-                function_name = eval_spec.get("function")
-                args = eval_spec.get("args", {})
-                weight = eval_spec.get("weight", 1.0)
-
-                # Use context to execute the sub-evaluation
-                sub_result = await context.execute_evaluation(
-                    {"function": function_name, "args": args}
-                )
-
-                sub_score = sub_result.get("reward", 0.0)
-                weighted_score += sub_score * weight
-                total_weight += weight
-
-                results.append(
-                    {
-                        "function": function_name,
-                        "args": args,
-                        "weight": weight,
-                        "score": sub_score,
-                        "result": sub_result,
-                    }
-                )
-
-            # Normalize by total weight
-            final_score = weighted_score / total_weight if total_weight > 0 else 0.0
-            overall_success = final_score >= 0.7  # 70% threshold
-
-            return {
-                "reward": final_score,
-                "done": True,
-                "info": {
-                    "success": overall_success,
-                    "final_score": final_score,
-                    "total_weight": total_weight,
-                    "weighted_score": weighted_score,
-                    "sub_evaluations": results,
-                    "threshold": 0.7,
-                    "message": f"Composite evaluation score: {final_score:.2f}",
-                    "evaluator": "composite_evaluate",
-                },
-            }
-        except Exception as e:
-            logger.error(f"CompositeEvaluator failed: {e}")
-            return {
-                "reward": 0.0,
-                "done": True,
-                "info": {
-                    "success": False,
-                    "error": str(e),
-                    "message": "Failed to run composite evaluation",
-                    "evaluator": "composite_evaluate",
-                },
-            }
+        return EvaluationResult(
+            reward=1.0 if success else (completed_count / total_count if total_count > 0 else 0.0),
+            done=success,
+            info={
+                "success": success,
+                "completed_count": completed_count,
+                "total_count": total_count,
+                "message": message,
+            },
+        )
+    except Exception as e:
+        logger.error(f"todo_all_completed failed: {e}")
+        return EvaluationResult(
+            reward=0.0,
+            done=True,
+            info={
+                "success": False,
+                "error": str(e),
+                "message": "Failed to evaluate if all todos are completed",
+            },
+        )

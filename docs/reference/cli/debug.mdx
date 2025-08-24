@@ -1,0 +1,165 @@
+---
+title: "hud debug"
+description: "Test MCP environments through 5 validation phases"
+icon: "bug"
+---
+
+The `hud debug` command validates MCP environments through 5 progressive phases.
+
+## Synopsis
+
+```bash
+hud debug [OPTIONS] IMAGE [DOCKER_ARGS...]
+hud debug --command COMMAND [ARGS...]
+hud debug --cursor SERVER_NAME
+```
+
+## Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--max-phase` | Stop at specified phase (1-5) | 5 |
+| `--command` | Debug a command instead of Docker | - |
+| `--cursor` | Debug a Cursor MCP server | - |
+| `--timeout` | Timeout per phase in seconds | 30 |
+| `-e, --env` | Set environment variables | - |
+
+## Debug Phases
+
+### Phase 1: Container Startup
+```
+🚀 Phase 1: Container startup
+✓ Container started successfully
+✓ Received output on stderr
+```
+Checks: Process starts, outputs to stderr, doesn't exit
+
+### Phase 2: MCP Initialization
+```
+🔗 Phase 2: MCP initialization
+✓ Received valid initialize response
+✓ Protocol version: 1.0
+```
+Checks: JSON-RPC communication, protocol compatibility
+
+### Phase 3: Tool Discovery
+```
+🔧 Phase 3: Tool discovery
+✓ Found 8 tools:
+  • setup_board - Initialize game board
+  • move - Move in direction
+```
+Checks: Tools registered, valid schemas
+
+### Phase 4: Tool Execution
+```
+🧪 Phase 4: Tool testing
+→ Testing tool: setup_board
+✓ Tool executed successfully
+```
+Checks: Tools callable, return valid responses
+
+### Phase 5: Readiness Check
+```
+✅ Phase 5: Readiness check
+✓ Ready for agent interaction
+```
+Checks: Overall health, state persistence
+
+<Note>
+Once your environment passes Phase 5, consider using `hud mcp` for hot-reload development. This eliminates rebuild cycles and speeds up iteration.
+</Note>
+
+## Examples
+
+### Docker Debug
+```bash
+# Basic
+hud debug my-server:latest
+
+# With environment variables
+hud debug my-server:latest -e DEBUG=true -e LOG_LEVEL=debug
+
+# Stop at phase 3
+hud debug my-server:latest --max-phase 3
+```
+
+### Local Development
+```bash
+# Python script
+hud debug --command "python my_server.py"
+
+# With arguments
+hud debug --command "python -m my_module.server --port 8000"
+```
+
+### Cursor Integration
+```bash
+# Debug Cursor server
+hud debug --cursor my-dev-env
+```
+
+## Common Issues
+
+### Phase 1 Failures
+- **Container exits**: Check CMD/ENTRYPOINT
+- **No stderr**: Add `print(..., file=sys.stderr)`
+- **Permission denied**: Check file permissions
+
+### Phase 2 Failures
+- **Invalid JSON**: Only JSON-RPC on stdout
+- **Timeout**: Check for blocking operations
+
+### Phase 3 Failures
+- **No tools**: Check `@server.tool()` decorators
+- **Invalid schema**: Add type hints and docstrings
+
+## Advanced Usage
+
+### Incremental Debugging
+```bash
+# Debug phase by phase
+for phase in 1 2 3 4 5; do
+    echo "Testing phase $phase..."
+    hud debug my-env:latest --max-phase $phase || break
+done
+```
+
+### Development Mode
+```bash
+# Once debug passes, use hot-reload for development
+cd environments/my-env
+hud mcp . --build
+
+# Make changes to src/ files
+# Test changes without rebuilding
+hud analyze hud-my-env:dev
+```
+
+### Parallel Testing
+```bash
+# Test multiple environments
+images=("env1:latest" "env2:latest")
+for image in "${images[@]}"; do
+    hud debug "$image" > "debug_${image//:/}.log" 2>&1 &
+done
+wait
+```
+
+## Best Practices
+
+1. Start with phase 1 and work up
+2. Use `--max-phase` for incremental debugging
+3. Check stderr output first
+4. Keep tools simple for easier debugging
+5. Add health check tools
+
+<Note>
+If debug passes, agents should work reliably with your environment.
+</Note>
+
+## Next Step
+
+<Card title="Analyze Command" icon="magnifying-glass" href="/reference/cli/analyze">
+  Explore environment capabilities after debugging
+</Card>

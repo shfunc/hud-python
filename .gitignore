@@ -13,7 +13,6 @@ uv.lock
 # Media files
 *.jpg
 *.jpeg
-*.gif
 *.bmp
 *.tiff
 *.ico
@@ -33,3 +32,14 @@ TODO.md
 /ref/
 
 .cursor/
+
+/dev/
+
+.claude
+CLAUDE.md
+
+*.csv
+
+# RL
+wandb/
+outputs/

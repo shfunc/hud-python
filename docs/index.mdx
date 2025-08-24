@@ -1,0 +1,127 @@
+---
+title: "HUD - Evaluate, Build, Train"
+description: "Improve tool use and computer use agents. Built on Model Context Protocol."
+---
+
+<CardGroup cols={3}>
+<Card title="I want to evaluate agents" icon="robot" href="/evaluate-agents">
+  Test Claude, Operator, or custom agents on benchmarks like SheetBench and OSWorld
+</Card>
+
+<Card title="I want to build environments" icon="cube" href="/build-environments">
+  Wrap any software in dockerized MCP for scalable and generalizable agent evaluation
+</Card>
+
+<Card title="I want to train agents" icon="brain" href="/train-agents">
+  Use reinforcement learning and GRPO on evaluations to improve agent performance
+</Card>
+</CardGroup>
+
+## What is HUD?
+
+HUD connects AI agents to software environments using the Model Context Protocol (MCP). Whether you're evaluating existing agents, building new environments, or training models with RL, HUD provides the infrastructure.
+
+```mermaid
+graph LR
+    Agent["🤖 Any Agent<br/>(Claude, Operator, etc.)"]
+    MCP["🔌 MCP Protocol<br/>(Tool Calls)"]
+    Env["📦 Any Environment<br/>(Browser, OS, etc.)"]
+    
+    Agent -->|"call_tool()"| MCP
+    MCP -->|"click(x, y)"| Env
+    Env -->|"screenshot"| MCP
+    MCP -->|"get_response()"| Agent
+    
+    style Agent fill:#e0e7ff,stroke:#6366f1,stroke-width:2px
+    style MCP fill:#fef3c7,stroke:#f59e0b,stroke-width:2px
+    style Env fill:#d1fae5,stroke:#10b981,stroke-width:2px
+```
+
+## Why HUD?
+
+- **🔌 MCP-native**: Any agent can connect to any environment
+- **📡 Live telemetry**: Debug every tool call at [app.hud.so](https://app.hud.so)
+- **🚀 Production-ready**: From local Docker to cloud scale
+- **🎯 Built-in benchmarks**: OSWorld-Verified, SheetBench-50, and more
+- **🔧 CLI tools**: Debug, analyze, create environments with `hud debug` and `hud analyze`
+
+<CardGroup cols={2}>
+<Card title="3-minute quickstart" icon="bolt" href="/quickstart">
+  Run your first agent evaluation with zero setup
+</Card>
+
+<Card title="Clone starter project" icon="code-branch">
+  ```bash
+  uvx hud-python quickstart
+  ```
+</Card>
+</CardGroup>
+
+<Card title="Using an AI assistant?" icon="sparkles">
+**Add HUD docs as an MCP server for better understanding:**
+
+<Tabs>
+  <Tab title="Claude">
+    ```bash
+    claude mcp add docs-hud https://docs.hud.so/mcp
+    ```
+  </Tab>
+  <Tab title="Cursor">
+    ```json
+    "docs-hud": {
+      "url": "https://docs.hud.so/mcp"
+    }
+    ```
+     [![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=docs-hud-so&config=eyJ1cmwiOiJodHRwczovL2RvY3MuaHVkLnNvL21jcCJ9)
+  </Tab>
+</Tabs>
+</Card>
+
+## Quick Example
+
+```python
+import asyncio, os, hud
+from hud.datasets import Task
+from hud.agents import ClaudeAgent
+
+async def main():
+    # Define evaluation task with remote MCP
+    task = Task(
+        prompt="Win a game of 2048 by reaching the 128 tile",
+        mcp_config={
+            "hud": {
+                "url": "https://mcp.hud.so",
+                "headers": {
+                    "Authorization": f"Bearer {os.getenv('HUD_API_KEY')}",
+                    "Mcp-Image": "hudpython/hud-text-2048:v1.1"
+                }
+            }
+        },
+        setup_tool={"name": "setup", "arguments": {"name": "board", "board_size": 4}},
+        evaluate_tool={"name": "evaluate", "arguments": {"name": "max_number", "target": 128}}
+    )
+    
+    # Run agent (auto-creates MCP client)
+    agent = ClaudeAgent()
+    result = await agent.run(task)
+    print(f"Score: {result.reward}")
+
+asyncio.run(main())
+```
+
+## Community
+
+<CardGroup cols={2}>
+<Card title="GitHub" icon="github" href="https://github.com/hud-evals/hud-python">
+  Star the repo and contribute
+</Card>
+
+<Card title="Discord" icon="discord" href="https://discord.gg/hud-evals">
+  Join our community
+</Card>
+</CardGroup>
+
+### Are you a startup building agents?
+
+[📅 Hop on a call](https://cal.com/jay-ram-z6st6w/demo) or [📧 founders@hud.so](mailto:founders@hud.so)
+

@@ -116,14 +116,14 @@ class SteelProvider(BrowserProvider):
 
         return self._cdp_url
 
-    async def close(self) -> None:
+    def close(self) -> None:
         """Terminate the Steel session."""
         if not self._instance_id:
             return
 
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.delete(
+            with httpx.Client() as client:
+                response = client.delete(
                     f"{self.base_url}/v1/sessions/{self._instance_id}",
                     headers={
                         "Content-Type": "application/json",

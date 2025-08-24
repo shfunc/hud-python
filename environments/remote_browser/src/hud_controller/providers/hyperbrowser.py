@@ -159,14 +159,14 @@ class HyperBrowserProvider(BrowserProvider):
 
         return self._cdp_url
 
-    async def close(self) -> None:
+    def close(self) -> None:
         """Terminate the HyperBrowser session."""
         if not self._instance_id:
             return
 
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.put(
+            with httpx.Client() as client:
+                response = client.put(
                     f"{self.base_url}/api/session/{self._instance_id}/stop",
                     headers={"x-api-key": str(self.api_key), "Content-Type": "application/json"},
                     timeout=30.0,
@@ -208,7 +208,7 @@ class HyperBrowserProvider(BrowserProvider):
 
         return status
 
-    def get_live_url(self) -> Optional[str]:
+    def get_live_view_url(self) -> Optional[str]:
         """Get the live view URL for the HyperBrowser instance."""
         return self._live_url if hasattr(self, "_live_url") else None
 

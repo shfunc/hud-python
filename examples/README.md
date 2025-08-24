@@ -1,32 +1,84 @@
-# HUD SDK Examples
+# Examples
 
-This directory contains example notebooks demonstrating different aspects of the HUD SDK.
+A collection of examples demonstrating HUD SDK usage patterns.
 
-## Getting Started
+## Quick Start Examples
 
-1. **Installation**: Follow the [main README](../README.md) instructions to install the SDK.
+### 00_agent_env.py
+Minimal MCP server and client in one file. Shows the basic agent-environment communication pattern.
 
-2. **API Key**: Get your API key from [app.hud.so](https://app.hud.so) and set it as an environment variable:
-   ```bash
-   export HUD_API_KEY=your_api_key_here
-   ```
+```bash
+python examples/00_agent_env.py
+```
 
-3. **Example Folders**:
-   - **[agents_tools/](agents_tools/)** - Examples of agent implementations with various tools, including MCP (Model Context Protocol) integration, browser automation, and secure handling of sensitive data
-   - **[environments/](environments/)** - Environment setup examples showcasing local and remote environment configurations, including emulator-based environments like Pokemon_tools
-   - **[evaluations/](evaluations/)** - Evaluation and benchmarking examples including task creation, OS-level agent evaluation, and practical applications like SheetBench and Wordle
-   - **[rl/](rl/)** - Reinforcement learning examples (currently in development)
+### 01_hello_2048.py
+Complete agent evaluation on the 2048 environment using Claude.
 
-## Key Concepts
+```bash
+python examples/01_hello_2048.py
+```
 
-- **Tasks**: Define the objective, context, and success criteria for what an agent should accomplish
-- **Environments**: Browser or OS interfaces where agents can perceive and interact with real applications
-- **Agents**: AI systems (like Claude or OpenAI models) that process observations and generate actions in environments
-- **Jobs**: Group related environment runs (trajectories) together for evaluation and analysis
-- **Evaluation**: Methods to assess agent performance, success rates, and behavior patterns
+> | Requires Docker and `ANTHROPIC_API_KEY` environment variable.
 
-Each example demonstrates practical applications of these concepts with code you can run and modify.
+## Core Patterns
 
-For more detailed documentation, visit [docs.hud.so](https://docs.hud.so/introduction).
+### 02_agent_lifecycle.py
+Demonstrates the full agent lifecycle with telemetry and state management.
+- Task creation and configuration
+- Trace context for debugging
+- State persistence between runs
 
+### run_evaluation.py
+Generic dataset evaluation runner supporting multiple agents.
 
+```bash
+# Run single task
+python examples/run_evaluation.py hud-evals/SheetBench-50
+
+# Run full dataset
+python examples/run_evaluation.py hud-evals/SheetBench-50 --full
+```
+
+## Integration Examples
+
+### claude_agent.py
+Direct usage of Claude agent without environments.
+
+### integration_mcp_use.py
+Using the legacy `mcp_use` client for multi-server setups.
+
+### integration_otel.py
+Custom OpenTelemetry backend integration (e.g., Jaeger).
+
+## Prerequisites
+
+| Requirement | Used For |
+|-------------|----------|
+| Docker | Running environment containers |
+| `HUD_API_KEY` | Cloud deployments and telemetry |
+| `ANTHROPIC_API_KEY` | Claude agent examples |
+
+## Common Pattern
+
+All examples follow this structure:
+
+```python
+import asyncio, hud
+from hud.datasets import Task
+from hud.agents import ClaudeAgent
+
+async def main():
+    with hud.trace("example-name"):
+        task = Task(
+            prompt="Your task here",
+            mcp_config={...}
+        )
+        
+        agent = ClaudeAgent()
+        result = await agent.run(task)
+        print(f"Reward: {result.reward}")
+
+asyncio.run(main())
+```
+
+> | The agent automatically creates an MCP client from `task.mcp_config` if none is provided.

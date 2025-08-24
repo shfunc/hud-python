@@ -1,5 +1,5 @@
 from __future__ import annotations
 
-from .requests import make_request, make_request_sync
+from .server import MCPServer
 
-__all__ = ["make_request", "make_request_sync"]
+__all__ = ["MCPServer"]

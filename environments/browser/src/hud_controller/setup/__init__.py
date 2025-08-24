@@ -1,10 +1,14 @@
-"""Setup tools package for browser environment.
+"""Setup module for browser environment."""
 
-This package provides environment-specific setup functions that can be used
-as MCP resources and for direct setup calls.
-"""
+from hud.tools.base import BaseHub
 
-from .registry import SetupRegistry, setup
-from .todo import *
+setup = BaseHub(
+    name="setup",
+    title="Browser Setup",
+    description="Initialize or configure the browser environment",
+)
 
-__all__ = ["SetupRegistry", "setup"]
+# Import all setup tools to register them
+from . import game_2048, todo
+
+__all__ = ["setup"]

@@ -1,0 +1,397 @@
+---
+title: "Create Agents"
+description: "Build your own MCP-compatible agent for HUD evaluation"
+icon: "robot"
+---
+
+Create custom agents that work with HUD's evaluation system. You can either extend the `MCPAgent` class for full control, or use the quickstart template for a simpler approach.
+
+## Quick Start with Template
+
+The fastest way to create an agent is using the HUD quickstart template:
+
+```bash
+# Clone the quickstart repository
+uvx hud-python quickstart
+
+# This creates a full agent implementation with:
+# - Complete lifecycle example
+# - Direct tool call handling
+# - Ready-to-run code
+```
+
+The quickstart provides a working agent that you can modify to add your own logic for making tool calls.
+
+## Building from Scratch
+
+For full control, create an agent by inheriting from `MCPAgent` and implementing four core methods:
+
+```python
+from hud.agents import MCPAgent
+from hud.types import AgentResponse, MCPToolCall, MCPToolResult
+
+class MyAgent(MCPAgent):
+    """Your custom agent implementation."""
+    
+    async def get_system_messages(self) -> list[Any]:
+        """Return system messages for your LLM."""
+        pass
+    
+    async def get_response(self, messages: list[Any]) -> AgentResponse:
+        """Generate agent response with tool calls."""
+        pass
+    
+    async def format_blocks(self, blocks: list[ContentBlock]) -> list[Any]:
+        """Format content blocks for your LLM."""
+        pass
+    
+    async def format_tool_results(
+        self, tool_calls: list[MCPToolCall], 
+        tool_results: list[MCPToolResult]
+    ) -> list[Any]:
+        """Format tool results back into messages."""
+        pass
+```
+
+## Understanding the Interface
+
+The methods provide a bridge between two worlds:
+
+- **`messages: list[Any]`** - Your LLM's native message format (e.g., OpenAI's format)
+- **`blocks: list[ContentBlock]`** - MCP's content blocks (text, images, etc.)
+- **`tool_calls: list[MCPToolCall]`** and **`tool_results: list[MCPToolResult]`** - Native MCP types
+
+These methods translate between your LLM's format and MCP's standardized format.
+
+## Implementation Guide
+
+### 1. Get System Messages
+
+Define the system prompt for your agent:
+
+```python
+async def get_system_messages(self) -> list[Any]:
+    """
+    Return system messages in your LLM's format.
+    """
+    # Use the configured system prompt or default
+    prompt = self.system_prompt or "You are a helpful assistant."
+    
+    # Return in your LLM's expected format
+    return [{"role": "system", "content": prompt}]
+```
+
+### 2. Get Response Method
+
+This is where your agent decides what to do:
+
+```python
+async def get_response(self, messages: list[Any]) -> AgentResponse:
+    """
+    Call your LLM and return tool calls.
+    
+    Args:
+        messages: Conversation history in your LLM's format
+        
+    Returns:
+        AgentResponse with content and tool_calls
+    """
+    # Call your LLM API
+    response = await self.llm_client.chat(
+        messages=messages,
+        tools=self._available_tools  # Provided by MCPAgent
+    )
+    
+    # Parse response into tool calls
+    tool_calls = []
+    if response.tool_calls:
+        for tc in response.tool_calls:
+            tool_calls.append(
+                MCPToolCall(
+                    name=tc.function.name,
+                    arguments=json.loads(tc.function.arguments),
+                    id=tc.id  # Optional tool call ID
+                )
+            )
+    
+    return AgentResponse(
+        content=response.content,
+        tool_calls=tool_calls
+    )
+```
+
+### 3. Format Blocks Method
+
+Convert MCP's content blocks into your LLM's message format:
+
+```python
+async def format_blocks(self, blocks: list[ContentBlock]) -> list[Any]:
+    """
+    Format content blocks from tools into messages.
+    
+    Args:
+        blocks: List of MCP ContentBlock objects
+        
+    Returns:
+        Messages in your LLM's expected format
+    """
+    # Example for OpenAI-style format
+    content = []
+    for block in blocks:
+        if block.type == "text":
+            content.append({"type": "text", "text": block.text})
+        elif block.type == "image":
+            content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:{block.mime_type};base64,{block.data}"}
+            })
+    
+    return [{"role": "user", "content": content}]
+```
+
+### 4. Format Tool Results Method
+
+Convert tool execution results back into messages:
+
+```python
+async def format_tool_results(
+    self, 
+    tool_calls: list[MCPToolCall], 
+    tool_results: list[MCPToolResult]
+) -> list[Any]:
+    """
+    Format tool results for the next LLM call.
+    
+    Args:
+        tool_calls: The MCP tool calls that were made
+        tool_results: MCP results from executing those tools
+        
+    Returns:
+        Messages to append to conversation
+    """
+    messages = []
+    
+    for call, result in zip(tool_calls, tool_results):
+        # Add the assistant's tool call
+        messages.append({
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [{
+                "id": call.id or str(uuid.uuid4()),
+                "type": "function",
+                "function": {
+                    "name": call.name,
+                    "arguments": json.dumps(call.arguments)
+                }
+            }]
+        })
+        
+        # Add the tool result
+        messages.append({
+            "role": "tool",
+            "tool_call_id": call.id,
+            "content": json.dumps(result.content)
+        })
+    
+    return messages
+```
+
+## Complete Example
+
+Here's a minimal agent using OpenAI:
+
+```python
+import json
+import openai
+from typing import Any
+from hud.agents import MCPAgent
+from hud.types import AgentResponse, MCPToolCall, MCPToolResult
+
+class OpenAIAgent(MCPAgent):
+    """Simple OpenAI agent for HUD."""
+    
+    def __init__(self, model: str = "gpt-4", **kwargs):
+        super().__init__(**kwargs)
+        self.model = model
+        self.client = openai.AsyncOpenAI()
+    
+    async def get_system_messages(self) -> list[Any]:
+        prompt = self.system_prompt or "You are a helpful assistant that uses tools."
+        return [{"role": "system", "content": prompt}]
+    
+    async def get_response(self, messages: list[Any]) -> AgentResponse:
+        # Convert MCP tools to OpenAI format
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.inputSchema
+                }
+            }
+            for tool in self._available_tools
+        ]
+        
+        # Call OpenAI
+        response = await self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            tools=tools if tools else None
+        )
+        
+        # Extract tool calls
+        tool_calls = []
+        msg = response.choices[0].message
+        if msg.tool_calls:
+            for tc in msg.tool_calls:
+                tool_calls.append(
+                    MCPToolCall(
+                        name=tc.function.name,
+                        arguments=json.loads(tc.function.arguments),
+                        id=tc.id
+                    )
+                )
+        
+        return AgentResponse(
+            content=msg.content or "",
+            tool_calls=tool_calls
+        )
+    
+    async def format_blocks(self, blocks: list[Any]) -> list[Any]:
+        # Simple text-only formatting
+        text = " ".join(b.text for b in blocks if b.type == "text")
+        return [{"role": "user", "content": text}]
+    
+    async def format_tool_results(
+        self, tool_calls: list[MCPToolCall], 
+        tool_results: list[MCPToolResult]
+    ) -> list[Any]:
+        messages = []
+        
+        # Add assistant message with tool calls
+        messages.append({
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": call.id,
+                    "type": "function",
+                    "function": {
+                        "name": call.name,
+                        "arguments": json.dumps(call.arguments)
+                    }
+                }
+                for call in tool_calls
+            ]
+        })
+        
+        # Add tool results
+        for call, result in zip(tool_calls, tool_results):
+            content = json.dumps(result.content[0].text if result.content else "")
+            messages.append({
+                "role": "tool",
+                "tool_call_id": call.id,
+                "content": content
+            })
+        
+        return messages
+```
+
+## Testing Your Agent
+
+Test your agent on a simple task:
+
+```python
+import asyncio
+import hud
+import os
+from hud import Task
+
+async def test_agent():
+    with hud.trace("test-custom-agent"):
+        task = Task(
+            prompt="Navigate to example.com",
+            mcp_config={
+                "hud": {
+                    "url": "https://mcp.hud.so",
+                    "headers": {
+                        "Authorization": f"Bearer {os.getenv('HUD_API_KEY')}",
+                        "Mcp-Image": "hudpython/hud-remote-browser:latest"
+                    }
+                }
+            },
+            setup_tool={
+                "name": "setup",
+                "arguments": {
+                    "name": "navigate",
+                    "arguments": {"url": "https://example.com"}
+                }
+            },
+            evaluate_tool={
+                "name": "evaluate",
+                "arguments": {
+                    "name": "url_match",
+                    "arguments": {"pattern": "example.com"}
+                }
+            }
+        )
+        
+        agent = OpenAIAgent(model="gpt-4")
+        result = await agent.run(task)
+        print(f"Reward: {result.reward}")
+
+asyncio.run(test_agent())
+```
+
+## Advanced Features
+
+### Custom System Prompts
+
+```python
+class MyAgent(MCPAgent):
+    def __init__(self, **kwargs):
+        super().__init__(
+            system_prompt="You are an expert web automation agent.",
+            **kwargs
+        )
+```
+
+### Tool Filtering
+
+```python
+# Only allow specific tools
+agent = MyAgent(
+    allowed_tools=["click", "type", "playwright"],
+    disallowed_tools=["execute_script"]
+)
+```
+
+### Response Agent
+
+The ResponseAgent is an OpenAI-powered helper that determines whether an agent should stop or continue based on the agent's messages. It's useful for handling ambiguous situations:
+
+```python
+from hud.agents.misc import ResponseAgent
+
+# ResponseAgent analyzes agent messages like:
+# "I've completed the form. Should I submit it?"
+# And returns "STOP" or "CONTINUE"
+
+agent = MyAgent(
+    response_agent=ResponseAgent()  # Requires OPENAI_API_KEY
+)
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+<Card title="Leaderboards" icon="trophy" href="/evaluate-agents/leaderboards">
+  Track and compare agent performance
+</Card>
+
+<Card title="Create Benchmarks" icon="flask" href="/evaluate-agents/create-benchmarks">
+  Build custom evaluation datasets
+</Card>
+</CardGroup>
+

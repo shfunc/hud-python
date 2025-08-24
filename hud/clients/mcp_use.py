@@ -1,0 +1,278 @@
+"""MCP-use based client implementation (legacy)."""
+
+from __future__ import annotations
+
+import logging
+from typing import TYPE_CHECKING, Any
+
+from mcp import Implementation
+from mcp.shared.exceptions import McpError
+from mcp_use.client import MCPClient as MCPUseClient
+from pydantic import AnyUrl
+
+from hud.types import MCPToolCall, MCPToolResult
+from hud.version import __version__ as hud_version
+
+from .base import BaseHUDClient
+
+if TYPE_CHECKING:
+    from mcp import types
+    from mcp_use.session import MCPSession as MCPUseSession
+
+logger = logging.getLogger(__name__)
+
+
+class MCPUseHUDClient(BaseHUDClient):
+    """MCP-use based implementation of HUD MCP client."""
+
+    client_info = Implementation(
+        name="hud-mcp-use", title="hud MCP-use Client", version=hud_version
+    )
+
+    def __init__(self, mcp_config: dict[str, dict[str, Any]] | None = None, **kwargs: Any) -> None:
+        """
+        Initialize MCP-use client.
+
+        Args:
+            mcp_config: MCP server configuration dict
+            **kwargs: Additional arguments passed to base class
+        """
+        super().__init__(mcp_config=mcp_config, **kwargs)
+
+        self._sessions: dict[str, MCPUseSession] = {}
+        self._tool_map: dict[str, tuple[str, types.Tool]] = {}
+        self._client: MCPUseClient | None = None
+
+    async def _connect(self, mcp_config: dict[str, dict[str, Any]]) -> None:
+        """Create all sessions for MCP-use client."""
+        if self._client is not None:
+            logger.warning("Client is already connected, cannot connect again")
+            return
+
+        config = {"mcpServers": mcp_config}
+        self._client = MCPUseClient.from_dict(config)
+        try:
+            self._sessions = await self._client.create_all_sessions()
+            logger.info("Created %d MCP sessions", len(self._sessions))
+
+            # Configure validation for all sessions based on client setting
+            from mcp.client.session import ValidationOptions
+
+            for session in self._sessions.values():
+                if (
+                    hasattr(session, "connector")
+                    and hasattr(session.connector, "client_session")
+                    and session.connector.client_session is not None
+                ):
+                    session.connector.client_session._validation_options = ValidationOptions(
+                        strict_output_validation=self._strict_validation
+                    )
+
+            # Log session details in verbose mode
+            if self.verbose and self._sessions:
+                for name, session in self._sessions.items():
+                    logger.debug("  - %s: %s", name, type(session).__name__)
+
+        except McpError as e:
+            # Protocol error - the server is reachable but rejecting our request
+            logger.error("MCP protocol error: %s", e)
+            logger.error("This typically means:")
+            logger.error("- Invalid or missing initialization parameters")
+            logger.error("- Incompatible protocol version")
+            logger.error("- Server-side configuration issues")
+            raise
+        except Exception as e:
+            # Transport or other errors
+            logger.error("Failed to create sessions: %s", e)
+            if self.verbose:
+                logger.info("Check that the MCP server is running and accessible")
+            raise
+
+    async def list_tools(self) -> list[types.Tool]:
+        """List all available tools from all sessions."""
+        if self._client is None or not self._sessions:
+            raise ValueError("Client is not connected, call initialize() first")
+
+        all_tools = []
+        self._tool_map = {}
+
+        for server_name, session in self._sessions.items():
+            try:
+                # Ensure session is initialized
+                if not hasattr(session, "connector") or not hasattr(
+                    session.connector, "client_session"
+                ):
+                    await session.initialize()
+
+                if session.connector.client_session is None:
+                    logger.warning("Client session not initialized for %s", server_name)
+                    continue
+
+                # List tools
+                tools_result = await session.connector.client_session.list_tools()
+
+                logger.info(
+                    "Discovered %d tools from '%s': %s",
+                    len(tools_result.tools),
+                    server_name,
+                    [tool.name for tool in tools_result.tools],
+                )
+
+                # Add to collections
+                for tool in tools_result.tools:
+                    all_tools.append(tool)
+                    self._tool_map[tool.name] = (server_name, tool)
+
+                # Log detailed tool info in verbose mode
+                if self.verbose:
+                    for tool in tools_result.tools:
+                        description = tool.description or ""
+                        logger.debug(
+                            "  Tool '%s': %s",
+                            tool.name,
+                            description[:100] + "..." if len(description) > 100 else description,
+                        )
+
+            except Exception as e:
+                logger.error("Error discovering tools from '%s': %s", server_name, e)
+                if self.verbose:
+                    logger.exception("Full error details:")
+
+        return all_tools
+
+    async def _call_tool(self, tool_call: MCPToolCall) -> MCPToolResult:
+        """Execute a tool by name."""
+        if self._client is None or not self._initialized:
+            raise ValueError("Client is not connected, call initialize() first")
+
+        if tool_call.name not in self._tool_map:
+            raise ValueError(f"Tool '{tool_call.name}' not found")
+
+        server_name, _ = self._tool_map[tool_call.name]
+        session = self._sessions[server_name]
+
+        if self.verbose:
+            logger.debug(
+                "Calling tool '%s' on server '%s' with arguments: %s",
+                tool_call.name,
+                server_name,
+                tool_call.arguments,
+            )
+
+        if session.connector.client_session is None:
+            raise ValueError(f"Client session not initialized for {server_name}")
+
+        result = await session.connector.client_session.call_tool(
+            name=tool_call.name,
+            arguments=tool_call.arguments or {},
+        )
+
+        if self.verbose:
+            logger.debug("Tool '%s' result: %s", tool_call.name, result)
+
+        # MCP-use already returns the correct type, but we need to ensure it's MCPToolResult
+        return MCPToolResult(
+            content=result.content,
+            isError=result.isError,
+            structuredContent=result.structuredContent,
+        )
+
+    async def list_resources(self) -> list[types.Resource]:
+        """List all available resources."""
+        if self._client is None or not self._sessions:
+            raise ValueError("Client is not connected, call initialize() first")
+
+        for server_name, session in self._sessions.items():
+            try:
+                if not hasattr(session, "connector") or not hasattr(
+                    session.connector, "client_session"
+                ):
+                    continue
+                if session.connector.client_session is None:
+                    continue
+                # Prefer standard method name if available
+                if hasattr(session.connector.client_session, "list_resources"):
+                    resources = await session.connector.client_session.list_resources()
+                else:
+                    # If the client doesn't support resource listing, skip
+                    continue
+                return resources.resources
+            except Exception as e:
+                if self.verbose:
+                    logger.debug("Could not list resources from server '%s': %s", server_name, e)
+                continue
+        return []
+
+    async def read_resource(self, uri: str | AnyUrl) -> types.ReadResourceResult | None:
+        """Read a resource by URI from any server that provides it."""
+        if self._client is None or not self._sessions:
+            raise ValueError("Client is not connected, call initialize() first")
+
+        for server_name, session in self._sessions.items():
+            try:
+                if not hasattr(session, "connector") or not hasattr(
+                    session.connector, "client_session"
+                ):
+                    continue
+
+                if session.connector.client_session is None:
+                    continue
+
+                # Convert str to AnyUrl if needed
+                resource_uri = AnyUrl(uri) if isinstance(uri, str) else uri
+                # Prefer read_resource; fall back to list_resources if needed
+                if hasattr(session.connector.client_session, "read_resource"):
+                    result = await session.connector.client_session.read_resource(resource_uri)
+                else:
+                    # Fallback path for older clients: not supported in strict typing
+                    raise AttributeError("read_resource not available")
+
+                if self.verbose:
+                    logger.debug(
+                        "Successfully read resource '%s' from server '%s'", uri, server_name
+                    )
+
+                return result
+
+            except McpError as e:
+                # McpError is expected for unsupported resources
+                if "telemetry://" in str(uri):
+                    logger.debug(
+                        "Telemetry resource not supported by server '%s': %s", server_name, e
+                    )
+                elif self.verbose:
+                    logger.debug(
+                        "MCP resource error for '%s' from server '%s': %s", uri, server_name, e
+                    )
+                continue
+            except Exception as e:
+                # Other errors might be more serious
+                if "telemetry://" in str(uri):
+                    logger.debug("Failed to fetch telemetry from server '%s': %s", server_name, e)
+                else:
+                    logger.warning(
+                        "Unexpected error reading resource '%s' from server '%s': %s",
+                        uri,
+                        server_name,
+                        e,
+                    )
+                continue
+
+        return None
+
+    async def _disconnect(self) -> None:
+        """Close all active sessions."""
+        if self._client is None:
+            logger.warning("Client is not connected, cannot close")
+            return
+
+        await self._client.close_all_sessions()
+        self._sessions = {}
+        self._tool_map = {}
+        self._initialized = False
+        logger.debug("MCP-use client disconnected")
+
+    # Legacy compatibility methods (limited; tests should not rely on these)
+    def get_sessions(self) -> dict[str, MCPUseSession]:
+        """Get active MCP sessions."""
+        return self._sessions

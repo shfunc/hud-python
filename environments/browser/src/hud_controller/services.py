@@ -9,7 +9,7 @@ import subprocess
 import os
 import logging
 from pathlib import Path
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any, Set
 import socket
 
 logger = logging.getLogger(__name__)
@@ -35,6 +35,7 @@ class ServiceManager:
         self._app_ports: Dict[
             str, Dict[str, int]
         ] = {}  # Store frontend and backend ports for each app
+        self._allocated_ports: Set[int] = set()  # Track all allocated ports
 
     async def start_services(self):
         """Start all core services in parallel where possible."""
@@ -91,24 +92,7 @@ class ServiceManager:
         await asyncio.gather(vnc_ready, websockify_ready)
         logger.info("noVNC available at: http://localhost:8080/vnc.html")
 
-    async def launch_apps(self):
-        """Launch configured applications in parallel."""
-        apps = os.getenv("LAUNCH_APPS", "").split(",")
-        tasks = []
-
-        for app in apps:
-            app = app.strip()
-            if app:
-                tasks.append(self.launch_app(app))
-
-        if tasks:
-            # Launch all apps in parallel
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            for app, result in zip(apps, results):
-                if isinstance(result, Exception):
-                    logger.error(f"Failed to launch app '{app.strip()}': {result}")
-
-    async def launch_app(self, app_name: str) -> Dict[str, str]:
+    async def launch_app(self, app_name: str) -> Dict[str, Any]:
         """Launch a specific app dynamically.
 
         Args:
@@ -126,14 +110,9 @@ class ServiceManager:
         if not launch_script.exists():
             raise ValueError(f"App '{app_name}' missing launch.py")
 
-        # For todo app, use specific ports
-        if app_name == "todo":
-            frontend_port = 3000
-            backend_port = 5000
-        else:
-            # Find an available port for other apps
-            frontend_port = self._get_next_port()
-            backend_port = self._get_next_port()
+        # Get unique ports for frontend and backend
+        frontend_port = self._get_next_port()
+        backend_port = self._get_next_port()
 
         # Launch the app with both frontend and backend ports
         # Note: Can't use stdout/stderr pipes as stdio is reserved for MCP
@@ -156,13 +135,12 @@ class ServiceManager:
         self._app_processes[app_name] = proc
         self._launched_apps.append(app_name)
 
-        # Wait for frontend to be ready using HTTP health checks
         try:
-            await self._wait_for_port(frontend_port, f"app '{app_name}' frontend", timeout=60)
-
-            # Additional HTTP health check for web apps with faster timeout
-            if app_name == "todo":
-                await self._wait_for_http_health(f"http://localhost:{frontend_port}", timeout=10)
+            # Wait for both ports in parallel
+            await asyncio.gather(
+                self._wait_for_port(frontend_port, f"app '{app_name}' frontend", timeout=60),
+                self._wait_for_port(backend_port, f"app '{app_name}' backend", timeout=60),
+            )
 
             logger.info(
                 f"Launched app '{app_name}' - Frontend: {frontend_port}, Backend: {backend_port}"
@@ -250,6 +228,7 @@ class ServiceManager:
         self._app_processes.clear()
         self._app_ports.clear()
         self._launched_apps.clear()
+        self._allocated_ports.clear()
 
         # Stop services in reverse order
         for proc, name in [
@@ -278,10 +257,12 @@ class ServiceManager:
     def _get_next_port(self) -> int:
         """Get next available port for apps."""
         # Start from 3000 and find first available
-        base_port = 3010
-        for offset in range(100):  # Support up to 100 apps
+        base_port = 3000
+        for offset in range(200):  # Support up to 200 ports
             port = base_port + offset
-            if not self._is_port_open(port):
+            # Check if port is available AND not already allocated
+            if not self._is_port_open(port) and port not in self._allocated_ports:
+                self._allocated_ports.add(port)
                 return port
         raise RuntimeError("No available ports")
 
@@ -290,7 +271,7 @@ class ServiceManager:
         import httpx
 
         async with httpx.AsyncClient() as client:
-            for i in range(timeout * 5):  # Check every 200ms instead of 500ms
+            for _ in range(timeout * 5):  # Check every 200ms instead of 500ms
                 try:
                     response = await client.get(url, timeout=0.5)
                     if response.status_code < 500:  # Any non-server-error response is good
@@ -304,7 +285,7 @@ class ServiceManager:
 
     async def _wait_for_port(self, port: int, service_name: str = "service", timeout: int = 30):
         """Wait for a port to become available."""
-        for i in range(timeout * 5):  # Check every 200ms instead of 100ms
+        for _ in range(timeout * 5):  # Check every 200ms instead of 100ms
             if self._is_port_open(port):
                 logger.info(f"{service_name} is ready on port {port}")
                 return

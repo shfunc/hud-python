@@ -1,0 +1,427 @@
+---
+title: "Training Datasets"
+description: "Create and manage datasets for agent training"
+icon: "database"
+---
+
+Quality datasets are crucial for effective agent training. HUD integrates with HuggingFace datasets to make creating, sharing, and versioning training data simple.
+
+## Dataset Structure
+
+Training datasets consist of `Task` objects with variations:
+
+```python
+from hud import Task
+
+# Single task with variations
+base_task = Task(
+    prompt="Navigate to the login page and sign in",
+    mcp_config={"hudpython/hud-browser:latest": {}},
+    setup_tool="clear_cookies",
+    evaluate_tool="check_logged_in"
+)
+
+# Create variations
+tasks = []
+for site in ["example.com", "test.io", "demo.org"]:
+    task = Task(
+        prompt=f"Navigate to {site} and sign in",
+        mcp_config=base_task.mcp_config,
+        setup_tool=base_task.setup_tool,
+        evaluate_tool=MCPToolCall(
+            name="url_contains",
+            arguments={"pattern": f"{site}/dashboard"}
+        )
+    )
+    tasks.append(task)
+```
+
+## Creating Datasets
+
+### From Scratch
+
+```python
+from hud.datasets import save_tasks
+from hud import Task, MCPToolCall
+
+# Create diverse tasks
+tasks = []
+
+# Task complexity levels
+for difficulty in ["easy", "medium", "hard"]:
+    for i in range(10):
+        if difficulty == "easy":
+            prompt = f"Click the submit button"
+            max_steps = 5
+        elif difficulty == "medium":
+            prompt = f"Fill out the contact form with test data"
+            max_steps = 15
+        else:
+            prompt = f"Complete the multi-step checkout process"
+            max_steps = 30
+        
+        tasks.append(Task(
+            id=f"{difficulty}_{i}",
+            prompt=prompt,
+            mcp_config={"hudpython/hud-browser:latest": {}},
+            metadata={
+                "difficulty": difficulty,
+                "max_steps": max_steps,
+                "category": "form_interaction"
+            }
+        ))
+
+# Save to HuggingFace
+save_tasks(tasks, "my-org/browser-form-tasks")
+```
+
+### From Existing Benchmarks
+
+Augment existing benchmarks for training:
+
+```python
+from hud.datasets import load_tasks
+
+# Load existing benchmark
+base_tasks = load_tasks("hud-evals/sheetbench-50")
+
+# Create training variations
+training_tasks = []
+for task in base_tasks:
+    # Original task
+    training_tasks.append(task)
+    
+    # Variation 1: Different wording
+    var1 = Task(
+        prompt=rephrase_prompt(task.prompt),
+        mcp_config=task.mcp_config,
+        setup_tool=task.setup_tool,
+        evaluate_tool=task.evaluate_tool,
+        metadata={**task.metadata, "variation": "rephrase"}
+    )
+    training_tasks.append(var1)
+    
+    # Variation 2: Partial task
+    if "create" in task.prompt.lower():
+        var2 = Task(
+            prompt=task.prompt.replace("create and format", "create"),
+            mcp_config=task.mcp_config,
+            setup_tool=task.setup_tool,
+            evaluate_tool=simplified_evaluator(task.evaluate_tool),
+            metadata={**task.metadata, "variation": "partial"}
+        )
+        training_tasks.append(var2)
+
+save_tasks(training_tasks, "my-org/sheetbench-training")
+```
+
+## Dataset Design Principles
+
+### 1. Diversity
+
+Include varied scenarios:
+
+```python
+# Different task types
+task_types = [
+    ("navigation", "Go to the {} page"),
+    ("form_filling", "Complete the {} form"),
+    ("data_extraction", "Extract {} from the table"),
+    ("interaction", "Click all {} buttons"),
+    ("search", "Search for {} and select the first result")
+]
+
+tasks = []
+for task_type, template in task_types:
+    for item in get_items_for_type(task_type):
+        tasks.append(create_task(template.format(item), task_type))
+```
+
+### 2. Difficulty Progression
+
+```python
+# Curriculum learning dataset
+difficulty_stages = {
+    "stage_1": {
+        "num_steps": 3,
+        "num_elements": 1,
+        "complexity": "single_action"
+    },
+    "stage_2": {
+        "num_steps": 10,
+        "num_elements": 5,
+        "complexity": "sequence"
+    },
+    "stage_3": {
+        "num_steps": 20,
+        "num_elements": 10,
+        "complexity": "conditional"
+    }
+}
+
+curriculum_tasks = []
+for stage, config in difficulty_stages.items():
+    stage_tasks = generate_tasks_for_difficulty(config)
+    for task in stage_tasks:
+        task.metadata["curriculum_stage"] = stage
+    curriculum_tasks.extend(stage_tasks)
+```
+
+### 3. Error Cases
+
+Include failure scenarios:
+
+```python
+# Tasks that should fail gracefully
+error_tasks = [
+    Task(
+        prompt="Click the button that doesn't exist",
+        evaluate_tool=MCPToolCall(
+            name="check_error_handled",
+            arguments={"expected_error": "Element not found"}
+        ),
+        metadata={"type": "error_handling"}
+    ),
+    Task(
+        prompt="Navigate to an invalid URL",
+        evaluate_tool=MCPToolCall(
+            name="check_stayed_on_page"
+        ),
+        metadata={"type": "error_recovery"}
+    )
+]
+```
+
+## Dataset Management
+
+### Versioning
+
+Use HuggingFace's built-in versioning:
+
+```python
+# Save with version tag
+save_tasks(tasks, "my-org/my-dataset", revision="v2.0")
+
+# Load specific version
+tasks_v1 = load_tasks("my-org/my-dataset", revision="v1.0")
+tasks_v2 = load_tasks("my-org/my-dataset", revision="v2.0")
+```
+
+### Filtering and Splitting
+
+```python
+from hud.datasets import load_tasks
+import random
+
+# Load full dataset
+all_tasks = load_tasks("my-org/browser-tasks")
+
+# Filter by metadata
+hard_tasks = [t for t in all_tasks if t.metadata.get("difficulty") == "hard"]
+form_tasks = [t for t in all_tasks if t.metadata.get("category") == "forms"]
+
+# Create train/val/test splits
+random.shuffle(all_tasks)
+n = len(all_tasks)
+train_tasks = all_tasks[:int(0.8*n)]
+val_tasks = all_tasks[int(0.8*n):int(0.9*n)]
+test_tasks = all_tasks[int(0.9*n):]
+
+# Save splits
+save_tasks(train_tasks, "my-org/browser-tasks-train")
+save_tasks(val_tasks, "my-org/browser-tasks-val")
+save_tasks(test_tasks, "my-org/browser-tasks-test")
+```
+
+### Dataset Statistics
+
+Analyze your dataset:
+
+```python
+import pandas as pd
+from collections import Counter
+
+def analyze_dataset(tasks):
+    df = pd.DataFrame([
+        {
+            "prompt_length": len(task.prompt),
+            "difficulty": task.metadata.get("difficulty", "unknown"),
+            "category": task.metadata.get("category", "unknown"),
+            "has_setup": task.setup_tool is not None,
+            "has_eval": task.evaluate_tool is not None
+        }
+        for task in tasks
+    ])
+    
+    print("Dataset Statistics:")
+    print(f"Total tasks: {len(tasks)}")
+    print(f"\nDifficulty distribution:")
+    print(df["difficulty"].value_counts())
+    print(f"\nCategory distribution:")
+    print(df["category"].value_counts())
+    print(f"\nPrompt length: {df['prompt_length'].mean():.1f} ± {df['prompt_length'].std():.1f}")
+    print(f"Tasks with setup: {df['has_setup'].sum()} ({df['has_setup'].mean():.1%})")
+    print(f"Tasks with eval: {df['has_eval'].sum()} ({df['has_eval'].mean():.1%})")
+
+analyze_dataset(tasks)
+```
+
+## Synthetic Data Generation
+
+Use LLMs to create training data:
+
+```python
+from hud.agents import ClaudeAgent
+import asyncio
+
+async def generate_synthetic_tasks(base_task, num_variations=10):
+    agent = ClaudeAgent()
+    
+    prompt = f"""
+    Generate {num_variations} variations of this task:
+    Original: {base_task.prompt}
+    
+    Requirements:
+    - Keep same objective but vary wording
+    - Include edge cases
+    - Vary difficulty slightly
+    
+    Format each as: <task>prompt text</task>
+    """
+    
+    response = await agent.complete(prompt)
+    
+    # Parse generated tasks
+    import re
+    generated_prompts = re.findall(r'<task>(.*?)</task>', response, re.DOTALL)
+    
+    # Create task objects
+    synthetic_tasks = []
+    for i, prompt in enumerate(generated_prompts):
+        task = Task(
+            id=f"synthetic_{i}",
+            prompt=prompt.strip(),
+            mcp_config=base_task.mcp_config,
+            setup_tool=base_task.setup_tool,
+            evaluate_tool=base_task.evaluate_tool,
+            metadata={
+                **base_task.metadata,
+                "synthetic": True,
+                "base_task_id": base_task.id
+            }
+        )
+        synthetic_tasks.append(task)
+    
+    return synthetic_tasks
+
+# Generate synthetic data
+base = tasks[0]
+synthetic = await generate_synthetic_tasks(base, num_variations=20)
+```
+
+## Quality Control
+
+### Validation
+
+Ensure tasks are solvable:
+
+```python
+async def validate_dataset(tasks, sample_size=10):
+    from hud.agents import ClaudeAgent
+    agent = ClaudeAgent()
+    
+    # Sample tasks
+    sample = random.sample(tasks, min(sample_size, len(tasks)))
+    
+    results = []
+    for task in sample:
+        try:
+            result = await agent.run(task)
+            results.append({
+                "task_id": task.id,
+                "success": result.reward > 0.5,
+                "reward": result.reward,
+                "duration": result.duration,
+                "error": result.content if result.isError else None
+            })
+        except Exception as e:
+            results.append({
+                "task_id": task.id,
+                "success": False,
+                "error": str(e)
+            })
+    
+    # Analyze results
+    success_rate = sum(r["success"] for r in results) / len(results)
+    avg_duration = sum(r.get("duration", 0) for r in results) / len(results)
+    
+    print(f"Validation Results:")
+    print(f"Success rate: {success_rate:.1%}")
+    print(f"Average duration: {avg_duration:.1f}s")
+    print(f"Failed tasks: {[r['task_id'] for r in results if not r['success']]}")
+    
+    return results
+
+# Validate before publishing
+validation_results = await validate_dataset(tasks)
+```
+
+### Deduplication
+
+Remove similar tasks:
+
+```python
+from sentence_transformers import SentenceTransformer
+import numpy as np
+
+def deduplicate_tasks(tasks, threshold=0.9):
+    # Encode prompts
+    model = SentenceTransformer('all-MiniLM-L6-v2')
+    embeddings = model.encode([t.prompt for t in tasks])
+    
+    # Find similar pairs
+    unique_indices = []
+    for i in range(len(tasks)):
+        is_duplicate = False
+        for j in unique_indices:
+            similarity = np.dot(embeddings[i], embeddings[j])
+            if similarity > threshold:
+                is_duplicate = True
+                break
+        if not is_duplicate:
+            unique_indices.append(i)
+    
+    # Return unique tasks
+    unique_tasks = [tasks[i] for i in unique_indices]
+    print(f"Removed {len(tasks) - len(unique_tasks)} duplicates")
+    
+    return unique_tasks
+
+tasks = deduplicate_tasks(tasks, threshold=0.85)
+```
+
+## Best Practices
+
+1. **Start Small**: Create 50-100 high-quality tasks before scaling
+2. **Test Coverage**: Ensure all environment tools are exercised
+3. **Balance Difficulty**: Mix easy and hard tasks for better learning
+4. **Document Metadata**: Use metadata for filtering and analysis
+5. **Version Control**: Tag stable versions for reproducibility
+
+<Warning>
+Always validate datasets before training. Bad data leads to bad models.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+<Card title="RL Quickstart" icon="rocket" href="/train-agents/rl-quickstart">
+  Use your dataset to train an agent
+</Card>
+
+<Card title="Custom Environments" icon="cube" href="/build-environments">
+  Build environments for your datasets
+</Card>
+</CardGroup>
+
+

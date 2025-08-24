@@ -14,13 +14,13 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="allow")
 
-    base_url: str = Field(
-        default="https://orchestration.hud.so/hud-gym/api",
+    hud_telemetry_url: str = Field(
+        default="https://telemetry.hud.so/v3/api",
         description="Base URL for the HUD API",
-        validation_alias="base_url",
+        validation_alias="HUD_TELEMETRY_URL",
     )
 
-    mcp_url: str = Field(
+    hud_mcp_url: str = Field(
         default="https://mcp.hud.so/v3/mcp",
         description="Base URL for the MCP Server",
         validation_alias="HUD_MCP_URL",
@@ -50,22 +50,16 @@ class Settings(BaseSettings):
         validation_alias="HUD_TELEMETRY_ENABLED",
     )
 
-    fancy_logging: bool = Field(
+    hud_logging: bool = Field(
         default=True,
         description="Enable fancy logging for the HUD SDK",
-        validation_alias="HUD_FANCY_LOGGING",
+        validation_alias="HUD_LOGGING",
     )
 
     log_stream: str = Field(
         default="stdout",
         description="Stream to use for logging output: 'stdout' or 'stderr'",
         validation_alias="HUD_LOG_STREAM",
-    )
-
-    display: str = Field(
-        default=":0",
-        description="Display to use for the HUD SDK",
-        validation_alias="HUD_DISPLAY",
     )
 
 

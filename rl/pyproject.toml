@@ -1,0 +1,16 @@
+[project]
+name = "hud-rl-demo"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "hud-vf-gym",
+]
+
+[tool.uv.sources]
+hud-python = { path = "../", editable = true }
+hud-vf-gym = { workspace = true }
+
+[tool.uv.workspace]
+members = [
+    "hud_vf_gym",
+]

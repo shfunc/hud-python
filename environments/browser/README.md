@@ -1,4 +1,4 @@
-# Simple Browser MCP Environment
+# Browser MCP Environment
 
 A browser automation environment for the HUD platform demonstrating best practices for building MCP (Model Context Protocol) environments with evaluation systems.
 
@@ -7,14 +7,11 @@ A browser automation environment for the HUD platform demonstrating best practic
 ### Build & Deploy
 ```bash
 # Build the Docker image
-cd environments/simple_browser
+cd environments/browser
 docker build -t hud-browser .
 
 # Run with stdio (recommended for HUD SDK v3)
-docker run --rm -i -p 8080:8080 -e LAUNCH_APPS=todo hud-browser
-
-# Run with HTTP transport (for testing)
-docker-compose up -d
+docker run --rm -i -p 8080:8080 hud-browser
 ```
 
 ## Deployment to Registry
@@ -41,8 +38,8 @@ docker push ghcr.io/your-org/hud-browser:latest
 ```python
 import os
 import hud
-from mcp_use import MCPClient
-from hud.mcp import ClaudeMCPAgent
+from hud.clients import MCPClient
+from hud.agents import ClaudeAgent
 
 BASE_URL = "https://mcp.hud.so"
 HUD_API_KEY = os.getenv("HUD_API_KEY")
@@ -64,7 +61,7 @@ async def main():
         }
 
         client = MCPClient.from_dict(config)
-        agent = ClaudeMCPAgent(
+        agent = ClaudeAgent(
             client=client,
             model="claude-sonnet-4-20250514",
             allowed_tools=["computer", "setup", "evaluate"]
@@ -84,13 +81,13 @@ config = {
     "mcp_config": {
         "browser": {
             "command": "docker",
-            "args": ["run", "--rm", "-i", "-p", "8080:8080", "-e", "LAUNCH_APPS=todo", "hud-browser"]
+            "args": ["run", "--rm", "-i", "-p", "8080:8080", "hud-browser"]
         }
     }
 }
 ```
 
-See `examples/environments/simple_browser_example.py` for a complete working example.
+See the HUD documentation for complete working examples.
 
 ## Environment Design Strategy
 
@@ -98,13 +95,13 @@ See `examples/environments/simple_browser_example.py` for a complete working exa
 
 1. **Clean Protocol Separation**
    - All logging to stderr, only JSON-RPC to stdout
-   - Use `@mcp_intialize_wrapper` for progress notifications
-   - Separate tool registration timing (static vs dynamic)
+   - Use `@mcp.initialize` for progress notifications
+   - Register shutdown cleanup with `@mcp.shutdown`
 
 2. **Evaluation System Architecture**
    - **Class-based problems** with inheritance for reusability
    - **App-centric evaluation** - backends provide `/api/eval/*` endpoints
-   - **Registry pattern** for discovery (`@evaluator`, `@setup`, `@problem`)
+   - **Hub pattern for discovery (`@setup.tool`, `@evaluate.tool`, problems registry)**
    - **MCP resources** for runtime introspection
 
 3. **Service Management**
@@ -128,7 +125,6 @@ Set these in your environment/Docker configuration:
 - `PYTHONUNBUFFERED=1` - Prevent output buffering for real-time logs
 
 #### Optional
-- `LAUNCH_APPS` - Comma-separated apps to auto-launch (`todo,chat`)
 - `BROWSER_URL` - Initial navigation URL (default: google.com)
 - `LOG_LEVEL` - Logging verbosity (`DEBUG`, `INFO`, `WARNING`)
 
@@ -155,7 +151,7 @@ Set these in your environment/Docker configuration:
 
 3. **No tools registered**
    - Check that tools requiring X11 are registered AFTER X11 is ready
-   - Use `register_instance_tool()` in initialization, not at module load
+   - Add tools via `mcp.add_tool(instance)` once prerequisites are ready
    - Verify initialization completes before restoring handler
 
 4. **Evaluation fails unexpectedly**
@@ -166,7 +162,7 @@ Set these in your environment/Docker configuration:
 
 5. **Progress notifications not working**
    - Ensure `progressToken` is provided in `InitializeRequest`
-   - Use `@mcp_intialize_wrapper` decorator correctly
+   - Use `@mcp.initialize` decorator correctly
    - Send progress updates between 0-100 with meaningful messages
 
 ### Architecture Pattern
@@ -191,16 +187,16 @@ Docker Container
 ## File Structure Overview
 
 ```
-simple_browser/
+browser/
 ├── Dockerfile              # Multi-stage build with optimization
 ├── start.sh                # Service startup script
-├── docker-compose.yml      # HTTP transport testing
 ├── apps/                   # Launchable web applications
-│   └── todo/              # Example app with evaluation APIs
+│   ├── todo/              # Example app with evaluation APIs
+│   └── 2048/              # 2048 game app
 ├── src/hud_controller/     # MCP server implementation
 │   ├── server.py          # FastMCP server + resource definitions
-│   ├── runtime.py         # setup/evaluate tool implementations
 │   ├── services.py        # Service management
+│   ├── context.py         # Environment context
 │   ├── evaluators/        # Evaluation system
 │   ├── setup/            # Setup system
 │   └── problems/         # Problem definitions
@@ -208,6 +204,28 @@ simple_browser/
 ```
 
 ## Development Workflow
+
+### Hot-Reload Development with `hud mcp`
+
+For rapid iteration without Docker rebuilds:
+
+```bash
+# Navigate to the environment directory
+cd environments/browser
+
+# Start hot-reload development proxy
+hud mcp . --build
+
+# This will:
+# - Build/use hud-browser:dev image
+# - Mount ./src for instant code updates
+# - Run with reloaderoo for auto-restart
+# - Provide HTTP endpoint for Cursor
+```
+
+Add the URL from output to Cursor settings or click the deeplink. Now you can edit code in `src/` and changes apply instantly!
+
+### Traditional Development Steps
 
 1. **Start with apps** - Build your web applications independently
 2. **Add evaluation APIs** - Extend app backends with `/api/eval/*` endpoints
@@ -248,7 +266,7 @@ docker run -d --rm -p 8080:8080 --name browser-debug hud-browser
 
 ## Using MCP Inspector
 
-The [MCP Inspector](https://modelcontextprotocol.io/legacy/tools/inspector) is an interactive developer tool for testing and debugging MCP servers. You can use it to test the simple_browser environment locally.
+The [MCP Inspector](https://github.com/modelcontextprotocol/inspector) is an interactive developer tool for testing and debugging MCP servers. You can use it to test the browser environment locally.
 
 ### Installation
 The Inspector runs directly through `npx` without requiring installation:
@@ -262,16 +280,14 @@ npx @modelcontextprotocol/inspector --help
 
 #### Option 1: Running with Docker (Recommended)
 ```bash
-# From the simple_browser directory
-npx @modelcontextprotocol/inspector docker run --rm -i -p 8080:8080 -e LAUNCH_APPS=todo hud-browser
+# From the browser directory
+npx @modelcontextprotocol/inspector docker run --rm -i -p 8080:8080 hud-browser
 ```
-
-npx @modelcontextprotocol/inspector docker run --rm -i -e ANCHOR_API_KEY=sk-9b85fdbd2b497bf4def463cc3b69b44b hud-remote-browser
 
 #### Option 2: Running Python module directly
 ```bash
 # First install the package locally
-cd environments/simple_browser
+cd environments/browser
 pip install -e .
 
 # Then run with the Inspector
@@ -345,8 +361,8 @@ Once connected, the Inspector provides several interactive features:
 ### Example Testing Session
 
 ```bash
-# 1. Start the Inspector with the simple_browser
-npx @modelcontextprotocol/inspector docker run --rm -i -p 8080:8080 -e LAUNCH_APPS=todo hud-browser
+# 1. Start the Inspector with the browser environment
+npx @modelcontextprotocol/inspector docker run --rm -i -p 8080:8080 hud-browser
 
 # 2. In the Inspector UI:
 # - Go to Tools tab
