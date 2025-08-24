@@ -17,7 +17,7 @@ import verifiers as vf
 env = vf.load_environment(
     env_id="hud_vf_gym",
     taskset="hud-evals/2048-taskset",
-    config_path="./configs/2048.yaml"
+    config_path="verifiers/configs/2048.yaml"
 )
 
 # Train with GRPO
@@ -67,6 +67,13 @@ trainer.train()
   </tbody>
 </Table>
 
+## Monitoring & Analytics
+
+Track training progress in real-time:
+- **[app.hud.so](https://app.hud.so)** - View traces, metrics, and rewards for each training generation
+- **Weights & Biases** - Detailed ML metrics and loss curves
+- **Local logs** - Training checkpoints and evaluation results
+
 ## Getting Started
 
 <CardGroup cols={3}>
@@ -74,7 +81,7 @@ trainer.train()
   Train your first agent in 30 minutes
 </Card>
 
-<Card title="Config System" icon="cog" href="/train-agents/verifiers-gym">
+<Card title="Config System" icon="gear" href="/train-agents/verifiers-gym">
   Configure tools with YAML
 </Card>
 

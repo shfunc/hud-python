@@ -11,6 +11,7 @@ Train agents to perform better on specific tasks using GRPO (Group Relative Poli
 ### Prerequisites
 - GPU with 24GB+ VRAM (A100, RTX 4090)
 - Python 3.12+
+- HUD API key (set `HUD_API_KEY` environment variable)
 
 ### Installation
 
@@ -19,14 +20,31 @@ Train agents to perform better on specific tasks using GRPO (Group Relative Poli
 git clone https://github.com/hud-evals/hud-python
 cd hud-python/rl
 
+# Clone hud-vf-gym (required)
+git clone https://github.com/hud-evals/hud_vf_gym.git
+
 # Install with uv (recommended)
 uv sync
 source .venv/bin/activate
+
+# Note: Uses a fork of verifiers for multimodal support
 ```
 
 ### Train 2048 Agent
 
 <Steps>
+<Step title="Build Docker Image">
+```bash
+# Set API key
+export HUD_API_KEY="YOUR_API_KEY"
+
+# Build the 2048 environment
+cd ../../environments/text_2048/
+docker build -t hud-text-2048 .
+cd ../../rl/
+```
+</Step>
+
 <Step title="Start vLLM Server">
 ```bash
 # Terminal 1 - GPU 0
@@ -61,9 +79,10 @@ graph LR
 
 ## Configuration
 
-Training uses YAML configs to map agent tools to MCP tools:
+Training uses YAML configs to map agent tools to MCP tools. The actual config is loaded from the cloned hud_vf_gym:
 
-```yaml rl/configs/2048.yaml
+```yaml
+# From hud_vf_gym/verifiers/configs/2048.yaml
 system_prompt: |
   You are an excellent 2048 player. 
   Available moves: left(), right(), up(), down(), done()
@@ -88,16 +107,18 @@ import verifiers as vf
 env = vf.load_environment(
     env_id="hud_vf_gym",
     taskset="your-org/your-taskset",  # HuggingFace dataset
-    config_path="./configs/your-env.yaml",
+    config_path="verifiers/configs/your-env.yaml",  # In hud_vf_gym
     num_tasks=10
 )
 
-# Configure training
+# Configure training (matching train_2048.py)
 model, tokenizer = vf.get_model_and_tokenizer("Qwen/Qwen2.5-3B-Instruct")
 args = vf.grpo_defaults(run_name="my-training")
-args.max_steps = 100
+args.gradient_accumulation_steps = 2
 args.per_device_train_batch_size = 8
 args.num_generations = 16
+args.max_steps = 100
+args.learning_rate = 1e-6
 
 # Train with LoRA
 trainer = vf.GRPOTrainer(
@@ -112,7 +133,14 @@ trainer.train()
 
 ## Monitoring
 
-Track with Weights & Biases:
+### HUD Dashboard
+View training progress and traces at [app.hud.so](https://app.hud.so):
+- Real-time screenshot and setp viewing
+- Tool call traces for each trajectory
+- Reward distribution across generations
+
+### Weights & Biases
+For detailed ML metrics:
 ```python
 args.report_to = "wandb"
 os.environ["WANDB_API_KEY"] = "your-key"
