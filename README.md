@@ -6,7 +6,7 @@
   </picture>
 </div>
 
-Evaluate and improve agents. Wrap software as environments, run benchmarks, and train with RL – locally or at scale.
+OSS RL environment + evals toolkit. Wrap software as environments, run benchmarks, and train with RL – locally or at scale.
 
 [![PyPI version](https://img.shields.io/pypi/v/hud-python?style=flat-square)](https://pypi.org/project/hud-python/)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
@@ -27,20 +27,20 @@ Evaluate and improve agents. Wrap software as environments, run benchmarks, and 
 - 🗂️ **[Public benchmarks](https://app.hud.so/leaderboards)** – OSWorld-Verified, SheetBench-50, and more.
 - 🌱 **[Reinforcement learning built-in](rl/)** – Verifiers gym pipelines for GRPO training.
 - 🌐 **[Cloud browsers](environments/remote_browser/)** – AnchorBrowser, Steel, BrowserBase integrations for browser automation.
-- 🛠️ **[Hot-reload dev loop](environments/README.md#phase-5-hot-reload-development-with-cursor-agent)** – `hud dev` for instant code updates without rebuilds.
+- 🛠️ **[Hot-reload dev loop](environments/README.md#phase-5-hot-reload-development-with-cursor-agent)** – `hud dev` for iterating on environments without rebuilds.
 
 > We welcome contributors and feature requests – open an issue or hop on a call to discuss improvements!
 
 ## Installation
 
 ```bash
-# Core installation - MCP servers, CLI, basic tools for environment design
+# Core installation - MCP servers, telemetry, basic tools for environment design
 pip install hud-python
 
 # Agent installation - Adds AI providers, telemetry, datasets
 pip install "hud-python[agent]"
 
-# CLI utilities (inside isolated env)
+# CLI utilities
 uv tool install hud-python
 
 # From source (latest)
@@ -72,7 +72,7 @@ async def main() -> None:
     with hud.trace("Quick Start 2048"): # All telemetry works for any MCP-based agent (see https://app.hud.so)
         task = Task(
             prompt="Reach 64 in 2048.",
-        mcp_config={
+            mcp_config={
                 "hud": {
                     "url": "https://mcp.hud.so",  # HUD's cloud MCP server (see https://docs.hud.so/core-concepts/architecture)
                     "headers": {
@@ -189,7 +189,13 @@ CMD ["python", "-m", "hud_controller.server"]
 And build the image:
 
 ```bash
-docker build -t my-name/my-environment:latest .
+hud build # runs docker build under the hood
+```
+
+Or run it in interactible mode
+
+```bash
+hud dev
 ```
 
 3. Debug it with the CLI to see if it launches:
@@ -205,32 +211,6 @@ $ hud debug my-name/my-environment:latest
 
 Progress: [█████████████████████] 5/5 phases (100%)
 ✅ All phases completed successfully!
-```
-
-4. **Hot-reload development** with instant code updates:
-
-```console
-$ hud dev
-
-🔨 Building image: hud-my-environment:dev
-✅ Build successful!
-
-═══════════════════════════════════════
-         HUD Development Server
-═══════════════════════════════════════
-
-Configuration:
-{
-  "hud-my-environment": {
-    "url": "http://localhost:8765/mcp"
-  }
-}
-
-Connect to Cursor:
-cursor://anysphere.cursor-deeplink/mcp/install?name=hud-my-environment&config=...
-
-# Edit src/ files - changes are immediately reflected!
-# No rebuild required for code changes
 ```
 
 Analyze it to see if all tools appear:
@@ -262,7 +242,7 @@ Tools
 4. When the tests pass, push it up to the docker registry:
 
 ```bash
-hud push . --image my-name/my-environment:latest
+hud push # needs docker login, hud api key
 ```
 
 5. Now you can use `mcp.hud.so` to launch 100s of instances of this environment in parallel with any agent, and see everything live on [app.hud.so](https://app.hud.so):
@@ -280,6 +260,13 @@ result = await ClaudeAgent().run({  # See all agents: https://docs.hud.so/refere
                 "Mcp-Image": "my-name/my-environment:latest"
             }
         }
+        # "my-environment": { # or use hud run which wraps local and remote running
+        #     "cmd": "hud",
+        #     "args": [
+        #         "run",
+        #         "my-name/my-environment:latest",
+        #     ]
+        # }
     }
 })
 
