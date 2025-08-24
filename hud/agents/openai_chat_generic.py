@@ -115,7 +115,7 @@ class GenericOpenAIChatAgent(MCPAgent):
         tool_calls = []
         if msg.tool_calls:
             for tc in msg.tool_calls:
-                if tc.function.name is not None:
+                if tc.function.name is not None:  # type: ignore
                     tool_calls.append(self._oai_to_mcp(tc))
                     if not self.parallel_tool_calls:
                         break
