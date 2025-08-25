@@ -1,5 +1,11 @@
 # Configuration for 2048 game environment
 
+job:
+  name: "2048 Run"
+  metadata:
+    dataset: "hud-evals/2048-taskset"
+    experiment: "training"
+
 system_prompt: |
   You are an excellent 2048 player. Always choose the move most likely to combine tiles and reach higher numbers.
   

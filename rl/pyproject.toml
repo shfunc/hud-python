@@ -12,5 +12,5 @@ hud-vf-gym = { workspace = true }
 
 [tool.uv.workspace]
 members = [
-    "hud_vf_gym",
+    "hud-vf-gym",
 ]

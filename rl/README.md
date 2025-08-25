@@ -1,6 +1,6 @@
 # HUD environments for Reinforcement Learning
 
-[hud-vf-gym](https://github.com/hud-evals/hud_vf_gym) module exposes CUA environments built with HUD MCP for training and evaluating RL agents using the [Verifiers](https://github.com/willccbb/verifiers) framework. It provides a standardized interface for agents to interact with computer interfaces through tool calls.
+[hud-vf-gym](https://github.com/hud-evals/hud-vf-gym) module exposes CUA environments built with HUD MCP for training and evaluating RL agents using the [Verifiers](https://github.com/willccbb/verifiers) framework. It provides a standardized interface for agents to interact with computer interfaces through tool calls.
 
 ## Installation
 
@@ -8,7 +8,7 @@ You can directly install hud-vf-gym in this workspace `hud-python/rl`
 
 ```bash
 # Clone hud-vf-gym
-git clone https://github.com/hud-evals/hud_vf_gym.git
+git clone https://github.com/hud-evals/hud-vf-gym.git
 
 # Install dependencies (we recommend using uv for managing python envs)
 uv sync
@@ -17,62 +17,53 @@ uv sync
 source .venv/bin/activate
 ```
 
-Note: We use this [fork](https://github.com/jdchawla29/verifiers.git) of verifiers for multimodal support.
-
 ## Running Evaluations
 
 Use the Verifiers CLI to run evaluations such as hud-evals/2048-taskset.
 
-For this, build the base docker image locally:
+For this, first build the base docker image locally:
 
 ```bash
 export OPENAI_API_KEY="YOUR_API_KEY"
 export HUD_API_KEY="YOUR_API_KEY"
-cd environments/text_2048/
+cd ../environments/text_2048/
 docker build -t hud-text-2048 .
 ```
 
-This will load in the taskset and run the VF gym via the config at ./configs/2048.yaml:
+Switch back to the workspace,
+
 ```bash
-vf-eval hud_vf_gym \
+cd ../rl
+```
+
+This will load in the taskset and run the gym via the config at ./configs/2048.yaml:
+```bash
+vf-eval hud-vf-gym \
     --model gpt-4.1-mini \
     --env-args '{"taskset": "hud-evals/2048-taskset", "config_path": "./configs/2048.yaml"}' \
-    --num-examples 10
+    --num-examples 2 \
+    --rollouts-per-example 3
 ```
 
 Or use a custom config with a custom taskset:
 ```bash
 # Use a custom config with custom taskset
-vf-eval hud_vf_gym \
+vf-eval hud-vf-gym \
     --env-args '{"taskset": "your-org/your-taskset", "config_path": "custom_config.yaml"}' \
     --model gpt-4.1-mini \
     --num-examples 5 \
     --rollouts-per-example 3
 ```
 
-Additional options for saving out the results:
-
-```bash
-# Save evaluation results locally
-vf-eval hud_vf_gym \
-    --model gpt-4o-mini \
-    --env-args '{"taskset": "hud-evals/2048-taskset", "config_path": "./configs/2048.yaml"}' \
-    --num-examples 20 \
-    --save-dataset \
-    --save-path "./eval_results"
-
-# Save to HuggingFace Hub
-vf-eval hud_vf_gym \
-    --model gpt-4o-mini \
-    --env-args '{"taskset": "hud-evals/2048-taskset", "config_path": "./configs/2048.yaml"}' \
-    --num-examples 20 \
-    --save-to-hf-hub \
-    --hf-hub-dataset-name "your-org/gmail-eval-results"
-```
-
 ## Training with GRPO
 
 HUD Gym supports training with the GRPO (Group Relative Policy Optimization) trainer:
+
+Make sure you have the training dependencies installed:
+
+```python
+uv pip install 'verifiers[train]' && uv pip install flash-attn --no-build-isolation
+```
 
 Either just run:
 
@@ -94,7 +85,6 @@ env = load_environment(
 # Configure training
 config = GRPOConfig(
     model_name_or_path="your-model",
-    num_train_epochs=3,
     per_device_train_batch_size=4,
     # ... other training parameters
 )
@@ -113,11 +103,27 @@ trainer.train()
 
 To train the 2048 agent on 2 A100 GPUs, use `train_2048.py` with one GPU for inference and one for training (see script header for setup commands).
 
+For any issues related to Verifiers, see [their docs](https://verifiers.readthedocs.io/en/latest/training.html).
+
 ## Configuration
 
 ### Environment Configuration
 
 HUD VF Gym uses a config-driven architecture where each environment defines its tools, mappings, and behavior through YAML configuration files.
+
+#### Job Configuration
+
+HUD VF Gym automatically creates a HUD job for each training/evaluation run to track all rollouts. Configure the job metadata in your YAML file:
+
+```yaml
+job:
+  name: "2048 Training Run"
+  metadata:
+    dataset: "hud-evals/2048-taskset"
+    experiment: "baseline"
+```
+
+This creates a unique job for each environment instance, and all rollouts during that training/evaluation run will be associated with the same job ID. You can view all traces from a training run grouped together on the [HUD platform](https://app.hud.so).
 
 #### Available Configurations
 
