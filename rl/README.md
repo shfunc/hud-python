@@ -74,7 +74,7 @@ python train_2048.py
 Or configure your own training:
 ```python
 from verifiers.trainers import GRPOTrainer, GRPOConfig
-from hud_vf_gym import load_environment
+from  import load_environment
 
 # Load environment (both taskset and config_path are required)
 env = load_environment(
@@ -333,7 +333,7 @@ class CustomGym(HUDGym):
 uv run pre-commit run --all-files
 
 # Test with a single task
-vf-eval --env hud_vf_gym --num-tasks 1 --model gpt-4o-mini
+vf-eval --env hud-vf-gym --num-tasks 1 --model gpt-4o-mini
 ```
 
 ### Creating New Environments
@@ -361,7 +361,7 @@ action_mappings:
 
 2. **Use the config**:
 ```bash
-vf-eval hud_vf_gym \
+vf-eval hud-vf-gym \
     --env-args '{"taskset": "your-org/your-taskset", "config_path": "configs/my_env.yaml"}' \
     --model gpt-4o-mini
 ```
@@ -421,5 +421,5 @@ dataset.push_to_hub("your-org/your-dataset")
 
 ## License
 
-See LICENSE file in the hud_vf_gym directory.
+See LICENSE file in the hud-vf-gym directory.
 

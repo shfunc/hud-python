@@ -110,7 +110,7 @@ The above example let's the agent play 2048 ([See replay](https://app.hud.so/tra
 
 ## Reinforcement Learning with GRPO
 
-This is a Qwen-2.5-3B agent training a policy on the [`text-2048`](environments/text_2048/) environment (see above) using [Verifiers](rl/verifiers/):
+This is a Qwen-2.5-3B agent training a policy on the [`text-2048`](environments/text_2048/) environment (see above) using [Verifiers](rl/README):
 
 ![RL curve](https://raw.githubusercontent.com/hud-evals/hud-python/main/docs/src/images/rl_2.png)
 
@@ -118,8 +118,8 @@ To start training, check out the [`rl/README.md`](rl/README.md) folder:
 
 ```bash
 git clone https://github.com/hud-evals/hud-python
-cd hud-python
-python rl/verifiers/train_2048.py
+cd hud-python/rl
+python train_2048.py
 ```
 
 Any hud MCP environment and evaluation works with our RL pipeline. Even our remote configurations!
