@@ -72,6 +72,8 @@ vf-eval hud_vf_gym \
 
 ## Training with GRPO
 
+For training, set up a GPU instance on PrimeIntellect (at least an A100).
+
 HUD Gym supports training with the GRPO (Group Relative Policy Optimization) trainer:
 
 Either just run:

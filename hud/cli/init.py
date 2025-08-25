@@ -255,16 +255,16 @@ def create_environment(name: str | None, directory: str, force: bool) -> None:
 
     # Show commands based on where we created the environment
     if target_dir == Path.cwd():
-        console.print("1. Start development server:")
-        console.print("   [cyan]hud dev[/cyan]")
+        console.print("1. Start development server (with MCP inspector):")
+        console.print("   [cyan]hud dev --inspector[/cyan]")
     else:
         console.print("1. Enter the directory:")
         console.print(f"   [cyan]cd {target_dir}[/cyan]")
-        console.print("\n2. Start development server:")
-        console.print("   [cyan]hud dev[/cyan]")
+        console.print("\n2. Start development server (with MCP inspector):")
+        console.print("   [cyan]hud dev --inspector[/cyan]")
 
-    console.print("\n3. Connect from Cursor:")
-    console.print("   Follow the instructions shown by [cyan]hud dev[/cyan]")
+    console.print("\n3. Connect from Cursor or test via the MCP inspector:")
+    console.print("   Follow the instructions shown by [cyan]hud dev --inspector[/cyan]")
 
     console.print("\n4. Customize your environment:")
     console.print("   - Add tools to [cyan]src/hud_controller/server.py[/cyan]")

@@ -173,7 +173,17 @@ def create_proxy_server(
         click.echo(f"📊 docker logs -f {container_name}", err=True)
 
     # Create the HTTP proxy server using config
-    proxy = FastMCP.as_proxy(config, name=f"HUD Dev Proxy - {image_name}")
+    try:
+        proxy = FastMCP.as_proxy(config, name=f"HUD Dev Proxy - {image_name}")
+    except Exception as e:
+        from hud.utils.design import HUDDesign
+        
+        design = HUDDesign(stderr=True)
+        design.error(f"Failed to create proxy server: {e}")
+        design.info("")
+        design.info("💡 Tip: Run the following command to debug the container:")
+        design.info(f"   hud debug {image_name}")
+        raise
 
     return proxy
 
@@ -352,9 +362,7 @@ async def start_mcp_proxy(
                     click.echo("Failed to launch inspector", err=True)
 
             # Launch inspector asynchronously so it doesn't block
-            result = asyncio.create_task(launch_inspector())
-            if result.exception():
-                click.echo("Failed to launch inspector", err=True)
+            asyncio.create_task(launch_inspector())
 
         # Launch interactive mode if requested
         if interactive:
@@ -558,6 +566,20 @@ async def start_mcp_proxy(
                     log_level="INFO",
                     show_banner=False,
                 )
+    except (ConnectionError, OSError) as e:
+        from hud.utils.design import HUDDesign
+
+        error_design = HUDDesign(stderr=True)
+        error_design.error(f"Failed to connect to Docker container: {e}")
+        error_design.info("")
+        error_design.info("💡 Tip: Run the following command to debug the container:")
+        error_design.info(f"   hud debug {image_name}")
+        error_design.info("")
+        error_design.info("Common issues:")
+        error_design.info("  • Container failed to start or crashed immediately")
+        error_design.info("  • Server initialization failed")
+        error_design.info("  • Port binding conflicts")
+        raise
     except KeyboardInterrupt:
         from hud.utils.design import HUDDesign
 
@@ -706,6 +728,8 @@ def run_mcp_dev_server(
     else:
         design.info(f"🐳 {resolved_image}")
 
+    design.progress_message(f"❗ If any issues arise, run `hud debug {resolved_image}` to debug the container")
+
     # Show hints about inspector and interactive mode
     if transport == "http":
         if not inspector and not interactive:
@@ -740,17 +764,26 @@ def run_mcp_dev_server(
     design.info("")  # Empty line
 
     # Start the proxy (pass original port, start_mcp_proxy will find actual port again)
-    asyncio.run(
-        start_mcp_proxy(
-            directory,
-            resolved_image,
-            transport,
-            port,
-            no_reload,
-            verbose,
-            inspector,
-            no_logs,
-            interactive,
-            docker_args or [],
+    try:
+        asyncio.run(
+            start_mcp_proxy(
+                directory,
+                resolved_image,
+                transport,
+                port,
+                no_reload,
+                verbose,
+                inspector,
+                no_logs,
+                interactive,
+                docker_args or [],
+            )
         )
-    )
+    except Exception as e:
+        design.error(f"Failed to start MCP server: {e}")
+        design.info("")
+        design.info("💡 Tip: Run the following command to debug the container:")
+        design.info(f"   hud debug {resolved_image}")
+        design.info("")
+        design.info("This will help identify connection issues or initialization failures.")
+        raise

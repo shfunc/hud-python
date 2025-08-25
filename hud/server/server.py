@@ -7,6 +7,7 @@ import logging
 import os
 import signal
 import sys
+import contextlib
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
@@ -100,7 +101,10 @@ class MCPServer(FastMCP):
         def _run_init(ctx: RequestContext) -> Any:
             if self._initializer_fn is not None and not self._did_init:
                 self._did_init = True
-                return self._initializer_fn(ctx)
+                # Redirect stdout to stderr during initialization to prevent
+                # any library prints from corrupting the MCP protocol
+                with contextlib.redirect_stdout(sys.stderr):
+                    return self._initializer_fn(ctx)
             return None
 
         # Save the old server's handlers before replacing it

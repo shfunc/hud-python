@@ -128,8 +128,33 @@ class BaseHUDClient(AgentMCPClient):
 
         logger.debug("Initializing MCP client...")
 
-        # Subclasses implement connection
-        await self._connect(self._mcp_config)
+        try:
+            # Subclasses implement connection
+            await self._connect(self._mcp_config)
+        except RuntimeError as e:
+            # Re-raise authentication errors with clear message
+            if "Authentication failed" in str(e):
+                raise
+            raise
+        except Exception as e:
+            # Check for authentication errors in the exception chain
+            error_msg = str(e)
+            if "401" in error_msg or "Unauthorized" in error_msg:
+                # Check if connecting to HUD API
+                for server_config in self._mcp_config.values():
+                    url = server_config.get("url", "")
+                    if "mcp.hud.so" in url:
+                        raise RuntimeError(
+                            "Authentication failed for HUD API. "
+                            "Please ensure your HUD_API_KEY environment variable is set correctly. "
+                            "You can get an API key at https://app.hud.so"
+                        ) from e
+                # Generic 401 error
+                raise RuntimeError(
+                    f"Authentication failed (401 Unauthorized). "
+                    f"Please check your credentials or API key."
+                ) from e
+            raise
 
         # Common hud behavior - fetch telemetry
         await self._fetch_telemetry()
