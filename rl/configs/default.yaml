@@ -1,5 +1,12 @@
 # Default configuration for MCP HUD Gym
 
+# Job configuration for HUD telemetry
+job:
+  name: "HUDGym Run"
+  metadata:
+    dataset: "default-dataset"
+    experiment: "baseline"
+
 system_prompt: |
   You are an AI assistant that can interact with computer interfaces.
   

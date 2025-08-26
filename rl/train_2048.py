@@ -20,10 +20,10 @@ sys.path.insert(1, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import verifiers as vf
 
 vf_env = vf.load_environment(
-    env_id="hud_vf_gym",
+    env_id="hud-vf-gym",
     taskset="hud-evals/2048-taskset",  # HuggingFace dataset
-    config_path="verifiers/configs/2048.yaml",
-    num_tasks=1,
+    config_path="configs/2048.yaml",
+    num_tasks=4,
 )
 
 # Model configuration
