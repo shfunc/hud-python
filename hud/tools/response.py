@@ -36,6 +36,13 @@ class ResponseTool(BaseTool):
                 return blocks
     """
 
+    def __init__(self, name: str, title: str, description: str):
+        super().__init__(
+            name=name or "response",
+            title=title or "Response Tool",
+            description=description or "Send a text response or list of messages to the environment",
+        )
+
     @abstractmethod
     async def __call__(
         self,
