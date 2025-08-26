@@ -9,13 +9,10 @@ import click
 import requests
 import typer
 import yaml
-from rich.console import Console
 from rich.table import Table
 
 from hud.settings import settings
 from hud.utils.design import HUDDesign
-
-console = Console()
 
 
 def get_docker_manifest(image: str) -> dict | None:
@@ -32,8 +29,7 @@ def get_docker_manifest(image: str) -> dict | None:
 
             return json.loads(result.stdout)
     except Exception:
-        click.echo("Failed to get Docker manifest", err=True)
-    return None
+        return None
 
 
 def get_image_size_from_manifest(manifest: dict) -> int | None:
@@ -52,7 +48,6 @@ def get_image_size_from_manifest(manifest: dict) -> int | None:
 
         return total_size if total_size > 0 else None
     except Exception:
-        click.echo("Failed to get image size from manifest", err=True)
         return None
 
 
@@ -200,10 +195,8 @@ def pull_environment(
             # Minimal data from Docker manifest
             table.add_row("Source", "Docker Registry")
             if not yes:
-                console.print(
-                    "\n[yellow]Note:[/yellow] Limited metadata available from Docker registry."
-                )
-                console.print("For full environment details, use a lock file.\n")
+                design.warning("Note: Limited metadata available from Docker registry.")
+                design.info("For full environment details, use a lock file.\n")
         else:
             # Full lock file data
             if "build" in lock_data:
@@ -233,18 +226,19 @@ def pull_environment(
         # No metadata available
         table.add_row("Source", "Unknown")
 
-    console.print(table)
+    # Use design's console to maintain consistent output
+    design.console.print(table)
 
     # Tool summary (show after table)
     if lock_data and "tools" in lock_data:
-        console.print("\n[bold]Available Tools:[/bold]")
+        design.section_title("Available Tools")
         for tool in lock_data["tools"]:
-            console.print(f"  • {tool['name']}: {tool['description']}")
+            design.info(f"• {tool['name']}: {tool['description']}")
 
     # Show warnings if no metadata
     if not lock_data and not yes:
-        console.print("\n[yellow]Warning:[/yellow] No metadata available for this image.")
-        console.print("The image will be pulled without verification.")
+        design.warning("No metadata available for this image.")
+        design.info("The image will be pulled without verification.")
 
     # If verify only, stop here
     if verify_only:
@@ -253,7 +247,7 @@ def pull_environment(
 
     # Ask for confirmation unless --yes
     if not yes:
-        console.print()
+        design.info("")
         # Show simple name for confirmation, not the full digest
         if ":" in image_ref and "@" in image_ref:
             simple_name = image_ref.split("@")[0]
@@ -278,7 +272,7 @@ def pull_environment(
 
     for line in process.stdout or []:
         if verbose or "Downloading" in line or "Extracting" in line or "Pull complete" in line:
-            click.echo(line.rstrip(), err=True)
+            design.info(line.rstrip())
 
     process.wait()
 
@@ -311,14 +305,14 @@ def pull_environment(
     # Extract simple name for examples
     simple_ref = image_ref.split("@")[0] if ":" in image_ref and "@" in image_ref else image_ref
 
-    console.print("1. Quick analysis (from metadata):")
-    console.print(f"  [cyan]hud analyze {simple_ref}[/cyan]\n")
-
-    console.print("2. Live analysis (runs container):")
-    console.print(f"  [cyan]hud analyze {simple_ref} --live[/cyan]\n")
-
-    console.print("3. Run the environment:")
-    console.print(f"  [cyan]hud run {simple_ref}[/cyan]")
+    design.info("1. Quick analysis (from metadata):")
+    design.command_example(f"hud analyze {simple_ref}")
+    design.info("")
+    design.info("2. Live analysis (runs container):")
+    design.command_example(f"hud analyze {simple_ref} --live")
+    design.info("")
+    design.info("3. Run the environment:")
+    design.command_example(f"hud run {simple_ref}")
 
 
 def pull_command(

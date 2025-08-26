@@ -5,11 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
-from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
 
-console = Console()
+from hud.utils.design import HUDDesign
 
 # Embedded templates
 DOCKERFILE_TEMPLATE = """FROM python:3.11-slim
@@ -249,26 +248,26 @@ def create_environment(name: str | None, directory: str, force: bool) -> None:
 
     design.section_title("Files created")
     for file in files_created:
-        console.print(f"  ✓ {file}")
+        design.status_item(file, "created")
 
     design.section_title("Next steps")
 
     # Show commands based on where we created the environment
     if target_dir == Path.cwd():
-        console.print("1. Start development server (with MCP inspector):")
-        console.print("   [cyan]hud dev --inspector[/cyan]")
+        design.info("1. Start development server (with MCP inspector):")
+        design.command_example("hud dev --inspector")
     else:
-        console.print("1. Enter the directory:")
-        console.print(f"   [cyan]cd {target_dir}[/cyan]")
-        console.print("\n2. Start development server (with MCP inspector):")
-        console.print("   [cyan]hud dev --inspector[/cyan]")
+        design.info("1. Enter the directory:")
+        design.command_example(f"cd {target_dir}")
+        design.info("\n2. Start development server (with MCP inspector):")
+        design.command_example("hud dev --inspector")
 
-    console.print("\n3. Connect from Cursor or test via the MCP inspector:")
-    console.print("   Follow the instructions shown by [cyan]hud dev --inspector[/cyan]")
+    design.info("\n3. Connect from Cursor or test via the MCP inspector:")
+    design.info("   Follow the instructions shown by hud dev --inspector")
 
-    console.print("\n4. Customize your environment:")
-    console.print("   - Add tools to [cyan]src/hud_controller/server.py[/cyan]")
-    console.print("   - Add state to [cyan]src/hud_controller/context.py[/cyan]")
+    design.info("\n4. Customize your environment:")
+    design.info("   - Add tools to src/hud_controller/server.py")
+    design.info("   - Add state to src/hud_controller/context.py")
 
     # Show a sample of the server code
     design.section_title("Your MCP server")
@@ -278,4 +277,4 @@ async def act() -> str:
     return f"Action #{ctx.act()}"'''
 
     syntax = Syntax(sample_code, "python", theme="monokai", line_numbers=False)
-    console.print(Panel(syntax, border_style="dim"))
+    design.console.print(Panel(syntax, border_style="dim"))

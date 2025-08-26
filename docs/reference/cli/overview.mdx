@@ -68,72 +68,6 @@ hud --version
 | `hud cursor-list` | List Cursor MCP servers | `hud cursor-list` |
 | `hud version` | Show version info | `hud version` |
 
-## Common Usage
-
-### Docker Images
-```bash
-# Basic
-hud debug my-image:latest
-
-# With options
-hud debug my-image:latest -e DEBUG=true -p 8080:8080
-
-# From registry
-hud analyze ghcr.io/org/image:v1.0.0
-```
-
-### Local Commands
-```bash
-# Python script
-hud debug --command "python server.py"
-
-# Node.js server
-hud debug --command "node mcp-server.js"
-```
-
-### Cursor Integration
-```bash
-# Debug Cursor server
-hud debug --cursor my-dev-server
-
-# List all servers
-hud cursor-list
-```
-
-## Output Formats
-
-### Interactive (Default)
-```bash
-hud analyze my-env
-
-🔍 Analyzing MCP environment: my-env
-✓ Connected successfully
-✓ Found 12 tools
-
-Available Tools:
-  • click - Click at coordinates
-  • type - Type text
-  ...
-```
-
-### JSON
-```bash
-hud analyze my-env --format json
-
-{
-  "tools": [{
-    "name": "click",
-    "description": "Click at coordinates",
-    "parameters": {...}
-  }]
-}
-```
-
-### Markdown
-```bash
-hud analyze my-env --format markdown > docs/tools.md
-```
-
 ## Complete Workflows
 
 ### Building an Environment
@@ -207,6 +141,72 @@ hud run hudpython/text_init:latest --local  # Local Docker
 ```
 </Step>
 </Steps>
+
+## Common Usage
+
+### Docker Images
+```bash
+# Basic
+hud debug my-image:latest
+
+# With options
+hud debug my-image:latest -e DEBUG=true -p 8080:8080
+
+# From registry
+hud analyze ghcr.io/org/image:v1.0.0
+```
+
+### Local Commands
+```bash
+# Python script
+hud debug --command "python server.py"
+
+# Node.js server
+hud debug --command "node mcp-server.js"
+```
+
+### Cursor Integration
+```bash
+# Debug Cursor server
+hud debug --cursor my-dev-server
+
+# List all servers
+hud cursor-list
+```
+
+## Output Formats
+
+### Interactive (Default)
+```bash
+hud analyze my-env
+
+🔍 Analyzing MCP environment: my-env
+✓ Connected successfully
+✓ Found 12 tools
+
+Available Tools:
+  • click - Click at coordinates
+  • type - Type text
+  ...
+```
+
+### JSON
+```bash
+hud analyze my-env --format json
+
+{
+  "tools": [{
+    "name": "click",
+    "description": "Click at coordinates",
+    "parameters": {...}
+  }]
+}
+```
+
+### Markdown
+```bash
+hud analyze my-env --format markdown > docs/tools.md
+```
 
 ## CI/CD Example
 

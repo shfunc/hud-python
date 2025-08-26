@@ -12,7 +12,11 @@ import click
 import toml
 from fastmcp import FastMCP
 
+from hud.utils.design import HUDDesign
 from .docker_utils import get_docker_cmd, image_exists, inject_supervisor
+
+# Global design instance
+design = HUDDesign()
 
 
 def get_image_name(directory: str | Path, image_override: str | None = None) -> tuple[str, str]:
@@ -34,7 +38,7 @@ def get_image_name(directory: str | Path, image_override: str | None = None) -> 
             if config.get("tool", {}).get("hud", {}).get("image"):
                 return config["tool"]["hud"]["image"], "cache"
         except Exception:
-            click.echo("Failed to load pyproject.toml", err=True)
+            pass  # Silent failure, will use auto-generated name
 
     # Auto-generate with :dev tag
     dir_path = Path(directory).resolve()  # Get absolute path first
@@ -68,17 +72,14 @@ def update_pyproject_toml(directory: str | Path, image_name: str, silent: bool =
                 toml.dump(config, f)
 
             if not silent:
-                click.echo(f"✅ Updated pyproject.toml with image: {image_name}")
+                design.success(f"Updated pyproject.toml with image: {image_name}")
         except Exception as e:
             if not silent:
-                click.echo(f"⚠️  Could not update pyproject.toml: {e}")
+                design.warning(f"Could not update pyproject.toml: {e}")
 
 
 def build_and_update(directory: str | Path, image_name: str, no_cache: bool = False) -> None:
     """Build Docker image and update pyproject.toml."""
-    from hud.utils.design import HUDDesign
-
-    design = HUDDesign()
 
     build_cmd = ["docker", "build", "-t", image_name]
     if no_cache:
@@ -115,7 +116,7 @@ def create_proxy_server(
     # Get the original CMD from the image
     original_cmd = get_docker_cmd(image_name)
     if not original_cmd:
-        click.echo(f"⚠️  Could not extract CMD from {image_name}, using default")
+        design.warning(f"Could not extract CMD from {image_name}, using default")
         original_cmd = ["python", "-m", "hud_controller.server"]
 
     # Generate container name from image
@@ -167,18 +168,15 @@ def create_proxy_server(
     # Debug output - only if verbose
     if verbose:
         if not no_reload:
-            click.echo("📁 Watching: /app/src for changes", err=True)
+            design.info("Watching: /app/src for changes")
         else:
-            click.echo("🔧 Container will run without hot-reload", err=True)
-        click.echo(f"📊 docker logs -f {container_name}", err=True)
+            design.info("Container will run without hot-reload")
+        design.command_example(f"docker logs -f {container_name}", "View container logs")
 
     # Create the HTTP proxy server using config
     try:
         proxy = FastMCP.as_proxy(config, name=f"HUD Dev Proxy - {image_name}")
     except Exception as e:
-        from hud.utils.design import HUDDesign
-        
-        design = HUDDesign(stderr=True)
         design.error(f"Failed to create proxy server: {e}")
         design.info("")
         design.info("💡 Tip: Run the following command to debug the container:")
@@ -277,7 +275,7 @@ async def start_mcp_proxy(
     # Now check for src directory
     src_path = Path(directory) / "src"
     if not src_path.exists():
-        click.echo(f"❌ Source directory not found: {src_path}", err=(transport == "stdio"))
+        design.error(f"Source directory not found: {src_path}")
         raise click.Abort
 
     # Extract container name from the proxy configuration
@@ -293,20 +291,20 @@ async def start_mcp_proxy(
             check=False,  # Don't raise error if container doesn't exist
         )
     except Exception:
-        click.echo(f"Failed to remove existing container {container_name}", err=True)
+        pass  # Silent failure, container might not exist
 
     if transport == "stdio":
         if verbose:
-            click.echo("🔌 Starting stdio proxy (each connection gets its own container)", err=True)
+            design.info("Starting stdio proxy (each connection gets its own container)")
     else:
         # Find available port for HTTP
         actual_port = find_free_port(port)
         if actual_port is None:
-            click.echo(f"❌ No available ports found starting from {port}")
+            design.error(f"No available ports found starting from {port}")
             raise click.Abort
 
         if actual_port != port and verbose:
-            click.echo(f"⚠️  Port {port} in use, using port {actual_port} instead")
+            design.warning(f"Port {port} in use, using port {actual_port} instead")
 
         # Launch MCP Inspector if requested
         if inspector:
@@ -329,11 +327,8 @@ async def start_mcp_proxy(
                     )
 
                     # Print inspector info cleanly
-                    from hud.utils.design import HUDDesign
-
-                    inspector_design = HUDDesign(stderr=(transport == "stdio"))
-                    inspector_design.section_title("MCP Inspector")
-                    inspector_design.link(inspector_url)
+                    design.section_title("MCP Inspector")
+                    design.link(inspector_url)
 
                     # Set environment to disable auth (for development only)
                     env = os.environ.copy()
@@ -359,7 +354,7 @@ async def start_mcp_proxy(
 
                 except (FileNotFoundError, Exception):
                     # Silently fail - inspector is optional
-                    click.echo("Failed to launch inspector", err=True)
+                    design.error("Failed to launch inspector")
 
             # Launch inspector asynchronously so it doesn't block
             asyncio.create_task(launch_inspector())
@@ -369,8 +364,7 @@ async def start_mcp_proxy(
             if transport != "http":
                 from hud.utils.design import HUDDesign
 
-                interactive_design = HUDDesign(stderr=True)
-                interactive_design.warning("Interactive mode only works with HTTP transport")
+                design.warning("Interactive mode only works with HTTP transport")
             else:
                 server_url = f"http://localhost:{actual_port}/mcp"
 
@@ -383,12 +377,9 @@ async def start_mcp_proxy(
                     time.sleep(3)
 
                     try:
-                        from hud.utils.design import HUDDesign
-
-                        interactive_design = HUDDesign(stderr=(transport == "stdio"))
-                        interactive_design.section_title("Interactive Mode")
-                        interactive_design.info("Starting interactive testing mode...")
-                        interactive_design.info("Press Ctrl+C in the interactive session to exit")
+                        design.section_title("Interactive Mode")
+                        design.info("Starting interactive testing mode...")
+                        design.info("Press Ctrl+C in the interactive session to exit")
 
                         # Import and run interactive mode in a new event loop
                         from .interactive import run_interactive_mode
@@ -404,7 +395,7 @@ async def start_mcp_proxy(
                     except Exception as e:
                         # Log error but don't crash the server
                         if verbose:
-                            click.echo(f"Interactive mode error: {e}", err=True)
+                            design.error(f"Interactive mode error: {e}")
 
                 # Launch interactive mode in a separate thread
                 import threading
@@ -415,10 +406,7 @@ async def start_mcp_proxy(
     # Function to stream Docker logs
     async def stream_docker_logs() -> None:
         """Stream Docker container logs asynchronously."""
-        # Import design system for consistent output
-        from hud.utils.design import HUDDesign
-
-        log_design = HUDDesign(stderr=(transport == "stdio"))
+        log_design = design
 
         # Always show waiting message
         log_design.info("")  # Empty line for spacing
@@ -567,39 +555,33 @@ async def start_mcp_proxy(
                     show_banner=False,
                 )
     except (ConnectionError, OSError) as e:
-        from hud.utils.design import HUDDesign
-
-        error_design = HUDDesign(stderr=True)
-        error_design.error(f"Failed to connect to Docker container: {e}")
-        error_design.info("")
-        error_design.info("💡 Tip: Run the following command to debug the container:")
-        error_design.info(f"   hud debug {image_name}")
-        error_design.info("")
-        error_design.info("Common issues:")
-        error_design.info("  • Container failed to start or crashed immediately")
-        error_design.info("  • Server initialization failed")
-        error_design.info("  • Port binding conflicts")
+        design.error(f"Failed to connect to Docker container: {e}")
+        design.info("")
+        design.info("💡 Tip: Run the following command to debug the container:")
+        design.info(f"   hud debug {image_name}")
+        design.info("")
+        design.info("Common issues:")
+        design.info("  • Container failed to start or crashed immediately")
+        design.info("  • Server initialization failed")
+        design.info("  • Port binding conflicts")
         raise
     except KeyboardInterrupt:
-        from hud.utils.design import HUDDesign
-
-        shutdown_design = HUDDesign(stderr=(transport == "stdio"))
-        shutdown_design.info("\n👋 Shutting down...")
+        design.info("\n👋 Shutting down...")
 
         # Show next steps tutorial
         if not interactive:  # Only show if not in interactive mode
-            shutdown_design.section_title("Next Steps")
-            shutdown_design.info("🏗️  Ready to test with real agents? Run:")
-            shutdown_design.info(f"    [cyan]hud build {directory}[/cyan]")
-            shutdown_design.info("")
-            shutdown_design.info("This will:")
-            shutdown_design.info("  1. Build your environment image")
-            shutdown_design.info("  2. Generate a hud.lock.yaml file")
-            shutdown_design.info("  3. Prepare it for testing with agents")
-            shutdown_design.info("")
-            shutdown_design.info("Then you can:")
-            shutdown_design.info("  • Test locally: [cyan]hud run <image>[/cyan]")
-            shutdown_design.info(
+            design.section_title("Next Steps")
+            design.info("🏗️  Ready to test with real agents? Run:")
+            design.info(f"    [cyan]hud build {directory}[/cyan]")
+            design.info("")
+            design.info("This will:")
+            design.info("  1. Build your environment image")
+            design.info("  2. Generate a hud.lock.yaml file")
+            design.info("  3. Prepare it for testing with agents")
+            design.info("")
+            design.info("Then you can:")
+            design.info("  • Test locally: [cyan]hud run <image>[/cyan]")
+            design.info(
                 "  • Push to registry: [cyan]hud push --image <registry/name>[/cyan]"
             )
     except Exception as e:
@@ -613,10 +595,7 @@ async def start_mcp_proxy(
                 "Application shutdown complete",
             ]
         ):
-            from hud.utils.design import HUDDesign
-
-            shutdown_design = HUDDesign(stderr=(transport == "stdio"))
-            shutdown_design.error(f"Unexpected error: {e}")
+            design.error(f"Unexpected error: {e}")
     finally:
         # Cancel log streaming task if it exists
         if log_task and not log_task.done():
@@ -624,7 +603,7 @@ async def start_mcp_proxy(
             try:
                 await log_task
             except asyncio.CancelledError:
-                click.echo("Log streaming task cancelled", err=True)
+                pass  # Log streaming cancelled, normal shutdown
 
 
 def run_mcp_dev_server(
@@ -654,10 +633,6 @@ def run_mcp_dev_server(
         hud dev . --image custom:tag # Use specific image
         hud dev . --no-cache         # Force clean rebuild
     """
-    from hud.utils.design import HUDDesign
-
-    design = HUDDesign(stderr=(transport == "stdio"))
-
     # Ensure directory exists
     if not Path(directory).exists():
         design.error(f"Directory not found: {directory}")
@@ -780,10 +755,10 @@ def run_mcp_dev_server(
             )
         )
     except Exception as e:
-        design.error(f"Failed to start MCP server: {e}")
-        design.info("")
-        design.info("💡 Tip: Run the following command to debug the container:")
-        design.info(f"   hud debug {resolved_image}")
-        design.info("")
-        design.info("This will help identify connection issues or initialization failures.")
+        d.error(f"Failed to start MCP server: {e}")
+        d.info("")
+        d.info("💡 Tip: Run the following command to debug the container:")
+        d.info(f"   hud debug {resolved_image}")
+        d.info("")
+        d.info("This will help identify connection issues or initialization failures.")
         raise

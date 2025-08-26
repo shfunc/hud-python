@@ -82,7 +82,27 @@ class FastMCPHUDClient(BaseHUDClient):
 
         if self._stack is None:
             self._stack = AsyncExitStack()
-            await self._stack.enter_async_context(self._client)
+            try:
+                await self._stack.enter_async_context(self._client)
+            except Exception as e:
+                # Check for authentication errors
+                error_msg = str(e)
+                if "401" in error_msg or "Unauthorized" in error_msg:
+                    # Check if connecting to HUD API
+                    for server_config in mcp_config.values():
+                        url = server_config.get("url", "")
+                        if "mcp.hud.so" in url:
+                            raise RuntimeError(
+                                "Authentication failed for HUD API. "
+                                "Please ensure your HUD_API_KEY environment variable is set correctly. "
+                                "You can get an API key at https://app.hud.so"
+                            ) from e
+                    # Generic 401 error
+                    raise RuntimeError(
+                        f"Authentication failed (401 Unauthorized). "
+                        f"Please check your credentials or API key."
+                    ) from e
+                raise
 
             # Configure validation for output schemas based on client setting
             from mcp.client.session import ValidationOptions

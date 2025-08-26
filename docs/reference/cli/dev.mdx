@@ -144,6 +144,40 @@ Interactive mode disables Docker logs and hot-reload to provide a clean interfac
    - Edit files in `src/` directory
    - Changes are immediately reflected in running containers
    - No rebuild required for code changes
+   - **Only the MCP server restarts**, not your environment state
+
+### Process Separation Architecture
+
+For stateful environments, `hud dev` supports a critical design pattern: separating the MCP server from the environment process. This separation enables hot-reload without losing state.
+
+**Why Separation Matters:**
+- MCP server can restart instantly for code changes
+- Environment state (browsers, databases, games) persists
+- Development is faster without constant state resets
+
+**Example Architecture:**
+```
+┌─────────────────┐     ┌──────────────────────┐
+│   MCP Server    │────▶│ Environment Process  │
+│  (Restartable)  │     │    (Persistent)      │
+│                 │     │                      │
+│ - Lightweight   │     │ - Maintains state    │
+│ - Fast startup  │     │ - Long-lived         │
+│ - MCP protocol  │     │ - Resource heavy     │
+└─────────────────┘     └──────────────────────┘
+        ▲                         │
+        │                         │
+        └─── Unix Socket ─────────┘
+             TCP, gRPC, etc.
+```
+
+**Connection Methods:**
+- Unix sockets (recommended for local dev)
+- TCP/HTTP endpoints
+- gRPC services
+- Shared memory/IPC
+
+See the browser environment for a complete implementation example.
 
 ## File Mounting
 
@@ -155,9 +189,16 @@ Local: ./src/my_package/     → Container: /app/src/my_package/
 Local: ./src/server.py       → Container: /app/src/server.py
 ```
 
-**Live Changes**: Any edits to files in `src/` are immediately reflected in running containers without restart.
+**Live Changes**: Any edits to files in `src/` are immediately reflected in running containers.
 
-**Hot-Reload Supervisor**: Optionally injects a supervisor process that can restart the MCP server when needed (disabled with `--no-reload`).
+**Hot-Reload Behavior**: 
+- With process separation: Only the MCP server restarts, environment state persists
+- Without separation: Entire environment restarts (state is lost)
+- Disable with `--no-reload` if manual control is preferred
+
+<Note>
+For environments with important state (browsers, databases, running applications), implement process separation to preserve state during hot-reload. This dramatically improves development speed.
+</Note>
 
 ## Interactive Mode
 

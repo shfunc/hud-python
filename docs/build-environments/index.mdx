@@ -287,6 +287,84 @@ Study these examples:
 - **stderr**: All logs and debug output
 - **stdio transport**: How containers communicate
 
+### Process Separation for Hot-Reload Development
+
+<Warning>
+**Critical Design Principle**: For environments that need to maintain state during development (like browsers, databases, or running applications), you must separate the MCP server process from the actual environment process. This separation enables hot-reload development without losing state.
+</Warning>
+
+The MCP server should be a lightweight process that:
+1. Starts quickly and can restart without side effects
+2. Connects to your environment process on initialization
+3. Acts as a bridge between MCP protocol and your environment
+
+The environment process should:
+1. Run as a separate, persistent service
+2. Maintain state across MCP server restarts
+3. Accept connections from the MCP server
+
+#### Communication Methods
+
+You can connect the MCP server to your environment using:
+
+- **Unix Sockets** (recommended for local development)
+  ```python
+  # In your MCP server
+  from hud.server.context import attach_context
+  ctx = attach_context("/tmp/my_env.sock")
+  ```
+
+- **TCP/HTTP API**
+  ```python
+  # Connect to HTTP API
+  async with httpx.AsyncClient() as client:
+      response = await client.get("http://localhost:8080/state")
+  ```
+
+- **gRPC**
+  ```python
+  # Connect via gRPC
+  channel = grpc.aio.insecure_channel('localhost:50051')
+  stub = MyServiceStub(channel)
+  ```
+
+- **Shared Memory/IPC**
+  ```python
+  # Using multiprocessing managers
+  from multiprocessing.managers import BaseManager
+  manager.connect()
+  ```
+
+#### Example: Browser Environment Pattern
+
+The browser environment demonstrates this pattern:
+
+1. **Context Server** (`context_server.py`): Persistent process managing browser state
+2. **MCP Server** (`server.py`): Lightweight server that restarts on code changes
+3. **Connection**: Unix socket at `/tmp/hud_browser_ctx.sock`
+
+```python
+# context_server.py - Runs once, maintains state
+class PersistentBrowserContext:
+    def __init__(self):
+        self.browser = None
+        self.apps = {}
+    
+    def startup(self):
+        # Initialize browser, X11, VNC once
+        self.browser = launch_browser()
+
+# server.py - Can restart anytime
+@mcp.initialize
+async def initialize_environment(ctx):
+    # Connect to persistent context
+    persistent_ctx = attach_context("/tmp/hud_browser_ctx.sock")
+    # Use existing browser state
+    browser = persistent_ctx.get_browser()
+```
+
+This separation allows `hud dev` to restart the MCP server for code changes while keeping your browser, database, or application running.
+
 ### Testing Your Environment
 
 #### Traditional Testing
@@ -313,6 +391,11 @@ The `hud dev` command:
 - Auto-detects or builds Docker images
 - Provides HTTP endpoint for Cursor integration
 - Eliminates rebuild cycles during development
+- **Restarts only the MCP server**, not your environment state
+
+<Tip>
+For stateful environments (browsers, databases, games), implement process separation so that `hud dev` hot-reload doesn't reset your environment state. See the browser environment for a complete example.
+</Tip>
 
 ## SDK Reference
 

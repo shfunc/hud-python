@@ -12,13 +12,54 @@ from typing import Any
 
 import typer
 import yaml
-from rich.console import Console
 
 from hud.clients import MCPClient
 from hud.utils.design import HUDDesign
 from hud.version import __version__ as hud_version
 
-console = Console()
+
+def parse_version(version_str: str) -> tuple[int, int, int]:
+    """Parse version string like '1.0.0' or '1.0' into tuple of integers."""
+    # Remove 'v' prefix if present
+    version_str = version_str.lstrip('v')
+    
+    # Split by dots and pad with zeros if needed
+    parts = version_str.split('.')
+    parts.extend(['0'] * (3 - len(parts)))  # Ensure we have at least 3 parts
+    
+    try:
+        return (int(parts[0]), int(parts[1]), int(parts[2]))
+    except (ValueError, IndexError):
+        # Default to 0.0.0 if parsing fails
+        return (0, 0, 0)
+
+
+def increment_version(version_str: str, increment_type: str = "patch") -> str:
+    """Increment version string. increment_type can be 'major', 'minor', or 'patch'."""
+    major, minor, patch = parse_version(version_str)
+    
+    if increment_type == "major":
+        return f"{major + 1}.0.0"
+    elif increment_type == "minor":
+        return f"{major}.{minor + 1}.0"
+    else:  # patch
+        return f"{major}.{minor}.{patch + 1}"
+
+
+def get_existing_version(lock_path: Path) -> str | None:
+    """Get the internal version from existing lock file if it exists."""
+    if not lock_path.exists():
+        return None
+        
+    try:
+        with open(lock_path) as f:
+            lock_data = yaml.safe_load(f)
+            
+        # Look for internal version in build metadata
+        build_data = lock_data.get("build", {})
+        return build_data.get("version", None)
+    except Exception:
+        return None
 
 
 def get_docker_image_digest(image: str) -> str | None:
@@ -39,7 +80,8 @@ def get_docker_image_digest(image: str) -> str | None:
                 # Return full image reference with digest
                 return digest_list[0]
     except Exception:
-        console.print("Failed to get Docker image digest")
+        # Don't print error here, let calling code handle it
+        pass
     return None
 
 
@@ -272,17 +314,17 @@ def build_environment(
 
         # Provide helpful debugging tips
         design.section_title("Debugging Tips")
-        console.print("1. Test your server directly:")
-        console.print(f"   [cyan]docker run --rm -it {temp_tag}[/cyan]")
-        console.print("   (Should see MCP initialization output)")
-        console.print("")
-        console.print("2. Check for common issues:")
-        console.print("   - Server crashes on startup")
-        console.print("   - Missing dependencies")
-        console.print("   - Syntax errors in server.py")
-        console.print("")
-        console.print("3. Run with verbose mode:")
-        console.print("   [cyan]hud build . --verbose[/cyan]")
+        design.info("1. Test your server directly:")
+        design.command_example(f"docker run --rm -it {temp_tag}")
+        design.dim_info("   Expected output", "MCP initialization messages")
+        design.info("")
+        design.info("2. Check for common issues:")
+        design.info("   - Server crashes on startup")
+        design.info("   - Missing dependencies")
+        design.info("   - Syntax errors in server.py")
+        design.info("")
+        design.info("3. Run with verbose mode:")
+        design.command_example("hud build . --verbose")
 
         raise typer.Exit(1)
 
@@ -292,6 +334,19 @@ def build_environment(
     dockerfile_path = env_dir / "Dockerfile"
     required_env, optional_env = extract_env_vars_from_dockerfile(dockerfile_path)
 
+    # Check for existing version and increment
+    lock_path = env_dir / "hud.lock.yaml"
+    existing_version = get_existing_version(lock_path)
+    
+    if existing_version:
+        # Increment existing version
+        new_version = increment_version(existing_version)
+        design.info(f"Incrementing version: {existing_version} → {new_version}")
+    else:
+        # Start with 0.1.0 for new environments
+        new_version = "0.1.0"
+        design.info(f"Setting initial version: {new_version}")
+
     # Create lock file content - minimal and useful
     lock_content = {
         "version": "1.0",  # Lock file format version
@@ -300,6 +355,7 @@ def build_environment(
             "generatedAt": datetime.utcnow().isoformat() + "Z",
             "hudVersion": hud_version,
             "directory": str(env_dir.name),
+            "version": new_version,  # Internal environment version
         },
         "environment": {
             "initializeMs": analysis["initializeMs"],
@@ -338,13 +394,21 @@ def build_environment(
     design.progress_message("Rebuilding with lock file metadata...")
 
     # Build final image with label (uses cache from first build)
+    # Also tag with version
+    base_name = tag.split(":")[0] if tag and ":" in tag else tag
+    version_tag = f"{base_name}:{new_version}"
+    
     label_cmd = [
         "docker",
         "build",
         "--label",
         f"org.hud.manifest.head={lock_hash}:{lock_size}",
+        "--label",
+        f"org.hud.version={new_version}",
         "-t",
         tag,
+        "-t",
+        version_tag,
         str(env_dir),
     ]
 
@@ -398,21 +462,28 @@ def build_environment(
     # Print summary
     design.section_title("Build Complete")
 
-    # Show the actual image reference from the lock file
-    final_image_ref = lock_content.get("image", tag)
-    console.print(f"[green]✓[/green] Local image  : {final_image_ref}")
-    console.print("[green]✓[/green] Lock file    : hud.lock.yaml")
-    console.print(f"[green]✓[/green] Tools found  : {analysis['toolCount']}")
+    # Show the version tag as primary since that's what will be pushed
+    design.status_item("Built image", version_tag, primary=True)
+    if tag:
+        design.status_item("Also tagged", tag)
+    design.status_item("Version", new_version)
+    design.status_item("Lock file", "hud.lock.yaml")
+    design.status_item("Tools found", str(analysis['toolCount']))
+    
+    # Show the digest info separately if we have it
+    if image_id:
+        design.dim_info("\nImage digest", image_id)
 
     design.section_title("Next Steps")
-    console.print("Test locally:")
-    console.print("  [cyan]hud dev[/cyan]           # Hot-reload development")
-    console.print(f"  [cyan]hud run {tag}[/cyan]  # Run the built image")
-    console.print("")
-    console.print("Publish to registry:")
-    console.print(f"  [cyan]hud push --image <registry>/{tag}[/cyan]")
-    console.print("")
-    console.print("The lock file can be used to reproduce this exact environment.")
+    design.info("Test locally:")
+    design.command_example("hud dev", "Hot-reload development")
+    design.command_example(f"hud run {tag}", "Run the built image")
+    design.info("")
+    design.info("Publish to registry:")
+    design.command_example("hud push", f"Push as {version_tag}")
+    design.command_example("hud push --tag latest", "Push with custom tag")
+    design.info("")
+    design.info("The lock file can be used to reproduce this exact environment.")
 
 
 def build_command(
