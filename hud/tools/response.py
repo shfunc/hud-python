@@ -35,12 +35,16 @@ class ResponseTool(BaseTool):
                     blocks.extend(messages)
                 return blocks
     """
+    
+    name: str = "response"
+    title: str = "Response Tool"
+    description: str = "Send a text response or list of messages to the environment"
 
-    def __init__(self, name: str, title: str, description: str):
+    def __init__(self, name: str | None = None, title: str | None = None, description: str | None = None):
         super().__init__(
-            name=name or "response",
-            title=title or "Response Tool",
-            description=description or "Send a text response or list of messages to the environment",
+            name=name or self.name,
+            title=title or self.title,
+            description=description or self.description,
         )
 
     @abstractmethod
