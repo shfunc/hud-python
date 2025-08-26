@@ -15,7 +15,7 @@ Usage examples
 python examples/run_evaluation.py hud-evals/SheetBench-50 --full --agent claude
 
 # Run a single OSWorld-Verified task with OpenAI Operator agent (default single-task mode)
-python examples/run_evaluation.py hud-evals/OSWorld-Gold-Beta --agent openai
+python examples/run_evaluation.py hud-evals/OSWorld-Verified-XLang --agent openai
 """
 
 from __future__ import annotations

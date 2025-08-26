@@ -13,7 +13,7 @@ async def _decodo_proxy() -> Optional[Dict[str, Any]]:
     if not user or not pwd:
         return None
     host = os.getenv("DECODO_HOST", "us.decodo.com")
-    rotating = os.getenv("DECODO_ROTATING", "false").lower() == "true"
+    rotating = os.getenv("DECODO_ROTATING", "true").lower() == "true"
     if rotating:
         port = 10000
         logger.info("Using Decodo rotating proxy (port 10000)")
