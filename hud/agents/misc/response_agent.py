@@ -5,6 +5,8 @@ from typing import Literal
 
 from openai import AsyncOpenAI
 
+from hud.settings import settings
+
 ResponseType = Literal["STOP", "CONTINUE"]
 
 
@@ -15,7 +17,7 @@ class ResponseAgent:
     """
 
     def __init__(self, api_key: str | None = None) -> None:
-        self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
+        self.api_key = api_key or settings.openai_api_key or os.environ.get("OPENAI_API_KEY")
         if not self.api_key:
             raise ValueError(
                 "OpenAI API key must be provided or set as OPENAI_API_KEY environment variable"
