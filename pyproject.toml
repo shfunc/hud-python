@@ -1,6 +1,6 @@
 [project]
 name = "hud-python"
-version = "0.4.0"
+version = "0.4.2"
 description = "SDK for the HUD platform."
 readme = "README.md"
 requires-python = ">=3.11, <3.14"
@@ -52,6 +52,14 @@ hud-python = "hud.cli:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build]
+exclude = [
+    "environments/",
+    "docs/",
+    "examples/",
+    "rl/",
+]
+
 [tool.hud.clone]
 title = "🚀 Welcome to HUD SDK!"
 message = """[bold cyan]Thanks for using the hud SDK![/bold cyan]
@@ -71,10 +79,17 @@ style = "blue"
 allow-direct-references = true
 
 [tool.hatch.build.targets.sdist]
-exclude = ["*/tests/"]
+include = ["hud/**", "README.md", "LICENSE", "pyproject.toml"]
+exclude = [
+    "*/tests/",
+    "*/__pycache__/",
+    "*.pyc",
+    "*.pyo",
+    "*~",
+    ".DS_Store"
+]
 
 [tool.hatch.build.targets.wheel]
-include = ["hud"]
 packages = ["hud"]
 
 # Ensure py.typed is included in the package

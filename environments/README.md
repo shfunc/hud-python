@@ -28,7 +28,7 @@ This document is a step-by-step guide for turning *any* piece of software that c
 | 2 | A minimal MCP server that responds to `initialize` over **stdio** |
 | 3 | Working `setup`, `evaluate`, and **interaction** tools |
 | 4 | Image launches remotely on the HUD platform & exposes live telemetry |
-| 5 | Fast local iteration with Cursor Agent and a tiny `mcp.json` |
+| 5 | Fast local iteration with `hud dev` hot-reload |
 
 Take the phases one at a time; do **not** jump ahead.  Each stage's checkpoint is the foundation for the next.
 
@@ -605,13 +605,9 @@ Once all of the above works you can unleash *hundreds* of concurrent agents on y
 
 ---
 
-## Phase 5 – Hot-Reload Development with Cursor Agent
+## Phase 5 – Hot-Reload Development
 
-To enable rapid development without Docker rebuilds, we can mount the source code and use hot-reload. The HUD SDK provides two approaches:
-
-### Option 1: Using `hud dev` (Recommended)
-
-The HUD CLI provides a built-in development proxy that handles all the complexity:
+To enable rapid development without Docker rebuilds, we can mount the source code and use hot-reload. The HUD CLI provides a built-in development proxy that handles all the complexity:
 
 ```bash
 # Navigate to your environment directory
@@ -650,61 +646,92 @@ Either click the deeplink URL from the output, or manually add to `.cursor/mcp.j
 }
 ```
 
-### Option 2: Manual Configuration
+### Development Workflow
 
-If you prefer manual control or need custom settings, configure Cursor directly with [reloaderoo](https://github.com/cameroncooke/reloaderoo):
+1. Keep `hud dev` running in one terminal - it automatically handles reloads
+2. Edit your code in `src/` - changes take effect immediately
+3. Test changes in another terminal with `hud analyze` or the interactive mode
+4. Use Cursor/Claude to iterate quickly on your environment
 
-#### 1. Build for Development
+### Process Separation for Stateful Environments
 
-Your Dockerfile needs to copy source for the build, even though we'll mount over it:
+**Important Architecture Pattern**: For environments that maintain state (browsers, databases, running applications), you should separate the MCP server process from the actual environment process. This separation is critical for effective hot-reload development.
 
+#### Why Process Separation?
+
+When `hud dev` restarts your MCP server for code changes, you don't want to lose:
+- Open browser windows and navigation state
+- Database connections and data
+- Running application state
+- X11/VNC sessions
+- Any expensive initialization
+
+#### Architecture Pattern
+
+```
+┌─────────────────┐     ┌──────────────────────┐
+│   MCP Server    │────▶│ Environment Process  │
+│  (Restartable)  │     │    (Persistent)      │
+└─────────────────┘     └──────────────────────┘
+       ▲                         │
+       │                         │
+       └─── Communication ────────┘
+          (Socket, API, gRPC)
+```
+
+#### Implementation Example
+
+1. **Create a Context Server** (`context_server.py`):
+```python
+from hud.server.context import run_context_server
+
+class PersistentEnvironmentContext:
+    def __init__(self):
+        self.state = {}
+        self.resources = None
+    
+    def startup(self):
+        # One-time expensive initialization
+        self.resources = initialize_expensive_resources()
+    
+    def get_state(self):
+        return self.state
+
+if __name__ == "__main__":
+    context = PersistentEnvironmentContext()
+    context.startup()
+    # Run on Unix socket
+    asyncio.run(run_context_server(context, "/tmp/my_env_ctx.sock"))
+```
+
+2. **Connect from MCP Server** (`server.py`):
+```python
+from hud.server.context import attach_context
+
+@mcp.initialize
+async def initialize_environment(ctx):
+    # Connect to persistent context
+    persistent_ctx = attach_context("/tmp/my_env_ctx.sock")
+    
+    # Use existing state without reinitializing
+    state = persistent_ctx.get_state()
+    resources = persistent_ctx.get_resources()
+```
+
+3. **Update Dockerfile** to run both processes:
 ```dockerfile
-# Copy source files
-COPY src/ ./src/
-
-# Install in editable mode for development
-RUN pip install -e .
+# Start context server in background
+CMD ["sh", "-c", "python -m hud_controller.context_server & python -m hud_controller.server"]
 ```
 
-#### 2. Build the Development Image
+#### Communication Options
 
-```bash
-docker build -t my-environment:dev .
-```
+- **Unix Sockets** (recommended for local): Fast, simple, no network overhead
+- **TCP/HTTP API**: Good for distributed systems
+- **gRPC**: Type-safe, efficient for complex APIs
+- **Shared Memory**: Ultra-fast for large data
 
-#### 3. Configure Cursor Agent for development with hot-reload
-
-Add a development configuration to `.cursor/mcp.json`:
-
-```jsonc
-{
-  "mcpServers": {
-    // If your production config looks like this,
-    "my-environment": {
-      "command": "docker",
-      "args": ["run", "--rm", "-i", "my-environment:latest"]
-    },
-    // This is how you make the dev mode config:
-    "my-environment-dev": {
-      "command": "npx",
-      "args": [
-        "reloaderoo", "--",  // Wraps docker for hot-reload
-        "docker", "run", "-i", "--rm",
-        "-v", "%cd%/src:/app/src:rw",  // Windows
-        // "-v", "$(pwd)/src:/app/src:rw",  // Linux/Mac
-        "-e", "PYTHONPATH=/app/src",  // Required for module imports in the Phase 1 like setup
-        // Add your environment variables here
-        "my-environment:dev" // dev instead of latest!
-      ]
-    }
-  }
-}
-```
-
-Now you can edit code and call `restart_server` to reload without restarting the client.
-
-2. Follow the cursor rules below: rebuild, refresh, test, reflect, repeat.
-3. Keep the agent open for any messages or issues.
+See the `browser` environment for a complete production example of this pattern.
 
 ### 4. Cursor rules – paste this once
 
@@ -716,7 +743,7 @@ description: Improve an MCP environment
 alwaysApply: false
 ---
 Setup
-1. Make sure the user has set up the mcp config for the environment by seeing if you have access to the tools by the given name (i.e. my-environment-dev), and make sure the title is in dev mode. If not, ask the user to make a dev version!
+1. Make sure the user has started the development server with `hud dev --build` and that you can connect to the environment through the provided HTTP endpoint. Check that you have access to the environment's tools.
 2. Make sure you can find the source folder for this environment. Explore its contents and README.
 3. Clarify the objectives and ask follow up questions on the initial query to determine precise implementation details.
 
@@ -828,23 +855,26 @@ class MyCheckEvaluator(BaseEvaluator):
 
 ### 3. Testing Your Changes
 
-**Use the Development Configuration**
-```jsonc
-// In .cursor/mcp.json
-{
-  "mcpServers": {
-    "my-env-dev": {
-      "command": "npx",
-      "args": [
-        "reloaderoo", "--",
-        "docker", "run", "-i", "--rm",
-        "-v", "$(pwd)/src:/app/src:rw",
-        "my-environment:dev"
-      ]
-    }
-  }
-}
+**Use `hud dev` for Hot-Reload Development**
+```bash
+# Navigate to the environment directory
+cd environments/my-environment
+
+# Start development server with hot-reload
+hud dev --build
+
+# In another terminal, test your changes
+hud analyze hud-my-environment:dev
+
+# Or use interactive mode to test tools directly
+hud dev --build --interactive
 ```
+
+The `hud dev` command automatically:
+- Mounts your `src/` directory for live code updates
+- Handles container lifecycle and restarts
+- Provides an HTTP endpoint for testing
+- Shows logs for debugging
 
 ## Testing Your Environment
 

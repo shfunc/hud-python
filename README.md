@@ -22,10 +22,10 @@ OSS RL environment + evals toolkit. Wrap software as environments, run benchmark
 
 ## Highlights
 
-- 🚀 **[MCP-native connectivity](https://docs.hud.so/core-concepts/mcp-protocol)** – any agent can call any hud environment.
+- 🚀 **[MCP environment skeleton](https://docs.hud.so/core-concepts/mcp-protocol)** – any agent can call any environment.
 - ⚡️ **[Live telemetry](https://app.hud.so)** – inspect every tool call, observation, and reward in real time.
 - 🗂️ **[Public benchmarks](https://app.hud.so/leaderboards)** – OSWorld-Verified, SheetBench-50, and more.
-- 🌱 **[Reinforcement learning built-in](rl/)** – Verifiers gym pipelines for GRPO training.
+- 🌱 **[Reinforcement learning built-in](rl/)** – Verifiers gym pipelines for GRPO on any environment.
 - 🌐 **[Cloud browsers](environments/remote_browser/)** – AnchorBrowser, Steel, BrowserBase integrations for browser automation.
 - 🛠️ **[Hot-reload dev loop](environments/README.md#phase-5-hot-reload-development-with-cursor-agent)** – `hud dev` for iterating on environments without rebuilds.
 
