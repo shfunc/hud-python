@@ -445,7 +445,8 @@ def run(
 
         # Get URL from options or environment
         if not url:
-            url = os.getenv("HUD_MCP_URL", "https://mcp.hud.so/v3/mcp")
+            from hud.settings import settings
+            url = settings.hud_mcp_url
 
         run_remote_server(image, docker_args, transport, port, url, api_key, run_id, verbose)
 

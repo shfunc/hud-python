@@ -175,22 +175,23 @@ def eval_command(
         # Run with OpenAI Operator agent
         hud eval hud-evals/OSWorld-Gold-Beta --agent openai
     """
+    from hud.settings import settings
     import os
     
     # Check for required API keys
     if agent == "claude":
-        if not os.environ.get("ANTHROPIC_API_KEY"):
-            design.error("ANTHROPIC_API_KEY environment variable is required for Claude agent")
-            design.info("Please set it with: export ANTHROPIC_API_KEY=your-key-here")
+        if not settings.anthropic_api_key or not os.environ.get("ANTHROPIC_API_KEY"):
+            design.error("ANTHROPIC_API_KEY is required for Claude agent")
+            design.info("Set it in your environment or .env file: ANTHROPIC_API_KEY=your-key-here")
             raise typer.Exit(1)
     elif agent == "openai":
-        if not os.environ.get("OPENAI_API_KEY"):
-            design.error("OPENAI_API_KEY environment variable is required for OpenAI agent")
-            design.info("Please set it with: export OPENAI_API_KEY=your-key-here")
+        if not settings.openai_api_key or not os.environ.get("OPENAI_API_KEY"):
+            design.error("OPENAI_API_KEY is required for OpenAI agent")
+            design.info("Set it in your environment or .env file: OPENAI_API_KEY=your-key-here")
             raise typer.Exit(1)
     
     # Check for HUD_API_KEY if using HUD services
-    if not os.environ.get("HUD_API_KEY"):
+    if not settings.api_key or not os.environ.get("HUD_API_KEY"):
         design.warning("HUD_API_KEY not set. Some features may be limited.")
         design.info("Get your API key at: https://app.hud.so")
     
