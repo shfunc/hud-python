@@ -1,6 +1,6 @@
 [project]
 name = "hud-python"
-version = "0.4.4"
+version = "0.4.5"
 description = "SDK for the HUD platform."
 readme = "README.md"
 requires-python = ">=3.11, <3.14"
@@ -60,9 +60,6 @@ exclude = [
     "rl/",
 ]
 
-[tool.uv.sources]
-mcp = { git = "https://github.com/hud-evals/mcp-python-sdk.git" } 
-
 [tool.hud.clone]
 title = "🚀 Welcome to HUD SDK!"
 message = """[bold cyan]Thanks for using the hud SDK![/bold cyan]
@@ -80,6 +77,9 @@ style = "blue"
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+[tool.uv.sources]
+mcp = { git = "https://github.com/hud-evals/mcp-python-sdk.git" } 
 
 [tool.hatch.build.targets.sdist]
 include = ["hud/**", "README.md", "LICENSE", "pyproject.toml"]
