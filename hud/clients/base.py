@@ -149,10 +149,9 @@ class BaseHUDClient(AgentMCPClient):
                             "Please ensure your HUD_API_KEY environment variable is set correctly. "
                             "You can get an API key at https://app.hud.so"
                         ) from e
-                # Generic 401 error
                 raise RuntimeError(
-                    f"Authentication failed (401 Unauthorized). "
-                    f"Please check your credentials or API key."
+                    "Authentication failed (401 Unauthorized). "
+                    "Please check your credentials or API key."
                 ) from e
             raise
 

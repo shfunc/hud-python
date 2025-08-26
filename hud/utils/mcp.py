@@ -20,7 +20,7 @@ def patch_mcp_config(mcp_config: dict[str, dict[str, Any]], patch: MCPConfigPatc
 
     for server_cfg in mcp_config.values():
         url = server_cfg.get("url", "")
-
+        
         # 1) HTTP header lane (only for hud MCP servers)
         if hud_mcp_url in url and patch.headers:
             for key, value in patch.headers.items():
