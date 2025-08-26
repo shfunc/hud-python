@@ -2,15 +2,14 @@
 
 import logging
 from typing import List, Optional
-from fastmcp import Context
-from hud.tools.types import SetupResult
+from mcp.types import TextContent
 from . import setup
 
 logger = logging.getLogger(__name__)
 
 
 @setup.tool("game_2048_board")
-async def game_2048_board(ctx: Context, board_size: int = 4, target_tile: int = 2048):
+async def game_2048_board(board_size: int = 4, target_tile: int = 2048):
     """Initialize new game with specified board size and target tile.
 
     Args:
@@ -21,7 +20,7 @@ async def game_2048_board(ctx: Context, board_size: int = 4, target_tile: int = 
         SetupResult with game initialization status
     """
     try:
-        env = setup.env  # Get BrowserEnvironmentContext from hub
+        env = setup.env  # Get BrowserContext from hub
         result = await env.call_app_api(
             "2048",
             "/api/game/new",
@@ -31,21 +30,17 @@ async def game_2048_board(ctx: Context, board_size: int = 4, target_tile: int = 
 
         highest_tile = result.get("highest_tile", 0)
 
-        return SetupResult(
-            content=f"{board_size}x{board_size} game initialized with target {target_tile}",
-            info={
-                "board_size": board_size,
-                "target_tile": target_tile,
-                "highest_tile": highest_tile,
-            },
+        return TextContent(
+            text=f"{board_size}x{board_size} game initialized with target {target_tile}",
+            type="text",
         )
     except Exception as e:
         logger.error(f"game_2048_board failed: {e}")
-        return SetupResult(content=f"Failed to initialize game: {str(e)}", isError=True)
+        return TextContent(text=f"Failed to initialize game: {str(e)}", type="text")
 
 
 @setup.tool("game_2048_set_board")
-async def game_2048_set_board(ctx: Context, board: List[List[int]], score: int = 0, moves: int = 0):
+async def game_2048_set_board(board: List[List[int]], score: int = 0, moves: int = 0):
     """Set specific board configuration for testing.
 
     Args:
@@ -57,7 +52,7 @@ async def game_2048_set_board(ctx: Context, board: List[List[int]], score: int =
         SetupResult with board configuration status
     """
     try:
-        env = setup.env  # Get BrowserEnvironmentContext from hub
+        env = setup.env  # Get BrowserContext from hub
         result = await env.call_app_api(
             "2048",
             "/api/eval/set_board",
@@ -67,17 +62,17 @@ async def game_2048_set_board(ctx: Context, board: List[List[int]], score: int =
 
         highest_tile = result.get("highest_tile", 0)
 
-        return SetupResult(
-            content=f"Board set successfully (highest tile: {highest_tile})",
-            info={"board": board, "score": score, "moves": moves, "highest_tile": highest_tile},
+        return TextContent(
+            text=f"Board set successfully (highest tile: {highest_tile})",
+            type="text",
         )
     except Exception as e:
         logger.error(f"game_2048_set_board failed: {e}")
-        return SetupResult(content=f"Failed to set board: {str(e)}", isError=True)
+        return TextContent(text=f"Failed to set board: {str(e)}", type="text")
 
 
 @setup.tool("game_2048_near_win")
-async def game_2048_near_win(ctx: Context, target_tile: int = 2048):
+async def game_2048_near_win(target_tile: int = 2048):
     """Set board close to winning (with tiles near target).
 
     Args:
@@ -109,7 +104,7 @@ async def game_2048_near_win(ctx: Context, target_tile: int = 2048):
         score = sum(sum(row) for row in board) * 2
         moves = 150
 
-        env = setup.env  # Get BrowserEnvironmentContext from hub
+        env = setup.env  # Get BrowserContext from hub
         result = await env.call_app_api(
             "2048",
             "/api/eval/set_board",
@@ -117,22 +112,17 @@ async def game_2048_near_win(ctx: Context, target_tile: int = 2048):
             json={"board": board, "score": score, "moves": moves},
         )
 
-        return SetupResult(
-            content=f"Board set near winning state for target {target_tile}",
-            info={
-                "target_tile": target_tile,
-                "highest_tile": result.get("highest_tile", 0),
-                "score": score,
-                "moves": moves,
-            },
+        return TextContent(
+            text=f"Board set near winning state for target {target_tile}",
+            type="text",
         )
     except Exception as e:
         logger.error(f"game_2048_near_win failed: {e}")
-        return SetupResult(content=f"Failed to set near-win board: {str(e)}", isError=True)
+        return TextContent(text=f"Failed to set near-win board: {str(e)}", type="text")
 
 
 @setup.tool("game_2048_navigate")
-async def game_2048_navigate(ctx: Context, url: str = None):
+async def game_2048_navigate(url: Optional[str] = None):
     """Navigate to 2048 game.
 
     Args:
@@ -142,7 +132,7 @@ async def game_2048_navigate(ctx: Context, url: str = None):
         SetupResult with navigation status
     """
     try:
-        env = setup.env  # Get BrowserEnvironmentContext from hub
+        env = setup.env  # Get BrowserContext from hub
         # Get the default URL if not provided
         if not url:
             url = env.get_app_url("2048")
@@ -151,60 +141,52 @@ async def game_2048_navigate(ctx: Context, url: str = None):
         if env.playwright:
             nav_result = await env.playwright.navigate(url)
 
-            return SetupResult(
-                content=f"Navigated to 2048 game at {url}",
-                info={
-                    "url": url,
-                },
+            return TextContent(
+                text=f"Navigated to 2048 game at {url}",
+                type="text"
             )
         else:
-            return SetupResult(content="Playwright tool not available for navigation", isError=True)
+            return TextContent(text="Playwright tool not available for navigation", type="text")
     except Exception as e:
         logger.error(f"game_2048_navigate failed: {e}")
-        return SetupResult(content=f"Failed to navigate to 2048 game: {str(e)}", isError=True)
+        return TextContent(text=f"Failed to navigate to 2048 game: {str(e)}", type="text")
 
 
 @setup.tool("game_2048_reset")
-async def game_2048_reset(ctx: Context):
+async def game_2048_reset():
     """Reset game to initial state.
 
     Returns:
         SetupResult with reset status
     """
     try:
-        env = setup.env  # Get BrowserEnvironmentContext from hub
+        env = setup.env  # Get BrowserContext from hub
         result = await env.call_app_api("2048", "/api/eval/reset", method="POST")
 
-        return SetupResult(
-            content="Game reset to initial state",
-            info={
-                "board_size": result.get("board_size", 4),
-                "target_tile": result.get("target_tile", 2048),
-            },
+        return TextContent(
+            text="Game reset to initial state",
+            type="text",
         )
     except Exception as e:
         logger.error(f"game_2048_reset failed: {e}")
-        return SetupResult(content=f"Failed to reset game: {str(e)}", isError=True)
+        return TextContent(text=f"Failed to reset game: {str(e)}", type="text")
 
 
 @setup.tool("game_2048_test_seed")
-async def game_2048_test_seed(ctx: Context):
+async def game_2048_test_seed():
     """Seed the board with a test configuration.
 
     Returns:
         SetupResult with test seed status
     """
     try:
-        env = setup.env  # Get BrowserEnvironmentContext from hub
+        env = setup.env  # Get BrowserContext from hub
         result = await env.call_app_api("2048", "/api/eval/seed", method="POST")
 
-        return SetupResult(
-            content="Test board seeded successfully",
-            info={
-                "highest_tile": result.get("highest_tile", 0),
-                "message": result.get("message", ""),
-            },
+        return TextContent(
+            text="Test board seeded successfully",
+            type="text",
         )
     except Exception as e:
         logger.error(f"game_2048_test_seed failed: {e}")
-        return SetupResult(content=f"Failed to seed test board: {str(e)}", isError=True)
+        return TextContent(text=f"Failed to seed test board: {str(e)}", type="text")

@@ -237,7 +237,7 @@ browser/
 
 ## Development Workflow
 
-### Hot-Reload Development with `hud mcp`
+### Hot-Reload Development with `hud dev`
 
 For rapid iteration without Docker rebuilds:
 
@@ -246,7 +246,7 @@ For rapid iteration without Docker rebuilds:
 cd environments/browser
 
 # Start hot-reload development proxy
-hud mcp . --build
+hud dev . --build
 
 # This will:
 # - Build/use hud-browser:dev image

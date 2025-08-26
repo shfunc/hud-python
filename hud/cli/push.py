@@ -314,11 +314,11 @@ def push_environment(
     lock_data["image"] = pushed_digest
 
     # Add push information
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     lock_data["push"] = {
         "source": local_image,
-        "pushedAt": datetime.utcnow().isoformat() + "Z",
+        "pushedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "registry": pushed_digest.split("/")[0] if "/" in pushed_digest else "docker.io",
     }
 

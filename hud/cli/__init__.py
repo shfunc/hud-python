@@ -29,6 +29,7 @@ from .pull import pull_command
 from .push import push_command
 from .remove import remove_command
 from .utils import CaptureLogger
+from .eval import eval_command
 
 # Create the main Typer app
 app = typer.Typer(
@@ -649,6 +650,64 @@ def quickstart() -> None:
     """
     # Just call the clone command with the quickstart URL
     clone("https://github.com/hud-evals/quickstart.git")
+
+
+@app.command()
+def eval(
+    source: str = typer.Argument(
+        ...,
+        help="HuggingFace dataset identifier (e.g. 'hud-evals/SheetBench-50') or task JSON file",
+    ),
+    full: bool = typer.Option(
+        False,
+        "--full",
+        help="Run the entire dataset (omit for single-task debug mode)",
+    ),
+    agent: str = typer.Option(
+        "claude",
+        "--agent",
+        help="Agent backend to use (claude or openai)",
+    ),
+    model: str | None = typer.Option(
+        None,
+        "--model",
+        help="Model name for the chosen agent",
+    ),
+    allowed_tools: str | None = typer.Option(
+        None,
+        "--allowed-tools",
+        help="Comma-separated list of allowed tools",
+    ),
+    max_concurrent: int = typer.Option(
+        30,
+        "--max-concurrent",
+        help="Concurrency level for full-dataset mode",
+    ),
+    max_steps: int = typer.Option(
+        30,
+        "--max-steps",
+        help="Maximum steps per task (default: 10 for single, 50 for full)",
+    ),
+) -> None:
+    """🚀 Run evaluation on datasets or individual tasks with agents."""
+    # Validate agent choice
+    valid_agents = ["claude", "openai"]
+    if agent not in valid_agents:
+        from hud.utils.design import HUDDesign
+        design = HUDDesign()
+        design.error(f"Invalid agent: {agent}. Must be one of: {', '.join(valid_agents)}")
+        raise typer.Exit(1)
+    
+    # Import and run the command
+    eval_command(
+        source=source,
+        full=full,
+        agent=agent,  # type: ignore
+        model=model,
+        allowed_tools=allowed_tools,
+        max_concurrent=max_concurrent,
+        max_steps=max_steps,
+    )
 
 
 def main() -> None:

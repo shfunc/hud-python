@@ -1,7 +1,6 @@
 """Todo app evaluators."""
 
 import logging
-from fastmcp import Context
 from hud.tools.types import EvaluationResult
 from . import evaluate
 
@@ -9,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 @evaluate.tool("todo_completed")
-async def todo_completed(ctx: Context, expected_count: int):
+async def todo_completed(expected_count: int):
     """Check if expected number of todos are completed.
 
     Args:
@@ -20,7 +19,7 @@ async def todo_completed(ctx: Context, expected_count: int):
     """
     try:
         # Use the app-centric approach: call todo backend API
-        env = evaluate.env  # Get BrowserEnvironmentContext from hub
+        env = evaluate.env  # Get BrowserContext from hub
         stats = await env.call_app_api("todo", "/api/eval/stats")
         completed_count = stats.get("completed_items", 0)
         total_count = stats.get("total_items", 0)
@@ -55,7 +54,7 @@ async def todo_completed(ctx: Context, expected_count: int):
 
 
 @evaluate.tool("todo_exists")
-async def todo_exists(ctx: Context, title: str):
+async def todo_exists(title: str):
     """Check if a todo with specific title exists.
 
     Args:
@@ -66,7 +65,7 @@ async def todo_exists(ctx: Context, title: str):
     """
     try:
         # Call the app's API to get all todos
-        env = evaluate.env  # Get BrowserEnvironmentContext from hub
+        env = evaluate.env  # Get BrowserContext from hub
         todos = await env.call_app_api("todo", "/api/eval/todos")
 
         # Check if any todo has the expected title
@@ -96,7 +95,7 @@ async def todo_exists(ctx: Context, title: str):
 
 
 @evaluate.tool("todo_completion_rate")
-async def todo_completion_rate(ctx: Context, target_rate: float = 0.5):
+async def todo_completion_rate(target_rate: float = 0.5):
     """Check if completion rate meets target.
 
     Args:
@@ -107,7 +106,7 @@ async def todo_completion_rate(ctx: Context, target_rate: float = 0.5):
     """
     try:
         # Get stats from the app
-        env = evaluate.env  # Get BrowserEnvironmentContext from hub
+        env = evaluate.env  # Get BrowserContext from hub
         stats = await env.call_app_api("todo", "/api/eval/stats")
         total_count = stats.get("total_items", 0)
         completed_count = stats.get("completed_items", 0)
@@ -147,7 +146,7 @@ async def todo_completion_rate(ctx: Context, target_rate: float = 0.5):
 
 
 @evaluate.tool("todo_total_count")
-async def todo_total_count(ctx: Context, min_count: int = 1):
+async def todo_total_count(min_count: int = 1):
     """Check if total todo count meets minimum.
 
     Args:
@@ -158,7 +157,7 @@ async def todo_total_count(ctx: Context, min_count: int = 1):
     """
     try:
         # Get stats from the app
-        env = evaluate.env  # Get BrowserEnvironmentContext from hub
+        env = evaluate.env  # Get BrowserContext from hub
         stats = await env.call_app_api("todo", "/api/eval/stats")
         total_count = stats.get("total_items", 0)
 
@@ -189,7 +188,7 @@ async def todo_total_count(ctx: Context, min_count: int = 1):
 
 
 @evaluate.tool("todo_all_completed")
-async def todo_all_completed(ctx: Context):
+async def todo_all_completed():
     """Check if all todos are completed.
 
     Returns:
@@ -197,7 +196,7 @@ async def todo_all_completed(ctx: Context):
     """
     try:
         # Get stats from the app
-        env = evaluate.env  # Get BrowserEnvironmentContext from hub
+        env = evaluate.env  # Get BrowserContext from hub
         stats = await env.call_app_api("todo", "/api/eval/stats")
         total_count = stats.get("total_items", 0)
         completed_count = stats.get("completed_items", 0)
