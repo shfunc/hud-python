@@ -132,8 +132,7 @@ def list_environments(
     
     # Create table
     table = Table(title=f"Found {len(environments)} environment{'s' if len(environments) != 1 else ''}")
-    table.add_column("Name", style="cyan", no_wrap=True)
-    table.add_column("Tag", style="green")
+    table.add_column("Environment", style="cyan", no_wrap=True)
     table.add_column("Description", style="white")
     table.add_column("Tools", justify="right", style="yellow")
     table.add_column("Pulled", style="dim")
@@ -148,9 +147,11 @@ def list_environments(
         if desc and len(desc) > 50 and not verbose:
             desc = desc[:47] + "..."
         
+        # Combine name and tag for easy copying
+        full_ref = f"{env['name']}:{env['tag']}"
+        
         row = [
-            env["name"],
-            env["tag"],
+            full_ref,
             desc or "[dim]No description[/dim]",
             str(env["tools_count"]),
             format_timestamp(env["pulled_time"]),

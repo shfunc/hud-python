@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import quote
 
 import requests
 import yaml
@@ -26,7 +27,9 @@ def fetch_lock_from_registry(reference: str) -> dict | None:
         if "/" in reference and ":" not in reference:
             reference = f"{reference}:latest"
 
-        registry_url = f"{settings.hud_telemetry_url.rstrip('/')}/registry/envs/{reference}"
+        # URL-encode the path segments to handle special characters in tags
+        url_safe_path = "/".join(quote(part, safe="") for part in reference.split("/"))
+        registry_url = f"{settings.hud_telemetry_url.rstrip('/')}/registry/envs/{url_safe_path}"
 
         headers = {}
         if settings.api_key:
