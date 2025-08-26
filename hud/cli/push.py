@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
+from urllib.parse import quote
 
 import requests
 import typer
@@ -13,6 +14,12 @@ import yaml
 from hud.settings import settings
 from hud.utils.design import HUDDesign
 
+
+def _get_response_text(response: requests.Response) -> str:
+    try:
+        return response.json().get("detail", "No detail available")
+    except Exception:
+        return response.text
 
 def get_docker_username() -> str | None:
     """Get the current Docker username if logged in."""
@@ -312,11 +319,11 @@ def push_environment(
     lock_data["image"] = pushed_digest
 
     # Add push information
-    from datetime import datetime
+    from datetime import datetime, UTC
 
     lock_data["push"] = {
         "source": local_image,
-        "pushedAt": datetime.utcnow().isoformat() + "Z",
+        "pushedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "registry": pushed_digest.split("/")[0] if "/" in pushed_digest else "docker.io",
     }
 
@@ -331,52 +338,88 @@ def push_environment(
         # Extract org/name:tag from the pushed image
         # e.g., "docker.io/hudpython/test_init:latest@sha256:..." -> "hudpython/test_init:latest"
         # e.g., "hudpython/test_init:v1.0" -> "hudpython/test_init:v1.0"
-        registry_parts = pushed_digest.split("/")
+        # Use the original image name for the registry path, not the digest
+        # The digest might not contain the tag information
+        registry_image = image  # This is the image we tagged and pushed (e.g., hudpython/hud-text-2048:0.1.2)
+        
+        # Remove any registry prefix for the HUD registry path
+        registry_parts = registry_image.split("/")
         if len(registry_parts) >= 2:
             # Handle docker.io/org/name or just org/name
-            if registry_parts[0] in ["docker.io", "registry-1.docker.io", "index.docker.io"]:
-                # Remove registry prefix and get org/name:tag
-                name_with_tag = "/".join(registry_parts[1:]).split("@")[0]
+            if registry_parts[0] in ["docker.io", "registry-1.docker.io", "index.docker.io", "ghcr.io"]:
+                # Remove registry prefix
+                name_with_tag = "/".join(registry_parts[1:])
+            elif "." in registry_parts[0] or ":" in registry_parts[0]:
+                # Likely a registry URL (has dots or port)
+                name_with_tag = "/".join(registry_parts[1:])
             else:
-                # Just org/name:tag
-                name_with_tag = "/".join(registry_parts[:2]).split("@")[0]
-
-            # If no tag specified, use "latest"
-            if ":" not in name_with_tag:
-                name_with_tag = f"{name_with_tag}:latest"
-
-            # Upload to HUD registry
-            design.progress_message("Uploading metadata to HUD registry...")
-
-            registry_url = f"{settings.hud_telemetry_url.rstrip('/')}/registry/envs/{name_with_tag}"
-
-            # Prepare the payload
-            payload = {
-                "lock": yaml.dump(lock_data, default_flow_style=False, sort_keys=False),
-                "digest": pushed_digest.split("@")[-1] if "@" in pushed_digest else "latest",
-            }
-
-            headers = {"Authorization": f"Bearer {settings.api_key}"}
-
-            response = requests.post(registry_url, json=payload, headers=headers, timeout=10)
-
-            if response.status_code in [200, 201]:
-                design.success("Metadata uploaded to HUD registry")
-                design.info("Others can now pull with:")
-                design.command_example(f"hud pull {name_with_tag}")
-                design.info("")
-            else:
-                design.warning(f"Could not upload to registry: {response.status_code}")
-                if verbose:
-                    design.info(f"Response: {response.text}")
-                design.info("Share hud.lock.yaml manually\n")
+                # No registry prefix, use as-is
+                name_with_tag = registry_image
         else:
-            if verbose:
-                design.info("Could not parse registry path for upload")
-            design.info("Share hud.lock.yaml to let others reproduce your exact environment\n")
+            name_with_tag = registry_image
+
+        # The image variable already has the tag, no need to add :latest
+        
+        # Validate the image format
+        if not name_with_tag:
+            design.warning("Could not determine image name for registry upload")
+            raise typer.Exit(0)
+        
+        # For HUD registry, we need org/name format
+        if "/" not in name_with_tag:
+            design.warning("Image name must include organization/namespace for HUD registry")
+            design.info(f"Current format: {name_with_tag}")
+            design.info("Expected format: org/name:tag (e.g., hudpython/myenv:v1.0)")
+            design.info("\nYour Docker push succeeded - share hud.lock.yaml manually")
+            raise typer.Exit(0)
+
+        # Upload to HUD registry
+        design.progress_message("Uploading metadata to HUD registry...")
+
+        # URL-encode the path segments to handle special characters in tags
+        url_safe_path = "/".join(quote(part, safe="") for part in name_with_tag.split("/"))
+        registry_url = f"{settings.hud_telemetry_url.rstrip('/')}/registry/envs/{url_safe_path}"
+
+        # Prepare the payload
+        payload = {
+            "lock": yaml.dump(lock_data, default_flow_style=False, sort_keys=False),
+            "digest": pushed_digest.split("@")[-1] if "@" in pushed_digest else None,
+        }
+
+        headers = {"Authorization": f"Bearer {settings.api_key}"}
+
+        response = requests.post(registry_url, json=payload, headers=headers, timeout=10)
+
+        if response.status_code in [200, 201]:
+            design.success("Metadata uploaded to HUD registry")
+            design.info("Others can now pull with:")
+            design.command_example(f"hud pull {name_with_tag}")
+            design.info("")
+        elif response.status_code == 401:
+            design.error("Authentication failed")
+            design.info("Check your HUD_API_KEY is valid")
+            design.info("Get a new key at: https://hud.so/settings")
+        elif response.status_code == 403:
+            design.error("Permission denied")
+            design.info("You may not have access to push to this namespace")
+        elif response.status_code == 409:
+            design.warning("This version already exists in the registry")
+            design.info("Consider using a different tag if you want to update")
+        else:
+            design.warning(f"Could not upload to registry: {response.status_code}")
+            design.warning(_get_response_text(response))
+            design.info("Share hud.lock.yaml manually\n")
+    except requests.exceptions.Timeout:
+        design.warning("Registry upload timed out")
+        design.info("The registry might be slow or unavailable")
+        design.info("Your Docker push succeeded - share hud.lock.yaml manually")
+    except requests.exceptions.ConnectionError:
+        design.warning("Could not connect to HUD registry")
+        design.info("Check your internet connection")
+        design.info("Your Docker push succeeded - share hud.lock.yaml manually")
     except Exception as e:
         design.warning(f"Registry upload failed: {e}")
-        design.info("Share hud.lock.yaml manually\n")
+        design.info("Share hud.lock.yaml manually")
 
     # Show usage examples
     design.section_title("What's Next?")

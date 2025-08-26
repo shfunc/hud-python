@@ -1,11 +1,16 @@
+# Suppress warnings
+import warnings
+warnings.filterwarnings('ignore', category=SyntaxWarning)
+warnings.filterwarnings('ignore', message='Xlib.xauth: warning')
+warnings.filterwarnings('ignore', module='Xlib')
+
 import sys
 import logging
 import os
 import json
 import asyncio
-from typing import Optional, Any
-from pathlib import Path
 from datetime import datetime
+import contextlib
 
 # Configure logging before imports to go to stderr
 logging.basicConfig(
@@ -18,16 +23,20 @@ logger = logging.getLogger(__name__)
 
 from fastmcp import Context  # for type annotations
 from hud.server import MCPServer
+from hud.server.context import attach_context
 
-from .services import ServiceManager
-from .evaluators import evaluate as evaluate_hub
+from .evaluate import evaluate as evaluate_hub
 from .setup import setup as setup_hub
 from .problems import ProblemRegistry
-from .context import initialize_context, get_global_context
 
-service_manager = ServiceManager()
+# Global persistent context (initialized during startup)
+persistent_ctx = None
+service_manager = None
+playwright_tool = None  # Store playwright tool globally for launch_app
 
 # Create main server first so decorators can reference it
+# Note: MCPServer (from HUD SDK) automatically redirects stdout to stderr
+# during initialization to prevent library prints from corrupting MCP protocol
 mcp = MCPServer(
     name="HUD Browser Environment",
     instructions="""
@@ -42,55 +51,68 @@ mcp = MCPServer(
 @mcp.initialize
 async def initialize_environment(ctx):
     """Initialize the browser environment with clean startup sequence."""
-    # Extract client info for logging
-    client_info = ctx.session.client_params.clientInfo if ctx.session.client_params else None
-    if client_info:
-        logger.info(f"Client connected: {client_info.name} v{client_info.version}")
-
-    # Extract progress token from context
-    metadata = ctx.meta
-    progress_token = metadata.get("progressToken", None)
-
-    # Create and register computer tools
-    tool_kwargs: dict[str, Any] = {}
-
-    # Add display dimensions if provided
-    width = metadata.get("display_width", None) if metadata else None
-    height = metadata.get("display_height", None) if metadata else None
-
-    if width and height:
-        logger.info(f"Overriding display dimensions: {width}x{height}")
-        tool_kwargs["width"] = width
-        tool_kwargs["height"] = height
-
-    async def send_progress(progress: float, message: str):
-        """Send progress notification through the session."""
-        if progress_token:
-            logger.info(f"Sending progress: {progress}% - {message}")
-            await ctx.session.send_progress_notification(
-                progress_token=progress_token, progress=progress, total=100, message=message
-            )
-        else:
-            logger.info(f"No progress token, skipping: {progress}% - {message}")
+    global persistent_ctx, service_manager, playwright_tool
+    
+    logger.info("Initializing browser environment...")
+    
+    # Connect to persistent context server (must be running)
+    max_retries = 10
+    retry_delay = 1.0  # seconds
+    
+    for attempt in range(max_retries):
+        try:
+            persistent_ctx = attach_context("/tmp/hud_browser_ctx.sock")
+            logger.info("Connected to persistent browser context server")
+            
+            # Get service manager from persistent context
+            service_manager = persistent_ctx.get_service_manager()
+            
+            # Log current state
+            state = persistent_ctx.get_state_summary()
+            logger.info(f"Context state: {state}")
+            
+            if persistent_ctx.get_is_initialized():
+                logger.info("Resuming with existing browser environment")
+            else:
+                logger.info("Starting fresh browser environment")
+            break  # Success, exit the retry loop
+            
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"Context server not ready yet (attempt {attempt + 1}/{max_retries}): {e}")
+                await asyncio.sleep(retry_delay)
+            else:
+                logger.error(f"Failed to connect to context server after {max_retries} attempts: {e}")
+                logger.error("The context server should be started automatically. Check container logs.")
+                raise
+    
+    # At this point, persistent_ctx and service_manager are guaranteed to be set
+    assert persistent_ctx is not None
+    assert service_manager is not None
 
     try:
-        await send_progress(10, "Starting core services...")
+        # Only start services if not already initialized
+        if not persistent_ctx.get_is_initialized():
+            logger.info("Starting core services...")
 
-        # Start ONLY core services (X11, VNC) - NO app launching
-        await service_manager.start_services()
-        await send_progress(20, "X11 server started")
+            # Start ONLY core services (X11, VNC) - NO app launching
+            await service_manager.start_services()
+            logger.info("X11 server started")
 
-        # Wait for X11 to be ready
-        await service_manager.wait_for_x11()
-        await send_progress(30, "X11 ready")
+            # Wait for X11 to be ready
+            await service_manager.wait_for_x11()
+            logger.info("X11 ready")
 
-        # Start VNC and wait for it
-        await service_manager.wait_for_vnc()
-        vnc_message = {"message": "VNC server ready", "live_url": "http://localhost:8080/vnc.html"}
-        await send_progress(50, json.dumps(vnc_message))
+            # Start VNC and wait for it
+            await service_manager.wait_for_vnc()
+            logger.info("VNC server ready at http://localhost:8080/vnc.html")
+        else:
+            # Services already running from previous session
+            logger.info("Using existing X11 server")
+            logger.info("VNC server already running at http://localhost:8080/vnc.html")
 
         # Initialize browser tools
-        await send_progress(60, "Initializing browser tools...")
+        logger.info("Initializing browser tools...")
         from hud.tools import (
             HudComputerTool,
             PlaywrightTool,
@@ -98,40 +120,43 @@ async def initialize_environment(ctx):
             OpenAIComputerTool,
         )
 
-        # Store playwright tool instance for browser launch
+        # Always create new tools and context (they can't be pickled/shared)
+        # But the underlying services (X11, VNC, apps) persist
         playwright_tool = PlaywrightTool()
         await playwright_tool._ensure_browser()
-        await send_progress(70, "Browser ready...")
+        logger.info("Created Playwright browser instance")
 
-        # Create context and set on hubs
-        global_context = initialize_context(service_manager, playwright_tool)
-        setup_hub.env = global_context
-        evaluate_hub.env = global_context
+        # Set context on hubs (they'll access service_manager through it)
+        setup_hub.env = persistent_ctx
+        evaluate_hub.env = persistent_ctx
+        
+        # Store playwright tool on context for evaluate functions that need it
+        persistent_ctx.playwright_tool = playwright_tool
+        
+        logger.info("Configured hubs with browser context")
 
-        # Try without proxy first to match text_2048 and remote_browser pattern
+        # Mount hubs
         mcp.mount(setup_hub)
         mcp.mount(evaluate_hub)
         logger.info("Mounted setup and evaluate hubs")
 
-        await send_progress(80, "Tools registered...")
-
         # Register interaction tools
-        mcp.add_tool(HudComputerTool(**tool_kwargs))
-        mcp.add_tool(AnthropicComputerTool(**tool_kwargs))
-        mcp.add_tool(OpenAIComputerTool(**tool_kwargs))
-        mcp.add_tool(playwright_tool)
+        with contextlib.redirect_stdout(sys.stderr):
+            mcp.add_tool(HudComputerTool())
+            mcp.add_tool(AnthropicComputerTool())
+            mcp.add_tool(OpenAIComputerTool())
+            mcp.add_tool(playwright_tool)
 
-        await send_progress(100, "Environment ready!")
+        # Mark as initialized
+        if not persistent_ctx.get_is_initialized():
+            persistent_ctx.set_initialized(True)
+        
+        logger.info("Browser environment ready!")
 
     except Exception as e:
         logger.error(f"Initialization failed: {e}")
-        if progress_token:
-            await ctx.session.send_progress_notification(
-                progress_token=progress_token,
-                progress=0,
-                total=100,
-                message=f"Initialization failed: {str(e)}",
-            )
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise
 
 
@@ -188,15 +213,20 @@ async def launch_app(ctx: Context, app_name: str) -> str:
     """
     await ctx.info(f"Launching app: {app_name}")
 
+    assert service_manager is not None, "Service manager not initialized"
+    assert persistent_ctx is not None, "Persistent context not initialized"
+    
     app_info = await service_manager.launch_app(app_name)
     app_url = app_info["url"]
+    
+    # Track in persistent context
+    persistent_ctx.add_running_app(app_name)
 
     # Automatically navigate to the app after launching
-    # Get the playwright tool from global context to navigate
-    global_context = get_global_context()
-    if global_context and global_context.playwright:
+    # Use the global playwright tool to navigate
+    if playwright_tool:
         try:
-            await global_context.playwright.navigate(app_url)
+            await playwright_tool.navigate(app_url)
             # Give the page a moment to fully load
             await asyncio.sleep(1)
             return f"Launched {app_name} at {app_url} and navigated to it"

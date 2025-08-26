@@ -2,6 +2,8 @@
 
 A browser automation environment for the HUD platform demonstrating best practices for building MCP (Model Context Protocol) environments with evaluation systems.
 
+**Key Feature**: This environment is **hot-reloadable** - it maintains state (running services, browser sessions, launched apps) across server restarts during development.
+
 ## Quick Start
 
 ### Build & Deploy
@@ -13,6 +15,34 @@ docker build -t hud-browser .
 # Run with stdio (recommended for HUD SDK v3)
 docker run --rm -i -p 8080:8080 hud-browser
 ```
+
+### Hot-Reloadable Architecture
+
+This environment uses a persistent context server architecture that maintains state across MCP server restarts:
+
+- **Context Server**: Runs as a separate process holding ServiceManager and state
+- **MCP Server**: Connects via Unix socket, can restart without losing services
+- **State Preservation**: X11, VNC, running apps, and service states persist
+- **Development Friendly**: Edit code and restart MCP server instantly
+
+#### Docker Architecture
+
+The environment uses a single CMD that follows the proven text_2048 pattern:
+
+```dockerfile
+CMD ["sh", "-c", "\
+    # Start services in background \
+    python -m hud_controller.context_server & \
+    x11vnc ... & \
+    # Run MCP server in foreground \
+    exec hud-controller mcp \
+"]
+```
+
+This pattern ensures:
+- Background services (`&`) start once and persist
+- Only the `exec` command gets wrapped by watchfiles
+- Services survive hot-reloads during development
 
 ## Deployment to Registry
 
@@ -169,10 +199,11 @@ Set these in your environment/Docker configuration:
 
 ```
 Docker Container
-├── start.sh                 # Service startup orchestration
 ├── MCP Server (FastMCP)     # Protocol implementation
 │   ├── Tools                # setup, evaluate, computer, etc.
-│   └── Resources           # Dynamic registry discovery
+│   └── Resources            # Dynamic registry discovery
+├── Context Server           # Persistent state management
+│   └── PersistentContext    # Maintains services & browser state
 ├── Services
 │   ├── X11 (Xvfb)          # Virtual display
 │   ├── VNC + Websockify    # Remote access
@@ -188,8 +219,7 @@ Docker Container
 
 ```
 browser/
-├── Dockerfile              # Multi-stage build with optimization
-├── start.sh                # Service startup script
+├── Dockerfile              # Multi-stage build with integrated startup
 ├── apps/                   # Launchable web applications
 │   ├── todo/              # Example app with evaluation APIs
 │   └── 2048/              # 2048 game app
@@ -197,6 +227,8 @@ browser/
 │   ├── server.py          # FastMCP server + resource definitions
 │   ├── services.py        # Service management
 │   ├── context.py         # Environment context
+│   ├── context_server.py  # Persistent context server
+│   ├── persistent_context.py # State persistence wrapper
 │   ├── evaluators/        # Evaluation system
 │   ├── setup/            # Setup system
 │   └── problems/         # Problem definitions
@@ -205,7 +237,7 @@ browser/
 
 ## Development Workflow
 
-### Hot-Reload Development with `hud mcp`
+### Hot-Reload Development with `hud dev`
 
 For rapid iteration without Docker rebuilds:
 
@@ -214,7 +246,7 @@ For rapid iteration without Docker rebuilds:
 cd environments/browser
 
 # Start hot-reload development proxy
-hud mcp . --build
+hud dev . --build
 
 # This will:
 # - Build/use hud-browser:dev image
@@ -224,6 +256,21 @@ hud mcp . --build
 ```
 
 Add the URL from output to Cursor settings or click the deeplink. Now you can edit code in `src/` and changes apply instantly!
+
+#### How Hot-Reloading Works
+
+This environment uses a persistent context server pattern:
+
+1. **Context Server**: A separate Python process maintains state (services, browser, apps)
+2. **Socket Communication**: MCP server connects via Unix socket `/tmp/hud_browser_ctx.sock`
+3. **State Preservation**: X11, VNC, browser sessions, and launched apps persist across reloads
+4. **Automatic Recovery**: On reload, the server reconnects to existing services
+
+This means you can:
+- Edit code and have changes apply immediately
+- Keep browser sessions and apps running
+- Maintain VNC connections
+- Preserve test state between iterations
 
 ### Traditional Development Steps
 
@@ -391,5 +438,10 @@ When creating new MCP environments:
 5. **Define problems** using class inheritance for reusability
 6. **Update service dependencies** in `services.py` as needed
 7. **Extend Dockerfile** with your environment's requirements
+
+For hot-reloadability:
+- Keep complex objects out of the persistent context
+- Only store simple, picklable state
+- Recreate tools and clients on each server start
 
 See `src/hud_controller/README.md` for detailed implementation guidance. 

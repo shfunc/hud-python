@@ -34,7 +34,7 @@ docker run --rm -i \
 
 Development mode allows you to edit code locally and see changes immediately without rebuilding.
 
-#### Option 1: Using `hud mcp` (Recommended)
+#### Option 1: Using `hud dev` (Recommended)
 
 The easiest way to develop with hot-reload:
 
@@ -44,7 +44,7 @@ export BROWSER_PROVIDER=anchorbrowser
 export ANCHOR_API_KEY=your-api-key
 
 # Start development proxy
-hud mcp . --build
+hud dev . --build
 
 # This will:
 # - Build/use hud-remote-browser:dev image

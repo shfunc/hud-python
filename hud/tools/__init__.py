@@ -8,6 +8,7 @@ from .base import BaseHub, BaseTool
 from .bash import BashTool
 from .edit import EditTool
 from .playwright import PlaywrightTool
+from .response import ResponseTool
 
 if TYPE_CHECKING:
     from .computer import AnthropicComputerTool, HudComputerTool, OpenAIComputerTool
@@ -21,6 +22,7 @@ __all__ = [
     "HudComputerTool",
     "OpenAIComputerTool",
     "PlaywrightTool",
+    "ResponseTool",
 ]
 
 

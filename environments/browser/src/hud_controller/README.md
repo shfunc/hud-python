@@ -55,7 +55,7 @@ class EvaluatorRegistry:
     def create_evaluator(cls, spec, context): pass
 ```
 
-### BrowserEnvironmentContext
+### BrowserContext
 
 Unified interface for environment interactions:
 - `call_app_api(app, endpoint, method, data)` - Call app backend API

@@ -67,7 +67,7 @@ Checks: Tools callable, return valid responses
 Checks: Overall health, state persistence
 
 <Note>
-Once your environment passes Phase 5, consider using `hud mcp` for hot-reload development. This eliminates rebuild cycles and speeds up iteration.
+Once your environment passes Phase 5, consider using `hud dev` for hot-reload development. This eliminates rebuild cycles and speeds up iteration.
 </Note>
 
 ## Examples
@@ -129,7 +129,7 @@ done
 ```bash
 # Once debug passes, use hot-reload for development
 cd environments/my-env
-hud mcp . --build
+hud dev . --build
 
 # Make changes to src/ files
 # Test changes without rebuilding

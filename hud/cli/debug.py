@@ -167,7 +167,14 @@ async def debug_mcp_stdio(command: list[str], logger: CaptureLogger, max_phase: 
                         break
                 except Exception as e:
                     logger.error(f"Failed to parse MCP response: {e}")
-                    continue
+                    logger.error(f"Raw output that caused the error: {repr(line)}")
+                    logger.hint("This usually means non-JSON output is being sent to STDOUT")
+                    logger.hint("Common causes:")
+                    logger.hint("  - Print statements in your server code")
+                    logger.hint("  - Library warnings (use warnings.filterwarnings)")
+                    logger.hint("  - Import-time output from dependencies")
+                    phases_completed = 1  # Mark as failed
+                    break  # Stop trying to parse
 
         if response and "result" in response:
             logger.success("MCP server initialized successfully")

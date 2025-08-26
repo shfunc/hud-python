@@ -93,6 +93,16 @@ class HUDDesign:
         """
         console = self._stderr_console if stderr else self._stdout_console
         console.print(f"[default not bold]{message}[/default not bold]")
+    
+    def print(self, message: str, stderr: bool = True) -> None:
+        """Print a message.
+        
+        Args:
+            message: The message to print
+            stderr: If True, output to stderr (default), otherwise stdout
+        """
+        console = self._stderr_console if stderr else self._stdout_console
+        console.print(message)
 
     def dim_info(self, label: str, value: str, stderr: bool = True) -> None:
         """Print dimmed info with a label.

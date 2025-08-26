@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 @evaluate.tool("game_2048_max_number")
-async def game_2048_max_number(ctx: Context, target: int):
+async def game_2048_max_number(target: int):
     """Check if player reached target tile value.
 
     Uses logarithmic reward scaling to match text-2048 implementation.
@@ -23,7 +23,7 @@ async def game_2048_max_number(ctx: Context, target: int):
     """
     try:
         # Get game state from the 2048 app
-        env = evaluate.env  # Get BrowserEnvironmentContext from hub
+        env = evaluate.env  # Get BrowserContext from hub
         game_state = await env.call_app_api("2048", "/api/game/state")
         highest_tile = game_state.get("highest_tile", 0)
 
@@ -50,7 +50,7 @@ async def game_2048_max_number(ctx: Context, target: int):
 
 
 @evaluate.tool("game_2048_efficiency")
-async def game_2048_efficiency(ctx: Context, min_ratio: float):
+async def game_2048_efficiency(min_ratio: float):
     """Evaluate game efficiency based on score/moves ratio.
 
     Matches text-2048 implementation.
@@ -63,7 +63,7 @@ async def game_2048_efficiency(ctx: Context, min_ratio: float):
     """
     try:
         # Get game state from the 2048 app
-        env = evaluate.env  # Get BrowserEnvironmentContext from hub
+        env = evaluate.env  # Get BrowserContext from hub
         game_state = await env.call_app_api("2048", "/api/game/state")
         score = game_state.get("score", 0)
         moves = game_state.get("moves", 0)
@@ -89,7 +89,7 @@ async def game_2048_efficiency(ctx: Context, min_ratio: float):
 
 
 @evaluate.tool("game_2048_score_reached")
-async def game_2048_score_reached(ctx: Context, target_score: int):
+async def game_2048_score_reached(target_score: int):
     """Check if player reached target score.
 
     Args:
@@ -99,7 +99,7 @@ async def game_2048_score_reached(ctx: Context, target_score: int):
         EvaluationResult
     """
     try:
-        env = evaluate.env  # Get BrowserEnvironmentContext from hub
+        env = evaluate.env  # Get BrowserContext from hub
         game_state = await env.call_app_api("2048", "/api/game/state")
         score = game_state.get("score", 0)
 
@@ -121,14 +121,14 @@ async def game_2048_score_reached(ctx: Context, target_score: int):
 
 
 @evaluate.tool("game_2048_game_won")
-async def game_2048_game_won(ctx: Context):
+async def game_2048_game_won():
     """Check if game is won (reached target tile).
 
     Returns:
         EvaluationResult
     """
     try:
-        env = evaluate.env  # Get BrowserEnvironmentContext from hub
+        env = evaluate.env  # Get BrowserContext from hub
         game_state = await env.call_app_api("2048", "/api/game/state")
         won = game_state.get("won", False)
         highest_tile = game_state.get("highest_tile", 0)
@@ -148,14 +148,14 @@ async def game_2048_game_won(ctx: Context):
 
 
 @evaluate.tool("game_2048_game_over")
-async def game_2048_game_over(ctx: Context):
+async def game_2048_game_over():
     """Check if game is over (no valid moves).
 
     Returns:
         EvaluationResult
     """
     try:
-        env = evaluate.env  # Get BrowserEnvironmentContext from hub
+        env = evaluate.env  # Get BrowserContext from hub
         game_state = await env.call_app_api("2048", "/api/game/state")
         game_over = game_state.get("game_over", False)
         score = game_state.get("score", 0)
@@ -178,7 +178,7 @@ async def game_2048_game_over(ctx: Context):
 
 
 @evaluate.tool("game_2048_moves_made")
-async def game_2048_moves_made(ctx: Context, min_moves: int):
+async def game_2048_moves_made(min_moves: int):
     """Check if minimum number of moves were made.
 
     Args:
@@ -188,7 +188,7 @@ async def game_2048_moves_made(ctx: Context, min_moves: int):
         EvaluationResult
     """
     try:
-        env = evaluate.env  # Get BrowserEnvironmentContext from hub
+        env = evaluate.env  # Get BrowserContext from hub
         game_state = await env.call_app_api("2048", "/api/game/state")
         moves = game_state.get("moves", 0)
 

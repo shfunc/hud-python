@@ -12,6 +12,8 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from hud.settings import settings
 from hud.utils.design import HUDDesign
 
+from .registry import get_registry_dir, list_registry_entries, extract_digest_from_image, load_from_registry
+
 console = Console()
 design = HUDDesign()
 
@@ -50,38 +52,31 @@ def fetch_lock_from_registry(reference: str) -> dict | None:
 
 def check_local_cache(reference: str) -> dict | None:
     """Check local cache for lock file."""
-    # Extract digest if present
-    if "@sha256:" in reference:
-        digest = reference.split("@sha256:")[-1][:12]
-    elif "/" in reference:
-        # Try to find by name pattern
-        cache_dir = Path.home() / ".hud" / "envs"
-        if cache_dir.exists():
-            # Look for any cached version of this image
-            for env_dir in cache_dir.iterdir():
-                if env_dir.is_dir():
-                    lock_file = env_dir / "hud.lock.yaml"
-                    if lock_file.exists():
-                        with open(lock_file) as f:
-                            lock_data = yaml.safe_load(f)
-                        # Check if this matches our reference
-                        if lock_data and "image" in lock_data:
-                            image = lock_data["image"]
-                            # Match by name (ignoring tag/digest)
-                            ref_base = reference.split("@")[0].split(":")[0]
-                            img_base = image.split("@")[0].split(":")[0]
-                            if ref_base in img_base or img_base in ref_base:
-                                return lock_data
-        return None
-    else:
-        digest = "latest"
-
-    # Check specific digest directory
-    lock_file = Path.home() / ".hud" / "envs" / digest / "hud.lock.yaml"
-    if lock_file.exists():
-        with open(lock_file) as f:
-            return yaml.safe_load(f)
-
+    # First try exact digest match
+    digest = extract_digest_from_image(reference)
+    lock_data = load_from_registry(digest)
+    if lock_data:
+        return lock_data
+    
+    # If not found and reference has a name, search by name pattern
+    if "/" in reference:
+        # Look for any cached version of this image
+        ref_base = reference.split("@")[0].split(":")[0]
+        
+        for digest, lock_file in list_registry_entries():
+            try:
+                with open(lock_file) as f:
+                    lock_data = yaml.safe_load(f)
+                # Check if this matches our reference
+                if lock_data and "image" in lock_data:
+                    image = lock_data["image"]
+                    # Match by name (ignoring tag/digest)
+                    img_base = image.split("@")[0].split(":")[0]
+                    if ref_base in img_base or img_base in ref_base:
+                        return lock_data
+            except Exception:
+                continue
+    
     return None
 
 
@@ -147,15 +142,8 @@ async def analyze_from_metadata(reference: str, output_format: str, verbose: boo
                 source = "registry"
 
                 # Save to local cache for next time
-                if "@sha256:" in lock_data.get("image", ""):
-                    digest = lock_data["image"].split("@sha256:")[-1][:12]
-                else:
-                    digest = "latest"
-
-                cache_dir = Path.home() / ".hud" / "envs" / digest
-                cache_dir.mkdir(parents=True, exist_ok=True)
-                with open(cache_dir / "hud.lock.yaml", "w") as f:  # noqa: ASYNC230
-                    yaml.dump(lock_data, f, default_flow_style=False, sort_keys=False)
+                from .registry import save_to_registry
+                save_to_registry(lock_data, lock_data.get("image", ""), verbose=False)
             else:
                 progress.update(task, description="[red]✗ Not found[/red]")
 

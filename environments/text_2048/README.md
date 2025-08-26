@@ -57,13 +57,13 @@ The agent will play 2048 and try to reach a target tile using the available tool
 
 ## Development Mode
 
-### Option 1: Using `hud mcp` (Recommended)
+### Option 1: Using `hud dev` (Recommended)
 
 The easiest way to develop with hot-reload:
 
 ```bash
 # Start development proxy
-hud mcp . --build
+hud dev . --build
 
 # This will:
 # - Build/use hud-text-2048:dev image

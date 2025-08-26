@@ -23,10 +23,13 @@ from .clone import clone_repository, get_clone_message, print_error, print_tutor
 from .cursor import get_cursor_config_path, list_cursor_servers, parse_cursor_config
 from .debug import debug_mcp_stdio
 from .init import create_environment
+from . import list_func as list_module
 from .mcp_server import run_mcp_dev_server
 from .pull import pull_command
 from .push import push_command
+from .remove import remove_command
 from .utils import CaptureLogger
+from .eval import eval_command
 
 # Create the main Typer app
 app = typer.Typer(
@@ -442,7 +445,8 @@ def run(
 
         # Get URL from options or environment
         if not url:
-            url = os.getenv("HUD_MCP_URL", "https://mcp.hud.so/v3/mcp")
+            from hud.settings import settings
+            url = settings.hud_mcp_url
 
         run_remote_server(image, docker_args, transport, port, url, api_key, run_id, verbose)
 
@@ -561,6 +565,63 @@ def pull(
     pull_command(target, lock_file, yes, verify_only, verbose)
 
 
+@app.command(name="list")
+def list_environments(
+    filter_name: str | None = typer.Option(
+        None, "--filter", "-f", help="Filter environments by name (case-insensitive)"
+    ),
+    json_output: bool = typer.Option(
+        False, "--json", help="Output as JSON"
+    ),
+    show_all: bool = typer.Option(
+        False, "--all", "-a", help="Show all columns including digest"
+    ),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Show detailed output"
+    ),
+) -> None:
+    """📋 List all HUD environments in local registry.
+    
+    Shows environments pulled with 'hud pull' stored in ~/.hud/envs/
+    
+    Examples:
+        hud list                    # List all environments
+        hud list --filter text      # Filter by name
+        hud list --json            # Output as JSON
+        hud list --all             # Show digest column
+        hud list --verbose         # Show full descriptions
+    """
+    list_module.list_command(filter_name, json_output, show_all, verbose)
+
+
+@app.command()
+def remove(
+    target: str | None = typer.Argument(
+        None, 
+        help="Environment to remove (digest, name, or 'all' for all environments)"
+    ),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Skip confirmation prompt"
+    ),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Show detailed output"
+    ),
+) -> None:
+    """🗑️ Remove HUD environments from local registry.
+    
+    Removes environment metadata from ~/.hud/envs/
+    Note: This does not remove the Docker images.
+    
+    Examples:
+        hud remove abc123              # Remove by digest
+        hud remove text_2048           # Remove by name
+        hud remove hudpython/test_init # Remove by full name
+        hud remove all                 # Remove all environments
+        hud remove all --yes           # Remove all without confirmation
+    """
+    remove_command(target, yes, verbose)
+
+
 @app.command()
 def init(
     name: str = typer.Argument(None, help="Environment name (default: current directory name)"),
@@ -590,6 +651,64 @@ def quickstart() -> None:
     """
     # Just call the clone command with the quickstart URL
     clone("https://github.com/hud-evals/quickstart.git")
+
+
+@app.command()
+def eval(
+    source: str = typer.Argument(
+        ...,
+        help="HuggingFace dataset identifier (e.g. 'hud-evals/SheetBench-50') or task JSON file",
+    ),
+    full: bool = typer.Option(
+        False,
+        "--full",
+        help="Run the entire dataset (omit for single-task debug mode)",
+    ),
+    agent: str = typer.Option(
+        "claude",
+        "--agent",
+        help="Agent backend to use (claude or openai)",
+    ),
+    model: str | None = typer.Option(
+        None,
+        "--model",
+        help="Model name for the chosen agent",
+    ),
+    allowed_tools: str | None = typer.Option(
+        None,
+        "--allowed-tools",
+        help="Comma-separated list of allowed tools",
+    ),
+    max_concurrent: int = typer.Option(
+        30,
+        "--max-concurrent",
+        help="Concurrency level for full-dataset mode",
+    ),
+    max_steps: int = typer.Option(
+        30,
+        "--max-steps",
+        help="Maximum steps per task (default: 10 for single, 50 for full)",
+    ),
+) -> None:
+    """🚀 Run evaluation on datasets or individual tasks with agents."""
+    # Validate agent choice
+    valid_agents = ["claude", "openai"]
+    if agent not in valid_agents:
+        from hud.utils.design import HUDDesign
+        design = HUDDesign()
+        design.error(f"Invalid agent: {agent}. Must be one of: {', '.join(valid_agents)}")
+        raise typer.Exit(1)
+    
+    # Import and run the command
+    eval_command(
+        source=source,
+        full=full,
+        agent=agent,  # type: ignore
+        model=model,
+        allowed_tools=allowed_tools,
+        max_concurrent=max_concurrent,
+        max_steps=max_steps,
+    )
 
 
 def main() -> None:
