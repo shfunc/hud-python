@@ -101,6 +101,7 @@ class BaseHUDClient(AgentMCPClient):
         self._mcp_config = mcp_config
         self._strict_validation = strict_validation
         self._auto_trace = auto_trace
+        self._auto_trace_cm: Any | None = None  # Store auto-created trace context manager
 
         self._initialized = False
         self._telemetry_data = {}  # Initialize telemetry data
@@ -124,7 +125,7 @@ class BaseHUDClient(AgentMCPClient):
                 "Either pass it to the constructor or call initialize with a configuration"
             )
 
-        setup_hud_telemetry(self._mcp_config, auto_trace=self._auto_trace)
+        self._auto_trace_cm = setup_hud_telemetry(self._mcp_config, auto_trace=self._auto_trace)
 
         logger.debug("Initializing MCP client...")
 
@@ -163,6 +164,17 @@ class BaseHUDClient(AgentMCPClient):
 
     async def shutdown(self) -> None:
         """Disconnect from the MCP server."""
+        # Clean up auto-created trace if any
+        if self._auto_trace_cm:
+            try:
+                self._auto_trace_cm.__exit__(None, None, None)
+                logger.info("Closed auto-created trace")
+            except Exception as e:
+                logger.warning("Failed to close auto-created trace: %s", e)
+            finally:
+                self._auto_trace_cm = None
+        
+        # Disconnect from server
         if self._initialized:
             await self._disconnect()
             self._initialized = False

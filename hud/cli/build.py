@@ -17,6 +17,8 @@ from hud.clients import MCPClient
 from hud.utils.design import HUDDesign
 from hud.version import __version__ as hud_version
 
+from .registry import save_to_registry
+
 
 def parse_version(version_str: str) -> tuple[int, int, int]:
     """Parse version string like '1.0.0' or '1.0' into tuple of integers."""
@@ -458,6 +460,11 @@ def build_environment(
 
     # Remove temp image after we're done
     subprocess.run(["docker", "rmi", temp_tag], capture_output=True)  # noqa: S603, S607
+
+    # Add to local registry
+    if image_id:
+        # Save to local registry using the helper
+        save_to_registry(lock_content, lock_content.get("image", tag), verbose)
 
     # Print summary
     design.section_title("Build Complete")

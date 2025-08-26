@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 from hud.settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 class MCPConfigPatch(BaseModel):
@@ -34,8 +37,13 @@ def patch_mcp_config(mcp_config: dict[str, dict[str, Any]], patch: MCPConfigPatc
                 meta.setdefault(key, value)
 
 
-def setup_hud_telemetry(mcp_config: dict[str, dict[str, Any]], auto_trace: bool = True) -> None:
-    """Setup telemetry for hud servers."""
+def setup_hud_telemetry(mcp_config: dict[str, dict[str, Any]], auto_trace: bool = True) -> Any | None:
+    """Setup telemetry for hud servers.
+    
+    Returns:
+        The auto-created trace context manager if one was created, None otherwise.
+        Caller is responsible for exiting the context manager.
+    """
     if not mcp_config:
         raise ValueError("Please run initialize() before setting up client-side telemetry")
 
@@ -43,6 +51,8 @@ def setup_hud_telemetry(mcp_config: dict[str, dict[str, Any]], auto_trace: bool 
     from hud.telemetry import trace
 
     run_id = get_current_task_run_id()
+    auto_trace_cm = None
+    
     if not run_id and auto_trace:
         auto_trace_cm = trace("My Trace")
         run_id = auto_trace_cm.__enter__()
@@ -53,3 +63,5 @@ def setup_hud_telemetry(mcp_config: dict[str, dict[str, Any]], auto_trace: bool 
             mcp_config,
             MCPConfigPatch(headers={"Run-Id": run_id}, meta={"run_id": run_id}),
         )
+    
+    return auto_trace_cm

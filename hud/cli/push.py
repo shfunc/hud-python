@@ -13,6 +13,8 @@ import yaml
 from hud.settings import settings
 from hud.utils.design import HUDDesign
 
+from .registry import extract_digest_from_image
+
 
 def get_docker_username() -> str | None:
     """Get the current Docker username if logged in."""

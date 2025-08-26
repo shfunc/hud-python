@@ -85,6 +85,7 @@ class MCPAgent(ABC):
         self._tool_map: dict[str, types.Tool] = {}  # Simplified: just name to tool
         self.screenshot_history: list[str] = []
         self._auto_trace = auto_trace
+        self._auto_trace_cm: Any | None = None  # Store auto-created trace context manager
         self.initialization_complete = False
 
         # Response agent to automatically interact with the model
@@ -303,6 +304,9 @@ class MCPAgent(ABC):
                             except Exception as e:
                                 logger.warning("ResponseAgent failed: %s", e)
                         if decision == "STOP":
+                            # Try to submit response through lifecycle tool
+                            await self._maybe_submit_response(response, messages)
+                            
                             logger.info("Stopping execution")
                             final_response = response
                             break
@@ -483,6 +487,40 @@ class MCPAgent(ABC):
             self._available_tools.append(tool)
             # Simplified mapping - just tool name to tool
             self._tool_map[tool.name] = tool
+            
+            # Auto-detect response tool as a lifecycle tool
+            if tool.name == "response" and "response" not in self.lifecycle_tools:
+                logger.debug("Auto-detected 'response' tool as a lifecycle tool")
+                self.lifecycle_tools.append("response")
+
+    async def _maybe_submit_response(self, response: AgentResponse, messages: list[Any]) -> None:
+        """Submit response through lifecycle tool if available.
+        
+        Args:
+            response: The agent's response
+            messages: The current message history (will be modified in-place)
+        """
+        # Check if we have a response lifecycle tool
+        if "response" in self.lifecycle_tools and "response" in self._tool_map:
+            logger.debug("Calling response lifecycle tool")
+            try:
+                # Call the response tool with the agent's response
+                response_tool_call = MCPToolCall(
+                    name="response",
+                    arguments={"response": response.content, "messages": messages}
+                )
+                response_results = await self.call_tools(response_tool_call)
+                
+                # Format and add the response tool results to messages
+                response_messages = await self.format_tool_results(
+                    [response_tool_call], response_results
+                )
+                messages.extend(response_messages)
+                
+                # Mark the task as done
+                logger.info("Response lifecycle tool executed, marking task as done")
+            except Exception as e:
+                logger.error("Response lifecycle tool failed: %s", e)
 
     async def _setup_config(self, mcp_config: dict[str, dict[str, Any]]) -> None:
         """Inject metadata into the metadata of the initialize request."""
@@ -491,7 +529,7 @@ class MCPAgent(ABC):
                 mcp_config,
                 MCPConfigPatch(meta=self.metadata),
             )
-        setup_hud_telemetry(mcp_config, auto_trace=self._auto_trace)
+        self._auto_trace_cm = setup_hud_telemetry(mcp_config, auto_trace=self._auto_trace)
 
     def get_available_tools(self) -> list[types.Tool]:
         """Get list of available MCP tools for LLM use (excludes lifecycle tools)."""
@@ -532,6 +570,17 @@ class MCPAgent(ABC):
 
     async def _cleanup(self) -> None:
         """Cleanup resources."""
+        # Clean up auto-created trace if any
+        if self._auto_trace_cm:
+            try:
+                self._auto_trace_cm.__exit__(None, None, None)
+                logger.info("Closed auto-created trace")
+            except Exception as e:
+                logger.warning("Failed to close auto-created trace: %s", e)
+            finally:
+                self._auto_trace_cm = None
+        
+        # Clean up auto-created client
         if self._auto_created_client and self.mcp_client:
             try:
                 await self.mcp_client.shutdown()

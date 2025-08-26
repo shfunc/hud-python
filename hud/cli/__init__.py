@@ -23,9 +23,11 @@ from .clone import clone_repository, get_clone_message, print_error, print_tutor
 from .cursor import get_cursor_config_path, list_cursor_servers, parse_cursor_config
 from .debug import debug_mcp_stdio
 from .init import create_environment
+from . import list_func as list_module
 from .mcp_server import run_mcp_dev_server
 from .pull import pull_command
 from .push import push_command
+from .remove import remove_command
 from .utils import CaptureLogger
 
 # Create the main Typer app
@@ -559,6 +561,63 @@ def pull(
         hud pull myuser/myenv --verify-only # Check metadata only
     """
     pull_command(target, lock_file, yes, verify_only, verbose)
+
+
+@app.command(name="list")
+def list_environments(
+    filter_name: str | None = typer.Option(
+        None, "--filter", "-f", help="Filter environments by name (case-insensitive)"
+    ),
+    json_output: bool = typer.Option(
+        False, "--json", help="Output as JSON"
+    ),
+    show_all: bool = typer.Option(
+        False, "--all", "-a", help="Show all columns including digest"
+    ),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Show detailed output"
+    ),
+) -> None:
+    """📋 List all HUD environments in local registry.
+    
+    Shows environments pulled with 'hud pull' stored in ~/.hud/envs/
+    
+    Examples:
+        hud list                    # List all environments
+        hud list --filter text      # Filter by name
+        hud list --json            # Output as JSON
+        hud list --all             # Show digest column
+        hud list --verbose         # Show full descriptions
+    """
+    list_module.list_command(filter_name, json_output, show_all, verbose)
+
+
+@app.command()
+def remove(
+    target: str | None = typer.Argument(
+        None, 
+        help="Environment to remove (digest, name, or 'all' for all environments)"
+    ),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Skip confirmation prompt"
+    ),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Show detailed output"
+    ),
+) -> None:
+    """🗑️ Remove HUD environments from local registry.
+    
+    Removes environment metadata from ~/.hud/envs/
+    Note: This does not remove the Docker images.
+    
+    Examples:
+        hud remove abc123              # Remove by digest
+        hud remove text_2048           # Remove by name
+        hud remove hudpython/test_init # Remove by full name
+        hud remove all                 # Remove all environments
+        hud remove all --yes           # Remove all without confirmation
+    """
+    remove_command(target, yes, verbose)
 
 
 @app.command()

@@ -14,6 +14,8 @@ from rich.table import Table
 from hud.settings import settings
 from hud.utils.design import HUDDesign
 
+from .registry import save_to_registry
+
 
 def get_docker_manifest(image: str) -> dict | None:
     """Get manifest from Docker registry without pulling the image."""
@@ -282,19 +284,8 @@ def pull_environment(
 
     # Store lock file locally if we have full lock data (not minimal manifest data)
     if lock_data and lock_data.get("source") != "docker-manifest":
-        # Extract digest from image ref
-        digest = image_ref.split("@sha256:")[-1][:12] if "@sha256:" in image_ref else "latest"
-
-        # Store under ~/.hud/envs/<digest>/
-        local_env_dir = Path.home() / ".hud" / "envs" / digest
-        local_env_dir.mkdir(parents=True, exist_ok=True)
-
-        local_lock_path = local_env_dir / "hud.lock.yaml"
-        with open(local_lock_path, "w") as f:
-            yaml.dump(lock_data, f, default_flow_style=False, sort_keys=False)
-
-        if verbose:
-            design.info(f"Stored lock file: {local_lock_path}")
+        # Save to local registry using the helper
+        save_to_registry(lock_data, image_ref, verbose)
 
     # Success!
     design.success("Pull complete!")
