@@ -1,11 +1,12 @@
 version: '1.0'
-image: hud-browser:dev@sha256:bbea873bd230d9845165447a16c406a000c1f7e7951904f28c221557466ba2b3
+image: hudpython/hud-browser@sha256:2779119c1b85592095f45c3e638cd202aa9ce6a2f232b70573658907312de2b7
 build:
-  generatedAt: '2025-08-25T20:05:15.262041Z'
-  hudVersion: 0.4.1
+  generatedAt: '2025-08-26T19:46:16.346381Z'
+  hudVersion: 0.4.8
   directory: browser
+  version: 0.1.0
 environment:
-  initializeMs: 6657
+  initializeMs: 14615
   toolCount: 9
 tools:
 - name: setup
@@ -87,3 +88,7 @@ tools:
   description: Control computer with mouse, keyboard, and screenshots
 - name: playwright
   description: Web automation tool using Playwright
+push:
+  source: hud-browser:dev@sha256:2779119c1b85592095f45c3e638cd202aa9ce6a2f232b70573658907312de2b7
+  pushedAt: '2025-08-26T19:50:07.865982Z'
+  registry: hudpython

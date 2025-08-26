@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
+from urllib.parse import quote
 
 import requests
 import typer
@@ -12,8 +13,6 @@ import yaml
 
 from hud.settings import settings
 from hud.utils.design import HUDDesign
-
-from .registry import extract_digest_from_image
 
 
 def _get_response_text(response: requests.Response) -> str:
@@ -320,11 +319,11 @@ def push_environment(
     lock_data["image"] = pushed_digest
 
     # Add push information
-    from datetime import datetime, timezone
+    from datetime import datetime, UTC
 
     lock_data["push"] = {
         "source": local_image,
-        "pushedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "pushedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "registry": pushed_digest.split("/")[0] if "/" in pushed_digest else "docker.io",
     }
 
@@ -360,16 +359,31 @@ def push_environment(
             name_with_tag = registry_image
 
         # The image variable already has the tag, no need to add :latest
+        
+        # Validate the image format
+        if not name_with_tag:
+            design.warning("Could not determine image name for registry upload")
+            raise typer.Exit(0)
+        
+        # For HUD registry, we need org/name format
+        if "/" not in name_with_tag:
+            design.warning("Image name must include organization/namespace for HUD registry")
+            design.info(f"Current format: {name_with_tag}")
+            design.info("Expected format: org/name:tag (e.g., hudpython/myenv:v1.0)")
+            design.info("\nYour Docker push succeeded - share hud.lock.yaml manually")
+            raise typer.Exit(0)
 
         # Upload to HUD registry
         design.progress_message("Uploading metadata to HUD registry...")
 
-        registry_url = f"{settings.hud_telemetry_url.rstrip('/')}/registry/envs/{name_with_tag}"
+        # URL-encode the path segments to handle special characters in tags
+        url_safe_path = "/".join(quote(part, safe="") for part in name_with_tag.split("/"))
+        registry_url = f"{settings.hud_telemetry_url.rstrip('/')}/registry/envs/{url_safe_path}"
 
         # Prepare the payload
         payload = {
             "lock": yaml.dump(lock_data, default_flow_style=False, sort_keys=False),
-            "digest": pushed_digest.split("@")[-1] if "@" in pushed_digest else "latest",
+            "digest": pushed_digest.split("@")[-1] if "@" in pushed_digest else None,
         }
 
         headers = {"Authorization": f"Bearer {settings.api_key}"}
@@ -381,10 +395,28 @@ def push_environment(
             design.info("Others can now pull with:")
             design.command_example(f"hud pull {name_with_tag}")
             design.info("")
+        elif response.status_code == 401:
+            design.error("Authentication failed")
+            design.info("Check your HUD_API_KEY is valid")
+            design.info("Get a new key at: https://hud.so/settings")
+        elif response.status_code == 403:
+            design.error("Permission denied")
+            design.info("You may not have access to push to this namespace")
+        elif response.status_code == 409:
+            design.warning("This version already exists in the registry")
+            design.info("Consider using a different tag if you want to update")
         else:
             design.warning(f"Could not upload to registry: {response.status_code}")
             design.warning(_get_response_text(response))
             design.info("Share hud.lock.yaml manually\n")
+    except requests.exceptions.Timeout:
+        design.warning("Registry upload timed out")
+        design.info("The registry might be slow or unavailable")
+        design.info("Your Docker push succeeded - share hud.lock.yaml manually")
+    except requests.exceptions.ConnectionError:
+        design.warning("Could not connect to HUD registry")
+        design.info("Check your internet connection")
+        design.info("Your Docker push succeeded - share hud.lock.yaml manually")
     except Exception as e:
         design.warning(f"Registry upload failed: {e}")
         design.info("Share hud.lock.yaml manually")
