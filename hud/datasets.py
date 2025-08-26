@@ -12,6 +12,7 @@ from datasets import Dataset, load_dataset
 from pydantic import BaseModel, Field, field_validator
 
 from hud.agents.misc import ResponseAgent
+from hud.settings import settings
 
 from .types import MCPToolCall
 
@@ -94,6 +95,10 @@ class Task(BaseModel):
 
         # Start with current environment variables
         mapping = dict(os.environ)
+        mapping.update(settings.model_dump())
+
+        if settings.api_key:
+            mapping["HUD_API_KEY"] = settings.api_key
 
         def substitute_in_value(obj: Any) -> Any:
             """Recursively substitute variables in nested structures."""
