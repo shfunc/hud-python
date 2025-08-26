@@ -14,7 +14,7 @@ from hud.utils.design import HUDDesign
 
 def run_stdio_server(image: str, docker_args: list[str], verbose: bool) -> None:
     """Run Docker image as stdio MCP server (direct passthrough)."""
-    design = HUDDesign(stderr=True)  # Use stderr for stdio mode
+    design = HUDDesign()  # Use stderr for stdio mode
 
     # Build docker command
     docker_cmd = ["docker", "run", "--rm", "-i", *docker_args, image]

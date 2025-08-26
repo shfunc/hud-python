@@ -29,7 +29,6 @@ from .pull import pull_command
 from .push import push_command
 from .remove import remove_command
 from .utils import CaptureLogger
-from .eval import eval_command
 
 # Create the main Typer app
 app = typer.Typer(
@@ -132,7 +131,7 @@ def analyze(
 def debug(
     params: list[str] = typer.Argument(  # type: ignore[arg-type]  # noqa: B008
         None,
-        help="Docker image followed by optional Docker run arguments (e.g., 'hud-image:latest -e KEY=value')",  # noqa: E501
+        help="Docker image, environment directory, or config file followed by optional Docker arguments",  # noqa: E501
     ),
     config: Path = typer.Option(  # noqa: B008
         None,
@@ -148,6 +147,12 @@ def debug(
         "--cursor",
         help="Debug a server from Cursor config",
     ),
+    build: bool = typer.Option(
+        False,
+        "--build",
+        "-b",
+        help="Build image before debugging (for directory mode)",
+    ),
     max_phase: int = typer.Option(
         5,
         "--max-phase",
@@ -160,15 +165,24 @@ def debug(
     """🐛 Debug MCP environment - test initialization, tools, and readiness.
 
     Examples:
-        hud debug hud-text-2048:latest
-        hud debug my-mcp-server:v1 -e API_KEY=xxx -p 8080:8080
+        hud debug .                              # Debug current directory
+        hud debug environments/browser           # Debug specific directory
+        hud debug . --build                      # Build then debug
+        hud debug hud-text-2048:latest          # Debug Docker image
+        hud debug my-mcp-server:v1 -e API_KEY=xxx
         hud debug --config mcp-config.json
         hud debug --cursor text-2048-dev
-        hud debug hud-browser:dev --max-phase 3
+        hud debug . --max-phase 3               # Stop after phase 3
     """
-
+    # Import here to avoid circular imports
+    from .env_utils import get_image_name, is_environment_directory, build_environment, image_exists
+    from hud.utils.design import HUDDesign
+    
+    design = HUDDesign()
+    
     # Determine the command to run
     command = None
+    docker_args = []
 
     if config:
         # Load config from JSON file
@@ -186,13 +200,44 @@ def debug(
             console.print(f"[red]❌ {error or 'Failed to parse cursor config'}[/red]")
             raise typer.Exit(1)
     elif params:
-        image, *docker_args = params
-        # Build Docker command
-        command = ["docker", "run", "--rm", "-i", *docker_args, image]
+        first_param = params[0]
+        docker_args = params[1:] if len(params) > 1 else []
+        
+        # Check if it's a directory
+        if Path(first_param).exists() and is_environment_directory(first_param):
+            # Directory mode - like hud dev
+            directory = first_param
+            
+            # Get or generate image name
+            image_name, source = get_image_name(directory)
+            
+            if source == "auto":
+                design.info(f"Auto-generated image name: {image_name}")
+            
+            # Build if requested or if image doesn't exist
+            if build or not image_exists(image_name):
+                if not build and not image_exists(image_name):
+                    if typer.confirm(f"Image {image_name} not found. Build it now?"):
+                        build = True
+                    else:
+                        raise typer.Exit(1)
+                
+                if build:
+                    if not build_environment(directory, image_name):
+                        raise typer.Exit(1)
+            
+            # Build Docker command
+            command = ["docker", "run", "--rm", "-i", *docker_args, image_name]
+        else:
+            # Assume it's an image name
+            image = first_param
+            command = ["docker", "run", "--rm", "-i", *docker_args, image]
     else:
-        console.print("[red]Error: Must specify either a Docker image, --config, or --cursor[/red]")
+        console.print("[red]Error: Must specify a directory, Docker image, --config, or --cursor[/red]")
         console.print("\nExamples:")
-        console.print("  hud debug hud-text-2048:latest")
+        console.print("  hud debug .                      # Debug current directory")
+        console.print("  hud debug environments/browser   # Debug specific directory")
+        console.print("  hud debug hud-text-2048:latest  # Debug Docker image")
         console.print("  hud debug --config mcp-config.json")
         console.print("  hud debug --cursor my-server")
         raise typer.Exit(1)
@@ -699,7 +744,19 @@ def eval(
         design.error(f"Invalid agent: {agent}. Must be one of: {', '.join(valid_agents)}")
         raise typer.Exit(1)
     
-    # Import and run the command
+    # Import eval_command lazily to avoid importing agent dependencies
+    try:
+        from .eval import eval_command
+    except ImportError as e:
+        from hud.utils.design import HUDDesign
+        design = HUDDesign()
+        design.error(
+            "Evaluation dependencies are not installed. "
+            "Please install with: pip install 'hud-python[agent]'"
+        )
+        raise typer.Exit(1) from e
+    
+    # Run the command
     eval_command(
         source=source,
         full=full,
