@@ -1,11 +1,12 @@
 version: '1.0'
-image: hudpython/hud-text-2048@sha256:3a67f40b8044ea922bbf6d0c3d2cf4fd0a04d4f4f6900f3cde9a038c5702e89f
+image: hudpython/hud-text-2048@sha256:688c2602fa344616af95f171f10942622180187f6d5ca8a2636c7e689ad8f0c8
 build:
-  generatedAt: '2025-08-24T03:42:45.354794Z'
-  hudVersion: 0.4.0
+  generatedAt: '2025-08-26T06:32:48.638391Z'
+  hudVersion: 0.4.8
   directory: text_2048
+  version: 0.1.2
 environment:
-  initializeMs: 3229
+  initializeMs: 3322
   toolCount: 3
 tools:
 - name: setup
@@ -16,10 +17,10 @@ tools:
   description: "Call internal 'evaluate' functions. Available tools:\n\n\u2022 Name:\
     \ efficiency (Evaluate game efficiency based on score/moves ratio)\n  Arguments:\
     \ min_ratio (number)\n\n\u2022 Name: max_number (No description)\n  Arguments:\
-    \ target (integer)"
+    \ target (integer | null) (optional)"
 - name: move
   description: Make a move in the 2048 game by sliding tiles in a direction
 push:
-  source: hud-text-2048:dev@sha256:3a67f40b8044ea922bbf6d0c3d2cf4fd0a04d4f4f6900f3cde9a038c5702e89f
-  pushedAt: '2025-08-24T03:44:12.745295Z'
+  source: hud-text-2048:dev@sha256:688c2602fa344616af95f171f10942622180187f6d5ca8a2636c7e689ad8f0c8
+  pushedAt: '2025-08-26T06:33:44.610416Z'
   registry: hudpython
