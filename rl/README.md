@@ -2,6 +2,11 @@
 
 [hud-vf-gym](https://github.com/hud-evals/hud_vf_gym) module exposes CUA environments built with HUD MCP for training and evaluating RL agents using the [Verifiers](https://github.com/willccbb/verifiers) framework. It provides a standardized interface for agents to interact with computer interfaces through tool calls.
 
+
+Need help? Join the Discord.
+[![Discord](https://img.shields.io/discord/1327447144772407390?label=Discord&logo=discord&style=flat-square)](https://discord.gg/wkjtmHYYjm)
+
+
 ## Installation
 
 You can directly install hud-vf-gym in this workspace `hud-python/rl`
