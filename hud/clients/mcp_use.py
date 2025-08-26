@@ -73,7 +73,7 @@ class MCPUseHUDClient(BaseHUDClient):
 
             # Configure validation for all sessions based on client setting
             try:
-                from mcp.client.session import ValidationOptions  # type: ignore[import-not-found]
+                from hud_mcp.client.session import ValidationOptions  # type: ignore[import-not-found]
 
                 for session in self._sessions.values():
                     if (

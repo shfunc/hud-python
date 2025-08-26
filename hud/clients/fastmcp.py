@@ -105,15 +105,19 @@ class FastMCPHUDClient(BaseHUDClient):
                 raise
 
             # Configure validation for output schemas based on client setting
-            from mcp.client.session import ValidationOptions
+            try:
+                from hud_mcp.client.session import ValidationOptions  # type: ignore[import-not-found]
 
-            if (
-                hasattr(self._client, "_session_state")
-                and self._client._session_state.session is not None
-            ):
-                self._client._session_state.session._validation_options = ValidationOptions(
-                    strict_output_validation=self._strict_validation
-                )
+                if (
+                    hasattr(self._client, "_session_state")
+                    and self._client._session_state.session is not None
+                ):
+                    self._client._session_state.session._validation_options = ValidationOptions(
+                        strict_output_validation=self._strict_validation
+                    )
+            except ImportError:
+                # ValidationOptions may not be available in some mcp versions
+                pass
 
             logger.info("FastMCP client connected")
 
