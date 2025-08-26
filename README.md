@@ -110,7 +110,7 @@ The above example let's the agent play 2048 ([See replay](https://app.hud.so/tra
 
 ## Reinforcement Learning with GRPO
 
-This is a Qwen-2.5-3B agent training a policy on the [`text-2048`](environments/text_2048/) environment (see above) using [Verifiers](rl/README):
+This is a Qwen-2.5-3B agent training a policy on the [`text-2048`](environments/text_2048/) environment (see above) using [Verifiers](rl/):
 
 ![RL curve](https://raw.githubusercontent.com/hud-evals/hud-python/main/docs/src/images/rl_2.png)
 
