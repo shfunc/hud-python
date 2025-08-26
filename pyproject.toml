@@ -1,6 +1,6 @@
 [project]
 name = "hud-python"
-version = "0.4.7"
+version = "0.4.8"
 description = "SDK for the HUD platform."
 readme = "README.md"
 requires-python = ">=3.11, <3.14"
@@ -14,6 +14,7 @@ dependencies = [
     "pydantic>=2,<3",
     "pydantic-settings>=2,<3",
     # MCP dependencies
+    "hud-mcp-python-sdk>=0.1.0",
     "fastmcp>=2.11.2",
     "pathspec>=0.12.1",
     "wrapt>=1.14.0",
@@ -76,14 +77,6 @@ style = "blue"
 
 [tool.hatch.metadata]
 allow-direct-references = true
-
-[tool.uv.sources]
-mcp = { git = "https://github.com/hud-evals/mcp-python-sdk.git" } 
-
-[tool.uv]
-override-dependencies = [
-    "mcp @ git+https://github.com/hud-evals/mcp-python-sdk.git",
-]
 
 [tool.hatch.build.targets.sdist]
 include = ["hud/**", "README.md", "LICENSE", "pyproject.toml"]
