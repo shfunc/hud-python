@@ -173,7 +173,7 @@ class BaseHUDClient(AgentMCPClient):
                 logger.warning("Failed to close auto-created trace: %s", e)
             finally:
                 self._auto_trace_cm = None
-        
+
         # Disconnect from server
         if self._initialized:
             await self._disconnect()

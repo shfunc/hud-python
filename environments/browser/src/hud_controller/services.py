@@ -161,19 +161,25 @@ class ServiceManager:
     def list_running_apps(self) -> List[str]:
         """Get list of currently running apps (proxy-friendly)."""
         return list(self._launched_apps)
-    
+
     def get_app_processes_count(self) -> int:
         """Get count of running app processes (proxy-friendly)."""
         return len([p for p in self._app_processes.values() if p.poll() is None])
-    
+
     def get_service_status(self) -> Dict[str, bool]:
         """Get status of all services (proxy-friendly)."""
         return {
-            "x11": self.x11_proc is not None and self.x11_proc.poll() is None if self.x11_proc else Path("/tmp/.X11-unix/X1").exists(),
-            "vnc": self.vnc_proc is not None and self.vnc_proc.poll() is None if self.vnc_proc else False,
-            "websockify": self.websockify_proc is not None and self.websockify_proc.poll() is None if self.websockify_proc else False,
+            "x11": self.x11_proc is not None and self.x11_proc.poll() is None
+            if self.x11_proc
+            else Path("/tmp/.X11-unix/X1").exists(),
+            "vnc": self.vnc_proc is not None and self.vnc_proc.poll() is None
+            if self.vnc_proc
+            else False,
+            "websockify": self.websockify_proc is not None and self.websockify_proc.poll() is None
+            if self.websockify_proc
+            else False,
         }
-    
+
     def get_app_port(self, app_name: str) -> int:
         """Get the port for a running app.
 

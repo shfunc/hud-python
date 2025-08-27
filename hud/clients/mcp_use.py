@@ -16,12 +16,12 @@ from .base import BaseHUDClient
 
 if TYPE_CHECKING:
     from mcp import types
-    from mcp_use.client import MCPClient as MCPUseClient
-    from mcp_use.session import MCPSession as MCPUseSession
+    from mcp_use.client import MCPClient as MCPUseClient  # type: ignore[attr-defined]
+    from mcp_use.session import MCPSession as MCPUseSession  # type: ignore[attr-defined]
 
 try:
-    from mcp_use.client import MCPClient as MCPUseClient
-    from mcp_use.session import MCPSession as MCPUseSession
+    from mcp_use.client import MCPClient as MCPUseClient  # type: ignore[attr-defined]
+    from mcp_use.session import MCPSession as MCPUseSession  # type: ignore[attr-defined]
 except ImportError:
     MCPUseClient = None  # type: ignore[misc, assignment]
     MCPUseSession = None  # type: ignore[misc, assignment]
@@ -67,13 +67,15 @@ class MCPUseHUDClient(BaseHUDClient):
             raise ImportError("MCPUseClient is not available")
         self._client = MCPUseClient.from_dict(config)
         try:
-            assert self._client is not None  # For type checker
+            assert self._client is not None  # noqa: S101
             self._sessions = await self._client.create_all_sessions()
             logger.info("Created %d MCP sessions", len(self._sessions))
 
             # Configure validation for all sessions based on client setting
             try:
-                from hud_mcp.client.session import ValidationOptions  # type: ignore[import-not-found]
+                from hud_mcp.client.session import (  # type: ignore[import-not-found]
+                    ValidationOptions,  # type: ignore[import-not-found]
+                )
 
                 for session in self._sessions.values():
                     if (

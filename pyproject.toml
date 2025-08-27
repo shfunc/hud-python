@@ -1,6 +1,6 @@
 [project]
 name = "hud-python"
-version = "0.4.11"
+version = "0.4.12"
 description = "SDK for the HUD platform."
 readme = "README.md"
 requires-python = ">=3.11, <3.14"
@@ -110,8 +110,13 @@ agent = [
     # Data and evaluation
     "datasets>=2.14.0",
     "numpy>=1.24.0",
+    # Jupyter support
+    "ipykernel",
+    "ipython <9",
+    "jupyter_client",
+    "jupyter_core",
     # Other agent utilities
-    "hud-mcp-use-python-sdk>=0.1.0",
+    "mcp_use",
     "dotenv>=0.9.9",
 ]
 
@@ -128,11 +133,6 @@ dev = [
     "pytest-mock",
     "pytest-cov",
     "pyright==1.1.401",
-    # Jupyter support
-    "ipykernel",
-    "ipython <9",
-    "jupyter_client",
-    "jupyter_core",
     # Automation and computer control
     "playwright",
     "pyautogui>=0.9.54",
@@ -232,4 +232,4 @@ omit = ["*/tests/*", "*/examples/*"]
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["hud", "examples"]
 # Ignore the dev folder and other non-test directories
-addopts = "--ignore=dev --ignore=ref --ignore=test_env"
+addopts = "--ignore=dev --ignore=ref --ignore=test_env --ignore=environments"

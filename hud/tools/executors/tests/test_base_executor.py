@@ -336,3 +336,30 @@ class TestBaseExecutor:
 
         assert result1.base64_image == screenshot1
         assert result2.base64_image == screenshot1
+
+
+class TestLazyImports:
+    """Tests for lazy import functionality in executors module."""
+
+    def test_lazy_import_pyautogui_executor(self):
+        """Test lazy import of PyAutoGUIExecutor."""
+        # This should trigger the __getattr__ function and import PyAutoGUIExecutor
+        from hud.tools.executors import PyAutoGUIExecutor
+
+        # Verify it's imported correctly
+        assert PyAutoGUIExecutor.__name__ == "PyAutoGUIExecutor"
+
+    def test_lazy_import_xdo_executor(self):
+        """Test lazy import of XDOExecutor."""
+        # This should trigger the __getattr__ function and import XDOExecutor
+        from hud.tools.executors import XDOExecutor
+
+        # Verify it's imported correctly
+        assert XDOExecutor.__name__ == "XDOExecutor"
+
+    def test_lazy_import_invalid_attribute(self):
+        """Test lazy import with invalid attribute name."""
+        import hud.tools.executors as executors_module
+
+        with pytest.raises(AttributeError, match="module '.*' has no attribute 'InvalidExecutor'"):
+            _ = executors_module.InvalidExecutor

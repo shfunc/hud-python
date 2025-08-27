@@ -14,7 +14,7 @@ from rich.console import Console
 from hud.clients import MCPClient
 from hud.utils.design import HUDDesign
 
-from .utils import CaptureLogger, Colors, analyze_error_for_hints
+from .utils.logging import CaptureLogger, Colors, analyze_error_for_hints
 
 console = Console()
 
@@ -167,7 +167,7 @@ async def debug_mcp_stdio(command: list[str], logger: CaptureLogger, max_phase: 
                         break
                 except Exception as e:
                     logger.error(f"Failed to parse MCP response: {e}")
-                    logger.error(f"Raw output that caused the error: {repr(line)}")
+                    logger.error(f"Raw output that caused the error: {line!r}")
                     logger.hint("This usually means non-JSON output is being sent to STDOUT")
                     logger.hint("Common causes:")
                     logger.hint("  - Print statements in your server code")

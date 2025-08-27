@@ -81,3 +81,39 @@ def image_exists(image_name: str) -> bool:
         stderr=subprocess.DEVNULL,
     )
     return result.returncode == 0
+
+
+def remove_container(container_name: str) -> bool:
+    """Remove a Docker container by name.
+
+    Args:
+        container_name: Name of the container to remove
+
+    Returns:
+        True if successful or container doesn't exist, False on error
+    """
+    try:
+        subprocess.run(  # noqa: S603
+            ["docker", "rm", "-f", container_name],  # noqa: S607
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,  # Don't raise error if container doesn't exist
+        )
+        return True
+    except Exception:
+        return False
+
+
+def generate_container_name(identifier: str, prefix: str = "hud") -> str:
+    """Generate a safe container name from an identifier.
+
+    Args:
+        identifier: Image name or other identifier
+        prefix: Prefix for the container name
+
+    Returns:
+        Safe container name with special characters replaced
+    """
+    # Replace special characters with hyphens
+    safe_name = identifier.replace(":", "-").replace("/", "-").replace("\\", "-")
+    return f"{prefix}-{safe_name}"

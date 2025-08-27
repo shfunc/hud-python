@@ -48,52 +48,38 @@ class PlaywrightToolWithMemory(PlaywrightTool):
             return
 
         try:
-            # Track frame navigations (includes main frame)
-            def on_frame_navigated(frame):
-                if self.page is None:
-                    return
-                if frame == self.page.main_frame:
-                    self.navigation_history.append(
-                        {"url": frame.url, "timestamp": datetime.now().isoformat()}
-                    )
-                    logger.debug(f"Navigation tracked: {frame.url}")
-
-            self.page.on("framenavigated", on_frame_navigated)
-
-            # Track page loads
-            def on_load():
-                if self.page:
-                    logger.debug(f"Page loaded: {self.page.url}")
-
-            self.page.on("load", on_load)
-
-            # Track and handle dialogs
-            async def on_dialog(dialog):
-                """Track and handle JavaScript dialogs."""
-                try:
-                    dialog_info = {
-                        "type": dialog.type,
-                        "message": dialog.message,
-                        "timestamp": datetime.now().isoformat(),
-                    }
-                    logger.info(f"Dialog detected: {dialog_info}")
-
-                    # Add to action history
-                    self._record_action("dialog", dialog_info)
-
-                    # Let the base class dialog handler take care of dismissing
-                    # It's already set up in the parent class
-                except Exception as e:
-                    # Don't let dialog tracking errors cause issues
-                    logger.debug(f"Error tracking dialog: {e}")
-
-            try:
-                self.page.on("dialog", on_dialog)
-            except Exception as e:
-                logger.debug(f"Could not add dialog listener: {e}")
-
+            # Set up dialog handler using a method reference (not a lambda/closure)
+            # This avoids pickling issues while still handling dialogs
+            self.page.on("dialog", self._handle_dialog)
+            logger.debug("Dialog handler registered")
         except Exception as e:
             logger.warning(f"Failed to setup event listeners: {e}")
+
+    async def _handle_dialog(self, dialog) -> None:
+        """Handle JavaScript dialogs (alert, confirm, prompt).
+
+        This is an async method that can be used as an event handler without
+        creating unpicklable closures.
+
+        Args:
+            dialog: Playwright dialog object
+        """
+        try:
+            dialog_info = {
+                "type": dialog.type,
+                "message": dialog.message,
+                "timestamp": datetime.now().isoformat(),
+            }
+            logger.info(f"Dialog detected: {dialog_info}")
+
+            # Record the dialog in action history
+            self._record_action("dialog", dialog_info)
+
+            # Auto-dismiss the dialog
+            await dialog.dismiss()
+            logger.debug(f"Dialog dismissed: {dialog.type}")
+        except Exception as e:
+            logger.error(f"Error handling dialog: {e}")
 
     def _record_action(self, action_type: str, details: Dict[str, Any], result: Any = None) -> None:
         """Record an action in the history.
@@ -137,6 +123,13 @@ class PlaywrightToolWithMemory(PlaywrightTool):
         # Update action record with result
         if self.action_history:
             self.action_history[-1]["result"] = result
+
+        # Track navigation history directly (instead of using event listeners)
+        if result.get("success") and self.page:
+            self.navigation_history.append(
+                {"url": self.page.url, "timestamp": datetime.now().isoformat()}
+            )
+            logger.debug(f"Navigation tracked: {self.page.url}")
 
         return result
 

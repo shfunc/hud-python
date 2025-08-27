@@ -25,5 +25,12 @@ ENV PYTHONUNBUFFERED=1 \
 # - Provider-specific API keys: ANCHOR_API_KEY, STEEL_API_KEY, etc.
 # - GCP_CREDENTIALS_JSON: For Google Sheets functionality (if needed)
 
-# Run as a module to ensure proper package imports
-CMD ["python", "-m", "hud_controller.server"]
+# Run remote browser with persistent context
+CMD ["sh", "-c", "\
+    # Start context server in background \
+    python3 -m hud_controller.context >&2 & \
+    # Wait a bit for context server to start \
+    sleep 2 && \
+    # Run MCP server in foreground with exec \
+    exec python3 -m hud_controller.server \
+"]

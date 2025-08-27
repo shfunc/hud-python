@@ -2,7 +2,7 @@
 
 import logging
 from fastmcp import Context
-from hud.tools.types import SetupResult
+from mcp.types import TextContent
 from . import setup
 
 logger = logging.getLogger(__name__)
@@ -21,21 +21,21 @@ async def navigate_to_url(ctx: Context, url: str, wait_for_load_state: str = "ne
     """
     logger.info(f"Navigating to URL: {url}")
 
-    # Get the playwright tool from the environment
-    playwright_tool = setup.env
+    # Get the playwright tool from the environment context
+    persistent_ctx = setup.env
+    playwright_tool = getattr(persistent_ctx, "playwright_tool", None)
     if not playwright_tool or not hasattr(playwright_tool, "page") or not playwright_tool.page:
         logger.error("No playwright tool available")
-        return SetupResult(content="No browser available for navigation", isError=True)
+        return TextContent(text="No browser available for navigation", type="text")
 
     # Navigate using the playwright tool
     result = await playwright_tool.navigate(url, wait_for_load_state)
 
     if result.get("success"):
         logger.info(f"Successfully navigated to {url}")
-        return SetupResult(
-            content=f"Navigated to {url}",
-            info={"url": result.get("url"), "title": result.get("title")},
+        return TextContent(
+            text=f"Navigated to {url} - Title: {result.get('title', 'Unknown')}", type="text"
         )
     else:
         logger.error(f"Failed to navigate: {result.get('error')}")
-        return SetupResult(content=f"Navigation failed: {result.get('error')}", isError=True)
+        return TextContent(text=f"Navigation failed: {result.get('error')}", type="text")

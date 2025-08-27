@@ -21,6 +21,7 @@ def _get_response_text(response: requests.Response) -> str:
     except Exception:
         return response.text
 
+
 def get_docker_username() -> str | None:
     """Get the current Docker username if logged in."""
     try:
@@ -53,10 +54,10 @@ def get_docker_username() -> str | None:
                                 username = decoded.split(":", 1)[0]
                                 if username and username != "token":  # Skip token-based auth
                                     return username
-                            except Exception:
-                                pass  # Silent failure, try other methods
-                except Exception:
-                    pass  # Silent failure, try other methods
+                            except Exception:  # noqa: S110
+                                pass
+                except Exception:  # noqa: S110
+                    pass
 
         # Alternative: Check credsStore/credHelpers
         for config_path in config_paths:
@@ -91,12 +92,12 @@ def get_docker_username() -> str | None:
                                             username = cred_data.get("Username", "")
                                             if username and username != "token":
                                                 return username
-                        except Exception:
-                            pass  # Silent failure, try other methods
-                except Exception:
-                    pass  # Silent failure, try other methods
-    except Exception:
-        pass  # Silent failure, try other methods
+                        except Exception:  # noqa: S110
+                            pass
+                except Exception:  # noqa: S110
+                    pass
+    except Exception:  # noqa: S110
+        pass
     return None
 
 
@@ -155,7 +156,7 @@ def push_environment(
     if not local_image and "build" in lock_data:
         # New format might have image elsewhere
         local_image = lock_data.get("image", "")
-    
+
     # Get internal version from lock file
     internal_version = lock_data.get("build", {}).get("version", None)
 
@@ -206,21 +207,25 @@ def push_environment(
         # Handle tag when image is provided
         # Prefer explicit tag over internal version
         final_tag = tag if tag else internal_version
-        
+
         if ":" in image:
             # Image already has a tag
             existing_tag = image.split(":")[-1]
             if existing_tag != final_tag:
                 if tag:
-                    design.warning(f"Image already has tag '{existing_tag}', overriding with '{final_tag}'")
+                    design.warning(
+                        f"Image already has tag '{existing_tag}', overriding with '{final_tag}'"
+                    )
                 else:
-                    design.info(f"Image has tag '{existing_tag}', but using internal version '{final_tag}'")
+                    design.info(
+                        f"Image has tag '{existing_tag}', but using internal version '{final_tag}'"
+                    )
                 image = image.rsplit(":", 1)[0] + f":{final_tag}"
             # else: tags match, no action needed
         else:
             # Image has no tag, append the appropriate one
             image = f"{image}:{final_tag}"
-            
+
         if tag:
             design.info(f"Using specified tag: {tag}")
         else:
@@ -230,7 +235,7 @@ def push_environment(
     # Verify local image exists
     # Extract the tag part (before @sha256:...) for Docker operations
     local_tag = local_image.split("@")[0] if "@" in local_image else local_image
-    
+
     # Also check for version-tagged image if we have internal version
     version_tag = None
     if internal_version and ":" in local_tag:
@@ -246,7 +251,7 @@ def push_environment(
             design.info(f"Found version-tagged image: {version_tag}")
         except subprocess.CalledProcessError:
             pass
-    
+
     if not image_to_push:
         try:
             subprocess.run(["docker", "inspect", local_tag], capture_output=True, check=True)  # noqa: S603, S607
@@ -319,7 +324,7 @@ def push_environment(
     lock_data["image"] = pushed_digest
 
     # Add push information
-    from datetime import datetime, UTC
+    from datetime import UTC, datetime
 
     lock_data["push"] = {
         "source": local_image,
@@ -340,13 +345,20 @@ def push_environment(
         # e.g., "hudpython/test_init:v1.0" -> "hudpython/test_init:v1.0"
         # Use the original image name for the registry path, not the digest
         # The digest might not contain the tag information
-        registry_image = image  # This is the image we tagged and pushed (e.g., hudpython/hud-text-2048:0.1.2)
-        
+        registry_image = (
+            image  # This is the image we tagged and pushed (e.g., hudpython/hud-text-2048:0.1.2)
+        )
+
         # Remove any registry prefix for the HUD registry path
         registry_parts = registry_image.split("/")
         if len(registry_parts) >= 2:
             # Handle docker.io/org/name or just org/name
-            if registry_parts[0] in ["docker.io", "registry-1.docker.io", "index.docker.io", "ghcr.io"]:
+            if registry_parts[0] in [
+                "docker.io",
+                "registry-1.docker.io",
+                "index.docker.io",
+                "ghcr.io",
+            ]:
                 # Remove registry prefix
                 name_with_tag = "/".join(registry_parts[1:])
             elif "." in registry_parts[0] or ":" in registry_parts[0]:
@@ -359,12 +371,12 @@ def push_environment(
             name_with_tag = registry_image
 
         # The image variable already has the tag, no need to add :latest
-        
+
         # Validate the image format
         if not name_with_tag:
             design.warning("Could not determine image name for registry upload")
             raise typer.Exit(0)
-        
+
         # For HUD registry, we need org/name format
         if "/" not in name_with_tag:
             design.warning("Image name must include organization/namespace for HUD registry")

@@ -1,8 +1,9 @@
 # Suppress warnings
 import warnings
-warnings.filterwarnings('ignore', category=SyntaxWarning)
-warnings.filterwarnings('ignore', message='Xlib.xauth: warning')
-warnings.filterwarnings('ignore', module='Xlib')
+
+warnings.filterwarnings("ignore", category=SyntaxWarning)
+warnings.filterwarnings("ignore", message="Xlib.xauth: warning")
+warnings.filterwarnings("ignore", module="Xlib")
 
 import sys
 import logging
@@ -52,40 +53,46 @@ mcp = MCPServer(
 async def initialize_environment(ctx):
     """Initialize the browser environment with clean startup sequence."""
     global persistent_ctx, service_manager, playwright_tool
-    
+
     logger.info("Initializing browser environment...")
-    
+
     # Connect to persistent context server (must be running)
     max_retries = 10
     retry_delay = 1.0  # seconds
-    
+
     for attempt in range(max_retries):
         try:
             persistent_ctx = attach_context("/tmp/hud_browser_ctx.sock")
             logger.info("Connected to persistent browser context server")
-            
+
             # Get service manager from persistent context
             service_manager = persistent_ctx.get_service_manager()
-            
+
             # Log current state
             state = persistent_ctx.get_state_summary()
             logger.info(f"Context state: {state}")
-            
+
             if persistent_ctx.get_is_initialized():
                 logger.info("Resuming with existing browser environment")
             else:
                 logger.info("Starting fresh browser environment")
             break  # Success, exit the retry loop
-            
+
         except Exception as e:
             if attempt < max_retries - 1:
-                logger.warning(f"Context server not ready yet (attempt {attempt + 1}/{max_retries}): {e}")
+                logger.warning(
+                    f"Context server not ready yet (attempt {attempt + 1}/{max_retries}): {e}"
+                )
                 await asyncio.sleep(retry_delay)
             else:
-                logger.error(f"Failed to connect to context server after {max_retries} attempts: {e}")
-                logger.error("The context server should be started automatically. Check container logs.")
+                logger.error(
+                    f"Failed to connect to context server after {max_retries} attempts: {e}"
+                )
+                logger.error(
+                    "The context server should be started automatically. Check container logs."
+                )
                 raise
-    
+
     # At this point, persistent_ctx and service_manager are guaranteed to be set
     assert persistent_ctx is not None
     assert service_manager is not None
@@ -129,10 +136,10 @@ async def initialize_environment(ctx):
         # Set context on hubs (they'll access service_manager through it)
         setup_hub.env = persistent_ctx
         evaluate_hub.env = persistent_ctx
-        
+
         # Store playwright tool on context for evaluate functions that need it
         persistent_ctx.playwright_tool = playwright_tool
-        
+
         logger.info("Configured hubs with browser context")
 
         # Mount hubs
@@ -150,12 +157,13 @@ async def initialize_environment(ctx):
         # Mark as initialized
         if not persistent_ctx.get_is_initialized():
             persistent_ctx.set_initialized(True)
-        
+
         logger.info("Browser environment ready!")
 
     except Exception as e:
         logger.error(f"Initialization failed: {e}")
         import traceback
+
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise
 
@@ -215,10 +223,10 @@ async def launch_app(ctx: Context, app_name: str) -> str:
 
     assert service_manager is not None, "Service manager not initialized"
     assert persistent_ctx is not None, "Persistent context not initialized"
-    
+
     app_info = await service_manager.launch_app(app_name)
     app_url = app_info["url"]
-    
+
     # Track in persistent context
     persistent_ctx.add_running_app(app_name)
 

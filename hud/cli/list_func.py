@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import re
 from datetime import datetime
-from pathlib import Path
 
 import typer
 import yaml
@@ -12,30 +10,33 @@ from rich.table import Table
 
 from hud.utils.design import HUDDesign
 
-from .registry import get_registry_dir, list_registry_entries, extract_name_and_tag
+from .utils.registry import extract_name_and_tag, get_registry_dir, list_registry_entries
 
 
 def format_timestamp(timestamp: float | None) -> str:
     """Format timestamp to human-readable relative time."""
     if not timestamp:
         return "unknown"
-    
+
     dt = datetime.fromtimestamp(timestamp)
     now = datetime.now()
     delta = now - dt
-    
-    if delta.days > 365:
-        return f"{delta.days // 365}y ago"
-    elif delta.days > 30:
-        return f"{delta.days // 30}mo ago"
-    elif delta.days > 0:
-        return f"{delta.days}d ago"
-    elif delta.seconds > 3600:
-        return f"{delta.seconds // 3600}h ago"
-    elif delta.seconds > 60:
-        return f"{delta.seconds // 60}m ago"
-    else:
+
+    # Get total seconds to handle edge cases properly
+    total_seconds = delta.total_seconds()
+
+    if total_seconds < 60:
         return "just now"
+    elif total_seconds < 3600:
+        return f"{int(total_seconds // 60)}m ago"
+    elif total_seconds < 86400:  # Less than 24 hours
+        return f"{int(total_seconds // 3600)}h ago"
+    elif delta.days < 30:
+        return f"{delta.days}d ago"
+    elif delta.days < 365:
+        return f"{delta.days // 30}mo ago"
+    else:
+        return f"{delta.days // 365}y ago"
 
 
 def list_environments(
@@ -46,71 +47,73 @@ def list_environments(
 ) -> None:
     """List all HUD environments in the local registry."""
     design = HUDDesign()
-    
+
     if not json_output:
         design.header("HUD Environment Registry")
-    
+
     # Check for environment directory
     env_dir = get_registry_dir()
     if not env_dir.exists():
         if json_output:
-            print("[]")
+            print("[]")  # noqa: T201
         else:
             design.info("No environments found in local registry.")
             design.info("")
             design.info("Pull environments with: [cyan]hud pull <org/name:tag>[/cyan]")
             design.info("Build environments with: [cyan]hud build[/cyan]")
         return
-    
+
     # Collect all environments using the registry helper
     environments = []
-    
+
     for digest, lock_file in list_registry_entries():
         try:
             # Read lock file
             with open(lock_file) as f:
                 lock_data = yaml.safe_load(f)
-            
+
             # Extract metadata
             image = lock_data.get("image", "unknown")
             name, tag = extract_name_and_tag(image)
-            
+
             # Apply filter if specified
             if filter_name and filter_name.lower() not in name.lower():
                 continue
-            
+
             # Get additional metadata
             metadata = lock_data.get("metadata", {})
             description = metadata.get("description", "")
             tools_count = len(metadata.get("tools", []))
-            
+
             # Get file modification time as pulled time
             pulled_time = lock_file.stat().st_mtime
-            
-            environments.append({
-                "name": name,
-                "tag": tag,
-                "digest": digest,
-                "description": description,
-                "tools_count": tools_count,
-                "pulled_time": pulled_time,
-                "image": image,
-                "path": str(lock_file),
-            })
-            
+
+            environments.append(
+                {
+                    "name": name,
+                    "tag": tag,
+                    "digest": digest,
+                    "description": description,
+                    "tools_count": tools_count,
+                    "pulled_time": pulled_time,
+                    "image": image,
+                    "path": str(lock_file),
+                }
+            )
+
         except Exception as e:
             if verbose:
                 design.warning(f"Failed to read {lock_file}: {e}")
-    
+
     # Sort by pulled time (newest first)
     environments.sort(key=lambda x: x["pulled_time"], reverse=True)
-    
+
     if json_output:
         # Output as JSON
         import json
-        json_data = []
-        for env in environments:
-            json_data.append({
+
+        json_data = [
+            {
                 "name": env["name"],
                 "tag": env["tag"],
                 "digest": env["digest"],
@@ -118,67 +121,71 @@ def list_environments(
                 "tools_count": env["tools_count"],
                 "pulled_time": env["pulled_time"],
                 "image": env["image"],
-                "path": env["path"],
-            })
-        print(json.dumps(json_data, indent=2))
+                "path": str(env["path"]).replace("\\", "/"),  # Normalize path separators for JSON
+            }
+            for env in environments
+        ]
+        print(json.dumps(json_data, indent=2))  # noqa: T201
         return
-    
+
     if not environments:
         design.info("No environments found matching criteria.")
         design.info("")
         design.info("Pull environments with: [cyan]hud pull <org/name:tag>[/cyan]")
         design.info("Build environments with: [cyan]hud build[/cyan]")
         return
-    
+
     # Create table
-    table = Table(title=f"Found {len(environments)} environment{'s' if len(environments) != 1 else ''}")
+    table = Table(
+        title=f"Found {len(environments)} environment{'s' if len(environments) != 1 else ''}"
+    )
     table.add_column("Environment", style="cyan", no_wrap=True)
     table.add_column("Description", style="white")
     table.add_column("Tools", justify="right", style="yellow")
     table.add_column("Pulled", style="dim")
-    
+
     if show_all or verbose:
         table.add_column("Digest", style="dim")
-    
+
     # Add rows
     for env in environments:
         # Truncate description if too long
         desc = env["description"]
         if desc and len(desc) > 50 and not verbose:
             desc = desc[:47] + "..."
-        
+
         # Combine name and tag for easy copying
         full_ref = f"{env['name']}:{env['tag']}"
-        
+
         row = [
             full_ref,
             desc or "[dim]No description[/dim]",
             str(env["tools_count"]),
             format_timestamp(env["pulled_time"]),
         ]
-        
+
         if show_all or verbose:
             row.append(env["digest"][:12])
-        
+
         table.add_row(*row)
-    
-    design.print(table)
+
+    design.print(str(table))
     design.info("")
-    
+
     # Show usage hints
     design.section_title("Usage")
     if environments:
         # Use the most recently pulled environment as example
         example_env = environments[0]
         example_ref = f"{example_env['name']}:{example_env['tag']}"
-        
+
         design.info(f"Run an environment: [cyan]hud run {example_ref}[/cyan]")
         design.info(f"Analyze tools: [cyan]hud analyze {example_ref}[/cyan]")
         design.info(f"Debug server: [cyan]hud debug {example_ref}[/cyan]")
-    
+
     design.info("Pull more environments: [cyan]hud pull <org/name:tag>[/cyan]")
     design.info("Build new environments: [cyan]hud build[/cyan]")
-    
+
     if verbose:
         design.info("")
         design.info(f"[dim]Registry location: {env_dir}[/dim]")
@@ -188,21 +195,15 @@ def list_command(
     filter_name: str | None = typer.Option(
         None, "--filter", "-f", help="Filter environments by name (case-insensitive)"
     ),
-    json_output: bool = typer.Option(
-        False, "--json", help="Output as JSON"
-    ),
-    show_all: bool = typer.Option(
-        False, "--all", "-a", help="Show all columns including digest"
-    ),
-    verbose: bool = typer.Option(
-        False, "--verbose", "-v", help="Show detailed output"
-    ),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+    show_all: bool = typer.Option(False, "--all", "-a", help="Show all columns including digest"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
 ) -> None:
     """📋 List all HUD environments in local registry.
-    
+
     Shows environments pulled with 'hud pull' or built with 'hud build',
     stored in ~/.hud/envs/
-    
+
     Examples:
         hud list                    # List all environments
         hud list --filter text      # Filter by name

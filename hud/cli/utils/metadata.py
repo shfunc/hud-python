@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from urllib.parse import quote
 
 import requests
@@ -13,7 +12,11 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from hud.settings import settings
 from hud.utils.design import HUDDesign
 
-from .registry import get_registry_dir, list_registry_entries, extract_digest_from_image, load_from_registry
+from .registry import (
+    extract_digest_from_image,
+    list_registry_entries,
+    load_from_registry,
+)
 
 console = Console()
 design = HUDDesign()
@@ -60,13 +63,13 @@ def check_local_cache(reference: str) -> dict | None:
     lock_data = load_from_registry(digest)
     if lock_data:
         return lock_data
-    
+
     # If not found and reference has a name, search by name pattern
     if "/" in reference:
         # Look for any cached version of this image
         ref_base = reference.split("@")[0].split(":")[0]
-        
-        for digest, lock_file in list_registry_entries():
+
+        for _, lock_file in list_registry_entries():
             try:
                 with open(lock_file) as f:
                     lock_data = yaml.safe_load(f)
@@ -78,8 +81,8 @@ def check_local_cache(reference: str) -> dict | None:
                     if ref_base in img_base or img_base in ref_base:
                         return lock_data
             except Exception:
-                continue
-    
+                design.error("Error loading lock file")
+
     return None
 
 
@@ -87,7 +90,7 @@ async def analyze_from_metadata(reference: str, output_format: str, verbose: boo
     """Analyze environment from cached or registry metadata."""
     import json
 
-    from .analyze import display_interactive, display_markdown
+    from hud.cli.analyze import display_interactive, display_markdown
 
     design.header("MCP Environment Analysis", icon="🔍")
     design.info(f"Looking up: {reference}")
@@ -146,6 +149,7 @@ async def analyze_from_metadata(reference: str, output_format: str, verbose: boo
 
                 # Save to local cache for next time
                 from .registry import save_to_registry
+
                 save_to_registry(lock_data, lock_data.get("image", ""), verbose=False)
             else:
                 progress.update(task, description="[red]✗ Not found[/red]")

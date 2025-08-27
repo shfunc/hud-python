@@ -38,6 +38,7 @@ class BaseTool(ABC):
         name: str | None = None,
         title: str | None = None,
         description: str | None = None,
+        meta: dict[str, Any] | None = None,
     ) -> None:
         """Initialize the tool.
 
@@ -50,11 +51,13 @@ class BaseTool(ABC):
             name: Tool name for MCP registration (auto-generated from class name if not provided)
             title: Human-readable display name for the tool (auto-generated from class name)
             description: Tool description (auto-generated from docstring if not provided)
+            meta: Metadata to include in MCP tool listing (e.g., resolution info)
         """
         self.env = env
         self.name = name or self.__class__.__name__.lower().replace("tool", "")
         self.title = title or self.__class__.__name__.replace("Tool", "").replace("_", " ").title()
         self.description = description or (self.__doc__.strip() if self.__doc__ else None)
+        self.meta = meta
 
         # Expose attributes FastMCP expects when registering an instance directly
         self.__name__ = self.name  # FastMCP uses fn.__name__ if name param omitted
@@ -93,6 +96,7 @@ class BaseTool(ABC):
                 name=self.name,
                 title=self.title,
                 description=self.description,
+                meta=self.meta,
             )
         return self._mcp_tool
 
@@ -113,6 +117,7 @@ class BaseHub(FastMCP):
         env: Any | None = None,
         title: str | None = None,
         description: str | None = None,
+        meta: dict[str, Any] | None = None,
     ) -> None:
         """Create a new BaseHub.
 
@@ -124,6 +129,8 @@ class BaseHub(FastMCP):
             Optional long-lived environment object. Stored on the server
             instance (``layer.env``) and therefore available to every request
             via ``ctx.fastmcp.env``.
+        meta:
+            Metadata to include in MCP tool listing.
         """
 
         # Naming scheme for hidden objects
@@ -141,7 +148,7 @@ class BaseHub(FastMCP):
         async def _dispatch(  # noqa: ANN202
             name: str,
             arguments: dict | str | None = None,
-            ctx=None,  # noqa: ANN001
+            ctx: Any | None = None,
         ):
             """Gateway to hidden tools.
 
@@ -176,6 +183,7 @@ class BaseHub(FastMCP):
             title=dispatcher_title,
             description=dispatcher_desc,
             tags=set(),
+            meta=meta,
         )
         self._tool_manager.add_tool(dispatcher_tool)
 
@@ -344,8 +352,17 @@ class BaseHub(FastMCP):
                             "enum": [t[0] for t in sorted(internal_tools)],
                         },
                         "arguments": {
-                            "type": "object",
-                            "description": "Arguments to pass to the internal tool. See description for details on each tool's parameters.",  # noqa: E501
+                            "anyOf": [
+                                {
+                                    "type": "object",
+                                    "description": "Arguments object to pass to the internal tool",
+                                },
+                                {
+                                    "type": "string",
+                                    "description": "JSON string of arguments to pass to the internal tool",  # noqa: E501
+                                },
+                            ],
+                            "description": "Arguments to pass to the internal tool. Can be an object or JSON string. See description for details on each tool's parameters.",  # noqa: E501
                         },
                     },
                     "required": ["name", "arguments"],

@@ -9,7 +9,7 @@ from unittest.mock import mock_open, patch
 
 import pytest
 
-from hud.cli.cursor import get_cursor_config_path, list_cursor_servers, parse_cursor_config
+from hud.cli.utils.cursor import get_cursor_config_path, list_cursor_servers, parse_cursor_config
 
 
 class TestParseCursorConfig:

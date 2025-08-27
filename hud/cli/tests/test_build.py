@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 import subprocess
-import tempfile
-from datetime import datetime
-from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -81,11 +78,7 @@ class TestGetExistingVersion:
 
     def test_get_version_from_lock(self, tmp_path):
         """Test extracting version from lock file."""
-        lock_data = {
-            "build": {
-                "version": "1.2.3"
-            }
-        }
+        lock_data = {"build": {"version": "1.2.3"}}
         lock_path = tmp_path / "hud.lock.yaml"
         lock_path.write_text(yaml.dump(lock_data))
 
@@ -119,8 +112,7 @@ class TestGetDockerImageDigest:
         """Test successfully getting image digest."""
         # Note: The function expects to parse a list from the string representation
         mock_run.return_value = mock.Mock(
-            stdout="['docker.io/library/test@sha256:abc123']",
-            returncode=0
+            stdout="['docker.io/library/test@sha256:abc123']", returncode=0
         )
 
         result = get_docker_image_digest("test:latest")
@@ -149,10 +141,7 @@ class TestGetDockerImageId:
     @mock.patch("subprocess.run")
     def test_get_id_success(self, mock_run):
         """Test successfully getting image ID."""
-        mock_run.return_value = mock.Mock(
-            stdout="sha256:abc123def456",
-            returncode=0
-        )
+        mock_run.return_value = mock.Mock(stdout="sha256:abc123def456", returncode=0)
 
         result = get_docker_image_id("test:latest")
         assert result == "sha256:abc123def456"
@@ -223,13 +212,13 @@ class TestAnalyzeMcpEnvironment:
         # Setup mock client
         mock_client = mock.AsyncMock()
         mock_client_class.return_value = mock_client
-        
+
         # Mock tool
         mock_tool = mock.Mock()
         mock_tool.name = "test_tool"
         mock_tool.description = "Test tool"
         mock_tool.inputSchema = {"type": "object"}
-        
+
         mock_client.list_tools.return_value = [mock_tool]
 
         result = await analyze_mcp_environment("test:latest")
@@ -264,7 +253,7 @@ class TestAnalyzeMcpEnvironment:
 
         # Just test that it runs without error in verbose mode
         result = await analyze_mcp_environment("test:latest", verbose=True)
-        
+
         assert result["success"] is True
         assert "initializeMs" in result
 
@@ -272,35 +261,31 @@ class TestAnalyzeMcpEnvironment:
 class TestBuildDockerImage:
     """Test building Docker images."""
 
-    @mock.patch("subprocess.Popen")
-    def test_build_success(self, mock_popen, tmp_path):
+    @mock.patch("subprocess.run")
+    def test_build_success(self, mock_run, tmp_path):
         """Test successful Docker build."""
         # Create Dockerfile
         dockerfile = tmp_path / "Dockerfile"
         dockerfile.write_text("FROM python:3.11")
 
         # Mock successful process
-        mock_process = mock.Mock()
-        mock_process.stdout = ["Step 1/1 : FROM python:3.11\n", "Successfully built abc123\n"]
-        mock_process.wait.return_value = None
-        mock_process.returncode = 0
-        mock_popen.return_value = mock_process
+        mock_result = mock.Mock()
+        mock_result.returncode = 0
+        mock_run.return_value = mock_result
 
         result = build_docker_image(tmp_path, "test:latest")
         assert result is True
 
-    @mock.patch("subprocess.Popen")
-    def test_build_failure(self, mock_popen, tmp_path):
+    @mock.patch("subprocess.run")
+    def test_build_failure(self, mock_run, tmp_path):
         """Test failed Docker build."""
         dockerfile = tmp_path / "Dockerfile"
         dockerfile.write_text("FROM python:3.11")
 
         # Mock failed process
-        mock_process = mock.Mock()
-        mock_process.stdout = ["Error: failed to build\n"]
-        mock_process.wait.return_value = None
-        mock_process.returncode = 1
-        mock_popen.return_value = mock_process
+        mock_result = mock.Mock()
+        mock_result.returncode = 1
+        mock_run.return_value = mock_result
 
         result = build_docker_image(tmp_path, "test:latest")
         assert result is False
@@ -310,22 +295,20 @@ class TestBuildDockerImage:
         result = build_docker_image(tmp_path, "test:latest")
         assert result is False
 
-    @mock.patch("subprocess.Popen")
-    def test_build_with_no_cache(self, mock_popen, tmp_path):
+    @mock.patch("subprocess.run")
+    def test_build_with_no_cache(self, mock_run, tmp_path):
         """Test build with --no-cache flag."""
         dockerfile = tmp_path / "Dockerfile"
         dockerfile.write_text("FROM python:3.11")
 
-        mock_process = mock.Mock()
-        mock_process.stdout = []
-        mock_process.wait.return_value = None
-        mock_process.returncode = 0
-        mock_popen.return_value = mock_process
+        mock_result = mock.Mock()
+        mock_result.returncode = 0
+        mock_run.return_value = mock_result
 
         build_docker_image(tmp_path, "test:latest", no_cache=True)
 
         # Check that --no-cache was included
-        call_args = mock_popen.call_args[0][0]
+        call_args = mock_run.call_args[0][0]
         assert "--no-cache" in call_args
 
 
@@ -336,12 +319,10 @@ class TestBuildEnvironment:
     @mock.patch("hud.cli.build.analyze_mcp_environment")
     @mock.patch("hud.cli.build.save_to_registry")
     @mock.patch("hud.cli.build.get_docker_image_id")
-    @mock.patch("subprocess.Popen")
     @mock.patch("subprocess.run")
     def test_build_environment_success(
         self,
         mock_run,
-        mock_popen,
         mock_get_id,
         mock_save_registry,
         mock_analyze,
@@ -352,14 +333,14 @@ class TestBuildEnvironment:
         # Setup directory structure
         env_dir = tmp_path / "test-env"
         env_dir.mkdir()
-        
+
         # Create pyproject.toml
         pyproject = env_dir / "pyproject.toml"
         pyproject.write_text("""
 [tool.hud]
 image = "test/env:dev"
 """)
-        
+
         # Create Dockerfile
         dockerfile = env_dir / "Dockerfile"
         dockerfile.write_text("""
@@ -379,16 +360,11 @@ ENV API_KEY
             ],
         }
         mock_get_id.return_value = "sha256:abc123"
-        
+
         # Mock final rebuild
-        mock_process = mock.Mock()
-        # Create a mock file-like object with read method
-        mock_stdout = mock.Mock()
-        mock_stdout.read.return_value = ""
-        mock_process.stdout = mock_stdout
-        mock_process.wait.return_value = None
-        mock_process.returncode = 0
-        mock_popen.return_value = mock_process
+        mock_result = mock.Mock()
+        mock_result.returncode = 0
+        mock_run.return_value = mock_result
 
         # Run build
         build_environment(str(env_dir), "test/env:latest")

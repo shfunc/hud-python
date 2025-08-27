@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
-from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -30,22 +28,14 @@ class TestGetDockerManifest:
         manifest_data = {
             "schemaVersion": 2,
             "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
-            "layers": [
-                {"size": 1024},
-                {"size": 2048}
-            ]
+            "layers": [{"size": 1024}, {"size": 2048}],
         }
-        mock_run.return_value = mock.Mock(
-            returncode=0,
-            stdout=json.dumps(manifest_data)
-        )
+        mock_run.return_value = mock.Mock(returncode=0, stdout=json.dumps(manifest_data))
 
         result = get_docker_manifest("test:latest")
         assert result == manifest_data
         mock_run.assert_called_once_with(
-            ["docker", "manifest", "inspect", "test:latest"],
-            capture_output=True,
-            text=True
+            ["docker", "manifest", "inspect", "test:latest"], capture_output=True, text=True
         )
 
     @mock.patch("subprocess.run")
@@ -70,14 +60,8 @@ class TestGetImageSizeFromManifest:
 
     def test_get_size_v2_manifest(self):
         """Test getting size from v2 manifest with layers."""
-        manifest = {
-            "layers": [
-                {"size": 1024},
-                {"size": 2048},
-                {"size": 512}
-            ]
-        }
-        
+        manifest = {"layers": [{"size": 1024}, {"size": 2048}, {"size": 512}]}
+
         size = get_image_size_from_manifest(manifest)
         assert size == 3584  # Sum of all layers
 
@@ -86,24 +70,24 @@ class TestGetImageSizeFromManifest:
         manifest = {
             "manifests": [
                 {"size": 5120, "platform": {"os": "linux"}},
-                {"size": 4096, "platform": {"os": "windows"}}
+                {"size": 4096, "platform": {"os": "windows"}},
             ]
         }
-        
+
         size = get_image_size_from_manifest(manifest)
         assert size == 5120  # First manifest size
 
     def test_get_size_empty_manifest(self):
         """Test getting size from empty manifest."""
         manifest = {}
-        
+
         size = get_image_size_from_manifest(manifest)
         assert size is None
 
     def test_get_size_invalid_manifest(self):
         """Test getting size from invalid manifest."""
         manifest = {"invalid": "data"}
-        
+
         size = get_image_size_from_manifest(manifest)
         assert size is None
 
@@ -132,24 +116,24 @@ class TestFetchLockFromRegistry:
         mock_get.return_value = mock_response
 
         fetch_lock_from_registry("org/env")
-        
-        # Check URL includes :latest
+
+        # Check URL includes :latest (URL-encoded)
         call_args = mock_get.call_args
-        assert "org/env:latest" in call_args[0][0]
+        assert "org/env%3Alatest" in call_args[0][0]
 
     @mock.patch("hud.cli.pull.settings")
     @mock.patch("requests.get")
     def test_fetch_lock_with_auth(self, mock_get, mock_settings):
         """Test fetching with API key."""
         mock_settings.api_key = "test-key"
-        
+
         mock_response = mock.Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"test": "data"}
         mock_get.return_value = mock_response
 
         fetch_lock_from_registry("org/env:latest")
-        
+
         # Check auth header was set
         call_kwargs = mock_get.call_args[1]
         assert call_kwargs["headers"]["Authorization"] == "Bearer test-key"
@@ -205,21 +189,13 @@ class TestPullEnvironment:
         mock_design = mock.Mock()
         mock_design.console = mock.Mock()
         mock_design_class.return_value = mock_design
-        
+
         # Create lock file
         lock_data = {
             "image": "test/env:latest@sha256:abc123",
-            "build": {
-                "generatedAt": "2024-01-01T00:00:00Z",
-                "hudVersion": "1.0.0"
-            },
-            "environment": {
-                "toolCount": 5,
-                "initializeMs": 1500
-            },
-            "tools": [
-                {"name": "tool1", "description": "Tool 1"}
-            ]
+            "build": {"generatedAt": "2024-01-01T00:00:00Z", "hudVersion": "1.0.0"},
+            "environment": {"toolCount": 5, "initializeMs": 1500},
+            "tools": [{"name": "tool1", "description": "Tool 1"}],
         }
         lock_file = tmp_path / "hud.lock.yaml"
         lock_file.write_text(yaml.dump(lock_data))
@@ -251,12 +227,9 @@ class TestPullEnvironment:
         mock_design = mock.Mock()
         mock_design.console = mock.Mock()
         mock_design_class.return_value = mock_design
-        
+
         # Mock registry response
-        lock_data = {
-            "image": "docker.io/org/env:latest@sha256:def456",
-            "tools": []
-        }
+        lock_data = {"image": "docker.io/org/env:latest@sha256:def456", "tools": []}
         mock_fetch.return_value = lock_data
 
         # Mock docker pull
@@ -281,20 +254,20 @@ class TestPullEnvironment:
     @mock.patch("hud.cli.pull.get_docker_manifest")
     @mock.patch("hud.cli.pull.fetch_lock_from_registry")
     @mock.patch("subprocess.Popen")
-    def test_pull_docker_image_direct(self, mock_popen, mock_fetch, mock_manifest, mock_design_class):
+    def test_pull_docker_image_direct(
+        self, mock_popen, mock_fetch, mock_manifest, mock_design_class
+    ):
         """Test pulling Docker image directly."""
         # Create mock design instance
         mock_design = mock.Mock()
         mock_design.console = mock.Mock()
         mock_design_class.return_value = mock_design
-        
+
         # Mock no registry data
         mock_fetch.return_value = None
 
         # Mock manifest
-        mock_manifest.return_value = {
-            "layers": [{"size": 1024}]
-        }
+        mock_manifest.return_value = {"layers": [{"size": 1024}]}
 
         # Mock docker pull
         mock_process = mock.Mock()
@@ -318,7 +291,7 @@ class TestPullEnvironment:
         mock_design = mock.Mock()
         mock_design.console = mock.Mock()
         mock_design_class.return_value = mock_design
-        
+
         # Should not actually pull
         pull_environment("test:latest", verify_only=True)
 
@@ -333,7 +306,7 @@ class TestPullEnvironment:
         mock_design = mock.Mock()
         mock_design.console = mock.Mock()
         mock_design_class.return_value = mock_design
-        
+
         # Mock docker pull failure
         mock_process = mock.Mock()
         mock_process.stdout = ["Error: manifest unknown\n"]
@@ -355,7 +328,7 @@ class TestPullEnvironment:
         mock_design = mock.Mock()
         mock_design.console = mock.Mock()
         mock_design_class.return_value = mock_design
-        
+
         mock_confirm.return_value = False
 
         with pytest.raises(typer.Exit) as exc_info:
@@ -371,7 +344,7 @@ class TestPullEnvironment:
         mock_design = mock.Mock()
         mock_design.console = mock.Mock()
         mock_design_class.return_value = mock_design
-        
+
         with pytest.raises(typer.Exit):
             pull_environment("nonexistent.yaml")
 
@@ -392,9 +365,5 @@ class TestPullCommand:
         # Just test it doesn't crash with explicit values
         with mock.patch("hud.cli.pull.pull_environment"):
             pull_command(
-                "org/env:v1.0",
-                lock_file="lock.yaml",
-                yes=True,
-                verify_only=True,
-                verbose=True
+                "org/env:v1.0", lock_file="lock.yaml", yes=True, verify_only=True, verbose=True
             )

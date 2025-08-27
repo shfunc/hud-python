@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import pytest
 
 from hud.cli.debug import debug_mcp_stdio
-from hud.cli.utils import CaptureLogger
+from hud.cli.utils.logging import CaptureLogger
 
 
 class TestDebugMCPStdio:

@@ -141,10 +141,7 @@ async def game_2048_navigate(url: Optional[str] = None):
         if env.playwright:
             nav_result = await env.playwright.navigate(url)
 
-            return TextContent(
-                text=f"Navigated to 2048 game at {url}",
-                type="text"
-            )
+            return TextContent(text=f"Navigated to 2048 game at {url}", type="text")
         else:
             return TextContent(text="Playwright tool not available for navigation", type="text")
     except Exception as e:

@@ -17,7 +17,9 @@ class TestOperatorAgent:
     @pytest.fixture
     def mock_mcp_client(self):
         """Create a mock MCP client."""
-        mcp_client = MagicMock()
+        mcp_client = AsyncMock()
+        # Set up the mcp_config attribute as a regular dict, not a coroutine
+        mcp_client.mcp_config = {"test_server": {"url": "http://test"}}
         return mcp_client
 
     @pytest.fixture

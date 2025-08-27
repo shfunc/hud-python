@@ -305,7 +305,7 @@ Your environment should pass all 5 debug phases and show the available tools
 Now create tasks for agents to solve:
 
 ```python
-from hud import Task
+from hud.datasets import Task
 
 tasks = [
     Task(
@@ -388,7 +388,7 @@ Others can now use your environment at scale:
 
 ```python
 import os
-from hud import Task
+from hud.datasets import Task
 from hud.agents import ClaudeAgent
 
 # Remote MCP configuration

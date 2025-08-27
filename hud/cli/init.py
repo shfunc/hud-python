@@ -173,7 +173,6 @@ def sanitize_name(name: str) -> str:
 
 def create_environment(name: str | None, directory: str, force: bool) -> None:
     """Create a new HUD environment from templates."""
-    from hud.utils.design import HUDDesign
 
     design = HUDDesign()
 

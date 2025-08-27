@@ -41,7 +41,9 @@ async def verify_type_action(
         logger.info(f"Checking for specific selector: {selector}")
 
     # Get the playwright tool from the environment
-    playwright_tool = evaluate.env
+    # Get the playwright tool from the persistent context
+    persistent_ctx = evaluate.env
+    playwright_tool = getattr(persistent_ctx, "playwright_tool", None)
     if (
         not playwright_tool
         or not hasattr(playwright_tool, "action_history")
