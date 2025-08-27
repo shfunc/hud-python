@@ -2,7 +2,7 @@
 
 import logging
 from typing import Dict, Any, List
-from fastmcp import Context
+import httpx
 from mcp.types import TextContent
 from . import setup
 
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 @setup.tool("todo_seed")
-async def todo_seed(ctx: Context, num_items: int = 5):
+async def todo_seed(num_items: int = 5):
     """Seed database with default test todos.
 
     Args:
@@ -20,13 +20,21 @@ async def todo_seed(ctx: Context, num_items: int = 5):
         Setup result with seeded items info
     """
     try:
+        # Get the backend port from persistent context
+        persistent_ctx = setup.env
+        backend_port = persistent_ctx.get_app_backend_port("todo")
+
         # Call the app's seed API
-        env = setup.env  # Get BrowserContext from hub
-        result = await env.call_app_api("todo", "/api/eval/seed", method="POST")
+        url = f"http://localhost:{backend_port}/api/eval/seed"
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url)
+            response.raise_for_status()
+            result = response.json()
 
         # Refresh the page to show the seeded items
-        if env.playwright:
-            await env.playwright.page.reload()
+        playwright_tool = persistent_ctx.get_playwright_tool()
+        if playwright_tool:
+            await playwright_tool.page.reload()
             import asyncio
 
             await asyncio.sleep(0.5)  # Wait for page to reload
@@ -41,16 +49,23 @@ async def todo_seed(ctx: Context, num_items: int = 5):
 
 
 @setup.tool("todo_reset")
-async def todo_reset(ctx: Context):
+async def todo_reset():
     """Reset database to empty state.
 
     Returns:
         Setup result with reset confirmation
     """
     try:
+        # Get the backend port from persistent context
+        persistent_ctx = setup.env
+        backend_port = persistent_ctx.get_app_backend_port("todo")
+
         # Call the app's reset API
-        env = setup.env  # Get BrowserContext from hub
-        result = await env.call_app_api("todo", "/api/eval/reset", method="DELETE")
+        url = f"http://localhost:{backend_port}/api/eval/reset"
+        async with httpx.AsyncClient() as client:
+            response = await client.delete(url)
+            response.raise_for_status()
+            result = response.json()
 
         return TextContent(text="Database reset to empty state", type="text")
     except Exception as e:
@@ -59,7 +74,7 @@ async def todo_reset(ctx: Context):
 
 
 @setup.tool("todo_custom_seed")
-async def todo_custom_seed(ctx: Context, items: List[Dict[str, Any]]):
+async def todo_custom_seed(items: List[Dict[str, Any]]):
     """Seed database with custom todo items.
 
     Args:
@@ -79,11 +94,16 @@ async def todo_custom_seed(ctx: Context, items: List[Dict[str, Any]]):
             }
             formatted_items.append(formatted_item)
 
+        # Get the backend port from persistent context
+        persistent_ctx = setup.env
+        backend_port = persistent_ctx.get_app_backend_port("todo")
+
         # Call the app's custom seed API (send list directly, not wrapped in dict)
-        env = setup.env  # Get BrowserContext from hub
-        result = await env.call_app_api(
-            "todo", "/api/eval/seed_custom", method="POST", json=formatted_items
-        )
+        url = f"http://localhost:{backend_port}/api/eval/seed_custom"
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, json=formatted_items)
+            response.raise_for_status()
+            result = response.json()
 
         return TextContent(
             text=f"Seeded database with {len(items)} custom items",
@@ -95,7 +115,7 @@ async def todo_custom_seed(ctx: Context, items: List[Dict[str, Any]]):
 
 
 @setup.tool("todo_navigate")
-async def todo_navigate(ctx: Context, url: str):
+async def todo_navigate(url: str):
     """Navigate to the Todo app.
 
     Args:
@@ -105,14 +125,17 @@ async def todo_navigate(ctx: Context, url: str):
         Setup result with navigation confirmation
     """
     try:
+        # Get the persistent context
+        persistent_ctx = setup.env
+
         # Get the default URL if not provided
-        env = setup.env  # Get BrowserContext from hub
         if not url:
-            url = env.get_app_url("todo")
+            url = persistent_ctx.get_app_url("todo")
 
         # Use Playwright to navigate
-        if env.playwright:
-            nav_result = await env.playwright.navigate(url)
+        playwright_tool = persistent_ctx.get_playwright_tool()
+        if playwright_tool:
+            nav_result = await playwright_tool.navigate(url)
 
             return TextContent(
                 text=f"Navigated to Todo app at {url}",

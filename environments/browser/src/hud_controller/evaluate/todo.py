@@ -1,6 +1,7 @@
 """Todo app evaluators."""
 
 import logging
+import httpx
 from hud.tools.types import EvaluationResult
 from . import evaluate
 
@@ -18,9 +19,16 @@ async def todo_completed(expected_count: int):
         Evaluation result
     """
     try:
-        # Use the app-centric approach: call todo backend API
-        env = evaluate.env  # Get BrowserContext from hub
-        stats = await env.call_app_api("todo", "/api/eval/stats")
+        # Get the persistent context
+        persistent_ctx = evaluate.env
+
+        # Get the backend port and fetch stats
+        backend_port = persistent_ctx.get_app_backend_port("todo")
+        url = f"http://localhost:{backend_port}/api/eval/stats"
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            stats = response.json()
         completed_count = stats.get("completed_items", 0)
         total_count = stats.get("total_items", 0)
 
@@ -64,9 +72,16 @@ async def todo_exists(title: str):
         Evaluation result
     """
     try:
-        # Call the app's API to get all todos
-        env = evaluate.env  # Get BrowserContext from hub
-        todos = await env.call_app_api("todo", "/api/eval/todos")
+        # Get the persistent context
+        persistent_ctx = evaluate.env
+
+        # Get the backend port and fetch todos
+        backend_port = persistent_ctx.get_app_backend_port("todo")
+        url = f"http://localhost:{backend_port}/api/eval/todos"
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            todos = response.json()
 
         # Check if any todo has the expected title
         exists = any(todo.get("title") == title for todo in todos)
@@ -106,8 +121,16 @@ async def todo_completion_rate(target_rate: float = 0.5):
     """
     try:
         # Get stats from the app
-        env = evaluate.env  # Get BrowserContext from hub
-        stats = await env.call_app_api("todo", "/api/eval/stats")
+        # Get the persistent context
+        persistent_ctx = evaluate.env
+
+        # Get the backend port and fetch stats
+        backend_port = persistent_ctx.get_app_backend_port("todo")
+        url = f"http://localhost:{backend_port}/api/eval/stats"
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            stats = response.json()
         total_count = stats.get("total_items", 0)
         completed_count = stats.get("completed_items", 0)
 
@@ -157,8 +180,16 @@ async def todo_total_count(min_count: int = 1):
     """
     try:
         # Get stats from the app
-        env = evaluate.env  # Get BrowserContext from hub
-        stats = await env.call_app_api("todo", "/api/eval/stats")
+        # Get the persistent context
+        persistent_ctx = evaluate.env
+
+        # Get the backend port and fetch stats
+        backend_port = persistent_ctx.get_app_backend_port("todo")
+        url = f"http://localhost:{backend_port}/api/eval/stats"
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            stats = response.json()
         total_count = stats.get("total_items", 0)
 
         success = total_count >= min_count
@@ -196,8 +227,16 @@ async def todo_all_completed():
     """
     try:
         # Get stats from the app
-        env = evaluate.env  # Get BrowserContext from hub
-        stats = await env.call_app_api("todo", "/api/eval/stats")
+        # Get the persistent context
+        persistent_ctx = evaluate.env
+
+        # Get the backend port and fetch stats
+        backend_port = persistent_ctx.get_app_backend_port("todo")
+        url = f"http://localhost:{backend_port}/api/eval/stats"
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            stats = response.json()
         total_count = stats.get("total_items", 0)
         completed_count = stats.get("completed_items", 0)
 

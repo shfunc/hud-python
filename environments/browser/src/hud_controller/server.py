@@ -138,6 +138,7 @@ async def initialize_environment(ctx):
         evaluate_hub.env = persistent_ctx
 
         # Store playwright tool on context for evaluate functions that need it
+        # Note: This is NOT pickled/persisted, it's just for current session access
         persistent_ctx.playwright_tool = playwright_tool
 
         logger.info("Configured hubs with browser context")
@@ -221,11 +222,24 @@ async def launch_app(ctx: Context, app_name: str) -> str:
     """
     await ctx.info(f"Launching app: {app_name}")
 
-    assert service_manager is not None, "Service manager not initialized"
     assert persistent_ctx is not None, "Persistent context not initialized"
 
-    app_info = await service_manager.launch_app(app_name)
+    # Get the service manager from persistent context to ensure state consistency
+    ctx_service_manager = persistent_ctx.get_service_manager()
+    assert ctx_service_manager is not None, "Service manager not available from context"
+
+    app_info = await ctx_service_manager.launch_app(app_name)
     app_url = app_info["url"]
+
+    # Get the port information from service manager while we have access
+    try:
+        backend_port = ctx_service_manager.get_app_port(app_name)
+        frontend_port = ctx_service_manager.get_app_frontend_port(app_name)
+
+        # Store ports in persistent context
+        persistent_ctx.set_app_ports(app_name, frontend_port, backend_port)
+    except Exception as e:
+        logger.error(f"Failed to get ports for {app_name}: {e}")
 
     # Track in persistent context
     persistent_ctx.add_running_app(app_name)
@@ -241,7 +255,7 @@ async def launch_app(ctx: Context, app_name: str) -> str:
         except Exception as e:
             logger.warning(f"Could not auto-navigate to app: {e}")
 
-    return f"Launched {app_name} at {app_url}"
+    return f"App initialized."
 
 
 # API request tool (doesn't need X11)

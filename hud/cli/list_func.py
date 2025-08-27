@@ -169,7 +169,7 @@ def list_environments(
 
         table.add_row(*row)
 
-    design.print(str(table))
+    design.print(table)  # type: ignore
     design.info("")
 
     # Show usage hints

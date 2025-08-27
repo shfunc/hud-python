@@ -1,12 +1,12 @@
 version: '1.0'
-image: hudpython/hud-text-2048@sha256:3cadf980f1b736ee4a19c6722a3c183c79918f0341ea36fe6d7482fc82fd50ac
+image: hudevals/hud-text-2048@sha256:6d08b34c09817d42713afb9940294824bff8d7b47ed6fea9b261916c977f1dac
 build:
-  generatedAt: '2025-08-26T06:32:48.638391Z'
-  hudVersion: 0.4.8
+  generatedAt: '2025-08-27T09:12:24.910265Z'
+  hudVersion: 0.4.12
   directory: text_2048
-  version: 0.1.2
+  version: 0.1.3
 environment:
-  initializeMs: 3322
+  initializeMs: 4066
   toolCount: 3
 tools:
 - name: setup
@@ -21,6 +21,6 @@ tools:
 - name: move
   description: Make a move in the 2048 game by sliding tiles in a direction
 push:
-  source: hudpython/hud-text-2048@sha256:3cadf980f1b736ee4a19c6722a3c183c79918f0341ea36fe6d7482fc82fd50ac
-  pushedAt: '2025-08-26T19:42:13.377664Z'
-  registry: hudpython
+  source: hud-text-2048:dev@sha256:6d08b34c09817d42713afb9940294824bff8d7b47ed6fea9b261916c977f1dac
+  pushedAt: '2025-08-27T09:13:51.795177Z'
+  registry: hudevals

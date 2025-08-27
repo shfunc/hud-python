@@ -2,7 +2,7 @@
 
 import logging
 import math
-from fastmcp import Context
+import httpx
 from hud.tools.types import EvaluationResult
 from . import evaluate
 
@@ -22,9 +22,21 @@ async def game_2048_max_number(target: int):
         EvaluationResult with logarithmic reward
     """
     try:
-        # Get game state from the 2048 app
-        env = evaluate.env  # Get BrowserContext from hub
-        game_state = await env.call_app_api("2048", "/api/game/state")
+        # Get the persistent context
+        persistent_ctx = evaluate.env
+
+        # Get the backend port and fetch game state
+        try:
+            backend_port = persistent_ctx.get_app_backend_port("2048")
+        except:
+            backend_port = 3001  # Fallback port
+
+        url = f"http://localhost:{backend_port}/api/game/state"
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            game_state = response.json()
+
         highest_tile = game_state.get("highest_tile", 0)
 
         # Logarithmic reward scale (matching text-2048)
@@ -62,9 +74,20 @@ async def game_2048_efficiency(min_ratio: float):
         EvaluationResult with linear reward based on efficiency
     """
     try:
-        # Get game state from the 2048 app
-        env = evaluate.env  # Get BrowserContext from hub
-        game_state = await env.call_app_api("2048", "/api/game/state")
+        # Get the persistent context
+        persistent_ctx = evaluate.env
+
+        # Get the backend port and fetch game state
+        try:
+            backend_port = persistent_ctx.get_app_backend_port("2048")
+        except:
+            backend_port = 3001  # Fallback port
+
+        url = f"http://localhost:{backend_port}/api/game/state"
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            game_state = response.json()
         score = game_state.get("score", 0)
         moves = game_state.get("moves", 0)
 
@@ -99,8 +122,20 @@ async def game_2048_score_reached(target_score: int):
         EvaluationResult
     """
     try:
-        env = evaluate.env  # Get BrowserContext from hub
-        game_state = await env.call_app_api("2048", "/api/game/state")
+        # Get the persistent context
+        persistent_ctx = evaluate.env
+
+        # Get the backend port and fetch game state
+        try:
+            backend_port = persistent_ctx.get_app_backend_port("2048")
+        except:
+            backend_port = 3001  # Fallback port
+
+        url = f"http://localhost:{backend_port}/api/game/state"
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            game_state = response.json()
         score = game_state.get("score", 0)
 
         # Linear reward based on score progress
@@ -128,8 +163,20 @@ async def game_2048_game_won():
         EvaluationResult
     """
     try:
-        env = evaluate.env  # Get BrowserContext from hub
-        game_state = await env.call_app_api("2048", "/api/game/state")
+        # Get the persistent context
+        persistent_ctx = evaluate.env
+
+        # Get the backend port and fetch game state
+        try:
+            backend_port = persistent_ctx.get_app_backend_port("2048")
+        except:
+            backend_port = 3001  # Fallback port
+
+        url = f"http://localhost:{backend_port}/api/game/state"
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            game_state = response.json()
         won = game_state.get("won", False)
         highest_tile = game_state.get("highest_tile", 0)
         target_tile = game_state.get("target_tile", 2048)
@@ -155,8 +202,20 @@ async def game_2048_game_over():
         EvaluationResult
     """
     try:
-        env = evaluate.env  # Get BrowserContext from hub
-        game_state = await env.call_app_api("2048", "/api/game/state")
+        # Get the persistent context
+        persistent_ctx = evaluate.env
+
+        # Get the backend port and fetch game state
+        try:
+            backend_port = persistent_ctx.get_app_backend_port("2048")
+        except:
+            backend_port = 3001  # Fallback port
+
+        url = f"http://localhost:{backend_port}/api/game/state"
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            game_state = response.json()
         game_over = game_state.get("game_over", False)
         score = game_state.get("score", 0)
         moves = game_state.get("moves", 0)
@@ -188,8 +247,20 @@ async def game_2048_moves_made(min_moves: int):
         EvaluationResult
     """
     try:
-        env = evaluate.env  # Get BrowserContext from hub
-        game_state = await env.call_app_api("2048", "/api/game/state")
+        # Get the persistent context
+        persistent_ctx = evaluate.env
+
+        # Get the backend port and fetch game state
+        try:
+            backend_port = persistent_ctx.get_app_backend_port("2048")
+        except:
+            backend_port = 3001  # Fallback port
+
+        url = f"http://localhost:{backend_port}/api/game/state"
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            game_state = response.json()
         moves = game_state.get("moves", 0)
 
         # Linear reward based on move progress

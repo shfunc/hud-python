@@ -2,6 +2,7 @@
 
 import logging
 from typing import List, Optional
+import httpx
 from mcp.types import TextContent
 from . import setup
 
@@ -20,15 +21,17 @@ async def game_2048_board(board_size: int = 4, target_tile: int = 2048):
         SetupResult with game initialization status
     """
     try:
-        env = setup.env  # Get BrowserContext from hub
-        result = await env.call_app_api(
-            "2048",
-            "/api/game/new",
-            method="POST",
-            json={"board_size": board_size, "target_tile": target_tile},
-        )
+        # Get the backend port from persistent context
+        persistent_ctx = setup.env
+        backend_port = persistent_ctx.get_app_backend_port("2048")
 
-        highest_tile = result.get("highest_tile", 0)
+        # Initialize new game
+        url = f"http://localhost:{backend_port}/api/game/new"
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                url, json={"board_size": board_size, "target_tile": target_tile}
+            )
+            response.raise_for_status()
 
         return TextContent(
             text=f"{board_size}x{board_size} game initialized with target {target_tile}",
@@ -52,13 +55,16 @@ async def game_2048_set_board(board: List[List[int]], score: int = 0, moves: int
         SetupResult with board configuration status
     """
     try:
-        env = setup.env  # Get BrowserContext from hub
-        result = await env.call_app_api(
-            "2048",
-            "/api/eval/set_board",
-            method="POST",
-            json={"board": board, "score": score, "moves": moves},
-        )
+        # Get the backend port from persistent context
+        persistent_ctx = setup.env
+        backend_port = persistent_ctx.get_app_backend_port("2048")
+
+        # Set the board configuration
+        url = f"http://localhost:{backend_port}/api/eval/set_board"
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, json={"board": board, "score": score, "moves": moves})
+            response.raise_for_status()
+            result = response.json()
 
         highest_tile = result.get("highest_tile", 0)
 
@@ -82,6 +88,9 @@ async def game_2048_near_win(target_tile: int = 2048):
         SetupResult with near-win board status
     """
     try:
+        # Get the persistent context (just like remote browser does)
+        persistent_ctx = setup.env  # Get BrowserContext from hub
+
         # Create a board that's one move away from target
         if target_tile == 2048:
             board = [[1024, 1024, 256, 128], [512, 256, 64, 32], [128, 64, 16, 8], [32, 16, 4, 2]]
@@ -104,13 +113,16 @@ async def game_2048_near_win(target_tile: int = 2048):
         score = sum(sum(row) for row in board) * 2
         moves = 150
 
-        env = setup.env  # Get BrowserContext from hub
-        result = await env.call_app_api(
-            "2048",
-            "/api/eval/set_board",
-            method="POST",
-            json={"board": board, "score": score, "moves": moves},
-        )
+        # Get the backend port for the 2048 app directly from service manager
+        service_manager = persistent_ctx.get_service_manager()
+        backend_port = service_manager.get_app_port("2048")
+        url = f"http://localhost:{backend_port}/api/eval/set_board"
+
+        # Make the API call directly
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, json={"board": board, "score": score, "moves": moves})
+            response.raise_for_status()
+            result = response.json()
 
         return TextContent(
             text=f"Board set near winning state for target {target_tile}",
@@ -131,22 +143,31 @@ async def game_2048_navigate(url: Optional[str] = None):
     Returns:
         SetupResult with navigation status
     """
-    try:
-        env = setup.env  # Get BrowserContext from hub
-        # Get the default URL if not provided
-        if not url:
-            url = env.get_app_url("2048")
+    logger.info(f"Navigating to 2048 game")
 
-        # Use Playwright to navigate
-        if env.playwright:
-            nav_result = await env.playwright.navigate(url)
+    # Get the playwright tool from the environment context (remote browser pattern)
+    persistent_ctx = setup.env
+    playwright_tool = getattr(persistent_ctx, "playwright_tool", None)
+    if not playwright_tool or not hasattr(playwright_tool, "page") or not playwright_tool.page:
+        logger.error("No playwright tool available")
+        return TextContent(text="No browser available for navigation", type="text")
 
-            return TextContent(text=f"Navigated to 2048 game at {url}", type="text")
-        else:
-            return TextContent(text="Playwright tool not available for navigation", type="text")
-    except Exception as e:
-        logger.error(f"game_2048_navigate failed: {e}")
-        return TextContent(text=f"Failed to navigate to 2048 game: {str(e)}", type="text")
+    # Default to localhost:3000 if no URL provided
+    if not url:
+        url = "http://localhost:3000"
+
+    # Navigate using the playwright tool
+    result = await playwright_tool.navigate(url)
+
+    if result.get("success"):
+        logger.info(f"Successfully navigated to {url}")
+        return TextContent(
+            text=f"Navigated to 2048 game at {url} - Title: {result.get('title', 'Unknown')}",
+            type="text",
+        )
+    else:
+        logger.error(f"Failed to navigate: {result.get('error')}")
+        return TextContent(text=f"Navigation failed: {result.get('error')}", type="text")
 
 
 @setup.tool("game_2048_reset")
@@ -156,9 +177,24 @@ async def game_2048_reset():
     Returns:
         SetupResult with reset status
     """
+    logger.info("Resetting 2048 game")
+
+    # Get the playwright tool from the environment context (remote browser pattern)
+    persistent_ctx = setup.env
+    playwright_tool = getattr(persistent_ctx, "playwright_tool", None)
+    if not playwright_tool or not hasattr(playwright_tool, "page") or not playwright_tool.page:
+        logger.error("No playwright tool available")
+        return TextContent(text="No browser available", type="text")
+
     try:
-        env = setup.env  # Get BrowserContext from hub
-        result = await env.call_app_api("2048", "/api/eval/reset", method="POST")
+        # Navigate to ensure we're on the game page
+        await playwright_tool.navigate("http://localhost:3000")
+
+        # Click "New Game" button to reset
+        await playwright_tool.page.click('button:has-text("New Game")')
+
+        # Wait a moment for the game to reset
+        await playwright_tool.page.wait_for_timeout(500)
 
         return TextContent(
             text="Game reset to initial state",
@@ -177,8 +213,16 @@ async def game_2048_test_seed():
         SetupResult with test seed status
     """
     try:
-        env = setup.env  # Get BrowserContext from hub
-        result = await env.call_app_api("2048", "/api/eval/seed", method="POST")
+        # Get the backend port from persistent context
+        persistent_ctx = setup.env
+        backend_port = persistent_ctx.get_app_backend_port("2048")
+        url = f"http://localhost:{backend_port}/api/eval/seed"
+
+        # Make the API call directly
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url)
+            response.raise_for_status()
+            result = response.json()
 
         return TextContent(
             text="Test board seeded successfully",

@@ -1,447 +1,213 @@
-# Browser MCP Environment
+# Browser Environment
 
-A browser automation environment for the HUD platform demonstrating best practices for building MCP (Model Context Protocol) environments with evaluation systems.
+A browser automation environment for HUD that provides GUI access and web app interaction capabilities. This environment supports hot-reloading during development while maintaining persistent state.
 
-**Key Feature**: This environment is **hot-reloadable** - it maintains state (running services, browser sessions, launched apps) across server restarts during development.
+## Architecture Overview
 
-## Quick Start
+The browser environment uses a two-process architecture:
 
-### Build & Deploy
-```bash
-# Build the Docker image
-cd environments/browser
-docker build -t hud-browser .
+1. **Context Server** (`context.py`): Long-running process that maintains persistent state
+2. **MCP Server** (`server.py`): Hot-reloadable process that handles tool requests
 
-# Run with stdio (recommended for HUD SDK v3)
-docker run --rm -i -p 8080:8080 hud-browser
-```
+### Key Components
 
-### Hot-Reloadable Architecture
+- **BrowserContext**: Stores persistent state (running apps, ports, playwright instance)
+- **ServiceManager**: Manages X11, VNC, and app processes
+- **BaseHub Tools**: Setup and evaluate tools organized by app (2048, todo)
+- **Multiprocessing Proxy**: Enables state sharing between processes
 
-This environment uses a persistent context server architecture that maintains state across MCP server restarts:
+## Context Management and Common Pitfalls
 
-- **Context Server**: Runs as a separate process holding ServiceManager and state
-- **MCP Server**: Connects via Unix socket, can restart without losing services
-- **State Preservation**: X11, VNC, running apps, and service states persist
-- **Development Friendly**: Edit code and restart MCP server instantly
+### Understanding the Proxy System
 
-#### Docker Architecture
+The browser environment uses Python's `multiprocessing.Manager` to share state between the context server and MCP server. This introduces important constraints:
 
-The environment uses a single CMD that follows the proven text_2048 pattern:
-
-```dockerfile
-CMD ["sh", "-c", "\
-    # Start services in background \
-    python -m hud_controller.context_server & \
-    x11vnc ... & \
-    # Run MCP server in foreground \
-    exec hud-controller mcp \
-"]
-```
-
-This pattern ensures:
-- Background services (`&`) start once and persist
-- Only the `exec` command gets wrapped by watchfiles
-- Services survive hot-reloads during development
-
-## Deployment to Registry
-
-### 1. Publish to Docker Registry
-
-#### Docker Hub
-```bash
-# Build and push to Docker Hub
-docker build -t your-username/hud-browser:latest .
-docker push your-username/hud-browser:latest
-```
-
-#### GitHub Container Registry (GHCR)
-```bash
-# Login and push to GHCR
-echo $GITHUB_TOKEN | docker login ghcr.io -u your-username --password-stdin
-docker build -t ghcr.io/your-org/hud-browser:latest .
-docker push ghcr.io/your-org/hud-browser:latest
-```
-
-### 2. Use via HUD Cloud Orchestrator
+#### ❌ Common Pitfall: Unpicklable Objects
 
 ```python
-import os
-import hud
-from hud.clients import MCPClient
-from hud.agents import ClaudeAgent
+# BAD: This will fail with "cannot pickle 'coroutine' object"
+@setup.tool("my_tool")
+async def my_tool():
+    env = setup.env
+    result = await env.call_app_api("app", "/api/endpoint")  # Returns coroutine
+    # The coroutine can't be serialized through the proxy!
+```
 
-BASE_URL = "https://mcp.hud.so/v3/mcp"
-HUD_API_KEY = os.getenv("HUD_API_KEY")
+#### ✅ Solution: Direct HTTP Calls
 
-async def main():
-    with hud.trace() as run_id:
-        # Configure MCP client to connect to the cloud orchestrator
-        config = {
-            "mcp_config": {
-                "browser": {
-                    "url": f"{BASE_URL}/v3/mcp",
-                    "headers": {
-                        "Authorization": f"Bearer {HUD_API_KEY}",
-                        "Mcp-Image": "your-username/hud-browser:latest",  # Your published image
-                        "Run-Id": run_id,
-                    },
-                }
-            }
-        }
+```python
+# GOOD: Make HTTP calls directly
+@setup.tool("my_tool")
+async def my_tool():
+    import httpx
+    
+    # Get the backend port from persistent context
+    persistent_ctx = setup.env
+    backend_port = persistent_ctx.get_app_backend_port("app")
+    
+    # Make API call directly
+    url = f"http://localhost:{backend_port}/api/endpoint"
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        response.raise_for_status()
+        result = response.json()
+```
 
-        client = MCPClient.from_dict(config)
-        agent = ClaudeAgent(
-            client=client,
-            model="claude-sonnet-4-20250514",
-            allowed_tools=["computer", "setup", "evaluate"]
+### State Synchronization Issues
+
+#### ❌ Common Pitfall: Direct List/Dict Manipulation
+
+```python
+# BAD: Regular Python lists don't sync through proxy
+class ServiceManager:
+    def __init__(self):
+        self._launched_apps = []  # Won't sync!
+```
+
+#### ✅ Solution: Store State in Persistent Context
+
+```python
+# GOOD: Use the persistent context for shared state
+class BrowserContext:
+    def __init__(self):
+        self._running_apps: List[str] = []
+        self._app_ports: Dict[str, Dict[str, int]] = {}
+    
+    def add_running_app(self, app_name: str) -> None:
+        """Add app to running list."""
+        if app_name not in self._running_apps:
+            self._running_apps.append(app_name)
+```
+
+### Accessing Shared Resources
+
+#### ❌ Common Pitfall: Direct Attribute Access
+
+```python
+# BAD: Direct attribute access on proxy objects
+playwright_tool = env.playwright  # May not work with proxy
+```
+
+#### ✅ Solution: Use Getter Methods
+
+```python
+# GOOD: Use proxy-friendly getter methods
+playwright_tool = persistent_ctx.get_playwright_tool()
+```
+
+## Best Practices
+
+### 1. Tool Implementation Pattern
+
+All setup and evaluate tools should follow this pattern:
+
+```python
+@setup.tool("tool_name")
+async def tool_name(param1: type, param2: type):
+    """Tool description."""
+    try:
+        # Get persistent context
+        persistent_ctx = setup.env  # or evaluate.env
+        
+        # Get app ports
+        backend_port = persistent_ctx.get_app_backend_port("app_name")
+        
+        # Make HTTP request
+        url = f"http://localhost:{backend_port}/api/endpoint"
+        async with httpx.AsyncClient() as client:
+            response = await client.method(url, json=data)
+            response.raise_for_status()
+            result = response.json()
+        
+        # Return result
+        return TextContent(
+            text=f"Success message",
+            type="text"
         )
-
-        # Use your environment in the cloud
-        await agent.run("Set up the todo app and evaluate completion")
+    except Exception as e:
+        logger.error(f"tool_name failed: {e}")
+        return TextContent(
+            text=f"Failed: {str(e)}",
+            type="text"
+        )
 ```
 
-### 3. Local Development (stdio)
+### 2. App Launch Pattern
 
-For local testing and development:
+When launching apps, ensure ports are stored in the persistent context:
 
 ```python
-# Local Docker with stdio transport
-config = {
-    "mcp_config": {
-        "browser": {
-            "command": "docker",
-            "args": ["run", "--rm", "-i", "-p", "8080:8080", "hud-browser"]
-        }
-    }
-}
+# In launch_app tool
+app_info = await service_manager.launch_app(app_name)
+
+# Store ports in persistent context for later access
+try:
+    backend_port = service_manager.get_app_port(app_name)
+    frontend_port = service_manager.get_app_frontend_port(app_name)
+    persistent_ctx.set_app_ports(app_name, frontend_port, backend_port)
+except Exception as e:
+    logger.error(f"Failed to store ports: {e}")
+
+# Track app in persistent context
+persistent_ctx.add_running_app(app_name)
 ```
 
-See the HUD documentation for complete working examples.
+### 3. Import Organization
 
-## Environment Design Strategy
+Keep imports at module level:
 
-### Core Principles for MCP Environments
+```python
+# At top of file
+import logging
+import httpx
+from mcp.types import TextContent
+from . import setup
 
-1. **Clean Protocol Separation**
-   - All logging to stderr, only JSON-RPC to stdout
-   - Use `@mcp.initialize` for progress notifications
-   - Register shutdown cleanup with `@mcp.shutdown`
-
-2. **Evaluation System Architecture**
-   - **Class-based problems** with inheritance for reusability
-   - **App-centric evaluation** - backends provide `/api/eval/*` endpoints
-   - **Hub pattern for discovery (`@setup.tool`, `@evaluate.tool`, problems registry)**
-   - **MCP resources** for runtime introspection
-
-3. **Service Management**
-   - Start core services (X11, VNC) before MCP initialization
-   - Use progress notifications for long-running setup
-   - Graceful error handling with meaningful messages
-
-4. **Tool Design**
-   - `setup` and `evaluate` tools with dual interfaces:
-     - Direct: `{"function": "tool_name", "args": {...}}`
-     - Problem-based: `{"name": "problem_name"}`
-   - Environment context objects for unified API access
-   - Factory patterns for runtime instantiation
-
-### Environment Variables Strategy
-
-Set these in your environment/Docker configuration:
-
-#### Required
-- `DISPLAY=:1` - X11 display number for GUI automation
-- `PYTHONUNBUFFERED=1` - Prevent output buffering for real-time logs
-
-#### Optional
-- `BROWSER_URL` - Initial navigation URL (default: google.com)
-- `LOG_LEVEL` - Logging verbosity (`DEBUG`, `INFO`, `WARNING`)
-
-#### MCP-Specific
-- Set in client configuration, not container:
-  - Progress tokens for initialization feedback
-  - Tool allowlists for security
-  - Transport method (stdio vs HTTP)
-
-### Common Pitfalls & Solutions
-
-1. **stdout Contamination**
-   ```bash
-   # ❌ Wrong - X11 warnings go to stdout
-   Xvfb :1 -screen 0 1024x768x24
-   
-   # ✅ Correct - Redirect stderr
-   Xvfb :1 -screen 0 1024x768x24 2>/dev/null
-   ```
-
-2. **"Invalid request parameters" for tools/list**
-   - Ensure your client sends `InitializedNotification` after receiving `InitializeResult`
-   - The MCP protocol requires this handshake before tools are available
-
-3. **No tools registered**
-   - Check that tools requiring X11 are registered AFTER X11 is ready
-   - Add tools via `mcp.add_tool(instance)` once prerequisites are ready
-   - Verify initialization completes before restoring handler
-
-4. **Evaluation fails unexpectedly**
-   - Ensure apps are launched before running evaluations
-   - Check that app backend APIs are responding (`/api/eval/health`)
-   - Verify problem setup completed successfully before evaluation
-   - Use clean state between test runs (`reset` then `seed`)
-
-5. **Progress notifications not working**
-   - Ensure `progressToken` is provided in `InitializeRequest`
-   - Use `@mcp.initialize` decorator correctly
-   - Send progress updates between 0-100 with meaningful messages
-
-### Architecture Pattern
-
-```
-Docker Container
-├── MCP Server (FastMCP)     # Protocol implementation
-│   ├── Tools                # setup, evaluate, computer, etc.
-│   └── Resources            # Dynamic registry discovery
-├── Context Server           # Persistent state management
-│   └── PersistentContext    # Maintains services & browser state
-├── Services
-│   ├── X11 (Xvfb)          # Virtual display
-│   ├── VNC + Websockify    # Remote access
-│   └── Apps                # Web applications
-└── Evaluation System
-    ├── Evaluators          # @evaluator decorated classes
-    ├── Setup Tools         # @setup decorated classes
-    ├── Problems            # @problem decorated classes
-    └── Context             # Unified environment API
+# Not inside functions
 ```
 
-## File Structure Overview
+## Troubleshooting
 
-```
-browser/
-├── Dockerfile              # Multi-stage build with integrated startup
-├── apps/                   # Launchable web applications
-│   ├── todo/              # Example app with evaluation APIs
-│   └── 2048/              # 2048 game app
-├── src/hud_controller/     # MCP server implementation
-│   ├── server.py          # FastMCP server + resource definitions
-│   ├── services.py        # Service management
-│   ├── context.py         # Environment context
-│   ├── context_server.py  # Persistent context server
-│   ├── persistent_context.py # State persistence wrapper
-│   ├── evaluators/        # Evaluation system
-│   ├── setup/            # Setup system
-│   └── problems/         # Problem definitions
-└── README.md             # This file
-```
+### "Cannot pickle 'coroutine' object"
+
+**Cause**: Trying to return an async function result through the proxy.
+
+**Fix**: Don't use async methods on proxied objects. Make direct HTTP calls instead.
+
+### "App not launched" errors
+
+**Cause**: State synchronization issue between ServiceManager and persistent context.
+
+**Fix**: Ensure `launch_app` stores app info in the persistent context, and setup/evaluate tools check the persistent context's app list.
+
+### "Object has no attribute" on proxy objects
+
+**Cause**: Direct attribute access on multiprocessing proxy objects.
+
+**Fix**: Use getter/setter methods instead of direct attribute access.
 
 ## Development Workflow
 
-### Hot-Reload Development with `hud dev`
+1. **Start the environment**: `hud dev`
+2. **Make changes**: Edit tools in `src/hud_controller/`
+3. **Test immediately**: The MCP server hot-reloads automatically
+4. **Check logs**: Look for serialization or proxy errors
 
-For rapid iteration without Docker rebuilds:
+## Adding New Apps
 
-```bash
-# Navigate to the environment directory
-cd environments/browser
+1. Create app directory in `apps/`
+2. Add setup tools in `src/hud_controller/setup/app_name.py`
+3. Add evaluate tools in `src/hud_controller/evaluate/app_name.py`
+4. Follow the HTTP pattern - no `call_app_api` usage
+5. Store app ports in persistent context when launching
 
-# Start hot-reload development proxy
-hud dev . --build
+## Key Files
 
-# This will:
-# - Build/use hud-browser:dev image
-# - Mount ./src for instant code updates
-# - Run with reloaderoo for auto-restart
-# - Provide HTTP endpoint for Cursor
-```
+- `context.py`: Persistent state management
+- `server.py`: MCP server and tool definitions
+- `services.py`: Process management for X11, VNC, apps
+- `setup/`: Setup tools organized by app
+- `evaluate/`: Evaluation tools organized by app
 
-Add the URL from output to Cursor settings or click the deeplink. Now you can edit code in `src/` and changes apply instantly!
+Remember: When in doubt, make direct HTTP calls and store state in the persistent context!
 
-#### How Hot-Reloading Works
-
-This environment uses a persistent context server pattern:
-
-1. **Context Server**: A separate Python process maintains state (services, browser, apps)
-2. **Socket Communication**: MCP server connects via Unix socket `/tmp/hud_browser_ctx.sock`
-3. **State Preservation**: X11, VNC, browser sessions, and launched apps persist across reloads
-4. **Automatic Recovery**: On reload, the server reconnects to existing services
-
-This means you can:
-- Edit code and have changes apply immediately
-- Keep browser sessions and apps running
-- Maintain VNC connections
-- Preserve test state between iterations
-
-### Traditional Development Steps
-
-1. **Start with apps** - Build your web applications independently
-2. **Add evaluation APIs** - Extend app backends with `/api/eval/*` endpoints
-3. **Create evaluators** - Build `@evaluator` classes that consume app APIs
-4. **Build setup tools** - Create `@setup` classes for environment preparation
-5. **Define problems** - Combine setup + evaluation using inheritance
-6. **Test integration** - Use MCP tools to verify evaluation flow
-7. **Containerize** - Package in Docker with proper service orchestration
-
-## Testing & Debugging
-
-### Local Testing
-```bash
-# Test app evaluation APIs directly
-curl http://localhost:5000/api/eval/health
-curl http://localhost:5000/api/eval/stats
-
-# Test MCP evaluation flow
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"setup","arguments":{"config":{"name":"todo_basic_usage"}}}}' | docker run -i --rm hud-browser
-echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"evaluate","arguments":{"config":{"name":"todo_basic_usage"}}}}' | docker run -i --rm hud-browser
-```
-
-### Debug Logging
-```bash
-# Monitor all logs (stderr)
-docker run -i --rm hud-browser 2>debug.log
-
-# Monitor specific services
-docker run -i --rm hud-browser 2>&1 | grep -E "(X11|VNC|MCP)"
-```
-
-### VNC Access
-```bash
-# Launch with VNC access for GUI debugging
-docker run -d --rm -p 8080:8080 --name browser-debug hud-browser
-# Open http://localhost:8080/vnc.html
-```
-
-## Using MCP Inspector
-
-The [MCP Inspector](https://github.com/modelcontextprotocol/inspector) is an interactive developer tool for testing and debugging MCP servers. You can use it to test the browser environment locally.
-
-### Installation
-The Inspector runs directly through `npx` without requiring installation:
-
-```bash
-# Make sure you have Node.js installed first
-npx @modelcontextprotocol/inspector --help
-```
-
-### Testing with MCP Inspector
-
-#### Option 1: Running with Docker (Recommended)
-```bash
-# From the browser directory
-npx @modelcontextprotocol/inspector docker run --rm -i -p 8080:8080 hud-browser
-```
-
-#### Option 2: Running Python module directly
-```bash
-# First install the package locally
-cd environments/browser
-pip install -e .
-
-# Then run with the Inspector
-npx @modelcontextprotocol/inspector python -m hud_controller
-```
-
-### Using the Inspector
-
-Once connected, the Inspector provides several interactive features:
-
-1. **Resources Tab**: View available resources like evaluators, setup tools, and problems
-   - Explore `/evaluators`, `/setup`, `/problems` resources
-   - Check their metadata and configurations
-
-2. **Tools Tab**: Test the available tools
-   - **setup**: Configure and initialize problems
-     ```json
-     {
-       "config": {
-         "name": "todo_basic_usage"
-       }
-     }
-     ```
-   - **evaluate**: Run evaluations
-     ```json
-     {
-       "config": {
-         "name": "todo_basic_usage"
-       }
-     }
-     ```
-   - **computer**: Perform browser automation actions
-     ```json
-     {
-       "action": "screenshot"
-     }
-     ```
-
-3. **Notifications Pane**: Monitor logs and server notifications
-   - View initialization progress
-   - See debug messages and errors
-   - Track tool execution results
-
-### Development Workflow with Inspector
-
-1. **Start Development**
-   - Launch Inspector with your server
-   - Verify tools are properly registered
-   - Check that resources are available
-
-2. **Test Setup and Evaluation**
-   - Use the setup tool to initialize a problem
-   - Take screenshots to verify the browser state
-   - Run evaluations to test your evaluation logic
-   - Monitor logs for any issues
-
-3. **Test Browser Automation**
-   - Use the computer tool for actions like:
-     - `screenshot` - Capture current state
-     - `left_click` - Click at coordinates
-     - `type` - Enter text
-     - `key` - Press keyboard keys
-   - Verify actions work as expected
-
-4. **Debug Issues**
-   - Check the Notifications pane for errors
-   - Verify services are running (X11, VNC)
-   - Ensure apps are launched properly
-   - Test evaluation API endpoints directly
-
-### Example Testing Session
-
-```bash
-# 1. Start the Inspector with the browser environment
-npx @modelcontextprotocol/inspector docker run --rm -i -p 8080:8080 hud-browser
-
-# 2. In the Inspector UI:
-# - Go to Tools tab
-# - Test setup tool with: {"config": {"name": "todo_basic_usage"}}
-# - Test computer tool with: {"action": "screenshot"}
-# - Test evaluate tool with: {"config": {"name": "todo_basic_usage"}}
-
-# 3. Monitor the Notifications pane for progress and results
-```
-
-The Inspector is particularly useful for:
-- Verifying your MCP server implementation
-- Testing tool schemas and responses
-- Debugging evaluation logic
-- Understanding the server's resource structure
-- Monitoring real-time logs and notifications
-
-## Extending to New Environments
-
-When creating new MCP environments:
-
-1. **Copy this structure** as a template
-2. **Replace apps/** with your domain-specific applications
-3. **Implement your evaluators** following the `@evaluator` pattern
-4. **Create domain setup tools** with the `@setup` pattern
-5. **Define problems** using class inheritance for reusability
-6. **Update service dependencies** in `services.py` as needed
-7. **Extend Dockerfile** with your environment's requirements
-
-For hot-reloadability:
-- Keep complex objects out of the persistent context
-- Only store simple, picklable state
-- Recreate tools and clients on each server start
-
-See `src/hud_controller/README.md` for detailed implementation guidance. 
