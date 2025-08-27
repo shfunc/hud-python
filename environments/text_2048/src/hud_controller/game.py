@@ -156,7 +156,6 @@ class Game2048:
             lines.append("+" + "-------+" * self.size)
 
         # Add score and status
-        lines.append(f"\nScore: {self.score} | Moves: {self.moves_made}")
         lines.append(f"\n[ASCII]")
         if self.game_over:
             lines.append("GAME OVER!")
