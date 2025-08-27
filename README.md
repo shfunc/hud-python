@@ -282,7 +282,7 @@ result = await ClaudeAgent().run({  # See all agents: https://docs.hud.so/refere
 
 All leaderboards are publicly available on [app.hud.so/leaderboards](https://app.hud.so/leaderboards) (see [docs](https://docs.hud.so/evaluate-agents/leaderboards))
 
-![Leaderboard](https://raw.githubusercontent.com/hud-evals/hud-python/main/docs/src/images/leaderboards_2.png)
+![Leaderboard](https://raw.githubusercontent.com/hud-evals/hud-python/main/docs/src/images/leaderboards_3.png)
 
 We highly suggest running 3-5 evaluations per dataset for the most consistent results across multiple jobs.
 
@@ -327,10 +327,6 @@ graph LR
     Trace --> Dashboard
     AnyMCP -->|"MCP"| API
   
-    style Dashboard fill:#e0e7ff,stroke:#6366f1,stroke-width:2px
-    style SDK fill:#fef3c7,stroke:#f59e0b,stroke-width:2px
-    style RemoteEnv fill:#d1fae5,stroke:#10b981,stroke-width:2px
-    style AnyMCP fill:#fce7f3,stroke:#ec4899,stroke-width:2px,stroke-dasharray: 5 5
 ```
 
 ## CLI reference
