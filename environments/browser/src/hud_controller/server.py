@@ -230,12 +230,12 @@ async def launch_app(ctx: Context, app_name: str) -> str:
 
     app_info = await ctx_service_manager.launch_app(app_name)
     app_url = app_info["url"]
-    
+
     # Get the port information from service manager while we have access
     try:
         backend_port = ctx_service_manager.get_app_port(app_name)
         frontend_port = ctx_service_manager.get_app_frontend_port(app_name)
-        
+
         # Store ports in persistent context
         persistent_ctx.set_app_ports(app_name, frontend_port, backend_port)
     except Exception as e:
@@ -255,7 +255,7 @@ async def launch_app(ctx: Context, app_name: str) -> str:
         except Exception as e:
             logger.warning(f"Could not auto-navigate to app: {e}")
 
-    return f"Launched {app_name} at {app_url}"
+    return f"App initialized."
 
 
 # API request tool (doesn't need X11)

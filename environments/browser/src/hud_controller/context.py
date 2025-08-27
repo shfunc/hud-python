@@ -64,11 +64,13 @@ class BrowserContext:
         if app_name not in self._running_apps:
             self._running_apps.append(app_name)
             logger.info(f"[BrowserContext] Added running app: {app_name}")
-    
+
     def set_app_ports(self, app_name: str, frontend_port: int, backend_port: int) -> None:
         """Set port information for an app."""
         self._app_ports[app_name] = {"frontend": frontend_port, "backend": backend_port}
-        logger.info(f"[BrowserContext] Set ports for {app_name}: frontend={frontend_port}, backend={backend_port}")
+        logger.info(
+            f"[BrowserContext] Set ports for {app_name}: frontend={frontend_port}, backend={backend_port}"
+        )
 
     def get_playwright_tool(self):
         """Get the playwright tool instance."""
@@ -92,10 +94,10 @@ class BrowserContext:
 
     def get_app_url(self, app_name: str) -> str:
         """Get the frontend URL for a running app.
-        
+
         Args:
             app_name: Name of the app (e.g., '2048', 'todo')
-            
+
         Returns:
             Frontend URL for the app
         """
@@ -104,40 +106,40 @@ class BrowserContext:
 
     def get_app_backend_port(self, app_name: str) -> int:
         """Get the backend port for a running app.
-        
+
         Args:
             app_name: Name of the app (e.g., '2048', 'todo')
-            
+
         Returns:
             Backend port number
         """
         # Check if app is tracked
         if app_name not in self._running_apps:
             raise ValueError(f"App '{app_name}' not in running apps: {self._running_apps}")
-        
+
         # Get tracked port
         if app_name not in self._app_ports:
             raise ValueError(f"Port information not available for app '{app_name}'")
-            
+
         return self._app_ports[app_name]["backend"]
-    
+
     def get_app_frontend_port(self, app_name: str) -> int:
         """Get the frontend port for a running app.
-        
+
         Args:
             app_name: Name of the app (e.g., '2048', 'todo')
-            
+
         Returns:
             Frontend port number
         """
         # Check if app is tracked
         if app_name not in self._running_apps:
             raise ValueError(f"App '{app_name}' not in running apps: {self._running_apps}")
-        
+
         # Get tracked port
         if app_name not in self._app_ports:
             raise ValueError(f"Port information not available for app '{app_name}'")
-            
+
         return self._app_ports[app_name]["frontend"]
 
 

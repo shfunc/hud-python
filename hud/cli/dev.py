@@ -51,8 +51,9 @@ def create_proxy_server(
 
     # Generate unique container name from image to avoid conflicts between multiple instances
     import os
+
     pid = str(os.getpid())[-6:]  # Last 6 digits of process ID for uniqueness
-    base_name = image_name.replace(':', '-').replace('/', '-')
+    base_name = image_name.replace(":", "-").replace("/", "-")
     container_name = f"{base_name}-{pid}"
 
     # Build the docker run command
@@ -230,8 +231,9 @@ async def start_mcp_proxy(
 
     # Extract container name from the proxy configuration (must match create_proxy_server naming)
     import os
+
     pid = str(os.getpid())[-6:]  # Last 6 digits of process ID for uniqueness
-    base_name = image_name.replace(':', '-').replace('/', '-')
+    base_name = image_name.replace(":", "-").replace("/", "-")
     container_name = f"{base_name}-{pid}"
 
     # Remove any existing container with the same name (silently)
@@ -366,7 +368,7 @@ async def start_mcp_proxy(
         # Always show waiting message
         log_design.info("")  # Empty line for spacing
         log_design.progress_message("⏳ Waiting for first client connection to start container...")
-        log_design.info(f"📋 Looking for container: {container_name}")
+        log_design.info(f"📋 Looking for container: {container_name}")  # noqa: G004
 
         # Keep trying to stream logs - container is created on demand
         has_shown_started = False
@@ -431,10 +433,11 @@ async def start_mcp_proxy(
 
             except Exception as e:
                 # Some unexpected error - show it so we can debug
-                log_design.warning(f"Failed to stream Docker logs: {e}")
+                log_design.warning(f"Failed to stream Docker logs: {e}")  # noqa: G004
                 if verbose:
                     import traceback
-                    log_design.warning(f"Traceback: {traceback.format_exc()}")
+
+                    log_design.warning(f"Traceback: {traceback.format_exc()}")  # noqa: G004
                 await asyncio.sleep(1)
 
     # CRITICAL: Create proxy AFTER all logging setup to prevent it from resetting logging config

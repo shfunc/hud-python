@@ -348,7 +348,11 @@ def dev(
     ),
     port: int = typer.Option(8765, "--port", "-p", help="HTTP server port (ignored for stdio)"),
     no_reload: bool = typer.Option(False, "--no-reload", help="Disable hot-reload"),
-    full_reload: bool = typer.Option(False, "--full-reload", help="Restart entire container on file changes (instead of just server process)"),
+    full_reload: bool = typer.Option(
+        False,
+        "--full-reload",
+        help="Restart entire container on file changes (instead of just server process)",
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show server logs"),
     inspector: bool = typer.Option(
         False, "--inspector", help="Launch MCP Inspector (HTTP mode only)"
@@ -382,7 +386,7 @@ def dev(
         hud dev . -e BROWSER_PROVIDER=anchorbrowser -e ANCHOR_API_KEY=xxx
         hud dev . -e API_KEY=secret -v /tmp/data:/data --network host
         hud dev . --build -e DEBUG=true --memory 2g
-    """
+    """  # noqa: E501
     # Parse directory and Docker arguments
     if params:
         directory = params[0]
