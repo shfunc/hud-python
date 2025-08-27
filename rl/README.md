@@ -20,7 +20,13 @@ uv sync
 
 # Activate venv
 source .venv/bin/activate
+
+# Export environment variables
+export OPENAI_API_KEY="YOUR_API_KEY"  # for running evals in openai models
+export HUD_API_KEY="YOUR_API_KEY"   # for telemetry
 ```
+
+if you don't have a hud api key, you can get one through the [HUD platform](https://app.hud.so).
 
 ## Running Evaluations
 
@@ -29,8 +35,6 @@ Use the Verifiers CLI to run evaluations such as hud-evals/2048-taskset.
 For this, first build the base docker image locally:
 
 ```bash
-export OPENAI_API_KEY="YOUR_API_KEY"
-export HUD_API_KEY="YOUR_API_KEY"
 cd ../environments/text_2048/
 docker build -t hud-text-2048 .
 ```
@@ -38,7 +42,7 @@ docker build -t hud-text-2048 .
 Switch back to the workspace,
 
 ```bash
-cd ../rl
+cd ../../rl
 ```
 
 This will load in the taskset and run the gym via the config at ./configs/2048.yaml:
@@ -62,7 +66,7 @@ vf-eval hud-vf-gym \
 
 ## Training with GRPO
 
-For training, set up a GPU instance on PrimeIntellect (at least an A100).
+Verifier's GRPOtrainer is optimized for at least 2 GPUs. You can rent GPUs on marketplaces for [<$1/hr](https://app.primeintellect.ai).
 
 HUD Gym supports training with the GRPO (Group Relative Policy Optimization) trainer:
 
@@ -81,7 +85,7 @@ python train_2048.py
 Or configure your own training:
 ```python
 from verifiers.trainers import GRPOTrainer, GRPOConfig
-from  import load_environment
+from verifiers import load_environment
 
 # Load environment (both taskset and config_path are required)
 env = load_environment(
@@ -332,18 +336,7 @@ class CustomGym(HUDGym):
         return super().env_response(messages, state, **kwargs)
 ```
 
-## Development
-
-### Running Tests
-```bash
-# Run pre-commit hooks
-uv run pre-commit run --all-files
-
-# Test with a single task
-vf-eval --env hud-vf-gym --num-tasks 1 --model gpt-4o-mini
-```
-
-### Creating New Environments
+### Adding new HUD Environments
 
 To create a new environment:
 
@@ -429,4 +422,3 @@ dataset.push_to_hub("your-org/your-dataset")
 ## License
 
 See LICENSE file in the hud-vf-gym directory.
-
