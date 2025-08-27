@@ -291,7 +291,7 @@ Using the [`run_dataset`](https://docs.hud.so/reference/tasks#run_dataset) funct
 ## Architecture
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "darkMode": true, "background": "#0d1117", "primaryColor": "#58a6ff", "primaryTextColor": "#f0f6fc", "primaryBorderColor": "#30363d", "lineColor": "#484f58", "secondaryColor": "#21262d", "tertiaryColor": "#161b22"}, "flowchart": {"useMaxWidth": false}, "securityLevel": "loose"}}%%
+%%{init: {"theme": "neutral", "themeVariables": {"fontSize": "14px"}} }%%
 graph LR
     subgraph "Platform"
         Dashboard["📊 app.hud.so"]
@@ -327,10 +327,10 @@ graph LR
     Trace --> Dashboard
     AnyMCP -->|"MCP"| API
   
-    style Dashboard fill:#1f2937,stroke:#3b82f6,stroke-width:2px,color:#f9fafb
-    style SDK fill:#374151,stroke:#f59e0b,stroke-width:2px,color:#f9fafb
-    style RemoteEnv fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f0fdf4
-    style AnyMCP fill:#581c87,stroke:#a855f7,stroke-width:2px,stroke-dasharray: 5 5,color:#faf5ff
+    style Dashboard fill:#e0e7ff,stroke:#6366f1,stroke-width:2px
+    style SDK fill:#fef3c7,stroke:#f59e0b,stroke-width:2px
+    style RemoteEnv fill:#d1fae5,stroke:#10b981,stroke-width:2px
+    style AnyMCP fill:#fce7f3,stroke:#ec4899,stroke-width:2px,stroke-dasharray: 5 5
 ```
 
 ## CLI reference
