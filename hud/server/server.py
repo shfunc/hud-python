@@ -116,7 +116,7 @@ class MCPServer(FastMCP):
 
         # Replace FastMCP's low-level server with our version that supports
         # per-server initialization hooks
-        def _run_init(ctx: RequestContext) -> Any:
+        def _run_init(ctx: RequestContext | None = None) -> Any:
             if self._initializer_fn is not None and not self._did_init:
                 self._did_init = True
                 # Redirect stdout to stderr during initialization to prevent

@@ -1,12 +1,12 @@
 version: '1.0'
-image: hudevals/hud-browser@sha256:ce3ebd4330cb7507f25c142b7707592749c5aa924f3b3ea28b42ad220ff37959
+image: hudevals/hud-browser@sha256:b621d2b50510f9ef1b4460de37da3772c385a46b2c16ba9af32271a6563bed43
 build:
-  generatedAt: '2025-08-27T09:50:38.128607Z'
+  generatedAt: '2025-08-27T11:21:08.892437Z'
   hudVersion: 0.4.12
   directory: browser
-  version: 0.1.2
+  version: 0.1.3
 environment:
-  initializeMs: 8873
+  initializeMs: 12620
   toolCount: 9
 tools:
 - name: setup
@@ -89,6 +89,6 @@ tools:
 - name: playwright
   description: Web automation tool using Playwright
 push:
-  source: hud-browser:dev@sha256:ce3ebd4330cb7507f25c142b7707592749c5aa924f3b3ea28b42ad220ff37959
-  pushedAt: '2025-08-27T09:54:40.921736Z'
+  source: hud-browser:dev@sha256:b621d2b50510f9ef1b4460de37da3772c385a46b2c16ba9af32271a6563bed43
+  pushedAt: '2025-08-27T11:31:07.301427Z'
   registry: hudevals
