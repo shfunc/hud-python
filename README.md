@@ -130,7 +130,7 @@ Any hud MCP environment and evaluation works with our RL pipeline. Even our remo
 
 This is Claude Computer Use running on our proprietary financial analyst benchmark [SheetBench-50](https://huggingface.co/datasets/hud-evals/SheetBench-50):
 
-![Trace screenshot](https://raw.githubusercontent.com/hud-evals/hud-python/l/text-2048/docs/src/images/trace_sheet.gif)
+![Trace screenshot](https://raw.githubusercontent.com/hud-evals/hud-python/main/docs/src/images/trace_sheet.gif)
 
 > [See this trace on _app.hud.so_](https://app.hud.so/trace/9e212e9e-3627-4f1f-9eb5-c6d03c59070a)
 
@@ -282,7 +282,7 @@ result = await ClaudeAgent().run({  # See all agents: https://docs.hud.so/refere
 
 All leaderboards are publicly available on [app.hud.so/leaderboards](https://app.hud.so/leaderboards) (see [docs](https://docs.hud.so/evaluate-agents/leaderboards))
 
-![Leaderboard](https://raw.githubusercontent.com/hud-evals/hud-python/l/text-2048/docs/src/images/leaderboards_2.png)
+![Leaderboard](https://raw.githubusercontent.com/hud-evals/hud-python/main/docs/src/images/leaderboards_2.png)
 
 We highly suggest running 3-5 evaluations per dataset for the most consistent results across multiple jobs.
 
@@ -291,7 +291,7 @@ Using the [`run_dataset`](https://docs.hud.so/reference/tasks#run_dataset) funct
 ## Architecture
 
 ```mermaid
-%%{init: {"theme": "neutral", "themeVariables": {"fontSize": "14px"}} }%%
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px", "darkMode": true, "background": "#0d1117", "primaryColor": "#58a6ff", "primaryTextColor": "#f0f6fc", "primaryBorderColor": "#30363d", "lineColor": "#484f58", "secondaryColor": "#21262d", "tertiaryColor": "#161b22"}, "flowchart": {"useMaxWidth": false}, "securityLevel": "loose"}}%%
 graph LR
     subgraph "Platform"
         Dashboard["📊 app.hud.so"]
@@ -327,10 +327,10 @@ graph LR
     Trace --> Dashboard
     AnyMCP -->|"MCP"| API
   
-    style Dashboard fill:#e0e7ff,stroke:#6366f1,stroke-width:2px
-    style SDK fill:#fef3c7,stroke:#f59e0b,stroke-width:2px
-    style RemoteEnv fill:#d1fae5,stroke:#10b981,stroke-width:2px
-    style AnyMCP fill:#fce7f3,stroke:#ec4899,stroke-width:2px,stroke-dasharray: 5 5
+    style Dashboard fill:#1f2937,stroke:#3b82f6,stroke-width:2px,color:#f9fafb
+    style SDK fill:#374151,stroke:#f59e0b,stroke-width:2px,color:#f9fafb
+    style RemoteEnv fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f0fdf4
+    style AnyMCP fill:#581c87,stroke:#a855f7,stroke-width:2px,stroke-dasharray: 5 5,color:#faf5ff
 ```
 
 ## CLI reference
