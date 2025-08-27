@@ -21,8 +21,8 @@ COPY src/ ./src/
 RUN pip install --no-cache-dir -e .
 
 # Start context server in background, then MCP server
-CMD ["sh", "-c", "python -m hud_controller.env & sleep 1 && exec python -m hud_controller.server"]
-"""  # noqa: E501
+CMD ["sh", "-c", "python -m controller.env & sleep 1 && exec python -m controller.server"]
+"""
 
 PYPROJECT_TEMPLATE = """[project]
 name = "{name}"
@@ -44,7 +44,7 @@ image = "{name}:dev"
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/hud_controller"]
+packages = ["src/controller"]
 """
 
 ENV_TEMPLATE = '''"""Minimal environment that persists across hot-reloads."""
@@ -556,7 +556,7 @@ def create_environment(name: str | None, directory: str, force: bool) -> None:
             design.warning(f"Overwriting existing files in {target_dir}")
 
     # Create directory structure
-    src_dir = target_dir / "src" / "hud_controller"
+    src_dir = target_dir / "src" / "controller"
     src_dir.mkdir(parents=True, exist_ok=True)
 
     # Write files with proper formatting
@@ -582,19 +582,19 @@ def create_environment(name: str | None, directory: str, force: bool) -> None:
     # Python files
     # __init__.py
     init_path = src_dir / "__init__.py"
-    init_path.write_text('"""HUD Controller Package"""\n', encoding="utf-8")
-    files_created.append("src/hud_controller/__init__.py")
+    init_path.write_text('"""Controller Package"""\n', encoding="utf-8")
+    files_created.append("src/controller/__init__.py")
 
     # env.py
     env_path = src_dir / "env.py"
     env_path.write_text(ENV_TEMPLATE.strip() + "\n", encoding="utf-8")
-    files_created.append("src/hud_controller/env.py")
+    files_created.append("src/controller/env.py")
 
     # server.py (need to escape the double braces for .format())
     server_path = src_dir / "server.py"
     server_content = SERVER_TEMPLATE.format(name=package_name).strip() + "\n"
     server_path.write_text(server_content, encoding="utf-8")
-    files_created.append("src/hud_controller/server.py")
+    files_created.append("src/controller/server.py")
 
     # tasks.json
     tasks_path = target_dir / "tasks.json"
@@ -639,10 +639,10 @@ def create_environment(name: str | None, directory: str, force: bool) -> None:
     design.command_example("python test_task.py")
 
     design.info("\n5. Customize your environment:")
-    design.info("   - Add tools to src/hud_controller/server.py")
-    design.info("   - Add state to src/hud_controller/env.py")
+    design.info("   - Add tools to src/controller/server.py")
+    design.info("   - Add state to src/controller/env.py")
     design.info("   - Modify tasks in tasks.json")
-    design.info("   - Experiment in run_eval.ipynb")
+    design.info("   - Experiment in test_env.ipynb")
 
     # Show a sample of the server code
     design.section_title("Your MCP server")
