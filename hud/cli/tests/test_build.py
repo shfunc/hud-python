@@ -272,35 +272,31 @@ class TestAnalyzeMcpEnvironment:
 class TestBuildDockerImage:
     """Test building Docker images."""
 
-    @mock.patch("subprocess.Popen")
-    def test_build_success(self, mock_popen, tmp_path):
+    @mock.patch("subprocess.run")
+    def test_build_success(self, mock_run, tmp_path):
         """Test successful Docker build."""
         # Create Dockerfile
         dockerfile = tmp_path / "Dockerfile"
         dockerfile.write_text("FROM python:3.11")
 
         # Mock successful process
-        mock_process = mock.Mock()
-        mock_process.stdout = ["Step 1/1 : FROM python:3.11\n", "Successfully built abc123\n"]
-        mock_process.wait.return_value = None
-        mock_process.returncode = 0
-        mock_popen.return_value = mock_process
+        mock_result = mock.Mock()
+        mock_result.returncode = 0
+        mock_run.return_value = mock_result
 
         result = build_docker_image(tmp_path, "test:latest")
         assert result is True
 
-    @mock.patch("subprocess.Popen")
-    def test_build_failure(self, mock_popen, tmp_path):
+    @mock.patch("subprocess.run")
+    def test_build_failure(self, mock_run, tmp_path):
         """Test failed Docker build."""
         dockerfile = tmp_path / "Dockerfile"
         dockerfile.write_text("FROM python:3.11")
 
         # Mock failed process
-        mock_process = mock.Mock()
-        mock_process.stdout = ["Error: failed to build\n"]
-        mock_process.wait.return_value = None
-        mock_process.returncode = 1
-        mock_popen.return_value = mock_process
+        mock_result = mock.Mock()
+        mock_result.returncode = 1
+        mock_run.return_value = mock_result
 
         result = build_docker_image(tmp_path, "test:latest")
         assert result is False
@@ -310,22 +306,20 @@ class TestBuildDockerImage:
         result = build_docker_image(tmp_path, "test:latest")
         assert result is False
 
-    @mock.patch("subprocess.Popen")
-    def test_build_with_no_cache(self, mock_popen, tmp_path):
+    @mock.patch("subprocess.run")
+    def test_build_with_no_cache(self, mock_run, tmp_path):
         """Test build with --no-cache flag."""
         dockerfile = tmp_path / "Dockerfile"
         dockerfile.write_text("FROM python:3.11")
 
-        mock_process = mock.Mock()
-        mock_process.stdout = []
-        mock_process.wait.return_value = None
-        mock_process.returncode = 0
-        mock_popen.return_value = mock_process
+        mock_result = mock.Mock()
+        mock_result.returncode = 0
+        mock_run.return_value = mock_result
 
         build_docker_image(tmp_path, "test:latest", no_cache=True)
 
         # Check that --no-cache was included
-        call_args = mock_popen.call_args[0][0]
+        call_args = mock_run.call_args[0][0]
         assert "--no-cache" in call_args
 
 
@@ -336,12 +330,10 @@ class TestBuildEnvironment:
     @mock.patch("hud.cli.build.analyze_mcp_environment")
     @mock.patch("hud.cli.build.save_to_registry")
     @mock.patch("hud.cli.build.get_docker_image_id")
-    @mock.patch("subprocess.Popen")
     @mock.patch("subprocess.run")
     def test_build_environment_success(
         self,
         mock_run,
-        mock_popen,
         mock_get_id,
         mock_save_registry,
         mock_analyze,
@@ -381,14 +373,9 @@ ENV API_KEY
         mock_get_id.return_value = "sha256:abc123"
         
         # Mock final rebuild
-        mock_process = mock.Mock()
-        # Create a mock file-like object with read method
-        mock_stdout = mock.Mock()
-        mock_stdout.read.return_value = ""
-        mock_process.stdout = mock_stdout
-        mock_process.wait.return_value = None
-        mock_process.returncode = 0
-        mock_popen.return_value = mock_process
+        mock_result = mock.Mock()
+        mock_result.returncode = 0
+        mock_run.return_value = mock_result
 
         # Run build
         build_environment(str(env_dir), "test/env:latest")

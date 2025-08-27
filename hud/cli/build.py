@@ -265,23 +265,9 @@ def build_docker_image(
     design.info(f"Running: {' '.join(cmd)}")
 
     try:
-        # Run with real-time output, handling encoding issues on Windows
-        process = subprocess.Popen(  # noqa: S603
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="replace",  # Replace invalid chars instead of failing
-        )
-
-        # Stream output
-        for line in process.stdout or []:
-            design.info(line.rstrip())
-
-        process.wait()
-
-        return process.returncode == 0
+        # Use Docker's native output formatting - no capture, let Docker handle display
+        result = subprocess.run(cmd, check=False)  # noqa: S603
+        return result.returncode == 0
     except Exception as e:
         design.error(f"Build error: {e}")
         return False
@@ -329,8 +315,8 @@ def build_environment(
 
     design.progress_message(f"Building Docker image: {temp_tag}")
 
-    # Build the image (pass env vars as build args)
-    if not build_docker_image(env_dir, temp_tag, no_cache, verbose, env_vars):
+    # Build the image (env vars are for runtime, not build time)
+    if not build_docker_image(env_dir, temp_tag, no_cache, verbose):
         design.error("Docker build failed")
         raise typer.Exit(1)
 
@@ -353,9 +339,9 @@ def build_environment(
 
         # Provide helpful debugging tips
         design.section_title("Debugging Tips")
-        design.info("1. Test your server directly:")
-        design.command_example(f"docker run --rm -it {temp_tag}")
-        design.dim_info("   Expected output", "MCP initialization messages")
+        design.info("1. Debug your environment build:")
+        design.command_example("hud debug . --build")
+        design.dim_info("   This will", "test MCP server connection and show detailed logs")
         design.info("")
         design.info("2. Check for common issues:")
         design.info("   - Server crashes on startup")
@@ -477,33 +463,22 @@ def build_environment(
         version_tag,
     ]
     
-    # Add build args for final build
-    for key, value in env_vars.items():
-        label_cmd.extend(["--build-arg", f"{key}={value}"])
-    
     label_cmd.append(str(env_dir))
 
-    # Run rebuild with proper encoding
-    process = subprocess.Popen(  # noqa: S603
-        label_cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-
-    # Stream output if verbose
+    # Run rebuild using Docker's native output formatting
     if verbose:
-        for line in process.stdout or []:
-            design.info(line.rstrip())
+        # Show Docker's native output when verbose
+        result = subprocess.run(label_cmd, check=False)  # noqa: S603
     else:
-        # Just consume output to avoid blocking
-        process.stdout.read()  # type: ignore
+        # Hide output when not verbose
+        result = subprocess.run(  # noqa: S603
+            label_cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False
+        )
 
-    process.wait()
-
-    if process.returncode != 0:
+    if result.returncode != 0:
         design.error("Failed to rebuild with label")
         raise typer.Exit(1)
 

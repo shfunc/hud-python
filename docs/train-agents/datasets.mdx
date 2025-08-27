@@ -47,10 +47,12 @@ Tasks are stored as HuggingFace datasets with these fields:
 ## Loading Datasets
 
 ```python
-from hud.datasets import load_tasks
+from datasets import load_dataset
+from hud.datasets import Task
 
 # Load from HuggingFace
-tasks = load_tasks("hud-evals/2048-taskset")
+dataset = load_dataset("hud-evals/2048-taskset", split="train")
+tasks = [Task(**task_dict) for task_dict in dataset]
 
 # Filter tasks
 easy_tasks = [t for t in tasks if t.metadata.get("difficulty") == "easy"]

@@ -735,7 +735,7 @@ See the `browser` environment for a complete production example of this pattern.
 
 ### 4. Cursor rules – paste this once
 
-Inside `.cursor/rules/hud_environment_iteration.mdc` add (or verify) the following so the agent always knows the expected iteration loop:
+Inside `.cursor/rules/mcp_environment_iteration.mdc` add (or verify) the following so the agent always knows the expected iteration loop:
 
 ```mdc
 ---
@@ -743,7 +743,7 @@ description: Improve an MCP environment
 alwaysApply: false
 ---
 Setup
-1. Make sure the user has started the development server with `hud dev --build` and that you can connect to the environment through the provided HTTP endpoint. Check that you have access to the environment's tools.
+1. Make sure the user has set up the mcp config for the environment by seeing if you have access to the tools by the given name (i.e. my-environment-dev), and make sure the title is in dev mode. If not, ask the user to make a dev version!
 2. Make sure you can find the source folder for this environment. Explore its contents and README.
 3. Clarify the objectives and ask follow up questions on the initial query to determine precise implementation details.
 
@@ -760,7 +760,7 @@ Iteration
 Context: In the my-environment folder, I have a browser app environment. I've built a tool to interact with it called my-environment-dev.
 Interaction: There are multiple tools to setup and evaluate the environment. There are also interaction tools for you to be able to move around it, and a screenshot tool to see the state. Use all of the available tools.
 Objective: Please test if all setup, evaluation functions are working. This means you should come up with new problem definitions to test all functionality on. Be creative in how you pick edge cases to test on.
-Rules: @hud_environment_iteration.mdc
+Rules: @mcp_environment_iteration.mdc
 ```
 
 ---

@@ -58,19 +58,28 @@ class HudComputerTool(BaseTool):
             title: Human-readable display name for the tool (auto-generated from class name)
             description: Tool description (auto-generated from docstring if not provided)
         """
+        # This is the width and height the agent thinks it operates in
+        # By default, use subclass's width and height
+        # If specifically set to None, use environment width and height
+        self.width = width or computer_settings.DISPLAY_WIDTH
+        self.height = height or computer_settings.DISPLAY_HEIGHT
+
+        # Build metadata with resolution info
+        meta = {
+            "resolution": {
+                "width": self.width,
+                "height": self.height,
+            }
+        }
+        
         # Initialize base tool with executor as env
         super().__init__(
             env=executor,
             name=name or "computer",
             title=title or "Computer Control",
             description=description or "Control computer with mouse, keyboard, and screenshots",
+            meta=meta,
         )
-
-        # This is the width and height the agent thinks it operates in
-        # By default, use subclass's width and height
-        # If specifically set to None, use environment width and height
-        self.width = width or computer_settings.DISPLAY_WIDTH
-        self.height = height or computer_settings.DISPLAY_HEIGHT
 
         # This is the static width and height of the environment screen
         # And the width and height of the screenshots taken by the tool

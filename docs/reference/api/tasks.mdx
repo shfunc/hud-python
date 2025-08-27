@@ -112,26 +112,26 @@ setup = [
 
 ## Dataset Functions
 
-### load_tasks
+### Loading Tasks from Datasets
 
-Load tasks from HuggingFace or local source.
+Load tasks from HuggingFace datasets using the standard datasets library:
 
 ```python
-from hud.datasets import load_tasks
+from datasets import load_dataset
+from hud.datasets import Task
 
-tasks = load_tasks(
-    dataset: str | Dataset,
-    split: str = "train"
-) -> list[Task]
+# Load dataset and convert to Task objects
+dataset = load_dataset("hud-evals/SheetBench-50", split="train")
+tasks = [Task(**task_dict) for task_dict in dataset]
+
+# Or work with raw dictionaries (useful for run_dataset)
+raw_tasks = [dict(task) for task in dataset]
 ```
 
-<ParamField body="dataset" type="str | Dataset" required>
-  HuggingFace dataset ID (e.g., "hud-evals/sheetbench-50") or Dataset object
-</ParamField>
-
-<ParamField body="split" type="str" default="train">
-  Dataset split to load
-</ParamField>
+This approach gives you flexibility to:
+- Filter tasks before converting to Task objects
+- Work with raw dictionaries for `run_dataset` 
+- Inspect dataset structure before processing
 
 ### save_tasks
 
@@ -316,8 +316,13 @@ task = Task(
 ### Working with Datasets
 
 ```python
+from datasets import load_dataset
+from hud.datasets import Task, run_dataset
+from hud.agents import ClaudeAgent
+
 # Load existing benchmark
-tasks = load_tasks("hud-evals/sheetbench-50")
+dataset = load_dataset("hud-evals/sheetbench-50", split="train")
+tasks = [Task(**task_dict) for task_dict in dataset]
 
 # Filter tasks
 medium_tasks = [
