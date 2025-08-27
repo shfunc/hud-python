@@ -14,11 +14,10 @@ dependencies = [
     "pydantic>=2,<3",
     "pydantic-settings>=2,<3",
     # MCP dependencies
-    "hud-mcp-python-sdk>=0.1.0",
-    "fastmcp>=2.11.2",
+    "hud-mcp-python-sdk>=3.13.2",
+    "hud-fastmcp-python-sdk>=0.1.2",
     "pathspec>=0.12.1",
     "wrapt>=1.14.0",
-    "mcp>=1.13.1",
     # CLI dependencies
     "typer>=0.9.0",
     "rich>=13.0.0",
@@ -116,7 +115,7 @@ agent = [
     "jupyter_client",
     "jupyter_core",
     # Other agent utilities
-    "mcp_use",
+    "hud-mcp-use-python-sdk>=2.3.13",
     "dotenv>=0.9.9",
 ]
 

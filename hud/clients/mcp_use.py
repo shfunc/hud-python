@@ -73,19 +73,13 @@ class MCPUseHUDClient(BaseHUDClient):
 
             # Configure validation for all sessions based on client setting
             try:
-                from hud_mcp.client.session import (  # type: ignore[import-not-found]
-                    ValidationOptions,  # type: ignore[import-not-found]
-                )
-
                 for session in self._sessions.values():
                     if (
                         hasattr(session, "connector")
                         and hasattr(session.connector, "client_session")
                         and session.connector.client_session is not None
                     ):
-                        session.connector.client_session._validation_options = ValidationOptions(
-                            strict_output_validation=self._strict_validation
-                        )
+                        session.connector.client_session._validate_structured_outputs = self._strict_validation  # noqa: E501
             except ImportError:
                 # ValidationOptions may not be available in some mcp versions
                 pass
