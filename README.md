@@ -50,7 +50,7 @@ pip install -e "hud-python[dev]"
 ```
 
 > See [docs.hud.so](https://docs.hud.so), or add docs to any MCP client:
-> `claude mcp add docs-hud https://docs.hud.so/mcp`
+> `claude mcp add --transport http docs-hud https://docs.hud.so/mcp`
 
 ## Quickstart
 
