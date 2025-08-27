@@ -116,7 +116,7 @@ agent = [
     "jupyter_client",
     "jupyter_core",
     # Other agent utilities
-    "hud-mcp-use-python-sdk>=0.1.0",
+    "mcp_use",
     "dotenv>=0.9.9",
 ]
 

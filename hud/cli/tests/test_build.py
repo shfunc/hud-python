@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 import subprocess
-import tempfile
-from datetime import datetime
-from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -81,11 +78,7 @@ class TestGetExistingVersion:
 
     def test_get_version_from_lock(self, tmp_path):
         """Test extracting version from lock file."""
-        lock_data = {
-            "build": {
-                "version": "1.2.3"
-            }
-        }
+        lock_data = {"build": {"version": "1.2.3"}}
         lock_path = tmp_path / "hud.lock.yaml"
         lock_path.write_text(yaml.dump(lock_data))
 
@@ -119,8 +112,7 @@ class TestGetDockerImageDigest:
         """Test successfully getting image digest."""
         # Note: The function expects to parse a list from the string representation
         mock_run.return_value = mock.Mock(
-            stdout="['docker.io/library/test@sha256:abc123']",
-            returncode=0
+            stdout="['docker.io/library/test@sha256:abc123']", returncode=0
         )
 
         result = get_docker_image_digest("test:latest")
@@ -149,10 +141,7 @@ class TestGetDockerImageId:
     @mock.patch("subprocess.run")
     def test_get_id_success(self, mock_run):
         """Test successfully getting image ID."""
-        mock_run.return_value = mock.Mock(
-            stdout="sha256:abc123def456",
-            returncode=0
-        )
+        mock_run.return_value = mock.Mock(stdout="sha256:abc123def456", returncode=0)
 
         result = get_docker_image_id("test:latest")
         assert result == "sha256:abc123def456"
@@ -223,13 +212,13 @@ class TestAnalyzeMcpEnvironment:
         # Setup mock client
         mock_client = mock.AsyncMock()
         mock_client_class.return_value = mock_client
-        
+
         # Mock tool
         mock_tool = mock.Mock()
         mock_tool.name = "test_tool"
         mock_tool.description = "Test tool"
         mock_tool.inputSchema = {"type": "object"}
-        
+
         mock_client.list_tools.return_value = [mock_tool]
 
         result = await analyze_mcp_environment("test:latest")
@@ -264,7 +253,7 @@ class TestAnalyzeMcpEnvironment:
 
         # Just test that it runs without error in verbose mode
         result = await analyze_mcp_environment("test:latest", verbose=True)
-        
+
         assert result["success"] is True
         assert "initializeMs" in result
 
@@ -344,14 +333,14 @@ class TestBuildEnvironment:
         # Setup directory structure
         env_dir = tmp_path / "test-env"
         env_dir.mkdir()
-        
+
         # Create pyproject.toml
         pyproject = env_dir / "pyproject.toml"
         pyproject.write_text("""
 [tool.hud]
 image = "test/env:dev"
 """)
-        
+
         # Create Dockerfile
         dockerfile = env_dir / "Dockerfile"
         dockerfile.write_text("""
@@ -371,7 +360,7 @@ ENV API_KEY
             ],
         }
         mock_get_id.return_value = "sha256:abc123"
-        
+
         # Mock final rebuild
         mock_result = mock.Mock()
         mock_result.returncode = 0

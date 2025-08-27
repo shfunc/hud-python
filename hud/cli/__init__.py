@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import sys
-from pathlib import Path  # noqa: TC003
+from pathlib import Path
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from . import list_func as list_module
 from .analyze import (
     analyze_environment,
     analyze_environment_from_config,
@@ -20,14 +20,13 @@ from .analyze import (
 )
 from .build import build_command
 from .clone import clone_repository, get_clone_message, print_error, print_tutorial
-from .utils.cursor import get_cursor_config_path, list_cursor_servers, parse_cursor_config
 from .debug import debug_mcp_stdio
-from .init import create_environment
-from . import list_func as list_module
 from .dev import run_mcp_dev_server
+from .init import create_environment
 from .pull import pull_command
 from .push import push_command
 from .remove import remove_command
+from .utils.cursor import get_cursor_config_path, list_cursor_servers, parse_cursor_config
 from .utils.logging import CaptureLogger
 
 # Create the main Typer app
@@ -175,11 +174,17 @@ def debug(
         hud debug . --max-phase 3               # Stop after phase 3
     """
     # Import here to avoid circular imports
-    from .utils.environment import get_image_name, is_environment_directory, build_environment, image_exists
     from hud.utils.design import HUDDesign
-    
+
+    from .utils.environment import (
+        build_environment,
+        get_image_name,
+        image_exists,
+        is_environment_directory,
+    )
+
     design = HUDDesign()
-    
+
     # Determine the command to run
     command = None
     docker_args = []
@@ -202,18 +207,18 @@ def debug(
     elif params:
         first_param = params[0]
         docker_args = params[1:] if len(params) > 1 else []
-        
+
         # Check if it's a directory
         if Path(first_param).exists() and is_environment_directory(first_param):
             # Directory mode - like hud dev
             directory = first_param
-            
+
             # Get or generate image name
             image_name, source = get_image_name(directory)
-            
+
             if source == "auto":
                 design.info(f"Auto-generated image name: {image_name}")
-            
+
             # Build if requested or if image doesn't exist
             if build or not image_exists(image_name):
                 if not build and not image_exists(image_name):
@@ -221,11 +226,10 @@ def debug(
                         build = True
                     else:
                         raise typer.Exit(1)
-                
-                if build:
-                    if not build_environment(directory, image_name):
-                        raise typer.Exit(1)
-            
+
+                if build and not build_environment(directory, image_name):
+                    raise typer.Exit(1)
+
             # Build Docker command
             command = ["docker", "run", "--rm", "-i", *docker_args, image_name]
         else:
@@ -233,7 +237,9 @@ def debug(
             image = first_param
             command = ["docker", "run", "--rm", "-i", *docker_args, image]
     else:
-        console.print("[red]Error: Must specify a directory, Docker image, --config, or --cursor[/red]")
+        console.print(
+            "[red]Error: Must specify a directory, Docker image, --config, or --cursor[/red]"
+        )
         console.print("\nExamples:")
         console.print("  hud debug .                      # Debug current directory")
         console.print("  hud debug environments/browser   # Debug specific directory")
@@ -467,7 +473,7 @@ def run(
         hud run --local hud-text-2048:latest
         hud run --local my-server:v1 -e API_KEY=xxx
         hud run --local my-server:v1 --transport http
-    
+
     Interactive Testing (local only):
         hud run --local --interactive --transport http hud-text-2048:latest
         hud run --local --interactive --transport http --port 9000 my-server:v1
@@ -509,6 +515,7 @@ def run(
         # Get URL from options or environment
         if not url:
             from hud.settings import settings
+
             url = settings.hud_mcp_url
 
         run_remote_server(image, docker_args, transport, port, url, api_key, run_id, verbose)
@@ -584,7 +591,7 @@ def build(
     else:
         directory = "."
         extra_args = []
-    
+
     # Parse environment variables from extra args
     env_vars = {}
     i = 0
@@ -612,7 +619,7 @@ def build(
             i += 2
         else:
             i += 1
-    
+
     build_command(directory, tag, no_cache, verbose, env_vars)
 
 
@@ -672,20 +679,14 @@ def list_environments(
     filter_name: str | None = typer.Option(
         None, "--filter", "-f", help="Filter environments by name (case-insensitive)"
     ),
-    json_output: bool = typer.Option(
-        False, "--json", help="Output as JSON"
-    ),
-    show_all: bool = typer.Option(
-        False, "--all", "-a", help="Show all columns including digest"
-    ),
-    verbose: bool = typer.Option(
-        False, "--verbose", "-v", help="Show detailed output"
-    ),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+    show_all: bool = typer.Option(False, "--all", "-a", help="Show all columns including digest"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
 ) -> None:
     """📋 List all HUD environments in local registry.
-    
+
     Shows environments pulled with 'hud pull' stored in ~/.hud/envs/
-    
+
     Examples:
         hud list                    # List all environments
         hud list --filter text      # Filter by name
@@ -699,21 +700,16 @@ def list_environments(
 @app.command()
 def remove(
     target: str | None = typer.Argument(
-        None, 
-        help="Environment to remove (digest, name, or 'all' for all environments)"
+        None, help="Environment to remove (digest, name, or 'all' for all environments)"
     ),
-    yes: bool = typer.Option(
-        False, "--yes", "-y", help="Skip confirmation prompt"
-    ),
-    verbose: bool = typer.Option(
-        False, "--verbose", "-v", help="Show detailed output"
-    ),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
 ) -> None:
     """🗑️ Remove HUD environments from local registry.
-    
+
     Removes environment metadata from ~/.hud/envs/
     Note: This does not remove the Docker images.
-    
+
     Examples:
         hud remove abc123              # Remove by digest
         hud remove text_2048           # Remove by name
@@ -797,22 +793,24 @@ def eval(
     valid_agents = ["claude", "openai"]
     if agent not in valid_agents:
         from hud.utils.design import HUDDesign
+
         design = HUDDesign()
         design.error(f"Invalid agent: {agent}. Must be one of: {', '.join(valid_agents)}")
         raise typer.Exit(1)
-    
+
     # Import eval_command lazily to avoid importing agent dependencies
     try:
         from .eval import eval_command
     except ImportError as e:
         from hud.utils.design import HUDDesign
+
         design = HUDDesign()
         design.error(
             "Evaluation dependencies are not installed. "
             "Please install with: pip install 'hud-python[agent]'"
         )
         raise typer.Exit(1) from e
-    
+
     # Run the command
     eval_command(
         source=source,

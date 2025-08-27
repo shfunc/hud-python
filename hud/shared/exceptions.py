@@ -18,6 +18,17 @@ class HudException(Exception):
     Consumers should be able to catch this exception to handle any HUD-related error.
     """
 
+    def __init__(self, message: str, response_json: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.message = message
+        self.response_json = response_json
+
+    def __str__(self) -> str:
+        parts = [self.message]
+        if self.response_json:
+            parts.append(f"Response: {self.response_json}")
+        return " | ".join(parts)
+
 
 class HudRequestError(Exception):
     """Any request to the HUD API can raise this exception."""

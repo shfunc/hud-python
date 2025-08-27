@@ -7,8 +7,9 @@ import subprocess
 import sys
 
 from hud.utils.design import HUDDesign
-from .server import MCPServerManager, run_server_with_interactive
+
 from .logging import find_free_port
+from .server import MCPServerManager, run_server_with_interactive
 
 
 def run_stdio_server(image: str, docker_args: list[str], verbose: bool) -> None:
@@ -36,10 +37,10 @@ def run_stdio_server(image: str, docker_args: list[str], verbose: bool) -> None:
 async def run_http_server(image: str, docker_args: list[str], port: int, verbose: bool) -> None:
     """Run Docker image as HTTP MCP server (proxy mode)."""
     design = HUDDesign()
-    
+
     # Create server manager
     server_manager = MCPServerManager(image, docker_args)
-    
+
     # Find available port
     actual_port = find_free_port(port)
     if actual_port is None:
@@ -54,10 +55,10 @@ async def run_http_server(image: str, docker_args: list[str], port: int, verbose
 
     # Build docker command
     docker_cmd = server_manager.build_docker_command()
-    
+
     # Create MCP config
     config = server_manager.create_mcp_config(docker_cmd)
-    
+
     # Create proxy
     proxy = server_manager.create_proxy(config)
 
@@ -88,7 +89,7 @@ async def run_http_server_interactive(
     """Run Docker image as HTTP MCP server with interactive testing."""
     # Create server manager
     server_manager = MCPServerManager(image, docker_args)
-    
+
     # Use the shared utility function
     await run_server_with_interactive(server_manager, port, verbose)
 

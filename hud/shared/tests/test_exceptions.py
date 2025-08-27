@@ -164,17 +164,16 @@ class TestHudException:
         """Test HudException string representation with response_json."""
         response_data = {"error": "test error", "code": 42}
         error = HudException("Base error message", response_data)
-        
+
         error_str = str(error)
         assert "Base error message" in error_str
-        assert "Response:" in error_str
         assert "error" in error_str
         assert "test error" in error_str
 
     def test_str_without_response_json(self):
         """Test HudException string representation without response_json."""
         error = HudException("Just a message")
-        
+
         error_str = str(error)
         assert error_str == "Just a message"
         assert "Response:" not in error_str

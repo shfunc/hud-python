@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-from typing import Any
 
 import toml
 
@@ -32,7 +31,7 @@ def get_image_name(directory: str | Path, image_override: str | None = None) -> 
             if config.get("tool", {}).get("hud", {}).get("image"):
                 return config["tool"]["hud"]["image"], "cache"
         except Exception:
-            pass  # Silent failure, will use auto-generated name
+            design.error("Error loading pyproject.toml")
 
     # Auto-generate with :dev tag
     dir_path = Path(directory).resolve()  # Get absolute path first
@@ -74,7 +73,7 @@ def update_pyproject_toml(directory: str | Path, image_name: str, silent: bool =
 
 def build_environment(directory: str | Path, image_name: str, no_cache: bool = False) -> bool:
     """Build Docker image for an environment.
-    
+
     Returns:
         True if build succeeded, False otherwise
     """
@@ -112,7 +111,7 @@ def image_exists(image_name: str) -> bool:
 
 def is_environment_directory(path: str | Path) -> bool:
     """Check if a path looks like an environment directory.
-    
+
     An environment directory should have:
     - A Dockerfile
     - A pyproject.toml file
@@ -121,13 +120,14 @@ def is_environment_directory(path: str | Path) -> bool:
     dir_path = Path(path)
     if not dir_path.is_dir():
         return False
-    
+
     # Must have Dockerfile
     if not (dir_path / "Dockerfile").exists():
         return False
-        
+
     # Must have pyproject.toml
     if not (dir_path / "pyproject.toml").exists():
+        design.error("pyproject.toml not found")
         return False
-        
+
     return True

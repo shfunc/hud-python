@@ -43,7 +43,7 @@ async def verify_type_action(
     # Get the playwright tool from the environment
     # Get the playwright tool from the persistent context
     persistent_ctx = evaluate.env
-    playwright_tool = getattr(persistent_ctx, 'playwright_tool', None)
+    playwright_tool = getattr(persistent_ctx, "playwright_tool", None)
     if (
         not playwright_tool
         or not hasattr(playwright_tool, "action_history")

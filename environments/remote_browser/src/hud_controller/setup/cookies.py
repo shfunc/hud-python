@@ -23,7 +23,7 @@ async def set_cookies(ctx: Context, cookies: List[Dict[str, Any]]):
 
     # Get the playwright tool from the environment context
     persistent_ctx = setup.env
-    playwright_tool = getattr(persistent_ctx, 'playwright_tool', None)
+    playwright_tool = getattr(persistent_ctx, "playwright_tool", None)
     if not playwright_tool or not hasattr(playwright_tool, "page") or not playwright_tool.page:
         logger.error("No browser page available")
         return TextContent(text="No browser page available", type="text")
@@ -35,7 +35,7 @@ async def set_cookies(ctx: Context, cookies: List[Dict[str, Any]]):
         logger.info(f"Successfully set {len(cookies)} cookies")
         return TextContent(
             text=f"Set {len(cookies)} cookies: {', '.join([c.get('name', 'unnamed') for c in cookies])}",
-            type="text"
+            type="text",
         )
     except Exception as e:
         logger.error(f"Failed to set cookies: {e}")
@@ -53,7 +53,7 @@ async def clear_cookies(ctx: Context):
 
     # Get the playwright tool from the environment context
     persistent_ctx = setup.env
-    playwright_tool = getattr(persistent_ctx, 'playwright_tool', None)
+    playwright_tool = getattr(persistent_ctx, "playwright_tool", None)
     if not playwright_tool or not hasattr(playwright_tool, "page") or not playwright_tool.page:
         logger.error("No browser page available")
         return TextContent(text="No browser page available", type="text")

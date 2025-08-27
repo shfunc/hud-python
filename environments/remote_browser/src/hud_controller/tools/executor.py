@@ -233,7 +233,7 @@ class BrowserExecutor(BaseExecutor):
 
             # Map keys to Playwright format
             mapped_keys = [self._map_key(key) for key in keys]
-            
+
             # Always capitalize single letter keys in press method
             processed_keys = []
             for key in mapped_keys:
@@ -243,7 +243,7 @@ class BrowserExecutor(BaseExecutor):
                 else:
                     processed_keys.append(key)
             mapped_keys = processed_keys
-            
+
             logger.info(f"Mapped keys: {mapped_keys}")
 
             # Press the keys as a combination (at the same time)

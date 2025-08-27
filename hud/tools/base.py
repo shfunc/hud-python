@@ -355,12 +355,12 @@ class BaseHub(FastMCP):
                             "anyOf": [
                                 {
                                     "type": "object",
-                                    "description": "Arguments object to pass to the internal tool"
+                                    "description": "Arguments object to pass to the internal tool",
                                 },
                                 {
-                                    "type": "string", 
-                                    "description": "JSON string of arguments to pass to the internal tool"
-                                }
+                                    "type": "string",
+                                    "description": "JSON string of arguments to pass to the internal tool",  # noqa: E501
+                                },
                             ],
                             "description": "Arguments to pass to the internal tool. Can be an object or JSON string. See description for details on each tool's parameters.",  # noqa: E501
                         },

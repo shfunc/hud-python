@@ -24,7 +24,7 @@ async def selector_history(ctx: Context, index: int, expected_selector: str):
     # Get the playwright tool from the environment
     # Get the playwright tool from the persistent context
     persistent_ctx = evaluate.env
-    playwright_tool = getattr(persistent_ctx, 'playwright_tool', None)
+    playwright_tool = getattr(persistent_ctx, "playwright_tool", None)
     if not playwright_tool:
         logger.error("No playwright tool available")
         return EvaluationResult(

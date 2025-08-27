@@ -70,7 +70,7 @@ class Telemetry(TypedDict):
 async def get_telemetry_resource() -> Telemetry:
     """MCP resource containing telemetry data including provider's live view URL."""
     global persistent_ctx
-    
+
     if persistent_ctx:
         try:
             telemetry = persistent_ctx.get_telemetry()  # Now synchronous
@@ -111,11 +111,11 @@ async def initialize_environment(ctx):
 
     # Extract progress token from context if available
     progress_token = None
-    if ctx.meta and hasattr(ctx.meta, 'progressToken'):
+    if ctx.meta and hasattr(ctx.meta, "progressToken"):
         progress_token = ctx.meta.progressToken
 
     async def send_progress(progress: int, message: str):
-        if progress_token and hasattr(ctx, 'session'):
+        if progress_token and hasattr(ctx, "session"):
             try:
                 await ctx.session.send_progress_notification(
                     progress_token=progress_token,
@@ -129,46 +129,52 @@ async def initialize_environment(ctx):
 
     try:
         await send_progress(5, "Connecting to persistent context...")
-        
+
         # Connect to persistent context server
         max_retries = 10
         retry_delay = 1.0
-        
+
         for attempt in range(max_retries):
             try:
                 persistent_ctx = attach_context("/tmp/hud_remote_browser_ctx.sock")
                 if persistent_ctx is None:
                     raise ConnectionError("Failed to attach to context server")
                 logger.info("Connected to persistent remote browser context")
-                
+
                 # Log current state
                 state = persistent_ctx.get_state_summary()
                 logger.info(f"Context state: {state}")
-                
+
                 if persistent_ctx.get_is_initialized():
                     logger.info("Resuming with existing browser session")
                 else:
                     logger.info("Starting fresh browser session")
                 break
-                
+
             except Exception as e:
                 if attempt < max_retries - 1:
-                    logger.warning(f"Context server not ready yet (attempt {attempt + 1}/{max_retries}): {e}")
+                    logger.warning(
+                        f"Context server not ready yet (attempt {attempt + 1}/{max_retries}): {e}"
+                    )
                     await asyncio.sleep(retry_delay)
                 else:
-                    logger.error(f"Failed to connect to context server after {max_retries} attempts: {e}")
-                    logger.error("The context server should be started automatically. Check container logs.")
+                    logger.error(
+                        f"Failed to connect to context server after {max_retries} attempts: {e}"
+                    )
+                    logger.error(
+                        "The context server should be started automatically. Check container logs."
+                    )
                     raise
-        
+
         await send_progress(10, "Connected to persistent context")
-        
+
         # At this point, persistent_ctx is guaranteed to be set
         assert persistent_ctx is not None
-        
+
         # Check if we need to initialize a new browser session
         if not persistent_ctx.get_is_initialized():
             await send_progress(15, "Initializing new browser session...")
-            
+
             # Get provider configuration from environment
             provider_name = os.getenv("BROWSER_PROVIDER")
             if not provider_name:
@@ -205,7 +211,7 @@ async def initialize_environment(ctx):
 
             # Store provider config in context
             persistent_ctx.set_provider_config(provider_config)
-            
+
             browser_provider = provider_class(provider_config)
             persistent_ctx.set_browser_provider(browser_provider)
             await send_progress(30, "Browser provider initialized")
@@ -234,12 +240,12 @@ async def initialize_environment(ctx):
         else:
             # Reuse existing browser session
             await send_progress(20, "Reusing existing browser session...")
-            
+
             # Get existing CDP URL from context
             cdp_url = persistent_ctx.get_cdp_url()
             if not cdp_url:
                 raise ValueError("No CDP URL in persistent context")
-                
+
             await send_progress(60, f"Using existing CDP URL: {cdp_url}")
 
         # Initialize PlaywrightToolWithMemory with CDP URL from context
@@ -262,13 +268,13 @@ async def initialize_environment(ctx):
         mcp.add_tool(HudComputerTool(executor=browser_executor))
         mcp.add_tool(AnthropicComputerTool(executor=browser_executor))
         mcp.add_tool(OpenAIComputerTool(executor=browser_executor))
-        
+
         await send_progress(80, "Registered hud computer tools")
 
         # Set the persistent context as environment for setup and evaluate hubs
         setup_hub.env = persistent_ctx
         evaluate_hub.env = persistent_ctx
-        
+
         # Also store the current playwright tool on the persistent context
         # Note: This is NOT pickled/persisted, it's just for current session access
         persistent_ctx.playwright_tool = playwright_tool
@@ -284,7 +290,7 @@ async def initialize_environment(ctx):
             if initial_url:
                 await send_progress(95, f"Navigating to {initial_url}")
                 await playwright_tool.navigate(initial_url)
-            
+
             # Mark as initialized
             persistent_ctx.set_initialized(True)
 
@@ -293,6 +299,7 @@ async def initialize_environment(ctx):
     except Exception as e:
         logger.error(f"Initialization failed: {e}")
         import traceback
+
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise
 
@@ -309,12 +316,12 @@ async def shutdown_environment():
             logger.info("Closing browser provider...")
             try:
                 provider = persistent_ctx.get_browser_provider()
-                if provider and hasattr(provider, 'close'):
+                if provider and hasattr(provider, "close"):
                     provider.close()
                     logger.info("Browser provider closed")
             except Exception as e:
                 logger.error(f"Error closing provider: {e}")
-        
+
         logger.info("✅ Browser shutdown completed")
     except Exception as e:
         logger.error(f"Error during shutdown: {e}")

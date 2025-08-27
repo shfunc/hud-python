@@ -13,6 +13,7 @@ class ConcreteResponseTool(ResponseTool):
     async def __call__(self, response: str | None = None, messages=None):
         """Concrete implementation."""
         from mcp.types import TextContent
+
         return [TextContent(text=response or "test", type="text")]
 
 
@@ -29,9 +30,7 @@ class TestResponseTool:
     def test_init_with_custom_values(self):
         """Test initialization with custom values."""
         tool = ConcreteResponseTool(
-            name="custom_response",
-            title="Custom Response Tool",
-            description="Custom description"
+            name="custom_response", title="Custom Response Tool", description="Custom description"
         )
         assert tool.name == "custom_response"
         assert tool.title == "Custom Response Tool"
@@ -39,22 +38,23 @@ class TestResponseTool:
 
     def test_abstract_method_not_implemented(self):
         """Test that abstract method raises NotImplementedError when not implemented."""
-        
+
         # Create a concrete tool to test the abstract method's NotImplementedError
         tool = ConcreteResponseTool()
-        
+
         # This should trigger the NotImplementedError in the abstract method
         with pytest.raises(NotImplementedError, match="Subclasses must implement __call__"):
             # Call the parent abstract method directly to hit the raise line
             import asyncio
-            asyncio.run(ResponseTool.__call__(tool, "test"))
+
+            asyncio.run(ResponseTool.__call__(tool, "test"))  # type: ignore[attr-defined]
 
     @pytest.mark.asyncio
     async def test_concrete_implementation(self):
         """Test that concrete implementation works correctly."""
         tool = ConcreteResponseTool()
         result = await tool("Hello, World!")
-        
+
         assert len(result) == 1
         assert result[0].text == "Hello, World!"
         assert result[0].type == "text"

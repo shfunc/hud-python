@@ -3,21 +3,21 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from typing import Any
 
 from fastmcp import FastMCP
 
 from hud.utils.design import HUDDesign
-from .docker import remove_container, generate_container_name
+
+from .docker import generate_container_name, remove_container
 
 
 class MCPServerManager:
     """Manages MCP server lifecycle and configuration."""
-    
-    def __init__(self, image: str, docker_args: list[str] | None = None):
+
+    def __init__(self, image: str, docker_args: list[str] | None = None) -> None:
         """Initialize server manager.
-        
+
         Args:
             image: Docker image name
             docker_args: Additional Docker arguments
@@ -26,26 +26,26 @@ class MCPServerManager:
         self.docker_args = docker_args or []
         self.design = HUDDesign()
         self.container_name = self._generate_container_name()
-        
+
     def _generate_container_name(self) -> str:
         """Generate a unique container name from image."""
         return generate_container_name(self.image)
-    
+
     def cleanup_container(self) -> None:
         """Remove any existing container with the same name."""
         remove_container(self.container_name)
-    
+
     def build_docker_command(
         self,
         extra_args: list[str] | None = None,
         entrypoint: list[str] | None = None,
     ) -> list[str]:
         """Build Docker run command.
-        
+
         Args:
             extra_args: Additional arguments to add before image
             entrypoint: Custom entrypoint override
-            
+
         Returns:
             Complete docker command as list
         """
@@ -57,33 +57,33 @@ class MCPServerManager:
             "--name",
             self.container_name,
         ]
-        
+
         # Add extra args (like volume mounts, env vars)
         if extra_args:
             cmd.extend(extra_args)
-            
+
         # Add user-provided docker args
         cmd.extend(self.docker_args)
-        
+
         # Add entrypoint if specified
         if entrypoint:
             cmd.extend(["--entrypoint", entrypoint[0]])
-            
+
         # Add image
         cmd.append(self.image)
-        
+
         # Add entrypoint args if specified
         if entrypoint and len(entrypoint) > 1:
             cmd.extend(entrypoint[1:])
-            
+
         return cmd
-    
+
     def create_mcp_config(self, docker_cmd: list[str]) -> dict[str, Any]:
         """Create MCP configuration for stdio transport.
-        
+
         Args:
             docker_cmd: Docker command to run
-            
+
         Returns:
             MCP configuration dict
         """
@@ -96,20 +96,20 @@ class MCPServerManager:
                 }
             }
         }
-    
+
     def create_proxy(self, config: dict[str, Any], name: str | None = None) -> FastMCP:
         """Create FastMCP proxy server.
-        
+
         Args:
             config: MCP configuration
             name: Optional server name
-            
+
         Returns:
             FastMCP proxy instance
         """
         proxy_name = name or f"HUD Server - {self.image}"
         return FastMCP.as_proxy(config, name=proxy_name)
-    
+
     async def run_http_server(
         self,
         proxy: FastMCP,
@@ -118,7 +118,7 @@ class MCPServerManager:
         path: str = "/mcp",
     ) -> None:
         """Run HTTP server with proper shutdown handling.
-        
+
         Args:
             proxy: FastMCP proxy instance
             port: Port to listen on
@@ -128,19 +128,20 @@ class MCPServerManager:
         # Set up logging
         import logging
         import os
-        
+
         os.environ["FASTMCP_DISABLE_BANNER"] = "1"
-        
+
         if not verbose:
             logging.getLogger("fastmcp").setLevel(logging.ERROR)
             logging.getLogger("mcp").setLevel(logging.ERROR)
             logging.getLogger("uvicorn").setLevel(logging.ERROR)
             logging.getLogger("uvicorn.access").setLevel(logging.ERROR)
             logging.getLogger("uvicorn.error").setLevel(logging.ERROR)
-            
+
             import warnings
+
             warnings.filterwarnings("ignore", category=DeprecationWarning)
-        
+
         try:
             await proxy.run_async(
                 transport="http",
@@ -164,7 +165,7 @@ async def run_server_with_interactive(
     verbose: bool = False,
 ) -> None:
     """Run server with interactive testing mode.
-    
+
     Args:
         server_manager: Server manager instance
         port: Port to listen on
@@ -172,34 +173,34 @@ async def run_server_with_interactive(
     """
     from .interactive import run_interactive_mode
     from .logging import find_free_port
-    
+
     design = HUDDesign()
-    
+
     # Find available port
     actual_port = find_free_port(port)
     if actual_port is None:
         design.error(f"No available ports found starting from {port}")
         return
-    
+
     if actual_port != port:
         design.warning(f"Port {port} in use, using port {actual_port} instead")
-    
+
     # Clean up any existing container
     server_manager.cleanup_container()
-    
+
     # Build docker command
     docker_cmd = server_manager.build_docker_command()
-    
+
     # Create MCP config
     config = server_manager.create_mcp_config(docker_cmd)
-    
+
     # Create proxy
     proxy = server_manager.create_proxy(config, f"HUD Interactive - {server_manager.image}")
-    
+
     # Show header
     design.info("")  # Empty line
     design.header("HUD MCP Server - Interactive Mode", icon="🎮")
-    
+
     # Show configuration
     design.section_title("Server Information")
     design.info(f"Image: {server_manager.image}")
@@ -207,12 +208,12 @@ async def run_server_with_interactive(
     design.info(f"URL: http://localhost:{actual_port}/mcp")
     design.info(f"Container: {server_manager.container_name}")
     design.info("")
-    
+
     # Create event to signal server is ready
     server_ready = asyncio.Event()
     server_task = None
-    
-    async def start_server():
+
+    async def start_server() -> None:
         """Start the proxy server."""
         nonlocal server_task
         try:
@@ -221,19 +222,19 @@ async def run_server_with_interactive(
             await server_manager.run_http_server(proxy, actual_port, verbose)
         except asyncio.CancelledError:
             pass
-    
+
     try:
         # Start server in background
         server_task = asyncio.create_task(start_server())
-        
+
         # Wait for server to be ready
         await server_ready.wait()
         await asyncio.sleep(0.5)  # Give it a moment to fully start
-        
+
         # Run interactive mode
         server_url = f"http://localhost:{actual_port}/mcp"
         await run_interactive_mode(server_url, verbose=verbose)
-        
+
     except KeyboardInterrupt:
         design.info("\n👋 Shutting down...")
     finally:
@@ -243,7 +244,7 @@ async def run_server_with_interactive(
             try:
                 await server_task
             except asyncio.CancelledError:
-                pass
-        
+                design.error("Server task cancelled")
+
         # Clean up container
         server_manager.cleanup_container()

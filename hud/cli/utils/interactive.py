@@ -111,11 +111,11 @@ class InteractiveMCPTester:
         # Build choices list
         choices = []
         tool_map = {}
-        
+
         # Group tools by hub for better organization
         hub_groups = {}
         regular_tools = []
-        
+
         for tool in self.tools:
             if "/" in tool.name:
                 hub, name = tool.name.split("/", 1)
@@ -124,28 +124,28 @@ class InteractiveMCPTester:
                 hub_groups[hub].append((name, tool))
             else:
                 regular_tools.append(tool)
-        
+
         # Add regular tools first
         if regular_tools:
             # Add a separator for regular tools section
             if len(hub_groups) > 0:
                 choices.append("───── Regular Tools ─────")
-            
+
             for tool in regular_tools:
                 # Format: Bold tool name with color + dim description
                 if tool.description:
                     display = f"• {tool.name} │ {tool.description}"
                 else:
                     display = f"• {tool.name}"
-                
+
                 choices.append(display)
                 tool_map[display] = tool
-        
+
         # Add hub-grouped tools with visual separation
         for hub_name, tools in sorted(hub_groups.items()):
             # Add a visual separator for each hub
             choices.append(f"───── {hub_name} ─────")
-            
+
             for name, tool in sorted(tools, key=lambda x: x[0]):
                 # Format with hub indicator and better separation
                 if tool.description:
@@ -157,7 +157,7 @@ class InteractiveMCPTester:
                     display = f"• {name} │ {desc}"
                 else:
                     display = f"• {name}"
-                
+
                 choices.append(display)
                 tool_map[display] = tool
 
@@ -171,36 +171,34 @@ class InteractiveMCPTester:
         try:
             # Create custom Choice objects for better formatting
             from questionary import Choice
-            
+
             formatted_choices = []
             for choice in choices:
                 if choice.startswith("─────"):
                     # Separator - make it unselectable and styled
-                    formatted_choices.append(Choice(
-                        title=choice,
-                        disabled=True,
-                        shortcut_key=None
-                    ))
+                    formatted_choices.append(Choice(title=choice, disabled=True, shortcut_key=None))  # type: ignore[arg-type]
                 elif choice == "❌ Quit":
                     formatted_choices.append(choice)
                 else:
                     formatted_choices.append(choice)
-            
+
             # Use questionary's async select with enhanced styling
             selected = await questionary.select(
                 "",
                 choices=formatted_choices,
-                style=questionary.Style([
-                    ("question", ""),
-                    ("pointer", "fg:#ff9d00 bold"),           # Orange pointer
-                    ("highlighted", "fg:#00d7ff bold"),       # Bright cyan for highlighted
-                    ("selected", "fg:#00ff00 bold"),          # Green for selected
-                    ("separator", "fg:#666666"),              # Gray for separators
-                    ("instruction", "fg:#858585 italic"),     # Dim instructions
-                    ("disabled", "fg:#666666"),               # Gray for disabled items
-                    ("text", "fg:#ffffff"),                   # White text
-                ]),
-                instruction="(Use ↑/↓ arrows, Enter to select, Esc to cancel)"
+                style=questionary.Style(
+                    [
+                        ("question", ""),
+                        ("pointer", "fg:#ff9d00 bold"),  # Orange pointer
+                        ("highlighted", "fg:#00d7ff bold"),  # Bright cyan for highlighted
+                        ("selected", "fg:#00ff00 bold"),  # Green for selected
+                        ("separator", "fg:#666666"),  # Gray for separators
+                        ("instruction", "fg:#858585 italic"),  # Dim instructions
+                        ("disabled", "fg:#666666"),  # Gray for disabled items
+                        ("text", "fg:#ffffff"),  # White text
+                    ]
+                ),
+                instruction="(Use ↑/↓ arrows, Enter to select, Esc to cancel)",
             ).unsafe_ask_async()
 
             if selected is None:

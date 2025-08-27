@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import signal
 import sys
-import contextlib
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
@@ -32,7 +32,7 @@ _sigterm_received = False
 def _run_with_sigterm(coro_fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
     """Run *coro_fn* via anyio.run() and cancel on SIGTERM or SIGINT (POSIX)."""
     global _sigterm_received
-    
+
     async def _runner() -> None:
         stop_evt: asyncio.Event | None = None
         if sys.platform != "win32" and os.getenv("FASTMCP_DISABLE_SIGTERM_HANDLER") != "1":
@@ -157,16 +157,17 @@ class MCPServer(FastMCP):
     # Supports dockerized SIGTERM handling
     def shutdown(self, fn: Callable | None = None) -> Callable | None:
         """Register a shutdown handler that runs ONLY on SIGTERM.
-        
+
         This handler will be called when the server receives a SIGTERM signal
         (e.g., during container shutdown). It will NOT be called on:
         - SIGINT (Ctrl+C or hot reload)
         - Normal client disconnects
         - Other graceful shutdowns
-        
+
         This ensures that persistent resources (like browser sessions) are only
         cleaned up during actual termination, not during development hot reloads.
         """
+
         def decorator(func: Callable) -> Callable:
             self._shutdown_fn = func
             return func

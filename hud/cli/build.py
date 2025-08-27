@@ -23,12 +23,12 @@ from .utils.registry import save_to_registry
 def parse_version(version_str: str) -> tuple[int, int, int]:
     """Parse version string like '1.0.0' or '1.0' into tuple of integers."""
     # Remove 'v' prefix if present
-    version_str = version_str.lstrip('v')
-    
+    version_str = version_str.lstrip("v")
+
     # Split by dots and pad with zeros if needed
-    parts = version_str.split('.')
-    parts.extend(['0'] * (3 - len(parts)))  # Ensure we have at least 3 parts
-    
+    parts = version_str.split(".")
+    parts.extend(["0"] * (3 - len(parts)))  # Ensure we have at least 3 parts
+
     try:
         return (int(parts[0]), int(parts[1]), int(parts[2]))
     except (ValueError, IndexError):
@@ -39,7 +39,7 @@ def parse_version(version_str: str) -> tuple[int, int, int]:
 def increment_version(version_str: str, increment_type: str = "patch") -> str:
     """Increment version string. increment_type can be 'major', 'minor', or 'patch'."""
     major, minor, patch = parse_version(version_str)
-    
+
     if increment_type == "major":
         return f"{major + 1}.0.0"
     elif increment_type == "minor":
@@ -52,11 +52,11 @@ def get_existing_version(lock_path: Path) -> str | None:
     """Get the internal version from existing lock file if it exists."""
     if not lock_path.exists():
         return None
-        
+
     try:
         with open(lock_path) as f:
             lock_data = yaml.safe_load(f)
-            
+
         # Look for internal version in build metadata
         build_data = lock_data.get("build", {})
         return build_data.get("version", None)
@@ -81,7 +81,7 @@ def get_docker_image_digest(image: str) -> str | None:
             if digest_list:
                 # Return full image reference with digest
                 return digest_list[0]
-    except Exception:
+    except Exception:  # noqa: S110
         # Don't print error here, let calling code handle it
         pass
     return None
@@ -116,10 +116,10 @@ def extract_env_vars_from_dockerfile(dockerfile_path: Path) -> tuple[list[str], 
     # Parse both ENV and ARG directives
     content = dockerfile_path.read_text()
     arg_vars = set()  # Track ARG variables
-    
+
     for line in content.splitlines():
         line = line.strip()
-        
+
         # Look for ARG directives (build-time variables)
         if line.startswith("ARG "):
             parts = line[4:].strip().split("=", 1)
@@ -129,12 +129,12 @@ def extract_env_vars_from_dockerfile(dockerfile_path: Path) -> tuple[list[str], 
                 arg_vars.add(var_name)
                 if var_name not in required:
                     required.append(var_name)
-        
+
         # Look for ENV directives (runtime variables)
         elif line.startswith("ENV "):
             parts = line[4:].strip().split("=", 1)
             var_name = parts[0].strip()
-            
+
             # Check if it references an ARG variable (e.g., ENV MY_VAR=$MY_VAR)
             if len(parts) == 2 and parts[1].strip().startswith("$"):
                 ref_var = parts[1].strip()[1:]
@@ -152,18 +152,20 @@ def extract_env_vars_from_dockerfile(dockerfile_path: Path) -> tuple[list[str], 
     return required, optional
 
 
-async def analyze_mcp_environment(image: str, verbose: bool = False, env_vars: dict[str, str] | None = None) -> dict[str, Any]:
+async def analyze_mcp_environment(
+    image: str, verbose: bool = False, env_vars: dict[str, str] | None = None
+) -> dict[str, Any]:
     """Analyze an MCP environment to extract metadata."""
     design = HUDDesign()
     env_vars = env_vars or {}
 
     # Build Docker command to run the image
     docker_cmd = ["docker", "run", "--rm", "-i"]
-    
+
     # Add environment variables
     for key, value in env_vars.items():
         docker_cmd.extend(["-e", f"{key}={value}"])
-    
+
     docker_cmd.append(image)
 
     # Create MCP config
@@ -237,8 +239,11 @@ async def analyze_mcp_environment(image: str, verbose: bool = False, env_vars: d
 
 
 def build_docker_image(
-    directory: Path, tag: str, no_cache: bool = False, verbose: bool = False,
-    build_args: dict[str, str] | None = None
+    directory: Path,
+    tag: str,
+    no_cache: bool = False,
+    verbose: bool = False,
+    build_args: dict[str, str] | None = None,
 ) -> bool:
     """Build a Docker image from a directory."""
     design = HUDDesign()
@@ -254,11 +259,11 @@ def build_docker_image(
     cmd = ["docker", "build", "-t", tag]
     if no_cache:
         cmd.append("--no-cache")
-    
+
     # Add build args
     for key, value in build_args.items():
         cmd.extend(["--build-arg", f"{key}={value}"])
-        
+
     cmd.append(str(directory))
 
     # Always show build output
@@ -274,8 +279,11 @@ def build_docker_image(
 
 
 def build_environment(
-    directory: str = ".", tag: str | None = None, no_cache: bool = False, verbose: bool = False,
-    env_vars: dict[str, str] | None = None
+    directory: str = ".",
+    tag: str | None = None,
+    no_cache: bool = False,
+    verbose: bool = False,
+    env_vars: dict[str, str] | None = None,
 ) -> None:
     """Build a HUD environment and generate lock file."""
     design = HUDDesign()
@@ -358,7 +366,7 @@ def build_environment(
     # Extract environment variables from Dockerfile
     dockerfile_path = env_dir / "Dockerfile"
     required_env, optional_env = extract_env_vars_from_dockerfile(dockerfile_path)
-    
+
     # Merge user-provided env vars with detected ones
     provided_env_vars = {}
     missing_required = []
@@ -366,12 +374,12 @@ def build_environment(
         provided_env_vars = env_vars.copy()
         # Track which required vars are still missing
         missing_required = [e for e in required_env if e not in env_vars]
-        
+
         # Show what env vars were provided
         design.success(f"Using provided environment variables: {', '.join(env_vars.keys())}")
     else:
         missing_required = required_env[:]
-    
+
     # Warn about missing required variables
     if missing_required:
         design.warning(f"Missing required environment variables: {', '.join(missing_required)}")
@@ -380,7 +388,7 @@ def build_environment(
     # Check for existing version and increment
     lock_path = env_dir / "hud.lock.yaml"
     existing_version = get_existing_version(lock_path)
-    
+
     if existing_version:
         # Increment existing version
         new_version = increment_version(existing_version)
@@ -409,13 +417,13 @@ def build_environment(
     # Add environment variables section if any exist
     if missing_required or optional_env or provided_env_vars:
         lock_content["environment"]["variables"] = {}
-        
+
         # Add note about editing environment variables
         lock_content["environment"]["variables"]["_note"] = (
             "You can edit this section to add or modify environment variables. "
             "Provided variables will be used when running the environment."
         )
-        
+
         if provided_env_vars:
             lock_content["environment"]["variables"]["provided"] = provided_env_vars
         if missing_required:
@@ -449,7 +457,7 @@ def build_environment(
     # Also tag with version
     base_name = tag.split(":")[0] if tag and ":" in tag else tag
     version_tag = f"{base_name}:{new_version}"
-    
+
     label_cmd = [
         "docker",
         "build",
@@ -462,7 +470,7 @@ def build_environment(
         "-t",
         version_tag,
     ]
-    
+
     label_cmd.append(str(env_dir))
 
     # Run rebuild using Docker's native output formatting
@@ -472,10 +480,7 @@ def build_environment(
     else:
         # Hide output when not verbose
         result = subprocess.run(  # noqa: S603
-            label_cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False
+            label_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False
         )
 
     if result.returncode != 0:
@@ -519,8 +524,8 @@ def build_environment(
         design.status_item("Also tagged", tag)
     design.status_item("Version", new_version)
     design.status_item("Lock file", "hud.lock.yaml")
-    design.status_item("Tools found", str(analysis['toolCount']))
-    
+    design.status_item("Tools found", str(analysis["toolCount"]))
+
     # Show the digest info separately if we have it
     if image_id:
         design.dim_info("\nImage digest", image_id)

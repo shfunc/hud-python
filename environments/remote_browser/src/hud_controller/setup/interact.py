@@ -23,7 +23,7 @@ async def click_element(ctx: Context, selector: str, timeout: int = 30000):
 
     # Get the playwright tool from the environment context
     persistent_ctx = setup.env
-    playwright_tool = getattr(persistent_ctx, 'playwright_tool', None)
+    playwright_tool = getattr(persistent_ctx, "playwright_tool", None)
     if not playwright_tool or not hasattr(playwright_tool, "page") or not playwright_tool.page:
         logger.error("No browser page available")
         return TextContent(text="No browser page available", type="text")
@@ -56,7 +56,7 @@ async def fill_input(ctx: Context, selector: str, text: str, timeout: int = 3000
 
     # Get the playwright tool from the environment context
     persistent_ctx = setup.env
-    playwright_tool = getattr(persistent_ctx, 'playwright_tool', None)
+    playwright_tool = getattr(persistent_ctx, "playwright_tool", None)
     if not playwright_tool or not hasattr(playwright_tool, "page") or not playwright_tool.page:
         logger.error("No browser page available")
         return TextContent(text="No browser page available", type="text")
@@ -67,10 +67,7 @@ async def fill_input(ctx: Context, selector: str, text: str, timeout: int = 3000
         await element.fill(text)
 
         logger.info(f"Successfully filled input: {selector}")
-        return TextContent(
-            text=f"Filled input {selector} with {len(text)} characters",
-            type="text"
-        )
+        return TextContent(text=f"Filled input {selector} with {len(text)} characters", type="text")
     except Exception as e:
         logger.error(f"Failed to fill input: {e}")
         return TextContent(text=f"Failed to fill input: {str(e)}", type="text")
@@ -92,7 +89,7 @@ async def select_option(ctx: Context, selector: str, value: str, timeout: int = 
 
     # Get the playwright tool from the environment context
     persistent_ctx = setup.env
-    playwright_tool = getattr(persistent_ctx, 'playwright_tool', None)
+    playwright_tool = getattr(persistent_ctx, "playwright_tool", None)
     if not playwright_tool or not hasattr(playwright_tool, "page") or not playwright_tool.page:
         logger.error("No browser page available")
         return TextContent(text="No browser page available", type="text")

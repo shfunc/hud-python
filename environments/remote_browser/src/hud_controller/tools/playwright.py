@@ -57,10 +57,10 @@ class PlaywrightToolWithMemory(PlaywrightTool):
 
     async def _handle_dialog(self, dialog) -> None:
         """Handle JavaScript dialogs (alert, confirm, prompt).
-        
+
         This is an async method that can be used as an event handler without
         creating unpicklable closures.
-        
+
         Args:
             dialog: Playwright dialog object
         """
@@ -71,10 +71,10 @@ class PlaywrightToolWithMemory(PlaywrightTool):
                 "timestamp": datetime.now().isoformat(),
             }
             logger.info(f"Dialog detected: {dialog_info}")
-            
+
             # Record the dialog in action history
             self._record_action("dialog", dialog_info)
-            
+
             # Auto-dismiss the dialog
             await dialog.dismiss()
             logger.debug(f"Dialog dismissed: {dialog.type}")
@@ -123,7 +123,7 @@ class PlaywrightToolWithMemory(PlaywrightTool):
         # Update action record with result
         if self.action_history:
             self.action_history[-1]["result"] = result
-            
+
         # Track navigation history directly (instead of using event listeners)
         if result.get("success") and self.page:
             self.navigation_history.append(

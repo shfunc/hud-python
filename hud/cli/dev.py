@@ -9,12 +9,17 @@ import subprocess
 from pathlib import Path
 
 import click
-import toml
 from fastmcp import FastMCP
 
 from hud.utils.design import HUDDesign
+
 from .utils.docker import get_docker_cmd, inject_supervisor
-from .utils.environment import get_image_name, update_pyproject_toml, build_environment, image_exists
+from .utils.environment import (
+    build_environment,
+    get_image_name,
+    image_exists,
+    update_pyproject_toml,
+)
 
 # Global design instance
 design = HUDDesign()
@@ -96,7 +101,7 @@ def create_proxy_server(
         else:
             design.info("Container will run without hot-reload")
         design.command_example(f"docker logs -f {container_name}", "View container logs")
-        
+
         # Show the full Docker command if there are environment variables
         if docker_args and any(arg == "-e" or arg.startswith("--env") for arg in docker_args):
             design.info("")
@@ -133,7 +138,6 @@ async def start_mcp_proxy(
     import asyncio
     import logging
     import os
-    import subprocess
     import sys
 
     from .utils.logging import find_free_port
@@ -213,15 +217,15 @@ async def start_mcp_proxy(
 
     # Remove any existing container with the same name (silently)
     # Note: The proxy creates containers on-demand when clients connect
-    try:
+    try:  # noqa: SIM105
         subprocess.run(  # noqa: S603, ASYNC221
             ["docker", "rm", "-f", container_name],  # noqa: S607
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=False,  # Don't raise error if container doesn't exist
         )
-    except Exception:
-        pass  # Silent failure, container might not exist
+    except Exception:  # noqa: S110
+        pass
 
     if transport == "stdio":
         if verbose:
@@ -287,13 +291,11 @@ async def start_mcp_proxy(
                     design.error("Failed to launch inspector")
 
             # Launch inspector asynchronously so it doesn't block
-            asyncio.create_task(launch_inspector())
+            asyncio.create_task(launch_inspector())  # noqa: RUF006
 
         # Launch interactive mode if requested
         if interactive:
             if transport != "http":
-                from hud.utils.design import HUDDesign
-
                 design.warning("Interactive mode only works with HTTP transport")
             else:
                 server_url = f"http://localhost:{actual_port}/mcp"
@@ -336,7 +338,7 @@ async def start_mcp_proxy(
     # Function to stream Docker logs
     async def stream_docker_logs() -> None:
         """Stream Docker container logs asynchronously.
-        
+
         Note: The Docker container is created on-demand when the first client connects.
         Any environment variables passed via -e flags are included when the container starts.
         """
@@ -515,9 +517,7 @@ async def start_mcp_proxy(
             design.info("")
             design.info("Then you can:")
             design.info("  • Test locally: [cyan]hud run <image>[/cyan]")
-            design.info(
-                "  • Push to registry: [cyan]hud push --image <registry/name>[/cyan]"
-            )
+            design.info("  • Push to registry: [cyan]hud push --image <registry/name>[/cyan]")
     except Exception as e:
         # Suppress the graceful shutdown error and other FastMCP/uvicorn internal errors
         error_msg = str(e)
@@ -537,7 +537,7 @@ async def start_mcp_proxy(
             try:
                 await log_task
             except asyncio.CancelledError:
-                pass  # Log streaming cancelled, normal shutdown
+                contextlib.suppress(asyncio.CancelledError)
 
 
 def run_mcp_dev_server(
@@ -642,8 +642,10 @@ def run_mcp_dev_server(
     else:
         design.info(f"🐳 {resolved_image}")
 
-    design.progress_message(f"❗ If any issues arise, run `hud debug {resolved_image}` to debug the container")
-    
+    design.progress_message(
+        f"❗ If any issues arise, run `hud debug {resolved_image}` to debug the container"
+    )
+
     # Show environment variables if provided
     if docker_args and any(arg == "-e" or arg.startswith("--env") for arg in docker_args):
         design.section_title("Environment Variables")
@@ -655,7 +657,7 @@ def run_mcp_dev_server(
                 i += 2
             elif docker_args[i].startswith("--env="):
                 design.info(f"  • {docker_args[i][6:]}")
-                i += 1  
+                i += 1
             elif docker_args[i] == "--env" and i + 1 < len(docker_args):
                 design.info(f"  • {docker_args[i + 1]}")
                 i += 2

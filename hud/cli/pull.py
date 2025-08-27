@@ -6,7 +6,6 @@ import subprocess
 from pathlib import Path
 from urllib.parse import quote
 
-import click
 import requests
 import typer
 import yaml

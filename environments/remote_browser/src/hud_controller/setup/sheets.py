@@ -232,7 +232,7 @@ async def sheets_from_xlsx(
 
         # Navigate to the sheet
         persistent_ctx = setup.env
-        playwright_tool = getattr(persistent_ctx, 'playwright_tool', None)
+        playwright_tool = getattr(persistent_ctx, "playwright_tool", None)
         if playwright_tool and hasattr(playwright_tool, "page") and playwright_tool.page:
             page = playwright_tool.page
             logger.info(f"Navigating to sheet: {sheet_url}")
@@ -245,8 +245,7 @@ async def sheets_from_xlsx(
         sheet_info = {"sheet_id": sheet_id, "sheet_url": sheet_url, "sheet_name": sheet_name}
 
         return TextContent(
-            text=f"Created and navigated to Google Sheet '{sheet_name}': {sheet_url}",
-            type="text"
+            text=f"Created and navigated to Google Sheet '{sheet_name}': {sheet_url}", type="text"
         )
 
     except httpx.HTTPError as e:
@@ -325,7 +324,7 @@ async def sheets_from_bytes(
 
         # Navigate to the sheet
         persistent_ctx = setup.env
-        playwright_tool = getattr(persistent_ctx, 'playwright_tool', None)
+        playwright_tool = getattr(persistent_ctx, "playwright_tool", None)
         if playwright_tool and hasattr(playwright_tool, "page") and playwright_tool.page:
             page = playwright_tool.page
             logger.info(f"Navigating to sheet: {sheet_url}")
@@ -338,8 +337,7 @@ async def sheets_from_bytes(
         sheet_info = {"sheet_id": sheet_id, "sheet_url": sheet_url, "sheet_name": sheet_name}
 
         return TextContent(
-            text=f"Created and navigated to Google Sheet '{sheet_name}': {sheet_url}",
-            type="text"
+            text=f"Created and navigated to Google Sheet '{sheet_name}': {sheet_url}", type="text"
         )
 
     except Exception as e:

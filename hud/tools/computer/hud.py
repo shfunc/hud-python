@@ -71,7 +71,7 @@ class HudComputerTool(BaseTool):
                 "height": self.height,
             }
         }
-        
+
         # Initialize base tool with executor as env
         super().__init__(
             env=executor,

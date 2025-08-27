@@ -6,17 +6,12 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 import typer
 
 import hud
 from hud.utils.design import HUDDesign
-
-if TYPE_CHECKING:
-    from datasets import Dataset
-    from hud.agents import ClaudeAgent, OperatorAgent
-    from hud.agents.misc.response_agent import ResponseAgent
 
 logger = logging.getLogger(__name__)
 design = HUDDesign()
@@ -29,7 +24,7 @@ def build_agent(
     allowed_tools: list[str] | None = None,
 ) -> Any:
     """Create and return the requested agent type."""
-    
+
     # Import agents lazily to avoid dependency issues
     try:
         from hud.agents.misc.response_agent import ResponseAgent
@@ -39,7 +34,7 @@ def build_agent(
             "Please install with: pip install 'hud-python[agent]'"
         )
         raise typer.Exit(1) from e
-    
+
     if agent_type == "openai":
         try:
             from hud.agents import OperatorAgent
@@ -49,14 +44,14 @@ def build_agent(
                 "Please install with: pip install 'hud-python[agent]'"
             )
             raise typer.Exit(1) from e
-            
+
         allowed_tools = allowed_tools or ["openai_computer"]
-        
+
         return OperatorAgent(
             allowed_tools=allowed_tools,
             response_agent=ResponseAgent(),
         )
-    
+
     # Fallback Claude agent (Anthropic)
     try:
         from hud.agents import ClaudeAgent
@@ -66,10 +61,10 @@ def build_agent(
             "Please install with: pip install 'hud-python[agent]'"
         )
         raise typer.Exit(1) from e
-        
+
     model = model or "claude-sonnet-4-20250514"
     allowed_tools = allowed_tools or ["anthropic_computer"]
-    
+
     return ClaudeAgent(
         model=model,
         allowed_tools=allowed_tools,
@@ -86,9 +81,9 @@ async def run_single_task(
     max_steps: int = 10,
 ) -> None:
     """Load one task and execute it, or detect if JSON contains a list and run as dataset."""
-    
+
     design.info("📊 Loading dataset…")
-    
+
     # Import Task and run_dataset lazily
     try:
         from hud.datasets import Task, run_dataset
@@ -98,21 +93,22 @@ async def run_single_task(
             "Please install with: pip install 'hud-python[agent]'"
         )
         raise typer.Exit(1) from e
-    
+
     # Check if it's a JSON file
     path = Path(source)
     if path.exists() and path.suffix == ".json":
-        with open(path, "r") as f:
+        with open(path) as f:  # noqa: ASYNC230
             json_data = json.load(f)
-        
+
         # Check if JSON contains a list of tasks
         if isinstance(json_data, list):
             design.info(f"Found {len(json_data)} tasks in JSON file, running as dataset…")
-            
+
             # Build agent class and config for run_dataset
             if agent_type == "openai":
                 try:
                     from hud.agents import OperatorAgent
+
                     agent_class = OperatorAgent
                 except ImportError as e:
                     design.error(
@@ -120,13 +116,14 @@ async def run_single_task(
                         "Please install with: pip install 'hud-python[agent]'"
                     )
                     raise typer.Exit(1) from e
-                    
+
                 agent_config: dict[str, Any] = {
                     "allowed_tools": allowed_tools or ["openai_computer"],
                 }
             else:
                 try:
                     from hud.agents import ClaudeAgent
+
                     agent_class = ClaudeAgent
                 except ImportError as e:
                     design.error(
@@ -134,12 +131,12 @@ async def run_single_task(
                         "Please install with: pip install 'hud-python[agent]'"
                     )
                     raise typer.Exit(1) from e
-                    
+
                 agent_config = {
                     "model": model or "claude-sonnet-4-20250514",
                     "allowed_tools": allowed_tools or ["anthropic_computer"],
                 }
-            
+
             # Run as dataset with single-task concurrency to maintain debug behavior
             results = await run_dataset(
                 name=f"JSON Dataset: {path.name}",
@@ -151,12 +148,12 @@ async def run_single_task(
                 max_steps=max_steps,
                 auto_respond=True,
             )
-            
+
             # Display summary
-            successful = sum(1 for r in results if getattr(r, 'reward', 0) > 0)
+            successful = sum(1 for r in results if getattr(r, "reward", 0) > 0)
             design.success(f"Completed {len(results)} tasks: {successful} successful")
             return
-        
+
         # Single task JSON
         task = Task(**json_data)
     else:
@@ -169,15 +166,15 @@ async def run_single_task(
                 "Please install with: pip install 'hud-python[agent]'"
             )
             raise typer.Exit(1) from e
-            
+
         dataset = load_dataset(source, split="train")
-        
+
         # Get first task from dataset
         sample_task = dataset[0]  # type: ignore[index]
         task = Task(**sample_task)  # type: ignore[arg-type]
-    
+
     task_prompt = task.prompt[:50] + "..." if len(task.prompt) > 50 else task.prompt
-    
+
     with hud.trace(name=task_prompt):
         agent = build_agent(
             agent_type,
@@ -199,7 +196,7 @@ async def run_full_dataset(
     max_steps: int = 50,
 ) -> list[Any]:
     """Run evaluation across the entire dataset using hud.datasets.run_dataset."""
-    
+
     # Import run_dataset lazily
     try:
         from hud.datasets import run_dataset
@@ -209,28 +206,29 @@ async def run_full_dataset(
             "Please install with: pip install 'hud-python[agent]'"
         )
         raise typer.Exit(1) from e
-    
+
     # Check if source is a JSON file with list of tasks
     path = Path(source)
     dataset_or_tasks = source
-    dataset_name = source.split('/')[-1]
-    
+    dataset_name = source.split("/")[-1]
+
     if path.exists() and path.suffix == ".json":
-        with open(path, "r") as f:
+        with open(path) as f:  # noqa: ASYNC230
             json_data = json.load(f)
-        
+
         if isinstance(json_data, list):
             dataset_or_tasks = json_data
             dataset_name = f"JSON Dataset: {path.name}"
             design.info(f"Found {len(json_data)} tasks in JSON file")
         else:
-            design.error(f"JSON file must contain a list of tasks when using --full flag")
+            design.error("JSON file must contain a list of tasks when using --full flag")
             raise typer.Exit(1)
-    
+
     # Build agent class + config for run_dataset
     if agent_type == "openai":
         try:
             from hud.agents import OperatorAgent
+
             agent_class = OperatorAgent
         except ImportError as e:
             design.error(
@@ -238,13 +236,14 @@ async def run_full_dataset(
                 "Please install with: pip install 'hud-python[agent]'"
             )
             raise typer.Exit(1) from e
-            
+
         agent_config: dict[str, Any] = {
             "allowed_tools": allowed_tools or ["openai_computer"],
         }
     else:
         try:
             from hud.agents import ClaudeAgent
+
             agent_class = ClaudeAgent
         except ImportError as e:
             design.error(
@@ -252,12 +251,12 @@ async def run_full_dataset(
                 "Please install with: pip install 'hud-python[agent]'"
             )
             raise typer.Exit(1) from e
-            
+
         agent_config = {
             "model": model or "claude-sonnet-4-20250514",
             "allowed_tools": allowed_tools or ["anthropic_computer"],
         }
-    
+
     design.info("🚀 Running evaluation…")
     return await run_dataset(
         name=f"Evaluation {dataset_name}",
@@ -274,7 +273,7 @@ async def run_full_dataset(
 def eval_command(
     source: str = typer.Argument(
         ...,
-        help="HuggingFace dataset identifier (e.g. 'hud-evals/SheetBench-50'), single task JSON file, or JSON file with list of tasks",
+        help="HuggingFace dataset identifier (e.g. 'hud-evals/SheetBench-50'), single task JSON file, or JSON file with list of tasks",  # noqa: E501
     ),
     full: bool = typer.Option(
         False,
@@ -308,72 +307,76 @@ def eval_command(
     ),
 ) -> None:
     """🚀 Run evaluation on datasets or individual tasks with agents.
-    
+
     Examples:
         # Evaluate a single task from SheetBench
         hud eval hud-evals/SheetBench-50
-        
+
         # Evaluate the FULL SheetBench dataset with Claude
         hud eval hud-evals/SheetBench-50 --full --agent claude
-        
+
         # Run a single task from a JSON file
         hud eval task.json
-        
+
         # Run multiple tasks from a JSON file (auto-detects list)
         hud eval tasks.json  # If tasks.json contains a list, runs all tasks
-        
+
         # Run JSON list with full dataset mode and concurrency
         hud eval tasks.json --full --max-concurrent 10
-        
+
         # Run with OpenAI Operator agent
         hud eval hud-evals/OSWorld-Gold-Beta --agent openai
     """
-    from hud.settings import settings
     import os
-    
+
+    from hud.settings import settings
+
     # Check for required API keys
     if agent == "claude":
         if not settings.anthropic_api_key or not os.environ.get("ANTHROPIC_API_KEY"):
             design.error("ANTHROPIC_API_KEY is required for Claude agent")
             design.info("Set it in your environment or .env file: ANTHROPIC_API_KEY=your-key-here")
             raise typer.Exit(1)
-    elif agent == "openai":
-        if not settings.openai_api_key or not os.environ.get("OPENAI_API_KEY"):
-            design.error("OPENAI_API_KEY is required for OpenAI agent")
-            design.info("Set it in your environment or .env file: OPENAI_API_KEY=your-key-here")
-            raise typer.Exit(1)
-    
+    elif agent == "openai" and (
+        not settings.openai_api_key or not os.environ.get("OPENAI_API_KEY")
+    ):
+        design.error("OPENAI_API_KEY is required for OpenAI agent")
+        design.info("Set it in your environment or .env file: OPENAI_API_KEY=your-key-here")
+        raise typer.Exit(1)
+
     # Check for HUD_API_KEY if using HUD services
     if not settings.api_key or not os.environ.get("HUD_API_KEY"):
         design.warning("HUD_API_KEY not set. Some features may be limited.")
         design.info("Get your API key at: https://app.hud.so")
-    
+
     # Parse allowed tools
     allowed_tools_list = (
-        [t.strip() for t in allowed_tools.split(",") if t.strip()]
-        if allowed_tools
-        else None
+        [t.strip() for t in allowed_tools.split(",") if t.strip()] if allowed_tools else None
     )
-    
+
     # Set default max_steps if not provided
     if max_steps is None:
         max_steps = 50 if full else 10
-    
+
     # Run evaluation
     if full:
-        asyncio.run(run_full_dataset(
-            source,
-            agent_type=agent,
-            model=model,
-            allowed_tools=allowed_tools_list,
-            max_concurrent=max_concurrent,
-            max_steps=max_steps,
-        ))
+        asyncio.run(
+            run_full_dataset(
+                source,
+                agent_type=agent,
+                model=model,
+                allowed_tools=allowed_tools_list,
+                max_concurrent=max_concurrent,
+                max_steps=max_steps,
+            )
+        )
     else:
-        asyncio.run(run_single_task(
-            source,
-            agent_type=agent,
-            model=model,
-            allowed_tools=allowed_tools_list,
-            max_steps=max_steps,
-        ))
+        asyncio.run(
+            run_single_task(
+                source,
+                agent_type=agent,
+                model=model,
+                allowed_tools=allowed_tools_list,
+                max_steps=max_steps,
+            )
+        )

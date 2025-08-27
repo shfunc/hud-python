@@ -15,10 +15,10 @@ import hud
 if TYPE_CHECKING:
     from langchain.schema.language_model import BaseLanguageModel
     from langchain_core.tools import BaseTool
-    from mcp_use.adapters.langchain_adapter import LangChainAdapter
+    from mcp_use.adapters.langchain_adapter import LangChainAdapter  # type: ignore[attr-defined]
 
 try:
-    from mcp_use.adapters.langchain_adapter import LangChainAdapter
+    from mcp_use.adapters.langchain_adapter import LangChainAdapter  # type: ignore[attr-defined]
 except ImportError:
     LangChainAdapter = None  # type: ignore[misc, assignment]
 

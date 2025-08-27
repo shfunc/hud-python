@@ -93,10 +93,10 @@ class HUDDesign:
         """
         console = self._stderr_console if stderr else self._stdout_console
         console.print(f"[default not bold]{message}[/default not bold]")
-    
+
     def print(self, message: str, stderr: bool = True) -> None:
         """Print a message.
-        
+
         Args:
             message: The message to print
             stderr: If True, output to stderr (default), otherwise stdout
@@ -136,7 +136,9 @@ class HUDDesign:
         console = self._stderr_console if stderr else self._stdout_console
         console.print(f"[default not bold]{json_str}[/default not bold]")
 
-    def key_value_table(self, data: dict[str, str], show_header: bool = False, stderr: bool = True) -> None:
+    def key_value_table(
+        self, data: dict[str, str], show_header: bool = False, stderr: bool = True
+    ) -> None:
         """Print a key-value table.
 
         Args:
@@ -197,7 +199,14 @@ class HUDDesign:
         console = self._stderr_console if stderr else self._stdout_console
         console.print(f"\n[yellow]💡 Hint: {hint}[/yellow]")
 
-    def status_item(self, label: str, value: str, status: str = "success", primary: bool = False, stderr: bool = True) -> None:
+    def status_item(
+        self,
+        label: str,
+        value: str,
+        status: str = "success",
+        primary: bool = False,
+        stderr: bool = True,
+    ) -> None:
         """Print a status item with indicator.
 
         Args:
@@ -211,18 +220,20 @@ class HUDDesign:
             "success": f"[{GREEN} not bold]✓[/{GREEN} not bold]",
             "error": f"[{RED} not bold]✗[/{RED} not bold]",
             "warning": "[yellow]⚠[/yellow]",
-            "info": f"[{DIM}]•[/{DIM}]"
+            "info": f"[{DIM}]•[/{DIM}]",
         }
-        
+
         indicator = indicators.get(status, indicators["info"])
         console = self._stderr_console if stderr else self._stdout_console
-        
+
         if primary:
             console.print(f"{indicator} {label}: [bold cyan]{value}[/bold cyan]")
         else:
             console.print(f"{indicator} {label}: {value}")
 
-    def command_example(self, command: str, description: str | None = None, stderr: bool = True) -> None:
+    def command_example(
+        self, command: str, description: str | None = None, stderr: bool = True
+    ) -> None:
         """Print a command example with cyan highlighting.
 
         Args:

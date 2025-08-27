@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest import mock
 
-import pytest
 import yaml
 
 from hud.cli.utils.registry import (
@@ -25,7 +24,7 @@ class TestGetRegistryDir:
         """Test default registry directory."""
         with mock.patch("pathlib.Path.home") as mock_home:
             mock_home.return_value = Path("/home/user")
-            
+
             registry_dir = get_registry_dir()
             assert registry_dir == Path("/home/user/.hud/envs")
 
@@ -124,28 +123,25 @@ class TestSaveToRegistry:
         """Test successful save to registry."""
         mock_design = mock.Mock()
         mock_design_class.return_value = mock_design
-        
+
         # Mock home directory
         with mock.patch("pathlib.Path.home", return_value=tmp_path):
-            lock_data = {
-                "image": "test:latest@sha256:abc123",
-                "tools": ["tool1", "tool2"]
-            }
-            
+            lock_data = {"image": "test:latest@sha256:abc123", "tools": ["tool1", "tool2"]}
+
             result = save_to_registry(lock_data, "test:latest@sha256:abc123def456789")
-            
+
             assert result is not None
             assert result.exists()
             assert result.name == "hud.lock.yaml"
-            
+
             # Verify content
             with open(result) as f:
                 saved_data = yaml.safe_load(f)
             assert saved_data == lock_data
-            
+
             # Verify directory structure
             assert result.parent.name == "abc123def456"
-            
+
             mock_design.success.assert_called_once()
 
     @mock.patch("hud.cli.utils.registry.HUDDesign")
@@ -153,12 +149,12 @@ class TestSaveToRegistry:
         """Test save with verbose output."""
         mock_design = mock.Mock()
         mock_design_class.return_value = mock_design
-        
+
         with mock.patch("pathlib.Path.home", return_value=tmp_path):
             lock_data = {"image": "test:v1"}
-            
+
             result = save_to_registry(lock_data, "test:v1", verbose=True)
-            
+
             assert result is not None
             # Should show verbose info
             assert mock_design.info.call_count >= 1
@@ -168,16 +164,18 @@ class TestSaveToRegistry:
         """Test handling save failure."""
         mock_design = mock.Mock()
         mock_design_class.return_value = mock_design
-        
+
         # Mock file operations to fail
-        with mock.patch("builtins.open", side_effect=IOError("Permission denied")):
-            with mock.patch("pathlib.Path.home", return_value=Path("/tmp")):
-                lock_data = {"image": "test:latest"}
-                
-                result = save_to_registry(lock_data, "test:latest", verbose=True)
-                
-                assert result is None
-                mock_design.warning.assert_called_once()
+        with (
+            mock.patch("builtins.open", side_effect=OSError("Permission denied")),
+            mock.patch("pathlib.Path.home", return_value=Path("/tmp")),
+        ):
+            lock_data = {"image": "test:latest"}
+
+            result = save_to_registry(lock_data, "test:latest", verbose=True)
+
+            assert result is None
+            mock_design.warning.assert_called_once()
 
 
 class TestLoadFromRegistry:
@@ -190,11 +188,11 @@ class TestLoadFromRegistry:
             registry_dir = get_registry_dir()
             digest_dir = registry_dir / "abc123"
             digest_dir.mkdir(parents=True)
-            
+
             lock_data = {"image": "test:latest", "version": "1.0"}
             lock_file = digest_dir / "hud.lock.yaml"
             lock_file.write_text(yaml.dump(lock_data))
-            
+
             # Load it back
             loaded = load_from_registry("abc123")
             assert loaded == lock_data
@@ -211,10 +209,10 @@ class TestLoadFromRegistry:
             registry_dir = get_registry_dir()
             digest_dir = registry_dir / "bad"
             digest_dir.mkdir(parents=True)
-            
+
             lock_file = digest_dir / "hud.lock.yaml"
             lock_file.write_text("invalid: yaml: content:")
-            
+
             loaded = load_from_registry("bad")
             assert loaded is None
 
@@ -232,26 +230,26 @@ class TestListRegistryEntries:
         """Test listing multiple entries."""
         with mock.patch("pathlib.Path.home", return_value=tmp_path):
             registry_dir = get_registry_dir()
-            
+
             # Create several entries
             for digest in ["abc123", "def456", "ghi789"]:
                 digest_dir = registry_dir / digest
                 digest_dir.mkdir(parents=True)
                 lock_file = digest_dir / "hud.lock.yaml"
                 lock_file.write_text(f"image: test:{digest}")
-            
+
             # Create a directory without lock file (should be ignored)
             (registry_dir / "nolockfile").mkdir(parents=True)
-            
+
             # Create a file in registry dir (should be ignored)
             (registry_dir / "README.txt").write_text("info")
-            
+
             entries = list_registry_entries()
-            
+
             assert len(entries) == 3
             digests = [entry[0] for entry in entries]
             assert set(digests) == {"abc123", "def456", "ghi789"}
-            
+
             # Verify all paths are lock files
             for _, lock_path in entries:
                 assert lock_path.name == "hud.lock.yaml"

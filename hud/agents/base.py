@@ -306,7 +306,7 @@ class MCPAgent(ABC):
                         if decision == "STOP":
                             # Try to submit response through lifecycle tool
                             await self._maybe_submit_response(response, messages)
-                            
+
                             logger.info("Stopping execution")
                             final_response = response
                             break
@@ -487,7 +487,7 @@ class MCPAgent(ABC):
             self._available_tools.append(tool)
             # Simplified mapping - just tool name to tool
             self._tool_map[tool.name] = tool
-            
+
             # Auto-detect response tool as a lifecycle tool
             if tool.name == "response" and "response" not in self.lifecycle_tools:
                 logger.debug("Auto-detected 'response' tool as a lifecycle tool")
@@ -495,7 +495,7 @@ class MCPAgent(ABC):
 
     async def _maybe_submit_response(self, response: AgentResponse, messages: list[Any]) -> None:
         """Submit response through lifecycle tool if available.
-        
+
         Args:
             response: The agent's response
             messages: The current message history (will be modified in-place)
@@ -506,17 +506,16 @@ class MCPAgent(ABC):
             try:
                 # Call the response tool with the agent's response
                 response_tool_call = MCPToolCall(
-                    name="response",
-                    arguments={"response": response.content, "messages": messages}
+                    name="response", arguments={"response": response.content, "messages": messages}
                 )
                 response_results = await self.call_tools(response_tool_call)
-                
+
                 # Format and add the response tool results to messages
                 response_messages = await self.format_tool_results(
                     [response_tool_call], response_results
                 )
                 messages.extend(response_messages)
-                
+
                 # Mark the task as done
                 logger.info("Response lifecycle tool executed, marking task as done")
             except Exception as e:
@@ -579,7 +578,7 @@ class MCPAgent(ABC):
                 logger.warning("Failed to close auto-created trace: %s", e)
             finally:
                 self._auto_trace_cm = None
-        
+
         # Clean up auto-created client
         if self._auto_created_client and self.mcp_client:
             try:
