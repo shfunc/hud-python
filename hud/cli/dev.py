@@ -35,6 +35,7 @@ def create_proxy_server(
     directory: str | Path,
     image_name: str,
     no_reload: bool = False,
+    full_reload: bool = False,
     verbose: bool = False,
     docker_args: list[str] | None = None,
     interactive: bool = False,
@@ -48,8 +49,11 @@ def create_proxy_server(
         design.warning(f"Could not extract CMD from {image_name}, using default")
         original_cmd = ["python", "-m", "hud_controller.server"]
 
-    # Generate container name from image
-    container_name = f"{image_name.replace(':', '-').replace('/', '-')}"
+    # Generate unique container name from image to avoid conflicts between multiple instances
+    import os
+    pid = str(os.getpid())[-6:]  # Last 6 digits of process ID for uniqueness
+    base_name = image_name.replace(':', '-').replace('/', '-')
+    container_name = f"{base_name}-{pid}"
 
     # Build the docker run command
     docker_cmd = [
@@ -73,14 +77,20 @@ def create_proxy_server(
     if interactive:
         no_reload = True
 
-    if not no_reload:
-        # Inject our supervisor into the CMD
+    # Validate reload options
+    if no_reload and full_reload:
+        design.warning("Cannot use --full-reload with --no-reload, ignoring --full-reload")
+        full_reload = False
+
+    if not no_reload and not full_reload:
+        # Standard hot-reload: inject supervisor for server restart within container
         modified_cmd = inject_supervisor(original_cmd)
         docker_cmd.extend(["--entrypoint", modified_cmd[0]])
         docker_cmd.append(image_name)
         docker_cmd.extend(modified_cmd[1:])
     else:
-        # No reload - use original CMD
+        # No reload or full reload: use original CMD without supervisor
+        # Note: Full reload logic (container restart) would be implemented here in the future
         docker_cmd.append(image_name)
 
     # Create configuration following MCPConfig schema
@@ -96,9 +106,14 @@ def create_proxy_server(
 
     # Debug output - only if verbose
     if verbose:
-        if not no_reload:
+        if not no_reload and not full_reload:
+            design.info("Mode: Hot-reload (server restart within container)")
             design.info("Watching: /app/src for changes")
+        elif full_reload:
+            design.info("Mode: Full reload (container restart on file changes)")
+            design.info("Note: Full container restart not yet implemented, using no-reload mode")
         else:
+            design.info("Mode: No reload")
             design.info("Container will run without hot-reload")
         design.command_example(f"docker logs -f {container_name}", "View container logs")
 
@@ -127,6 +142,7 @@ async def start_mcp_proxy(
     transport: str,
     port: int,
     no_reload: bool = False,
+    full_reload: bool = False,
     verbose: bool = False,
     inspector: bool = False,
     no_logs: bool = False,
@@ -212,8 +228,11 @@ async def start_mcp_proxy(
         design.error(f"Source directory not found: {src_path}")
         raise click.Abort
 
-    # Extract container name from the proxy configuration
-    container_name = f"{image_name.replace(':', '-').replace('/', '-')}"
+    # Extract container name from the proxy configuration (must match create_proxy_server naming)
+    import os
+    pid = str(os.getpid())[-6:]  # Last 6 digits of process ID for uniqueness
+    base_name = image_name.replace(':', '-').replace('/', '-')
+    container_name = f"{base_name}-{pid}"
 
     # Remove any existing container with the same name (silently)
     # Note: The proxy creates containers on-demand when clients connect
@@ -347,6 +366,7 @@ async def start_mcp_proxy(
         # Always show waiting message
         log_design.info("")  # Empty line for spacing
         log_design.progress_message("⏳ Waiting for first client connection to start container...")
+        log_design.info(f"📋 Looking for container: {container_name}")
 
         # Keep trying to stream logs - container is created on demand
         has_shown_started = False
@@ -397,7 +417,8 @@ async def start_mcp_proxy(
 
                         # Show all logs with gold formatting like hud debug
                         # Format all logs in gold/dim style like hud debug's stderr
-                        log_design.console.print(
+                        # Use stdout console to avoid stderr redirection when not verbose
+                        log_design._stdout_console.print(
                             f"[rgb(192,150,12)]■[/rgb(192,150,12)] {decoded_line}", highlight=False
                         )
 
@@ -408,16 +429,18 @@ async def start_mcp_proxy(
                 await asyncio.sleep(1)
                 continue  # Loop back to check if container exists
 
-            except Exception:
-                # Some unexpected error
+            except Exception as e:
+                # Some unexpected error - show it so we can debug
+                log_design.warning(f"Failed to stream Docker logs: {e}")
                 if verbose:
-                    log_design.warning("Failed to stream logs")
+                    import traceback
+                    log_design.warning(f"Traceback: {traceback.format_exc()}")
                 await asyncio.sleep(1)
 
     # CRITICAL: Create proxy AFTER all logging setup to prevent it from resetting logging config
     # This is important because FastMCP might initialize loggers during creation
     proxy = create_proxy_server(
-        directory, image_name, no_reload, verbose, docker_args or [], interactive
+        directory, image_name, no_reload, full_reload, verbose, docker_args or [], interactive
     )
 
     # One more attempt to suppress the FastMCP server log
@@ -548,6 +571,7 @@ def run_mcp_dev_server(
     transport: str = "http",
     port: int = 8765,
     no_reload: bool = False,
+    full_reload: bool = False,
     verbose: bool = False,
     inspector: bool = False,
     no_logs: bool = False,
@@ -706,6 +730,7 @@ def run_mcp_dev_server(
                 transport,
                 port,
                 no_reload,
+                full_reload,
                 verbose,
                 inspector,
                 no_logs,

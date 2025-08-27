@@ -351,7 +351,7 @@ from . import basic, advanced  # This registers all @setup.tool() decorated func
 
 # In setup/basic.py
 from . import setup
-from hud.tools.types import SetupResult
+from mcp.types import TextContent
 
 @setup.tool()
 async def reset(**kwargs):
@@ -361,14 +361,14 @@ async def reset(**kwargs):
         **kwargs: Additional parameters
     
     Returns:
-        SetupResult
+        TextContent
     """
     # Access environment from the hub
     env = setup.env
     await env.reset_state()
-    return SetupResult(
-        content="Environment reset to initial state",
-        info={"status": "success"}
+    return TextContent(
+        text="Environment reset to initial state",
+        type="text"
     )
 
 @setup.tool()
@@ -379,14 +379,14 @@ async def seed_data(num_items: int = 5):
         num_items: Number of items to create
     
     Returns:
-        SetupResult
+        TextContent
     """
     # Access environment from the hub
     env = setup.env
     items = await env.create_items(num_items)
-    return SetupResult(
-        content=f"Created {len(items)} items",
-        info={"items_created": len(items)}
+    return TextContent(
+        text=f"Created {len(items)} items",
+        type="text"
     )
 
 # In evaluate/__init__.py
@@ -827,13 +827,13 @@ Before making changes:
 ```python
 # In setup/my_new_setup.py
 from . import setup
-from hud.tools import BaseSetup, SetupResult
+from hud.tools import BaseSetup, TextContent
 
 @setup("my_new_setup", description="Clear description of what this does")
 class MyNewSetup(BaseSetup):
-    async def __call__(self, context, param1: str, param2: int = 10) -> SetupResult:
+    async def __call__(self, context, param1: str, param2: int = 10) -> TextContent:
         # Implementation
-        return {"status": "success", "details": "..."}
+        return TextContent(...)
 ```
 
 **Adding New Evaluators**
