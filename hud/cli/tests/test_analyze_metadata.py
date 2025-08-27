@@ -11,12 +11,12 @@ from unittest import mock
 import pytest
 import yaml
 
-from hud.cli.analyze_metadata import (
+from hud.cli.utils.metadata import (
     analyze_from_metadata,
     check_local_cache,
     fetch_lock_from_registry,
 )
-from hud.cli.registry import save_to_registry
+from hud.cli.utils.registry import save_to_registry
 
 
 @pytest.fixture
@@ -121,9 +121,9 @@ class TestFetchLockFromRegistry:
 
         fetch_lock_from_registry("test/env")
         
-        # Check that the URL includes :latest
+        # Check that the URL includes :latest (URL-encoded)
         call_args = mock_get.call_args
-        assert "test/env:latest" in call_args[0][0]
+        assert "test/env%3Alatest" in call_args[0][0]
 
     @mock.patch("requests.get")
     def test_fetch_lock_failure(self, mock_get):
@@ -150,7 +150,7 @@ class TestCheckLocalCache:
     def test_check_local_cache_found(self, mock_registry_dir, sample_lock_data, monkeypatch):
         """Test finding lock data in local cache."""
         # Mock registry directory
-        monkeypatch.setattr("hud.cli.registry.get_registry_dir", lambda: mock_registry_dir)
+        monkeypatch.setattr("hud.cli.utils.registry.get_registry_dir", lambda: mock_registry_dir)
         
         # Save sample data to registry
         save_to_registry(sample_lock_data, "test/environment:latest", verbose=False)
@@ -162,17 +162,17 @@ class TestCheckLocalCache:
 
     def test_check_local_cache_not_found(self, mock_registry_dir, monkeypatch):
         """Test when lock data not in local cache."""
-        monkeypatch.setattr("hud.cli.registry.get_registry_dir", lambda: mock_registry_dir)
+        monkeypatch.setattr("hud.cli.utils.registry.get_registry_dir", lambda: mock_registry_dir)
         
         result = check_local_cache("nonexistent/env:latest")
         assert result is None
 
     def test_check_local_cache_invalid_yaml(self, mock_registry_dir, monkeypatch):
         """Test when lock file has invalid YAML."""
-        monkeypatch.setattr("hud.cli.registry.get_registry_dir", lambda: mock_registry_dir)
+        monkeypatch.setattr("hud.cli.utils.registry.get_registry_dir", lambda: mock_registry_dir)
         
         # Create invalid lock file
-        digest = "sha256:invalid"
+        digest = "invalid"
         lock_file = mock_registry_dir / digest / "hud.lock.yaml"
         lock_file.parent.mkdir(parents=True)
         lock_file.write_text("invalid: yaml: content:")
@@ -189,8 +189,8 @@ class TestCheckLocalCache:
 class TestAnalyzeFromMetadata:
     """Test the main analyze_from_metadata function."""
 
-    @mock.patch("hud.cli.analyze_metadata.check_local_cache")
-    @mock.patch("hud.cli.analyze_metadata.console")
+    @mock.patch("hud.cli.utils.metadata.check_local_cache")
+    @mock.patch("hud.cli.utils.metadata.console")
     async def test_analyze_from_local_cache(self, mock_console, mock_check, sample_lock_data):
         """Test analyzing from local cache."""
         mock_check.return_value = sample_lock_data
@@ -201,10 +201,10 @@ class TestAnalyzeFromMetadata:
         # Should output JSON
         mock_console.print_json.assert_called_once()
 
-    @mock.patch("hud.cli.analyze_metadata.check_local_cache")
-    @mock.patch("hud.cli.analyze_metadata.fetch_lock_from_registry")
-    @mock.patch("hud.cli.analyze_metadata.save_to_registry")
-    @mock.patch("hud.cli.analyze_metadata.console")
+    @mock.patch("hud.cli.utils.metadata.check_local_cache")
+    @mock.patch("hud.cli.utils.metadata.fetch_lock_from_registry")
+    @mock.patch("hud.cli.utils.registry.save_to_registry")
+    @mock.patch("hud.cli.utils.metadata.console")
     async def test_analyze_from_registry(
         self, mock_console, mock_save, mock_fetch, mock_check, sample_lock_data
     ):
@@ -219,10 +219,10 @@ class TestAnalyzeFromMetadata:
         mock_save.assert_called_once()  # Should save to cache
         mock_console.print_json.assert_called_once()
 
-    @mock.patch("hud.cli.analyze_metadata.check_local_cache")
-    @mock.patch("hud.cli.analyze_metadata.fetch_lock_from_registry")
-    @mock.patch("hud.cli.analyze_metadata.design")
-    @mock.patch("hud.cli.analyze_metadata.console")
+    @mock.patch("hud.cli.utils.metadata.check_local_cache")
+    @mock.patch("hud.cli.utils.metadata.fetch_lock_from_registry")
+    @mock.patch("hud.cli.utils.metadata.design")
+    @mock.patch("hud.cli.utils.metadata.console")
     async def test_analyze_not_found(self, mock_console, mock_design, mock_fetch, mock_check):
         """Test when environment not found anywhere."""
         mock_check.return_value = None
@@ -235,8 +235,8 @@ class TestAnalyzeFromMetadata:
         # Should print suggestions
         mock_console.print.assert_called()
 
-    @mock.patch("hud.cli.analyze_metadata.check_local_cache")
-    @mock.patch("hud.cli.analyze_metadata.console")
+    @mock.patch("hud.cli.utils.metadata.check_local_cache")
+    @mock.patch("hud.cli.utils.metadata.console")
     async def test_analyze_verbose_mode(self, mock_console, mock_check, sample_lock_data):
         """Test verbose mode includes input schemas."""
         mock_check.return_value = sample_lock_data
@@ -250,8 +250,8 @@ class TestAnalyzeFromMetadata:
         output_data = json.loads(call_args)
         assert "inputSchema" in output_data["tools"][0]
 
-    @mock.patch("hud.cli.analyze_metadata.check_local_cache")
-    @mock.patch("hud.cli.analyze_metadata.fetch_lock_from_registry")
+    @mock.patch("hud.cli.utils.metadata.check_local_cache")
+    @mock.patch("hud.cli.utils.metadata.fetch_lock_from_registry")
     async def test_analyze_registry_reference_parsing(self, mock_fetch, mock_check):
         """Test parsing of different registry reference formats."""
         mock_check.return_value = None

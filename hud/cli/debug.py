@@ -14,7 +14,7 @@ from rich.console import Console
 from hud.clients import MCPClient
 from hud.utils.design import HUDDesign
 
-from .utils import CaptureLogger, Colors, analyze_error_for_hints
+from .utils.logging import CaptureLogger, Colors, analyze_error_for_hints
 
 console = Console()
 

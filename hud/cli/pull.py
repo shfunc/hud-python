@@ -15,7 +15,7 @@ from rich.table import Table
 from hud.settings import settings
 from hud.utils.design import HUDDesign
 
-from .registry import save_to_registry
+from .utils.registry import save_to_registry
 
 
 def get_docker_manifest(image: str) -> dict | None:

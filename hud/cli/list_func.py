@@ -12,7 +12,7 @@ from rich.table import Table
 
 from hud.utils.design import HUDDesign
 
-from .registry import get_registry_dir, list_registry_entries, extract_name_and_tag
+from .utils.registry import get_registry_dir, list_registry_entries, extract_name_and_tag
 
 
 def format_timestamp(timestamp: float | None) -> str:

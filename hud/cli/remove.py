@@ -10,7 +10,7 @@ import yaml
 
 from hud.utils.design import HUDDesign
 
-from .registry import get_registry_dir, list_registry_entries, load_from_registry
+from .utils.registry import get_registry_dir, list_registry_entries, load_from_registry
 
 
 def remove_environment(

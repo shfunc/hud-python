@@ -11,7 +11,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 from google.oauth2.service_account import Credentials
 from fastmcp import Context
-from hud.tools.types import SetupResult
+from mcp.types import TextContent
 from . import setup
 
 logger = logging.getLogger(__name__)
@@ -178,7 +178,7 @@ async def sheets_from_xlsx(
     # Validate parameters
     if not file_url:
         logger.error("Missing required file_url parameter")
-        return SetupResult(content="Missing required parameter: file_url", isError=True)
+        return TextContent(text="Missing required parameter: file_url", type="text")
 
     logger.info(f"Downloading Excel file from: {file_url}")
 
@@ -231,26 +231,30 @@ async def sheets_from_xlsx(
         logger.info("Set sharing permissions")
 
         # Navigate to the sheet
-        playwright_tool = setup.env
+        persistent_ctx = setup.env
+        playwright_tool = getattr(persistent_ctx, 'playwright_tool', None)
         if playwright_tool and hasattr(playwright_tool, "page") and playwright_tool.page:
             page = playwright_tool.page
             logger.info(f"Navigating to sheet: {sheet_url}")
 
             # Use the unified navigation function
             await navigate_to_google_sheet(page, sheet_url, max_attempts=3)
+        else:
+            logger.warning("No playwright tool available for navigation")
 
         sheet_info = {"sheet_id": sheet_id, "sheet_url": sheet_url, "sheet_name": sheet_name}
 
-        return SetupResult(
-            content=f"Created and navigated to Google Sheet: {sheet_url}", info=sheet_info
+        return TextContent(
+            text=f"Created and navigated to Google Sheet '{sheet_name}': {sheet_url}",
+            type="text"
         )
 
     except httpx.HTTPError as e:
         logger.error(f"HTTP error downloading file: {str(e)}")
-        return SetupResult(content=f"Failed to download Excel file: {str(e)}", isError=True)
+        return TextContent(text=f"Failed to download Excel file: {str(e)}", type="text")
     except Exception as e:
         logger.error(f"Error in sheets_from_xlsx: {str(e)}")
-        return SetupResult(content=f"Failed to create sheet: {str(e)}", isError=True)
+        return TextContent(text=f"Failed to create sheet: {str(e)}", type="text")
 
 
 @setup.tool("sheets_from_bytes")
@@ -271,7 +275,7 @@ async def sheets_from_bytes(
     # Validate parameters
     if not base64_bytes:
         logger.error("Missing required base64_bytes parameter")
-        return SetupResult(content="Missing required parameter: base64_bytes", isError=True)
+        return TextContent(text="Missing required parameter: base64_bytes", type="text")
 
     file_bytes_b64 = base64_bytes
 
@@ -320,20 +324,24 @@ async def sheets_from_bytes(
         logger.info("Set sharing permissions")
 
         # Navigate to the sheet
-        playwright_tool = setup.env
+        persistent_ctx = setup.env
+        playwright_tool = getattr(persistent_ctx, 'playwright_tool', None)
         if playwright_tool and hasattr(playwright_tool, "page") and playwright_tool.page:
             page = playwright_tool.page
             logger.info(f"Navigating to sheet: {sheet_url}")
 
             # Use the unified navigation function
             await navigate_to_google_sheet(page, sheet_url, max_attempts=2)
+        else:
+            logger.warning("No playwright tool available for navigation")
 
         sheet_info = {"sheet_id": sheet_id, "sheet_url": sheet_url, "sheet_name": sheet_name}
 
-        return SetupResult(
-            content=f"Created and navigated to Google Sheet: {sheet_url}", info=sheet_info
+        return TextContent(
+            text=f"Created and navigated to Google Sheet '{sheet_name}': {sheet_url}",
+            type="text"
         )
 
     except Exception as e:
         logger.error(f"Error in sheets_from_bytes: {str(e)}")
-        return SetupResult(content=f"Failed to create sheet: {str(e)}", isError=True)
+        return TextContent(text=f"Failed to create sheet: {str(e)}", type="text")

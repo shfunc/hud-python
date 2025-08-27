@@ -25,7 +25,9 @@ async def raw_last_action_is(
     logger.info(f"Evaluating raw_last_action_is: expected={expected_action}")
 
     # Get the playwright tool from the environment
-    playwright_tool = evaluate.env
+    # Get the playwright tool from the persistent context
+    persistent_ctx = evaluate.env
+    playwright_tool = getattr(persistent_ctx, 'playwright_tool', None)
     if not playwright_tool:
         logger.error("No playwright tool available")
         return EvaluationResult(

@@ -17,7 +17,7 @@ from hud.clients import MCPClient
 from hud.utils.design import HUDDesign
 from hud.version import __version__ as hud_version
 
-from .registry import save_to_registry
+from .utils.registry import save_to_registry
 
 
 def parse_version(version_str: str) -> tuple[int, int, int]:
@@ -113,30 +113,58 @@ def extract_env_vars_from_dockerfile(dockerfile_path: Path) -> tuple[list[str], 
     if not dockerfile_path.exists():
         return required, optional
 
-    # Simple parsing - look for ENV directives
-    # This is a basic implementation - could be enhanced
+    # Parse both ENV and ARG directives
     content = dockerfile_path.read_text()
+    arg_vars = set()  # Track ARG variables
+    
     for line in content.splitlines():
         line = line.strip()
-        if line.startswith("ENV "):
-            # Basic parsing - this could be more sophisticated
+        
+        # Look for ARG directives (build-time variables)
+        if line.startswith("ARG "):
             parts = line[4:].strip().split("=", 1)
-            if len(parts) == 2 and not parts[1].strip():
+            var_name = parts[0].strip()
+            if len(parts) == 1 or not parts[1].strip():
                 # No default value = required
-                required.append(parts[0])
+                arg_vars.add(var_name)
+                if var_name not in required:
+                    required.append(var_name)
+        
+        # Look for ENV directives (runtime variables)
+        elif line.startswith("ENV "):
+            parts = line[4:].strip().split("=", 1)
+            var_name = parts[0].strip()
+            
+            # Check if it references an ARG variable (e.g., ENV MY_VAR=$MY_VAR)
+            if len(parts) == 2 and parts[1].strip().startswith("$"):
+                ref_var = parts[1].strip()[1:]
+                if ref_var in arg_vars and var_name not in required:
+                    required.append(var_name)
+            elif len(parts) == 2 and not parts[1].strip():
+                # No default value = required
+                if var_name not in required:
+                    required.append(var_name)
             elif len(parts) == 1:
                 # No equals sign = required
-                required.append(parts[0])
+                if var_name not in required:
+                    required.append(var_name)
 
     return required, optional
 
 
-async def analyze_mcp_environment(image: str, verbose: bool = False) -> dict[str, Any]:
+async def analyze_mcp_environment(image: str, verbose: bool = False, env_vars: dict[str, str] | None = None) -> dict[str, Any]:
     """Analyze an MCP environment to extract metadata."""
     design = HUDDesign()
+    env_vars = env_vars or {}
 
     # Build Docker command to run the image
-    docker_cmd = ["docker", "run", "--rm", "-i", image]
+    docker_cmd = ["docker", "run", "--rm", "-i"]
+    
+    # Add environment variables
+    for key, value in env_vars.items():
+        docker_cmd.extend(["-e", f"{key}={value}"])
+    
+    docker_cmd.append(image)
 
     # Create MCP config
     config = {
@@ -209,10 +237,12 @@ async def analyze_mcp_environment(image: str, verbose: bool = False) -> dict[str
 
 
 def build_docker_image(
-    directory: Path, tag: str, no_cache: bool = False, verbose: bool = False
+    directory: Path, tag: str, no_cache: bool = False, verbose: bool = False,
+    build_args: dict[str, str] | None = None
 ) -> bool:
     """Build a Docker image from a directory."""
     design = HUDDesign()
+    build_args = build_args or {}
 
     # Check if Dockerfile exists
     dockerfile = directory / "Dockerfile"
@@ -224,6 +254,11 @@ def build_docker_image(
     cmd = ["docker", "build", "-t", tag]
     if no_cache:
         cmd.append("--no-cache")
+    
+    # Add build args
+    for key, value in build_args.items():
+        cmd.extend(["--build-arg", f"{key}={value}"])
+        
     cmd.append(str(directory))
 
     # Always show build output
@@ -253,10 +288,12 @@ def build_docker_image(
 
 
 def build_environment(
-    directory: str = ".", tag: str | None = None, no_cache: bool = False, verbose: bool = False
+    directory: str = ".", tag: str | None = None, no_cache: bool = False, verbose: bool = False,
+    env_vars: dict[str, str] | None = None
 ) -> None:
     """Build a HUD environment and generate lock file."""
     design = HUDDesign()
+    env_vars = env_vars or {}
     design.header("HUD Environment Build")
 
     # Resolve directory
@@ -292,8 +329,8 @@ def build_environment(
 
     design.progress_message(f"Building Docker image: {temp_tag}")
 
-    # Build the image
-    if not build_docker_image(env_dir, temp_tag, no_cache, verbose):
+    # Build the image (pass env vars as build args)
+    if not build_docker_image(env_dir, temp_tag, no_cache, verbose, env_vars):
         design.error("Docker build failed")
         raise typer.Exit(1)
 
@@ -305,7 +342,7 @@ def build_environment(
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        analysis = loop.run_until_complete(analyze_mcp_environment(temp_tag, verbose))
+        analysis = loop.run_until_complete(analyze_mcp_environment(temp_tag, verbose, env_vars))
     finally:
         loop.close()
 
@@ -335,6 +372,24 @@ def build_environment(
     # Extract environment variables from Dockerfile
     dockerfile_path = env_dir / "Dockerfile"
     required_env, optional_env = extract_env_vars_from_dockerfile(dockerfile_path)
+    
+    # Merge user-provided env vars with detected ones
+    provided_env_vars = {}
+    missing_required = []
+    if env_vars:
+        provided_env_vars = env_vars.copy()
+        # Track which required vars are still missing
+        missing_required = [e for e in required_env if e not in env_vars]
+        
+        # Show what env vars were provided
+        design.success(f"Using provided environment variables: {', '.join(env_vars.keys())}")
+    else:
+        missing_required = required_env[:]
+    
+    # Warn about missing required variables
+    if missing_required:
+        design.warning(f"Missing required environment variables: {', '.join(missing_required)}")
+        design.info("These can be added to the lock file after build or provided with -e flags")
 
     # Check for existing version and increment
     lock_path = env_dir / "hud.lock.yaml"
@@ -365,11 +420,20 @@ def build_environment(
         },
     }
 
-    # Only add environment variables if they exist
-    if required_env or optional_env:
+    # Add environment variables section if any exist
+    if missing_required or optional_env or provided_env_vars:
         lock_content["environment"]["variables"] = {}
-        if required_env:
-            lock_content["environment"]["variables"]["required"] = required_env
+        
+        # Add note about editing environment variables
+        lock_content["environment"]["variables"]["_note"] = (
+            "You can edit this section to add or modify environment variables. "
+            "Provided variables will be used when running the environment."
+        )
+        
+        if provided_env_vars:
+            lock_content["environment"]["variables"]["provided"] = provided_env_vars
+        if missing_required:
+            lock_content["environment"]["variables"]["required"] = missing_required
         if optional_env:
             lock_content["environment"]["variables"]["optional"] = optional_env
 
@@ -411,8 +475,13 @@ def build_environment(
         tag,
         "-t",
         version_tag,
-        str(env_dir),
     ]
+    
+    # Add build args for final build
+    for key, value in env_vars.items():
+        label_cmd.extend(["--build-arg", f"{key}={value}"])
+    
+    label_cmd.append(str(env_dir))
 
     # Run rebuild with proper encoding
     process = subprocess.Popen(  # noqa: S603
@@ -500,6 +569,7 @@ def build_command(
     ),
     no_cache: bool = typer.Option(False, "--no-cache", help="Build without Docker cache"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
+    env_vars: dict[str, str] | None = None,
 ) -> None:
     """Build a HUD environment and generate lock file."""
-    build_environment(directory, tag, no_cache, verbose)
+    build_environment(directory, tag, no_cache, verbose, env_vars)

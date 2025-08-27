@@ -85,13 +85,13 @@ async def run_single_task(
     allowed_tools: list[str] | None = None,
     max_steps: int = 10,
 ) -> None:
-    """Load one task and execute it."""
+    """Load one task and execute it, or detect if JSON contains a list and run as dataset."""
     
     design.info("📊 Loading dataset…")
     
-    # Import Task lazily
+    # Import Task and run_dataset lazily
     try:
-        from hud.datasets import Task
+        from hud.datasets import Task, run_dataset
     except ImportError as e:
         design.error(
             "Dataset dependencies are not installed. "
@@ -99,12 +99,66 @@ async def run_single_task(
         )
         raise typer.Exit(1) from e
     
-    # Check if it's a single task JSON file
+    # Check if it's a JSON file
     path = Path(source)
     if path.exists() and path.suffix == ".json":
         with open(path, "r") as f:
-            task_data = json.load(f)
-        task = Task(**task_data)
+            json_data = json.load(f)
+        
+        # Check if JSON contains a list of tasks
+        if isinstance(json_data, list):
+            design.info(f"Found {len(json_data)} tasks in JSON file, running as dataset…")
+            
+            # Build agent class and config for run_dataset
+            if agent_type == "openai":
+                try:
+                    from hud.agents import OperatorAgent
+                    agent_class = OperatorAgent
+                except ImportError as e:
+                    design.error(
+                        "OpenAI agent dependencies are not installed. "
+                        "Please install with: pip install 'hud-python[agent]'"
+                    )
+                    raise typer.Exit(1) from e
+                    
+                agent_config: dict[str, Any] = {
+                    "allowed_tools": allowed_tools or ["openai_computer"],
+                }
+            else:
+                try:
+                    from hud.agents import ClaudeAgent
+                    agent_class = ClaudeAgent
+                except ImportError as e:
+                    design.error(
+                        "Claude agent dependencies are not installed. "
+                        "Please install with: pip install 'hud-python[agent]'"
+                    )
+                    raise typer.Exit(1) from e
+                    
+                agent_config = {
+                    "model": model or "claude-sonnet-4-20250514",
+                    "allowed_tools": allowed_tools or ["anthropic_computer"],
+                }
+            
+            # Run as dataset with single-task concurrency to maintain debug behavior
+            results = await run_dataset(
+                name=f"JSON Dataset: {path.name}",
+                dataset=json_data,  # Pass the list directly
+                agent_class=agent_class,
+                agent_config=agent_config,
+                max_concurrent=1,  # Run sequentially for debug mode
+                metadata={"source": str(path)},
+                max_steps=max_steps,
+                auto_respond=True,
+            )
+            
+            # Display summary
+            successful = sum(1 for r in results if getattr(r, 'reward', 0) > 0)
+            design.success(f"Completed {len(results)} tasks: {successful} successful")
+            return
+        
+        # Single task JSON
+        task = Task(**json_data)
     else:
         # Load from HuggingFace dataset
         try:
@@ -156,6 +210,23 @@ async def run_full_dataset(
         )
         raise typer.Exit(1) from e
     
+    # Check if source is a JSON file with list of tasks
+    path = Path(source)
+    dataset_or_tasks = source
+    dataset_name = source.split('/')[-1]
+    
+    if path.exists() and path.suffix == ".json":
+        with open(path, "r") as f:
+            json_data = json.load(f)
+        
+        if isinstance(json_data, list):
+            dataset_or_tasks = json_data
+            dataset_name = f"JSON Dataset: {path.name}"
+            design.info(f"Found {len(json_data)} tasks in JSON file")
+        else:
+            design.error(f"JSON file must contain a list of tasks when using --full flag")
+            raise typer.Exit(1)
+    
     # Build agent class + config for run_dataset
     if agent_type == "openai":
         try:
@@ -189,8 +260,8 @@ async def run_full_dataset(
     
     design.info("🚀 Running evaluation…")
     return await run_dataset(
-        name=f"Evaluation {source.split('/')[-1]}",
-        dataset=source,
+        name=f"Evaluation {dataset_name}",
+        dataset=dataset_or_tasks,
         agent_class=agent_class,
         agent_config=agent_config,
         max_concurrent=max_concurrent,
@@ -203,7 +274,7 @@ async def run_full_dataset(
 def eval_command(
     source: str = typer.Argument(
         ...,
-        help="HuggingFace dataset identifier (e.g. 'hud-evals/SheetBench-50') or task JSON file",
+        help="HuggingFace dataset identifier (e.g. 'hud-evals/SheetBench-50'), single task JSON file, or JSON file with list of tasks",
     ),
     full: bool = typer.Option(
         False,
@@ -247,6 +318,12 @@ def eval_command(
         
         # Run a single task from a JSON file
         hud eval task.json
+        
+        # Run multiple tasks from a JSON file (auto-detects list)
+        hud eval tasks.json  # If tasks.json contains a list, runs all tasks
+        
+        # Run JSON list with full dataset mode and concurrency
+        hud eval tasks.json --full --max-concurrent 10
         
         # Run with OpenAI Operator agent
         hud eval hud-evals/OSWorld-Gold-Beta --agent openai

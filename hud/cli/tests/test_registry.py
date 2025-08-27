@@ -8,7 +8,7 @@ from unittest import mock
 import pytest
 import yaml
 
-from hud.cli.registry import (
+from hud.cli.utils.registry import (
     extract_digest_from_image,
     extract_name_and_tag,
     get_registry_dir,
@@ -119,7 +119,7 @@ class TestExtractNameAndTag:
 class TestSaveToRegistry:
     """Test saving to local registry."""
 
-    @mock.patch("hud.cli.registry.HUDDesign")
+    @mock.patch("hud.cli.utils.registry.HUDDesign")
     def test_save_success(self, mock_design_class, tmp_path):
         """Test successful save to registry."""
         mock_design = mock.Mock()
@@ -148,7 +148,7 @@ class TestSaveToRegistry:
             
             mock_design.success.assert_called_once()
 
-    @mock.patch("hud.cli.registry.HUDDesign")
+    @mock.patch("hud.cli.utils.registry.HUDDesign")
     def test_save_verbose(self, mock_design_class, tmp_path):
         """Test save with verbose output."""
         mock_design = mock.Mock()
@@ -163,7 +163,7 @@ class TestSaveToRegistry:
             # Should show verbose info
             assert mock_design.info.call_count >= 1
 
-    @mock.patch("hud.cli.registry.HUDDesign")
+    @mock.patch("hud.cli.utils.registry.HUDDesign")
     def test_save_failure(self, mock_design_class):
         """Test handling save failure."""
         mock_design = mock.Mock()

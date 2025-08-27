@@ -111,53 +111,106 @@ class InteractiveMCPTester:
         # Build choices list
         choices = []
         tool_map = {}
-
-        for _, tool in enumerate(self.tools):
-            # Create display name
+        
+        # Group tools by hub for better organization
+        hub_groups = {}
+        regular_tools = []
+        
+        for tool in self.tools:
             if "/" in tool.name:
                 hub, name = tool.name.split("/", 1)
-                display = f"[{hub}] {name}"
+                if hub not in hub_groups:
+                    hub_groups[hub] = []
+                hub_groups[hub].append((name, tool))
             else:
-                display = tool.name
+                regular_tools.append(tool)
+        
+        # Add regular tools first
+        if regular_tools:
+            # Add a separator for regular tools section
+            if len(hub_groups) > 0:
+                choices.append("───── Regular Tools ─────")
+            
+            for tool in regular_tools:
+                # Format: Bold tool name with color + dim description
+                if tool.description:
+                    display = f"• {tool.name} │ {tool.description}"
+                else:
+                    display = f"• {tool.name}"
+                
+                choices.append(display)
+                tool_map[display] = tool
+        
+        # Add hub-grouped tools with visual separation
+        for hub_name, tools in sorted(hub_groups.items()):
+            # Add a visual separator for each hub
+            choices.append(f"───── {hub_name} ─────")
+            
+            for name, tool in sorted(tools, key=lambda x: x[0]):
+                # Format with hub indicator and better separation
+                if tool.description:
+                    # Remove redundant description text
+                    desc = tool.description
+                    # Truncate long descriptions
+                    if len(desc) > 60:
+                        desc = desc[:57] + "..."
+                    display = f"• {name} │ {desc}"
+                else:
+                    display = f"• {name}"
+                
+                choices.append(display)
+                tool_map[display] = tool
 
-            # Add description if available
-            if tool.description:
-                display += f" - {tool.description}"
-
-            choices.append(display)
-            tool_map[display] = tool
-
-        # Add quit option
+        # Add quit option with spacing
+        choices.append("─────────────────────")
         choices.append("❌ Quit")
 
         # Show selection menu with arrow keys
         console.print("\n[cyan]Select a tool (use arrow keys):[/cyan]")
 
         try:
-            # Use questionary's async select with custom styling
+            # Create custom Choice objects for better formatting
+            from questionary import Choice
+            
+            formatted_choices = []
+            for choice in choices:
+                if choice.startswith("─────"):
+                    # Separator - make it unselectable and styled
+                    formatted_choices.append(Choice(
+                        title=choice,
+                        disabled=True,
+                        shortcut_key=None
+                    ))
+                elif choice == "❌ Quit":
+                    formatted_choices.append(choice)
+                else:
+                    formatted_choices.append(choice)
+            
+            # Use questionary's async select with enhanced styling
             selected = await questionary.select(
                 "",
-                choices=choices,
-                style=questionary.Style(
-                    [
-                        ("question", ""),
-                        ("pointer", "fg:#ff9d00 bold"),
-                        ("highlighted", "fg:#ff9d00 bold"),
-                        ("selected", "fg:#cc5454"),
-                        ("separator", "fg:#6c6c6c"),
-                        ("instruction", "fg:#858585 italic"),
-                    ]
-                ),
+                choices=formatted_choices,
+                style=questionary.Style([
+                    ("question", ""),
+                    ("pointer", "fg:#ff9d00 bold"),           # Orange pointer
+                    ("highlighted", "fg:#00d7ff bold"),       # Bright cyan for highlighted
+                    ("selected", "fg:#00ff00 bold"),          # Green for selected
+                    ("separator", "fg:#666666"),              # Gray for separators
+                    ("instruction", "fg:#858585 italic"),     # Dim instructions
+                    ("disabled", "fg:#666666"),               # Gray for disabled items
+                    ("text", "fg:#ffffff"),                   # White text
+                ]),
+                instruction="(Use ↑/↓ arrows, Enter to select, Esc to cancel)"
             ).unsafe_ask_async()
 
             if selected is None:
                 console.print("[yellow]No selection made (ESC or Ctrl+C pressed)[/yellow]")
                 return None
 
-            if selected == "❌ Quit":
+            if selected == "❌ Quit" or selected.startswith("─────"):
                 return None
 
-            return tool_map[selected]
+            return tool_map.get(selected)
 
         except KeyboardInterrupt:
             console.print("[yellow]Interrupted by user[/yellow]")
@@ -236,6 +289,27 @@ class InteractiveMCPTester:
                     if not value_str and not is_required:
                         continue
                     value = [v.strip() for v in value_str.split(",")]
+                elif prop_type == "object":
+                    # For object types, allow JSON input
+                    console.print(f"[dim]Enter JSON object for {prop_name}:[/dim]")
+                    value_str = await questionary.text(
+                        prompt + " (JSON format)", default="{}"
+                    ).unsafe_ask_async()
+                    if not value_str and not is_required:
+                        continue
+                    try:
+                        value = json.loads(value_str)
+                    except json.JSONDecodeError as e:
+                        console.print(f"[red]Invalid JSON: {e}[/red]")
+                        # Try again
+                        value_str = await questionary.text(
+                            prompt + " (JSON format, please fix the error)", default=value_str
+                        ).unsafe_ask_async()
+                        try:
+                            value = json.loads(value_str)
+                        except json.JSONDecodeError:
+                            console.print("[red]Still invalid JSON, using empty object[/red]")
+                            value = {}
                 else:  # string or unknown
                     value = await questionary.text(prompt, default="").unsafe_ask_async()
                     if not value and not is_required:

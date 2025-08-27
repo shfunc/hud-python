@@ -199,7 +199,7 @@ async def run_remote_http(
     verbose: bool = False,
 ) -> None:
     """Run remote MCP server with HTTP transport."""
-    from .utils import find_free_port
+    from .logging import find_free_port
 
     # Find available port
     actual_port = find_free_port(port)

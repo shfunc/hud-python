@@ -87,7 +87,7 @@ async def analyze_from_metadata(reference: str, output_format: str, verbose: boo
     """Analyze environment from cached or registry metadata."""
     import json
 
-    from .analyze import display_interactive, display_markdown
+    from ..analyze import display_interactive, display_markdown
 
     design.header("MCP Environment Analysis", icon="🔍")
     design.info(f"Looking up: {reference}")

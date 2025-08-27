@@ -13,8 +13,8 @@ import toml
 from fastmcp import FastMCP
 
 from hud.utils.design import HUDDesign
-from .docker_utils import get_docker_cmd, inject_supervisor
-from .env_utils import get_image_name, update_pyproject_toml, build_environment, image_exists
+from .utils.docker import get_docker_cmd, inject_supervisor
+from .utils.environment import get_image_name, update_pyproject_toml, build_environment, image_exists
 
 # Global design instance
 design = HUDDesign()
@@ -96,6 +96,12 @@ def create_proxy_server(
         else:
             design.info("Container will run without hot-reload")
         design.command_example(f"docker logs -f {container_name}", "View container logs")
+        
+        # Show the full Docker command if there are environment variables
+        if docker_args and any(arg == "-e" or arg.startswith("--env") for arg in docker_args):
+            design.info("")
+            design.info("Docker command with environment variables:")
+            design.info(" ".join(docker_cmd))
 
     # Create the HTTP proxy server using config
     try:
@@ -130,7 +136,7 @@ async def start_mcp_proxy(
     import subprocess
     import sys
 
-    from .utils import find_free_port
+    from .utils.logging import find_free_port
 
     # Always disable the banner - we have our own output
     os.environ["FASTMCP_DISABLE_BANNER"] = "1"
@@ -306,7 +312,7 @@ async def start_mcp_proxy(
                         design.info("Press Ctrl+C in the interactive session to exit")
 
                         # Import and run interactive mode in a new event loop
-                        from .interactive import run_interactive_mode
+                        from .utils.interactive import run_interactive_mode
 
                         # Create a new event loop for the thread
                         loop = asyncio.new_event_loop()
@@ -329,7 +335,11 @@ async def start_mcp_proxy(
 
     # Function to stream Docker logs
     async def stream_docker_logs() -> None:
-        """Stream Docker container logs asynchronously."""
+        """Stream Docker container logs asynchronously.
+        
+        Note: The Docker container is created on-demand when the first client connects.
+        Any environment variables passed via -e flags are included when the container starts.
+        """
         log_design = design
 
         # Always show waiting message
@@ -588,7 +598,7 @@ def run_mcp_dev_server(
     # For HTTP transport, find available port first
     actual_port = port
     if transport == "http":
-        from .utils import find_free_port
+        from .utils.logging import find_free_port
 
         actual_port = find_free_port(port)
         if actual_port is None:
@@ -600,8 +610,13 @@ def run_mcp_dev_server(
     # Create config
     if transport == "stdio":
         server_config = {"command": "hud", "args": ["dev", directory, "--transport", "stdio"]}
+        # For stdio, include docker args in the command
+        if docker_args:
+            server_config["args"].extend(docker_args)
     else:
         server_config = {"url": f"http://localhost:{actual_port}/mcp"}
+        # Note: Environment variables are passed to the Docker container via the proxy,
+        # not included in the client configuration
 
     # For the deeplink, we only need the server config
     server_config_json = json.dumps(server_config, indent=2)
@@ -628,6 +643,24 @@ def run_mcp_dev_server(
         design.info(f"🐳 {resolved_image}")
 
     design.progress_message(f"❗ If any issues arise, run `hud debug {resolved_image}` to debug the container")
+    
+    # Show environment variables if provided
+    if docker_args and any(arg == "-e" or arg.startswith("--env") for arg in docker_args):
+        design.section_title("Environment Variables")
+        design.info("The following environment variables will be passed to the Docker container:")
+        i = 0
+        while i < len(docker_args):
+            if docker_args[i] == "-e" and i + 1 < len(docker_args):
+                design.info(f"  • {docker_args[i + 1]}")
+                i += 2
+            elif docker_args[i].startswith("--env="):
+                design.info(f"  • {docker_args[i][6:]}")
+                i += 1  
+            elif docker_args[i] == "--env" and i + 1 < len(docker_args):
+                design.info(f"  • {docker_args[i + 1]}")
+                i += 2
+            else:
+                i += 1
 
     # Show hints about inspector and interactive mode
     if transport == "http":
@@ -679,10 +712,10 @@ def run_mcp_dev_server(
             )
         )
     except Exception as e:
-        d.error(f"Failed to start MCP server: {e}")
-        d.info("")
-        d.info("💡 Tip: Run the following command to debug the container:")
-        d.info(f"   hud debug {resolved_image}")
-        d.info("")
-        d.info("This will help identify connection issues or initialization failures.")
+        design.error(f"Failed to start MCP server: {e}")
+        design.info("")
+        design.info("💡 Tip: Run the following command to debug the container:")
+        design.info(f"   hud debug {resolved_image}")
+        design.info("")
+        design.info("This will help identify connection issues or initialization failures.")
         raise

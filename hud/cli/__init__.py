@@ -20,15 +20,15 @@ from .analyze import (
 )
 from .build import build_command
 from .clone import clone_repository, get_clone_message, print_error, print_tutorial
-from .cursor import get_cursor_config_path, list_cursor_servers, parse_cursor_config
+from .utils.cursor import get_cursor_config_path, list_cursor_servers, parse_cursor_config
 from .debug import debug_mcp_stdio
 from .init import create_environment
 from . import list_func as list_module
-from .mcp_server import run_mcp_dev_server
+from .dev import run_mcp_dev_server
 from .pull import pull_command
 from .push import push_command
 from .remove import remove_command
-from .utils import CaptureLogger
+from .utils.logging import CaptureLogger
 
 # Create the main Typer app
 app = typer.Typer(
@@ -113,7 +113,7 @@ def analyze(
             asyncio.run(analyze_environment(docker_cmd, output_format, verbose))
         else:
             # Fast mode - analyze from metadata
-            from .analyze_metadata import analyze_from_metadata
+            from .utils.metadata import analyze_from_metadata
 
             asyncio.run(analyze_from_metadata(image, output_format, verbose))
     else:
@@ -175,7 +175,7 @@ def debug(
         hud debug . --max-phase 3               # Stop after phase 3
     """
     # Import here to avoid circular imports
-    from .env_utils import get_image_name, is_environment_directory, build_environment, image_exists
+    from .utils.environment import get_image_name, is_environment_directory, build_environment, image_exists
     from hud.utils.design import HUDDesign
     
     design = HUDDesign()
@@ -448,6 +448,11 @@ def run(
         "-v",
         help="Show detailed output",
     ),
+    interactive: bool = typer.Option(
+        False,
+        "--interactive",
+        help="Launch interactive testing mode (HTTP transport only)",
+    ),
 ) -> None:
     """🚀 Run MCP server locally or remotely.
 
@@ -462,6 +467,10 @@ def run(
         hud run --local hud-text-2048:latest
         hud run --local my-server:v1 -e API_KEY=xxx
         hud run --local my-server:v1 --transport http
+    
+    Interactive Testing (local only):
+        hud run --local --interactive --transport http hud-text-2048:latest
+        hud run --local --interactive --transport http --port 9000 my-server:v1
     """
     if not params:
         typer.echo("❌ Docker image is required")
@@ -479,14 +488,23 @@ def run(
     # Default to remote if not explicitly local
     is_local = local and not remote
 
+    # Check for interactive mode restrictions
+    if interactive:
+        if transport != "http":
+            typer.echo("❌ Interactive mode requires HTTP transport (use --transport http)")
+            raise typer.Exit(1)
+        if not is_local:
+            typer.echo("❌ Interactive mode is only available for local execution (use --local)")
+            raise typer.Exit(1)
+
     if is_local:
         # Local Docker execution
-        from .runner import run_mcp_server
+        from .utils.runner import run_mcp_server
 
-        run_mcp_server(image, docker_args, transport, port, verbose)
+        run_mcp_server(image, docker_args, transport, port, verbose, interactive)
     else:
         # Remote execution via proxy
-        from .remote_runner import run_remote_server
+        from .utils.remote_runner import run_remote_server
 
         # Get URL from options or environment
         if not url:
@@ -534,9 +552,12 @@ def clone(
         raise typer.Exit(1)
 
 
-@app.command()
+@app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
 def build(
-    directory: str = typer.Argument(".", help="Environment directory to build"),
+    params: list[str] = typer.Argument(  # type: ignore[arg-type]  # noqa: B008
+        None,
+        help="Environment directory followed by optional arguments (e.g., '. -e API_KEY=secret')",
+    ),
     tag: str | None = typer.Option(
         None, "--tag", "-t", help="Docker image tag (default: from pyproject.toml)"
     ),
@@ -552,11 +573,47 @@ def build(
 
     Examples:
         hud build                    # Build current directory
-        hud build environments/text_2048
-        hud build . --tag my-env:v1.0
+        hud build environments/text_2048 -e API_KEY=secret
+        hud build . --tag my-env:v1.0 -e VAR1=value1 -e VAR2=value2
         hud build . --no-cache       # Force rebuild
     """
-    build_command(directory, tag, no_cache, verbose)
+    # Parse directory and extra arguments
+    if params:
+        directory = params[0]
+        extra_args = params[1:] if len(params) > 1 else []
+    else:
+        directory = "."
+        extra_args = []
+    
+    # Parse environment variables from extra args
+    env_vars = {}
+    i = 0
+    while i < len(extra_args):
+        if extra_args[i] == "-e" and i + 1 < len(extra_args):
+            # Parse -e KEY=VALUE format
+            env_arg = extra_args[i + 1]
+            if "=" in env_arg:
+                key, value = env_arg.split("=", 1)
+                env_vars[key] = value
+            i += 2
+        elif extra_args[i].startswith("--env="):
+            # Parse --env=KEY=VALUE format
+            env_arg = extra_args[i][6:]  # Remove --env=
+            if "=" in env_arg:
+                key, value = env_arg.split("=", 1)
+                env_vars[key] = value
+            i += 1
+        elif extra_args[i] == "--env" and i + 1 < len(extra_args):
+            # Parse --env KEY=VALUE format
+            env_arg = extra_args[i + 1]
+            if "=" in env_arg:
+                key, value = env_arg.split("=", 1)
+                env_vars[key] = value
+            i += 2
+        else:
+            i += 1
+    
+    build_command(directory, tag, no_cache, verbose, env_vars)
 
 
 @app.command()

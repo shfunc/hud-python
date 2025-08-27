@@ -215,7 +215,7 @@ class TestPushEnvironment:
         # Verify registry upload
         mock_post.assert_called_once()
         call_args = mock_post.call_args
-        assert "testuser/image:0.1.0" in call_args[0][0]
+        assert "testuser/image%3A0.1.0" in call_args[0][0]
 
     @mock.patch("subprocess.run")
     @mock.patch("hud.cli.push.settings")

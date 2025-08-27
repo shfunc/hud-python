@@ -1,4 +1,4 @@
-"""Tests for hud.cli.mcp_server module."""
+"""Tests for hud.cli.dev module."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from hud.cli.mcp_server import (
+from hud.cli.dev import (
     create_proxy_server,
     get_docker_cmd,
     get_image_name,
@@ -119,7 +119,7 @@ class TestRunMCPDevServer:
         import click
 
         with (
-            patch("hud.cli.mcp_server.image_exists", return_value=False),
+            patch("hud.cli.dev.image_exists", return_value=False),
             patch("click.confirm", return_value=False),
             pytest.raises(click.Abort),
         ):

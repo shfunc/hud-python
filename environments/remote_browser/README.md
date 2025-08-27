@@ -52,9 +52,12 @@ hud dev . --build
 # - Provide HTTP endpoint for Cursor
 # - Auto-restart on file changes
 # - Pass through environment variables
+# - **Keep browser sessions alive across restarts**
 ```
 
 Add the URL from output to Cursor or click the deeplink.
+
+**Note**: With hot-reload enabled, your browser session persists across code changes. This means you can modify your code and the server will restart automatically without losing your browser state, tabs, or navigation history.
 
 #### Option 2: Manual Docker Run
 

@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from hud.cli.utils import HINT_REGISTRY, CaptureLogger, Colors, analyze_error_for_hints
+from hud.cli.utils.logging import HINT_REGISTRY, CaptureLogger, Colors, analyze_error_for_hints
 
 
 class TestColors:

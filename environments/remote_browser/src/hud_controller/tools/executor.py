@@ -233,6 +233,17 @@ class BrowserExecutor(BaseExecutor):
 
             # Map keys to Playwright format
             mapped_keys = [self._map_key(key) for key in keys]
+            
+            # Always capitalize single letter keys in press method
+            processed_keys = []
+            for key in mapped_keys:
+                # Capitalize single letters (e.g., 'a' -> 'A')
+                if len(key) == 1 and key.isalpha() and key.islower():
+                    processed_keys.append(key.upper())
+                else:
+                    processed_keys.append(key)
+            mapped_keys = processed_keys
+            
             logger.info(f"Mapped keys: {mapped_keys}")
 
             # Press the keys as a combination (at the same time)
@@ -241,7 +252,7 @@ class BrowserExecutor(BaseExecutor):
 
             logger.debug(f"Pressed keys: {keys} (mapped to: {mapped_keys})")
 
-            result = ContentResult(output=f"Pressed: {', '.join(mapped_keys)}")
+            result = ContentResult(output=f"Pressed: {key_combination}")
             if take_screenshot:
                 result = result + ContentResult(base64_image=await self.screenshot())
 
@@ -257,6 +268,7 @@ class BrowserExecutor(BaseExecutor):
         y: int | None = None,
         scroll_x: int | None = None,
         scroll_y: int | None = None,
+        hold_keys: list[str] | None = None,
         take_screenshot: bool = True,
     ) -> ContentResult:
         """Scroll in the browser viewport."""

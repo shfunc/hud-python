@@ -133,9 +133,9 @@ class TestFetchLockFromRegistry:
 
         fetch_lock_from_registry("org/env")
         
-        # Check URL includes :latest
+        # Check URL includes :latest (URL-encoded)
         call_args = mock_get.call_args
-        assert "org/env:latest" in call_args[0][0]
+        assert "org/env%3Alatest" in call_args[0][0]
 
     @mock.patch("hud.cli.pull.settings")
     @mock.patch("requests.get")
