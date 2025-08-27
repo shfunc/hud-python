@@ -52,8 +52,7 @@ def setup_hud_telemetry(
     # Check if there are any HUD servers to setup telemetry for
     hud_mcp_url = settings.hud_mcp_url
     has_hud_servers = any(
-        hud_mcp_url in server_cfg.get("url", "")
-        for server_cfg in mcp_config.values()
+        hud_mcp_url in server_cfg.get("url", "") for server_cfg in mcp_config.values()
     )
 
     # If no HUD servers, no need for telemetry setup

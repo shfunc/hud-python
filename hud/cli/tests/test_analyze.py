@@ -82,6 +82,7 @@ class TestAnalyzeEnvironment:
         with (
             patch("hud.cli.analyze.MCPClient") as MockClient,
             patch("hud.cli.analyze.console") as mock_console,
+            patch("hud.cli.analyze.platform.system", return_value="Windows") as mock_platform,
         ):
             # Setup mock client that will raise exception during initialization
             mock_client = MagicMock()
@@ -99,6 +100,7 @@ class TestAnalyzeEnvironment:
             # Check error was handled
             mock_client.initialize.assert_called_once()
             mock_client.shutdown.assert_called_once()
+            mock_platform.assert_called_once()
 
             # Check console printed error hints
             calls = mock_console.print.call_args_list

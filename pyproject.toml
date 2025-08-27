@@ -232,4 +232,4 @@ omit = ["*/tests/*", "*/examples/*"]
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["hud", "examples"]
 # Ignore the dev folder and other non-test directories
-addopts = "--ignore=dev --ignore=ref --ignore=test_env"
+addopts = "--ignore=dev --ignore=ref --ignore=test_env --ignore=environments"

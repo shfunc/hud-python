@@ -55,7 +55,7 @@ def list_environments(
     env_dir = get_registry_dir()
     if not env_dir.exists():
         if json_output:
-            print("[]")
+            print("[]")  # noqa: T201
         else:
             design.info("No environments found in local registry.")
             design.info("")
@@ -125,7 +125,7 @@ def list_environments(
             }
             for env in environments
         ]
-        print(json.dumps(json_data, indent=2))
+        print(json.dumps(json_data, indent=2))  # noqa: T201
         return
 
     if not environments:
