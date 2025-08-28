@@ -30,20 +30,7 @@
     "groups": [
       {
         "group": "Get Started",
-        "pages": [
-          {
-            "page": "index",
-            "icon": "book"
-          },
-          {
-            "page": "quickstart",
-            "icon": "rocket"
-          },
-          {
-            "page": "llm-quickstart", 
-            "icon": "sparkles"
-          }
-        ]
+        "pages": ["index", "quickstart", "llm-quickstart"]
       },
       {
         "group": "Core Concepts",
