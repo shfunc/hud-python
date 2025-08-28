@@ -1,0 +1,55 @@
+---
+title: "LLM Quickstart"
+description: "Add HUD docs to your AI assistant for enhanced development"
+---
+
+Enhance your AI assistant with HUD documentation for accurate code generation and contextual help.
+
+## Installation
+
+<Card title="Claude Desktop">
+  ```bash
+  claude mcp add --transport http docs-hud https://docs.hud.so/mcp
+  ```
+</Card>
+
+<Card title="Cursor" >
+  Add to MCP settings:
+  ```json
+  "docs-hud": {
+    "url": "https://docs.hud.so/mcp"
+  }
+  ```
+  
+  Or use one-click install:
+  
+  [![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=docs-hud-so&config=eyJ1cmwiOiJodHRwczovL2RvY3MuaHVkLnNvL21jcCJ9)
+</Card>
+
+<Card title="Full Documentation" icon="file-lines" href="https://docs.hud.so/llms-full.txt">
+  Copy paste the full llms-full.txt
+</Card>
+
+## What you get
+
+Your AI assistant gains access to:
+- Complete HUD API reference and methods
+- Working code examples and implementations  
+- Architecture patterns and best practices
+- Real-time updates as documentation evolves
+
+<Tip>
+Try asking your assistant: "How do I create a custom agent in HUD?" or "Help me debug MCP tool calls"
+</Tip>
+
+## Next steps
+
+<CardGroup cols={2}>
+<Card title="Run your first evaluation" icon="play" href="/quickstart">
+  Get started with HUD in 3 minutes
+</Card>
+
+<Card title="Build an environment" icon="cube" href="/build-environments">
+  Create custom MCP environments
+</Card>
+</CardGroup>
