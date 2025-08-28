@@ -156,19 +156,17 @@ For stateful environments, `hud dev` supports a critical design pattern: separat
 - Development is faster without constant state resets
 
 **Example Architecture:**
-```
-┌─────────────────┐     ┌──────────────────────┐
-│   MCP Server    │────▶│ Environment Process  │
-│  (Restartable)  │     │    (Persistent)      │
-│                 │     │                      │
-│ - Lightweight   │     │ - Maintains state    │
-│ - Fast startup  │     │ - Long-lived         │
-│ - MCP protocol  │     │ - Resource heavy     │
-└─────────────────┘     └──────────────────────┘
-        ▲                         │
-        │                         │
-        └─── Unix Socket ─────────┘
-             TCP, gRPC, etc.
+
+```mermaid
+graph LR
+    MCP["🔄 MCP Server<br/>(Restartable)<br/><br/>• Lightweight<br/>• Fast startup<br/>• MCP protocol"]
+    ENV["🏗️ Environment Process<br/>(Persistent)<br/><br/>• Maintains state<br/>• Long-lived<br/>• Resource heavy"]
+    
+    MCP -->|"MCP Calls"| ENV
+    ENV -->|"Unix Socket<br/>TCP, gRPC, etc."| MCP
+    
+    style MCP fill:#e0e7ff,stroke:#6366f1,stroke-width:2px
+    style ENV fill:#d1fae5,stroke:#10b981,stroke-width:2px
 ```
 
 **Connection Methods:**
