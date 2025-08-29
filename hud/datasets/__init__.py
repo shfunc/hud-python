@@ -14,7 +14,7 @@ from .execution import (
     calculate_optimal_workers,
     run_dataset,
     run_dataset_parallel,
-    run_dataset_parallel_auto,
+    run_dataset_parallel_manual,
 )
 
 __all__ = [
@@ -26,6 +26,6 @@ __all__ = [
     # Execution
     "run_dataset",
     "run_dataset_parallel",
-    "run_dataset_parallel_auto",
+    "run_dataset_parallel_manual",
     "calculate_optimal_workers",
 ]

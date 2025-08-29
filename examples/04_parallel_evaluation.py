@@ -25,7 +25,7 @@ async def main():
     # Import the parallel functions
     from hud.datasets import (
         run_dataset_parallel,
-        run_dataset_parallel_auto,
+        run_dataset_parallel_manual,
         calculate_optimal_workers
     )
     from hud.agents import ClaudeAgent
@@ -62,7 +62,7 @@ async def main():
     
     # Run with manual configuration
     start_time = datetime.now()
-    results = await run_dataset_parallel(
+    results = await run_dataset_parallel_manual(
         name="Manual Parallel Evaluation",
         dataset=test_tasks,
         agent_class=ClaudeAgent,
@@ -106,7 +106,7 @@ async def main():
     logger.info(f"Running {len(large_tasks)} tasks with automatic optimization...")
     
     start_time = datetime.now()
-    results = await run_dataset_parallel_auto(
+    results = await run_dataset_parallel(
         name="Auto-Optimized Large Scale Evaluation",
         dataset=large_tasks,
         agent_class=ClaudeAgent,
@@ -130,7 +130,7 @@ async def main():
     # Show how it would work with a real dataset
     logger.info("Example configuration for HuggingFace datasets:")
     logger.info("""
-    results = await run_dataset_parallel_auto(
+    results = await run_dataset_parallel(
         name="SheetBench Parallel Evaluation",
         dataset="hud-evals/SheetBench-50",
         agent_class=ClaudeAgent,
@@ -149,7 +149,7 @@ async def main():
         (100, "Consider run_dataset_parallel with 4 workers"),
         (200, "Use run_dataset_parallel with 8 workers"),
         (400, "Use run_dataset_parallel with 16 workers"),
-        (1000, "Use run_dataset_parallel_auto for optimal configuration"),
+        (1000, "Use run_dataset_parallel for auto-optimized configuration"),
         (5000, "Consider distributed solutions (Ray, Kubernetes)")
     ]
     

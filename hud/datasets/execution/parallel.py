@@ -151,7 +151,7 @@ def _process_worker(
             pass
 
 
-async def run_dataset_parallel(
+async def run_dataset_parallel_manual(
     name: str,
     dataset: str | Dataset | list[dict[str, Any]],
     agent_class: type[MCPAgent],
@@ -166,7 +166,7 @@ async def run_dataset_parallel(
     custom_system_prompt: str | None = None,
 ) -> list[Any]:
     """
-    Run all tasks in a dataset using process-based parallelism.
+    Run all tasks in a dataset using process-based parallelism with manual configuration.
     
     This function distributes tasks across multiple processes to achieve true parallelism,
     bypassing Python's GIL limitations. Each process runs its own event loop with a batch
@@ -192,10 +192,10 @@ async def run_dataset_parallel(
         
     Example:
         >>> from hud.agents import ClaudeAgent
-        >>> from hud.datasets import run_dataset_parallel
+        >>> from hud.datasets import run_dataset_parallel_manual
         >>> 
-        >>> # Run 400 tasks across 16 processes
-        >>> results = await run_dataset_parallel(
+        >>> # Run 400 tasks across 16 processes with manual configuration
+        >>> results = await run_dataset_parallel_manual(
         ...     "Large Scale Eval",
         ...     "hud-evals/benchmark-400",
         ...     ClaudeAgent,
@@ -419,8 +419,7 @@ def calculate_optimal_workers(
         return ideal_workers, tasks_per_worker
 
 
-# Convenience function that automatically optimizes parallelization
-async def run_dataset_parallel_auto(
+async def run_dataset_parallel(
     name: str,
     dataset: str | Dataset | list[dict[str, Any]],
     agent_class: type[MCPAgent],
@@ -430,14 +429,15 @@ async def run_dataset_parallel_auto(
     **kwargs
 ) -> list[Any]:
     """
-    Automatically optimized parallel dataset execution.
+    Run all tasks in a dataset using automatically optimized process-based parallelism.
     
     This function automatically determines the optimal number of workers
-    and batch sizes based on system resources and dataset size.
+    and batch sizes based on system resources and dataset size. For manual control
+    over worker configuration, use `run_dataset_parallel_manual`.
     
     Example:
         >>> # Automatically handles 400+ tasks efficiently
-        >>> results = await run_dataset_parallel_auto(
+        >>> results = await run_dataset_parallel(
         ...     "Large Evaluation",
         ...     "hud-evals/benchmark-400",
         ...     ClaudeAgent
@@ -474,7 +474,7 @@ async def run_dataset_parallel_auto(
     metadata["auto_tasks_per_worker"] = tasks_per_worker
     
     # Run with optimized settings
-    return await run_dataset_parallel(
+    return await run_dataset_parallel_manual(
         name=name,
         dataset=dataset,
         agent_class=agent_class,

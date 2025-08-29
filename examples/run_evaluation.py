@@ -41,7 +41,7 @@ from hud.datasets import (
     Task, 
     run_dataset, 
     run_dataset_parallel, 
-    run_dataset_parallel_auto
+    run_dataset_parallel_manual
 )
 
 logger = logging.getLogger(__name__)
@@ -155,8 +155,8 @@ async def run_full_dataset(
     if parallel:
         print(f"🚀 Running PARALLEL evaluation (workers: {max_workers or 'auto'})…")
         if max_workers is None:
-            # Use auto-optimization
-            return await run_dataset_parallel_auto(
+            # Use auto-optimization (now the default run_dataset_parallel)
+            return await run_dataset_parallel(
                 name=eval_name,
                 dataset=dataset_name,
                 agent_class=agent_class,
@@ -167,7 +167,7 @@ async def run_full_dataset(
             )
         else:
             # Use manual configuration
-            return await run_dataset_parallel(
+            return await run_dataset_parallel_manual(
                 name=eval_name,
                 dataset=dataset_name,
                 agent_class=agent_class,
