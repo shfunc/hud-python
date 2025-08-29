@@ -431,6 +431,15 @@ NOTEBOOK_TEMPLATE = '''{{
 }}
 '''
 
+ENV_FILE_TEMPLATE = '''# HUD API Configuration
+# Get your API key from https://app.hud.so/account
+HUD_API_KEY=your_hud_api_key_here
+
+# Anthropic API Configuration (optional)
+# Required for using Claude agents - get from https://console.anthropic.com/
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+'''
+
 README_TEMPLATE = '''# {title}
 
 A minimal HUD environment demonstrating the Task pattern with a simple counter.
@@ -439,12 +448,15 @@ A minimal HUD environment demonstrating the Task pattern with a simple counter.
 
 ### Interactive Development
 ```bash
-# 1. Start the environment (optional: with inspector)
+# 1. Configure your API keys (optional - only needed for evaluation)
+# Edit .env file to add your HUD_API_KEY and ANTHROPIC_API_KEY
+
+# 2. Start the environment (optional: with inspector)
 hud dev --build --inspector
 
-# 2. Choose your preferred way to test:
+# 3. Choose your preferred way to test:
 
-# Option A: Run the task with Claude
+# Option A: Run the task with Claude (requires ANTHROPIC_API_KEY)
 hud eval tasks.json --agent claude
 
 # Option B: Interactive notebook test_env.ipynb (great for learning!)
@@ -472,7 +484,7 @@ Once your environment is ready, you can share it with the community:
 
 ### 1. Push to Registry
 ```bash
-# Build and push your environment (this requires docker hub login and hud api key)
+# Build and push your environment (requires docker hub login and hud api key)
 hud build
 hud push
 ```
@@ -613,6 +625,12 @@ def create_environment(name: str | None, directory: str, force: bool) -> None:
     notebook_content = NOTEBOOK_TEMPLATE.format(name=package_name).strip() + "\n"
     notebook_path.write_text(notebook_content, encoding="utf-8")
     files_created.append("test_env.ipynb")
+
+    # .env file
+    env_file_path = target_dir / ".env"
+    env_file_content = ENV_FILE_TEMPLATE.strip() + "\n"
+    env_file_path.write_text(env_file_content, encoding="utf-8")
+    files_created.append(".env")
 
     # Success message
     design.header(f"Created HUD Environment: {name}")
