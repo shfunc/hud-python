@@ -164,7 +164,7 @@ TASKS_JSON_TEMPLATE = '''[
 TEST_TASK_TEMPLATE = '''#!/usr/bin/env python
 """Simple example of running tasks from tasks.json.
 
-Make sure to run 'hud dev --build' in another terminal first!
+Make sure to run 'hud dev --build' in another terminal first, and install hud-python[agents]
 """
 
 import asyncio
@@ -216,6 +216,8 @@ NOTEBOOK_TEMPLATE = '''{{
    "cell_type": "markdown",
    "metadata": {{}},
    "source": [
+    "Make sure to `pip install hud-python[agents]` before running this notebook\\n",
+    "\\n",
     "### Step 1: Create a Task\\n",
     "\\n",
     "A Task combines:\\n",
@@ -442,16 +444,15 @@ hud dev --build --inspector
 
 # 2. Choose your preferred way to test:
 
-# Option A: Interactive notebook test_env.ipynb (great for learning!)
-
-# Option B: Simple Python script (runs all tasks from tasks.json)
-python test_task.py
-```
-
-### Run with an Agent
-```bash
-# Run the task with Claude
+# Option A: Run the task with Claude
 hud eval tasks.json --agent claude
+
+# Option B: Interactive notebook test_env.ipynb (great for learning!)
+# Requires installation:
+pip install hud-python[agents]
+
+# Option C: Simple Python script (runs all tasks from tasks.json)
+python test_task.py
 ```
 
 ## How HUD Environments Work
