@@ -158,7 +158,7 @@ async def run_full_dataset(
                 agent_class=agent_class,
                 agent_config=agent_config,
                 metadata={"dataset": dataset_name, "parallel": True},
-                max_steps=1,
+                max_steps=max_steps,
                 auto_respond=True,
             )
         else:
