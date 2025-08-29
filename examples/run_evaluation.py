@@ -33,7 +33,7 @@ import logging
 from typing import Any, Literal
 
 import hud
-from datasets import load_dataset, Dataset
+from datasets import load_dataset
 from hud.agents import ClaudeAgent, OperatorAgent
 from hud.agents.misc.response_agent import ResponseAgent
 from hud.clients import MCPClient
