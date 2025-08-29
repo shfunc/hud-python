@@ -787,12 +787,27 @@ def eval(
     max_concurrent: int = typer.Option(
         30,
         "--max-concurrent",
-        help="Concurrency level for full-dataset mode",
+        help="Concurrency level for asyncio mode (ignored in parallel mode)",
     ),
     max_steps: int = typer.Option(
         30,
         "--max-steps",
         help="Maximum steps per task (default: 10 for single, 50 for full)",
+    ),
+    parallel: bool = typer.Option(
+        False,
+        "--parallel",
+        help="Use process-based parallel execution for large datasets (100+ tasks)",
+    ),
+    max_workers: int | None = typer.Option(
+        None,
+        "--max-workers",
+        help="Number of worker processes for parallel mode (auto-optimized if not set)",
+    ),
+    tasks_per_worker: int = typer.Option(
+        25,
+        "--tasks-per-worker",
+        help="Maximum tasks per worker in parallel mode",
     ),
 ) -> None:
     """🚀 Run evaluation on datasets or individual tasks with agents."""
@@ -827,6 +842,9 @@ def eval(
         allowed_tools=allowed_tools,
         max_concurrent=max_concurrent,
         max_steps=max_steps,
+        parallel=parallel,
+        max_workers=max_workers,
+        tasks_per_worker=tasks_per_worker,
     )
 
 
