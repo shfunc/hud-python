@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Generic HuggingFace dataset evaluation runner.
+"""Generic HuggingFace dataset evaluation runner with parallel execution support.
 
 This script lets you evaluate any HUD-compatible Task dataset with either
-Claude or OpenAI (Operator) agents.
+Claude or OpenAI (Operator) agents. Supports both asyncio-based concurrency
+(for small datasets) and process-based parallelization (for large datasets).
 
 Prerequisites:
 • `uv add hud-python`
@@ -11,8 +12,14 @@ Prerequisites:
 
 Usage examples
 ──────────────
-# Evaluate the FULL SheetBench dataset with Claude
-python examples/run_evaluation.py hud-evals/SheetBench-50 --full --agent claude
+# Evaluate the FULL SheetBench dataset with Claude (asyncio mode)
+python examples/run_evaluation.py hud-evals/SheetBench-50 --full --agent claude --max-concurrent 25
+
+# Run a large dataset with PARALLEL execution (400+ tasks)
+python examples/run_evaluation.py hud-evals/LargeDataset --full --parallel
+
+# Parallel mode with manual configuration (16 workers, 25 tasks each)
+python examples/run_evaluation.py hud-evals/LargeDataset --full --parallel --max-workers 16 --tasks-per-worker 25
 
 # Run a single OSWorld-Verified task with OpenAI Operator agent (default single-task mode)
 python examples/run_evaluation.py hud-evals/OSWorld-Verified-XLang --agent openai
@@ -29,7 +36,9 @@ import hud
 from datasets import load_dataset
 from hud.agents import ClaudeAgent, OperatorAgent
 from hud.agents.misc.response_agent import ResponseAgent
-from hud.datasets import Task, run_dataset
+from hud.clients import MCPClient
+from hud.datasets import Task, fetch_system_prompt_from_dataset, run_dataset
+from hud.datasets_parallel import run_dataset_parallel, run_dataset_parallel_auto
 
 logger = logging.getLogger(__name__)
 
@@ -113,8 +122,15 @@ async def run_full_dataset(
     allowed_tools: list[str] | None = None,
     max_concurrent: int = 30,
     max_steps: int = 50,
+    parallel: bool = False,
+    max_workers: int | None = None,
+    tasks_per_worker: int = 25,
 ) -> list[Any]:
-    """Run evaluation across the entire dataset using hud.datasets.run_dataset."""
+    """Run evaluation across the entire dataset.
+    
+    Uses either asyncio-based run_dataset or process-based run_dataset_parallel
+    depending on the parallel flag.
+    """
 
     # Build agent class + config for run_dataset – we pass the *class* and a minimal
     # config dict, run_dataset will create a fresh agent per task.
@@ -130,17 +146,47 @@ async def run_full_dataset(
             "allowed_tools": allowed_tools or ["anthropic_computer"],
         }
 
-    print("🚀 Running evaluation…")
-    return await run_dataset(
-        name=f"Evaluation {dataset_name.split('/')[-1]}",
-        dataset=dataset_name,
-        agent_class=agent_class,
-        agent_config=agent_config,
-        max_concurrent=max_concurrent,
-        metadata={"dataset": dataset_name},
-        max_steps=max_steps,
-        auto_respond=True,
-    )
+    eval_name = f"Evaluation {dataset_name.split('/')[-1]}"
+    
+    if parallel:
+        print(f"🚀 Running PARALLEL evaluation (workers: {max_workers or 'auto'})…")
+        if max_workers is None:
+            # Use auto-optimization
+            return await run_dataset_parallel_auto(
+                name=eval_name,
+                dataset=dataset_name,
+                agent_class=agent_class,
+                agent_config=agent_config,
+                metadata={"dataset": dataset_name, "parallel": True},
+                max_steps=1,
+                auto_respond=True,
+            )
+        else:
+            # Use manual configuration
+            return await run_dataset_parallel(
+                name=eval_name,
+                dataset=dataset_name,
+                agent_class=agent_class,
+                agent_config=agent_config,
+                max_workers=max_workers,
+                tasks_per_worker=tasks_per_worker,
+                max_concurrent_per_worker=10,  # Reasonable default
+                metadata={"dataset": dataset_name, "parallel": True},
+                max_steps=max_steps,
+                auto_respond=True,
+            )
+    else:
+        print(f"🚀 Running evaluation (max_concurrent: {max_concurrent})…")
+        return await run_dataset(
+            name=eval_name,
+            dataset=dataset_name,
+            agent_class=agent_class,
+            agent_config=agent_config,
+            max_concurrent=max_concurrent,
+            metadata={"dataset": dataset_name},
+            max_steps=max_steps,
+            auto_respond=True,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -182,7 +228,26 @@ def parse_args() -> argparse.Namespace:  # type: ignore[valid-type]
         dest="max_concurrent",
         type=int,
         default=50,
-        help="Concurrency level for full-dataset mode",
+        help="Concurrency level for asyncio mode (default: 50)",
+    )
+    parser.add_argument(
+        "--parallel",
+        action="store_true",
+        help="Use process-based parallelization for large datasets (400+ tasks)",
+    )
+    parser.add_argument(
+        "--max-workers",
+        dest="max_workers",
+        type=int,
+        default=None,
+        help="Number of worker processes for parallel mode (default: auto-detect)",
+    )
+    parser.add_argument(
+        "--tasks-per-worker",
+        dest="tasks_per_worker",
+        type=int,
+        default=25,
+        help="Tasks per worker in parallel mode (default: 25)",
     )
     return parser.parse_args()
 
@@ -197,13 +262,39 @@ async def main() -> None:
     )
 
     if args.full:
-        await run_full_dataset(
+        import time
+        start_time = time.time()
+        
+        results = await run_full_dataset(
             args.dataset,
             agent_type=args.agent,
             model=args.model,
             allowed_tools=allowed_tools,
             max_concurrent=args.max_concurrent,
+            parallel=args.parallel,
+            max_workers=args.max_workers,
+            tasks_per_worker=args.tasks_per_worker,
         )
+        
+        elapsed = time.time() - start_time
+        
+        # Print statistics
+        print("\n" + "=" * 50)
+        print("📊 Evaluation Complete!")
+        print("=" * 50)
+        print(f"Total tasks: {len(results)}")
+        print(f"Time elapsed: {elapsed:.2f} seconds")
+        print(f"Throughput: {len(results)/elapsed:.2f} tasks/second")
+        
+        if args.parallel:
+            print(f"Execution mode: PARALLEL (workers: {args.max_workers or 'auto'})")
+        else:
+            print(f"Execution mode: ASYNCIO (max_concurrent: {args.max_concurrent})")
+        
+        # Count successes
+        successful = sum(1 for r in results if getattr(r, "reward", 0) > 0)
+        print(f"Successful tasks: {successful}/{len(results)} ({100*successful/len(results):.1f}%)")
+        
     else:
         await run_single_task(
             args.dataset,
