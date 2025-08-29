@@ -12,17 +12,17 @@ Prerequisites:
 
 Usage examples
 ──────────────
-# Evaluate the FULL SheetBench dataset with Claude (asyncio mode)
-python examples/run_evaluation.py hud-evals/SheetBench-50 --full --agent claude --max-concurrent 25
-
-# Run a large dataset with PARALLEL execution (400+ tasks)
-python examples/run_evaluation.py hud-evals/LargeDataset --full --parallel
-
-# Parallel mode with manual configuration (16 workers, 25 tasks each)
-python examples/run_evaluation.py hud-evals/LargeDataset --full --parallel --max-workers 16 --tasks-per-worker 25
-
 # Run a single OSWorld-Verified task with OpenAI Operator agent (default single-task mode)
 python examples/run_evaluation.py hud-evals/OSWorld-Verified-XLang --agent openai
+
+# Evaluate the FULL SheetBench dataset with Claude (Single Process concurrency)
+python examples/run_evaluation.py hud-evals/SheetBench-50 --full --agent claude --max-concurrent 25
+
+# Run OSWorld-Verified dataset full with PARALLEL execution (300+ tasks)
+python examples/run_evaluation.py hud-evals/OSWorld-Verified-XLang --agent openai --full --parallel
+
+# Parallel mode with manual configuration (16 workers, 25 tasks each)
+python examples/run_evaluation.py hud-evals/OSWorld-Verified-XLang --agent openai --full --parallel --max-workers 16 --tasks-per-worker 25
 """
 
 from __future__ import annotations
@@ -195,60 +195,34 @@ async def run_full_dataset(
 
 
 def parse_args() -> argparse.Namespace:  # type: ignore[valid-type]
-    parser = argparse.ArgumentParser(description="Generic HUD dataset evaluation runner")
-    parser.add_argument(
-        "dataset",
-        help="HuggingFace dataset identifier, e.g. 'hud-evals/SheetBench-50'",
+    parser = argparse.ArgumentParser(
+        description="Evaluate HUD datasets",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s hud-evals/SheetBench-50                    # Single task test
+  %(prog)s hud-evals/SheetBench-50 --full             # Full dataset (<100 tasks)
+  %(prog)s hud-evals/LargeDataset --full --parallel   # Large dataset (100+ tasks)
+        """,
     )
-    parser.add_argument(
-        "--full",
-        action="store_true",
-        help="Run the entire dataset (omit for single-task debug mode)",
-    )
-    parser.add_argument(
-        "--agent",
-        choices=["claude", "openai"],
-        default="claude",
-        help="Agent backend to use",
-    )
-    parser.add_argument(
-        "--model",
-        dest="model",
-        default=None,
-        help="Model name for the chosen agent",
-    )
-    parser.add_argument(
-        "--allowed-tools",
-        dest="allowed_tools",
-        default=None,
-        help="Comma-separated list of allowed tools (overrides defaults)",
-    )
-    parser.add_argument(
-        "--max-concurrent",
-        dest="max_concurrent",
-        type=int,
-        default=50,
-        help="Concurrency level for asyncio mode (default: 50)",
-    )
-    parser.add_argument(
-        "--parallel",
-        action="store_true",
-        help="Use process-based parallelization for large datasets (400+ tasks)",
-    )
-    parser.add_argument(
-        "--max-workers",
-        dest="max_workers",
-        type=int,
-        default=None,
-        help="Number of worker processes for parallel mode (default: auto-detect)",
-    )
-    parser.add_argument(
-        "--tasks-per-worker",
-        dest="tasks_per_worker",
-        type=int,
-        default=25,
-        help="Tasks per worker in parallel mode (default: 25)",
-    )
+    
+    parser.add_argument("dataset", help="HuggingFace dataset ID")
+    parser.add_argument("--full", action="store_true", help="Run entire dataset")
+    
+    # Agent
+    parser.add_argument("--agent", choices=["claude", "openai"], default="claude")
+    parser.add_argument("--model", default=None, help="Model override")
+    parser.add_argument("--allowed-tools", dest="allowed_tools", help="Tool allowlist (comma-separated)")
+    
+    # Concurrency
+    parser.add_argument("--max-concurrent", dest="max_concurrent", type=int, default=50, 
+                        help="Max concurrent tasks (default: 50)")
+    
+    # Parallel mode (100+ tasks)
+    parser.add_argument("--parallel", action="store_true", help="Use parallel execution for large datasets")
+    parser.add_argument("--max-workers", dest="max_workers", type=int, help="Worker processes")
+    parser.add_argument("--tasks-per-worker", dest="tasks_per_worker", type=int, default=25)
+    
     return parser.parse_args()
 
 
