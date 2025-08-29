@@ -23,7 +23,7 @@ async def main():
     """Run a large-scale parallel evaluation."""
     
     # Import the parallel functions
-    from hud.datasets_parallel import (
+    from hud.datasets import (
         run_dataset_parallel,
         run_dataset_parallel_auto,
         calculate_optimal_workers

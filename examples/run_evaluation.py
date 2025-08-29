@@ -37,8 +37,12 @@ from datasets import load_dataset
 from hud.agents import ClaudeAgent, OperatorAgent
 from hud.agents.misc.response_agent import ResponseAgent
 from hud.clients import MCPClient
-from hud.datasets import Task, fetch_system_prompt_from_dataset, run_dataset
-from hud.datasets_parallel import run_dataset_parallel, run_dataset_parallel_auto
+from hud.datasets import (
+    Task, 
+    run_dataset, 
+    run_dataset_parallel, 
+    run_dataset_parallel_auto
+)
 
 logger = logging.getLogger(__name__)
 

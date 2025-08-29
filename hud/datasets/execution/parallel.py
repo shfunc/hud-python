@@ -1,17 +1,14 @@
-"""Parallel implementation of run_dataset using ProcessPoolExecutor."""
+"""Process-based parallel dataset runner."""
 
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
-import pickle
-import sys
 import traceback
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from functools import partial
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from datasets import Dataset
@@ -22,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Worker function that runs in a separate process
 def _process_worker(
-    task_batch: list[dict[str, Any]],
+    task_batch: list[tuple[int, dict[str, Any]]],
     agent_class_module: str,
     agent_class_name: str,
     agent_config: dict[str, Any] | None,
@@ -61,7 +58,7 @@ def _process_worker(
     """
     # Import inside worker to avoid pickling issues
     import hud
-    from hud.datasets import Task
+    from hud.datasets.task import Task
     from hud.agents.misc.response_agent import ResponseAgent
     from hud.otel import configure_telemetry
     
@@ -178,7 +175,7 @@ async def run_dataset_parallel(
     Args:
         name: Name for the job (shown in telemetry)
         dataset: HuggingFace dataset identifier (e.g. "hud-evals/SheetBench-50"),
-                Dataset object, OR list of TaskConfig objects
+                Dataset object, OR list of task dicts
         agent_class: Agent class to use (must be importable in worker processes)
         agent_config: Configuration for agent initialization
         max_workers: Number of processes (defaults to CPU count)
@@ -195,7 +192,7 @@ async def run_dataset_parallel(
         
     Example:
         >>> from hud.agents import ClaudeAgent
-        >>> from hud.datasets_parallel import run_dataset_parallel
+        >>> from hud.datasets import run_dataset_parallel
         >>> 
         >>> # Run 400 tasks across 16 processes
         >>> results = await run_dataset_parallel(
@@ -207,7 +204,7 @@ async def run_dataset_parallel(
         ... )
     """
     import hud
-    from hud.datasets import Task
+    from hud.datasets.task import Task
     from datasets import Dataset, load_dataset as hf_load_dataset
     
     # Determine optimal worker count
@@ -221,16 +218,19 @@ async def run_dataset_parallel(
     
     # Load dataset if needed
     dataset_link = None
+    task_dicts: list[dict[str, Any]]
+    
     if isinstance(dataset, str):
         logger.info(f"Loading dataset {dataset} from HuggingFace...")
         dataset_link = dataset
-        dataset = hf_load_dataset(dataset, split=split)
-    
-    # Convert to list of dicts
-    if hasattr(dataset, "__iter__"):
-        task_dicts = list(dataset)
+        loaded_dataset = hf_load_dataset(dataset, split=split)
+        task_dicts = list(loaded_dataset)  # type: ignore
+    elif isinstance(dataset, Dataset):
+        task_dicts = list(dataset)  # type: ignore
+    elif isinstance(dataset, list):
+        task_dicts = dataset
     else:
-        raise ValueError(f"Dataset must be iterable, got {type(dataset)}")
+        raise ValueError(f"Dataset must be string, Dataset, or list, got {type(dataset)}")
     
     # Apply custom system prompt if provided
     if custom_system_prompt:
@@ -267,7 +267,7 @@ async def run_dataset_parallel(
         agent_name = agent_class.__name__
         
         # Divide tasks into batches for each worker
-        task_batches = []
+        task_batches: list[list[tuple[int, dict[str, Any]]]] = []
         for i in range(0, len(task_dicts), tasks_per_worker):
             batch = [
                 (idx, task_dict) 
@@ -282,7 +282,7 @@ async def run_dataset_parallel(
         )
         
         # Initialize results list
-        results = [None] * len(task_dicts)
+        results: list[Any] = [None] * len(task_dicts)
         
         # Create worker function with all needed context
         worker_func = partial(
@@ -365,7 +365,6 @@ async def run_dataset_parallel(
     return results
 
 
-
 def calculate_optimal_workers(
     num_tasks: int,
     reserve_system_resources: bool = True
@@ -445,15 +444,17 @@ async def run_dataset_parallel_auto(
         ... )
     """
     # Load dataset to get size
+    num_tasks: int
+    
     if isinstance(dataset, str):
         from datasets import load_dataset as hf_load_dataset
         dataset_obj = hf_load_dataset(dataset, split=kwargs.get("split", "train"))
-        num_tasks = len(dataset_obj)
+        num_tasks = len(dataset_obj)  # type: ignore
     elif hasattr(dataset, "__len__"):
         num_tasks = len(dataset)
     else:
         # Convert to list to count
-        dataset_list = list(dataset)
+        dataset_list: list[dict[str, Any]] = list(dataset)  # type: ignore
         num_tasks = len(dataset_list)
         dataset = dataset_list
     
@@ -484,11 +485,3 @@ async def run_dataset_parallel_auto(
         max_steps=max_steps,
         **kwargs
     )
-
-
-# Export the main functions
-__all__ = [
-    "run_dataset_parallel",
-    "run_dataset_parallel_auto",
-    "calculate_optimal_workers"
-]
