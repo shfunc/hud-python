@@ -139,7 +139,7 @@ if __name__ == "__main__":
     mcp.run()
 '''
 
-TASKS_JSON_TEMPLATE = '''[
+TASKS_JSON_TEMPLATE = """[
   {{
     "prompt": "Increment the counter to reach 10",
     "mcp_config": {{
@@ -159,7 +159,7 @@ TASKS_JSON_TEMPLATE = '''[
     }}
   }}
 ]
-'''
+"""
 
 TEST_TASK_TEMPLATE = '''#!/usr/bin/env python
 """Simple example of running tasks from tasks.json.
@@ -210,7 +210,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 '''
 
-NOTEBOOK_TEMPLATE = '''{{
+NOTEBOOK_TEMPLATE = """{{
  "cells": [
   {{
    "cell_type": "markdown",
@@ -429,18 +429,18 @@ NOTEBOOK_TEMPLATE = '''{{
  "nbformat": 4,
  "nbformat_minor": 4
 }}
-'''
+"""
 
-ENV_FILE_TEMPLATE = '''# HUD API Configuration
+ENV_FILE_TEMPLATE = """# HUD API Configuration
 # Get your API key from https://app.hud.so/account
 HUD_API_KEY=your_hud_api_key_here
 
 # Anthropic API Configuration (optional)
 # Required for using Claude agents - get from https://console.anthropic.com/
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
-'''
+"""
 
-README_TEMPLATE = '''# {title}
+README_TEMPLATE = """# {title}
 
 A minimal HUD environment demonstrating the Task pattern with a simple counter.
 
@@ -523,7 +523,7 @@ hud eval "your-org/your-dataset" --agent claude
 **Note**: Only public HuggingFace datasets appear as leaderboards!
 
 📚 Learn more: [Creating Benchmarks](https://docs.hud.so/evaluate-agents/create-benchmarks) | [Leaderboards](https://docs.hud.so/evaluate-agents/leaderboards)
-'''
+"""
 
 
 def sanitize_name(name: str) -> str:

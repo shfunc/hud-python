@@ -22,16 +22,16 @@ from .build import build_command
 from .clone import clone_repository, get_clone_message, print_error, print_tutorial
 from .debug import debug_mcp_stdio
 from .dev import run_mcp_dev_server
+
+# Import new commands
+from .hf import hf_command
 from .init import create_environment
 from .pull import pull_command
 from .push import push_command
 from .remove import remove_command
+from .rl import rl_app
 from .utils.cursor import get_cursor_config_path, list_cursor_servers, parse_cursor_config
 from .utils.logging import CaptureLogger
-
-# Import new commands
-from .hf import hf_command
-from .rl import rl_app
 
 # Create the main Typer app
 app = typer.Typer(
@@ -780,8 +780,7 @@ def eval(
         None,
         "--agent",
         help=(
-            "Agent backend to use (claude or openai). "
-            "If not provided, will prompt interactively."
+            "Agent backend to use (claude or openai). If not provided, will prompt interactively."
         ),
     ),
     model: str | None = typer.Option(
@@ -822,32 +821,36 @@ def eval(
 ) -> None:
     """🚀 Run evaluation on datasets or individual tasks with agents."""
     from hud.utils.design import HUDDesign
+
     design = HUDDesign()
-    
+
     # If no source provided, look for task/eval JSON files in current directory
     if source is None:
         # Search for JSON files with "task" or "eval" in the name (case-insensitive)
         json_files = []
         patterns = [
-            "*task*.json", "*eval*.json",
-            "*Task*.json", "*Eval*.json",
-            "*TASK*.json", "*EVAL*.json"
+            "*task*.json",
+            "*eval*.json",
+            "*Task*.json",
+            "*Eval*.json",
+            "*TASK*.json",
+            "*EVAL*.json",
         ]
-        
+
         # First check current directory
         for pattern in patterns:
             json_files.extend(Path(".").glob(pattern))
-        
+
         # If no files found, search recursively (but limit depth to avoid deep searches)
         if not json_files:
             for pattern in patterns:
                 # Search up to 2 levels deep
                 json_files.extend(Path(".").glob(f"*/{pattern}"))
                 json_files.extend(Path(".").glob(f"*/*/{pattern}"))
-        
+
         # Remove duplicates and sort
         json_files = sorted(set(json_files))
-        
+
         if not json_files:
             design.error(
                 "No source provided and no task/eval JSON files found in current directory"
@@ -869,7 +872,7 @@ def eval(
             )
             source = file_choice
             design.success(f"Selected: {source}")
-    
+
     # If no agent specified, prompt for selection
     if agent is None:
         agent = design.select(
@@ -880,7 +883,7 @@ def eval(
             ],
             default="Claude 4 Sonnet",
         )
-    
+
     # Validate agent choice
     valid_agents = ["claude", "openai"]
     if agent not in valid_agents:
@@ -918,18 +921,24 @@ app.add_typer(rl_app, name="rl")
 
 @app.command()
 def hf(
-    tasks_file: Path | None = typer.Argument(None, help="JSON file containing tasks (auto-detected if not provided)"),
-    name: str | None = typer.Option(None, "--name", "-n", help="Dataset name (e.g., 'my-org/my-dataset')"),
+    tasks_file: Path | None = typer.Argument(
+        None, help="JSON file containing tasks (auto-detected if not provided)"
+    ),
+    name: str | None = typer.Option(
+        None, "--name", "-n", help="Dataset name (e.g., 'my-org/my-dataset')"
+    ),
     push: bool = typer.Option(True, "--push/--no-push", help="Push to HuggingFace Hub"),
     private: bool = typer.Option(False, "--private", help="Make dataset private on Hub"),
-    update_lock: bool = typer.Option(True, "--update-lock/--no-update-lock", help="Update hud.lock.yaml"),
+    update_lock: bool = typer.Option(
+        True, "--update-lock/--no-update-lock", help="Update hud.lock.yaml"
+    ),
     token: str | None = typer.Option(None, "--token", help="HuggingFace API token"),
 ) -> None:
     """📊 Convert tasks to HuggingFace dataset format.
-    
+
     Automatically detects task files if not specified.
     Suggests dataset name based on environment if not provided.
-    
+
     Examples:
         hud hf                      # Auto-detect tasks and suggest name
         hud hf tasks.json           # Use specific file, suggest name

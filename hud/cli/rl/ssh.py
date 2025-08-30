@@ -22,29 +22,29 @@ async def check_and_configure_ssh_key() -> bool:
         capture_output=True,
         text=True,
     )
-    
+
     ssh_key_path = None
     if result.returncode == 0:
         # Parse the output for SSH key path
-        for line in result.stdout.split('\n'):
-            if 'SSH Key Path' in line:
+        for line in result.stdout.split("\n"):
+            if "SSH Key Path" in line:
                 # Handle table format: "| SSH Key Path        | C:\\Users\\saecl\\.ssh\\private_key.pem |"
-                if '|' in line:
-                    parts = line.split('|')
+                if "|" in line:
+                    parts = line.split("|")
                     if len(parts) >= 3:
                         path = parts[2].strip()
-                        if path and path != 'None':
+                        if path and path != "None":
                             ssh_key_path = path
                             break
                 # Handle simple format: "SSH Key Path: /path/to/key"
-                elif ':' in line:
-                    parts = line.split(':', 1)
+                elif ":" in line:
+                    parts = line.split(":", 1)
                     if len(parts) > 1:
                         path = parts[1].strip()
-                        if path and path != 'None':
+                        if path and path != "None":
                             ssh_key_path = path
                             break
-    
+
     # If SSH key is configured, verify it exists
     if ssh_key_path:
         if Path(ssh_key_path).expanduser().exists():
@@ -52,7 +52,7 @@ async def check_and_configure_ssh_key() -> bool:
             return True
         else:
             design.warning(f"Configured SSH key not found: {ssh_key_path}")
-    
+
     # Prompt for SSH key
     design.section_title("🔑 SSH Key Configuration")
     design.info("Prime Intellect requires an SSH key for pod access.")
@@ -62,26 +62,26 @@ async def check_and_configure_ssh_key() -> bool:
     design.info("2. Generate or upload your SSH key")
     design.info("3. Download the private key file")
     design.info("")
-    
+
     key_path = typer.prompt("Enter path to your Prime SSH private key (e.g., ~/.ssh/prime-key.pem)")
     key_path = Path(key_path).expanduser()
-    
+
     if not key_path.exists():
         design.error(f"File not found: {key_path}")
         return False
-    
+
     # Set permissions if not Windows
-    if os.name != 'nt':
+    if os.name != "nt":
         subprocess.run(["chmod", "400", str(key_path)])
         design.success("Set proper permissions on key file")
-    
+
     # Configure the SSH key globally
     result = subprocess.run(
         ["prime", "config", "set-ssh-key-path", str(key_path)],
         capture_output=True,
         text=True,
     )
-    
+
     if result.returncode == 0:
         design.success("SSH key configured successfully")
         return True
@@ -104,130 +104,134 @@ async def connect_and_train(
 ) -> None:
     """Connect to the pod via SSH and run training commands."""
     design.section_title("🚀 Starting Remote Training")
-    
+
     # Parse SSH info to get host and port
     # Format is like "root@65.108.33.78 -p 1234"
     ssh_parts = ssh_info.split()
     ssh_user_host = ssh_parts[0]  # root@65.108.33.78
     ssh_port = ssh_parts[2] if len(ssh_parts) > 2 else "22"  # 1234 or default 22
-    
+
     # Get SSH key path from Prime config
     result = subprocess.run(
         ["prime", "config", "view"],
         capture_output=True,
         text=True,
     )
-    
+
     ssh_key_path = None
     if result.returncode == 0:
-        for line in result.stdout.split('\n'):
-            if 'SSH Key Path' in line:
-                if '|' in line:
-                    parts = line.split('|')
+        for line in result.stdout.split("\n"):
+            if "SSH Key Path" in line:
+                if "|" in line:
+                    parts = line.split("|")
                     if len(parts) >= 3:
                         ssh_key_path = parts[2].strip()
                         break
-                elif ':' in line:
-                    parts = line.split(':', 1)
+                elif ":" in line:
+                    parts = line.split(":", 1)
                     if len(parts) > 1:
                         ssh_key_path = parts[1].strip()
                         break
-    
+
     if not ssh_key_path:
         design.error("SSH key path not configured")
         raise typer.Exit(1)
-    
+
     # Verify SSH key exists
     ssh_key_path = Path(ssh_key_path).expanduser()
     if not ssh_key_path.exists():
         design.error(f"SSH key not found: {ssh_key_path}")
         raise typer.Exit(1)
-    
+
     design.info(f"Using SSH key: {ssh_key_path}")
-    
+
     # First, copy the config file to the pod using scp
     design.info("Copying config file to pod...")
     try:
         # On Windows, we need to ensure proper path formatting
-        config_path = str(config).replace('\\', '/')
+        config_path = str(config).replace("\\", "/")
         scp_cmd = [
             "scp",
-            "-i", str(ssh_key_path),
-            "-P", ssh_port,
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
+            "-i",
+            str(ssh_key_path),
+            "-P",
+            ssh_port,
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
             config_path,
-            f"{ssh_user_host}:/root/config.yaml"
+            f"{ssh_user_host}:/root/config.yaml",
         ]
         design.debug(f"Running: {' '.join(scp_cmd)}")
         subprocess.run(scp_cmd, check=True)
         design.success("Config file copied")
     except subprocess.CalledProcessError as e:
         design.error(f"Failed to copy config file: {e}")
-        if os.name == 'nt':  # Windows
+        if os.name == "nt":  # Windows
             design.info("Make sure OpenSSH is installed. On Windows 10+, it's built-in.")
             design.info("If using older Windows, install Git for Windows which includes SSH/SCP.")
         else:
             design.info("Make sure scp is installed and in your PATH")
         raise typer.Exit(1)
-    
+
     design.info("Setting up environment and starting training...")
     design.info("This will take a few minutes for initial setup, then training will begin.")
     design.info("")
-    
+
     # Build environment exports
     env_exports = []
-    wandb_key = getattr(settings, 'wandb_api_key', None)
+    wandb_key = getattr(settings, "wandb_api_key", None)
     if wandb_key:
         env_exports.append(f"export WANDB_API_KEY={wandb_key}")
     if settings.api_key:  # HUD API key
         env_exports.append(f"export HUD_API_KEY={settings.api_key}")
     env_export_cmd = " && ".join(env_exports) + " && " if env_exports else ""
-    
+
     # Create the training script content using echo commands
     # This is more reliable than heredoc through SSH
     training_script_lines = [
-        'import verifiers as vf',
-        '',
-        '# Load environment',
-        'env = vf.load_environment(',
+        "import verifiers as vf",
+        "",
+        "# Load environment",
+        "env = vf.load_environment(",
         '    env_id="hud-vf-gym",',
         f'    taskset="{dataset}",',
         '    config_path="/root/config.yaml",',
-        f'    num_tasks={dataset_size},',
-        ')',
-        '',
+        f"    num_tasks={dataset_size},",
+        ")",
+        "",
         'print(f"Loaded environment with {len(env.dataset)} tasks")',
-        '',
-        '# Load model and tokenizer',
+        "",
+        "# Load model and tokenizer",
         f'model, tokenizer = vf.get_model_and_tokenizer("{model}")',
-        '',
-        '# Get default training args',
+        "",
+        "# Get default training args",
         f'args = vf.grpo_defaults(run_name="hud-rl-{pod_id[:8]}")',
         f'args.output_dir = "{output_dir}"',
         'args.wandb_project = "hud-rl"',
-        'args.logging_steps = 1',
-        '',
-        '# Create trainer',
-        'trainer = vf.GRPOTrainer(',
-        '    model=model,',
-        '    processing_class=tokenizer,',
-        '    env=env,',
-        '    args=args,',
-        '    peft_config=vf.lora_defaults(),',
-        ')',
-        '',
-        '# Train',
+        "args.logging_steps = 1",
+        "",
+        "# Create trainer",
+        "trainer = vf.GRPOTrainer(",
+        "    model=model,",
+        "    processing_class=tokenizer,",
+        "    env=env,",
+        "    args=args,",
+        "    peft_config=vf.lora_defaults(),",
+        ")",
+        "",
+        "# Train",
         'print("Starting training...")',
-        'trainer.train()',
+        "trainer.train()",
     ]
-    
+
     # Create echo commands for each line
     # First remove any existing file, then create new one
-    training_script = "rm -f /root/train_hud_rl.py && " + " && ".join([
-        f'echo {repr(line)} >> /root/train_hud_rl.py' for line in training_script_lines
-    ])
-    
+    training_script = "rm -f /root/train_hud_rl.py && " + " && ".join(
+        [f"echo {line!r} >> /root/train_hud_rl.py" for line in training_script_lines]
+    )
+
     # Build the full setup and training command
     full_command = (
         # Install uv
@@ -256,20 +260,24 @@ async def connect_and_train(
         "echo 'Starting training on GPU 1...' && "
         "CUDA_VISIBLE_DEVICES=1 python /root/train_hud_rl.py"
     )
-    
+
     try:
         # Execute the full command via SSH
         ssh_cmd = [
             "ssh",
-            "-i", str(ssh_key_path),
-            "-p", ssh_port,
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
+            "-i",
+            str(ssh_key_path),
+            "-p",
+            ssh_port,
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
             ssh_user_host,
-            full_command
+            full_command,
         ]
         subprocess.run(ssh_cmd, check=True)
-        
+
     except subprocess.CalledProcessError as e:
         design.error(f"Training failed: {e}")
         raise typer.Exit(1)

@@ -74,7 +74,7 @@ class MCPAgent(ABC):
 
         self.model_name = model_name
         self.design = HUDDesign(logger=logger)
-        
+
         # Set verbose mode if requested
         if verbose:
             self.design.set_verbose(True)
@@ -192,7 +192,7 @@ class MCPAgent(ABC):
                     reward=0.0,
                     done=True,
                     content=self._get_connection_error_message(e),
-                    isError=True
+                    isError=True,
                 )
             raise
         finally:
@@ -344,17 +344,17 @@ class MCPAgent(ABC):
                     # 3. Format tool results and add to messages
                     tool_messages = await self.format_tool_results(tool_calls, tool_results)
                     messages.extend(tool_messages)
-                    
+
                     # Compact step completion display
                     step_info = f"\n[bold]Step {step_count}"
                     if max_steps != -1:
                         step_info += f"/{max_steps}"
                     step_info += "[/bold]"
-                    
+
                     # Show tool calls and results in compact format
-                    for call, result in zip(tool_calls, tool_results):
+                    for call, result in zip(tool_calls, tool_results, strict=False):
                         step_info += f"\n{call}\n{result}"
-                    
+
                     self.design.info_log(step_info)
 
                 except Exception as e:
@@ -526,11 +526,13 @@ class MCPAgent(ABC):
             if tool.name == "response" and "response" not in self.lifecycle_tools:
                 self.design.debug("Auto-detected 'response' tool as a lifecycle tool")
                 self.lifecycle_tools.append("response")
-        
+
         # Check if all required tools are available
         if self.required_tools:
             available_tool_names = {tool.name for tool in self._available_tools}
-            missing_tools = [tool for tool in self.required_tools if tool not in available_tool_names]
+            missing_tools = [
+                tool for tool in self.required_tools if tool not in available_tool_names
+            ]
             if missing_tools:
                 raise ValueError(
                     f"Required tools not available: {missing_tools}. "
@@ -637,17 +639,26 @@ class MCPAgent(ABC):
     def _is_connection_error(self, e: Exception) -> bool:
         """Check if an exception is a connection error."""
         error_msg = str(e).lower()
-        return any(pattern in error_msg for pattern in [
-            "connection", "connect", "refused", "failed", "could not connect", "mcp server"
-        ])
-    
+        return any(
+            pattern in error_msg
+            for pattern in [
+                "connection",
+                "connect",
+                "refused",
+                "failed",
+                "could not connect",
+                "mcp server",
+            ]
+        )
+
     def _get_connection_error_message(self, e: Exception) -> str:
         """Extract a helpful connection error message."""
         import re
-        url_match = re.search(r'https?://[^\s]+', str(e))
+
+        url_match = re.search(r"https?://[^\s]+", str(e))
         url = url_match.group(0) if url_match else "the MCP server"
         return f"Connection failed: Could not connect to {url}. Is your MCP client/server running?"
-    
+
     def _handle_connection_error(self, e: Exception) -> None:
         """Handle connection errors with helpful messages."""
         if self._is_connection_error(e):
@@ -655,12 +666,12 @@ class MCPAgent(ABC):
             # Always show connection errors, not just when logging is enabled
             self.design.error(f"❌ {msg}")
             self.design.info("💡 Make sure the MCP server is started before running the agent.")
-            
+
             # For localhost, provide specific instructions
             error_str = str(e).lower()
             if "localhost" in error_str or "127.0.0.1" in error_str:
                 self.design.info("   Run 'hud dev' in another terminal to start the MCP server")
-            
+
             raise RuntimeError(msg) from e
         raise
 

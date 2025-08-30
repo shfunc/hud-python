@@ -32,7 +32,7 @@ _sigterm_received = False
 def _run_with_sigterm(coro_fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
     """Run *coro_fn* via anyio.run() and cancel on SIGTERM or SIGINT (POSIX)."""
     global _sigterm_received
-    
+
     sys.stderr.flush()
 
     async def _runner() -> None:
@@ -61,7 +61,7 @@ def _run_with_sigterm(coro_fn: Callable[..., Any], *args: Any, **kwargs: Any) ->
                 logger.info("SIGTERM handler registered")
             except (ValueError, OSError) as e:
                 logger.warning(f"Could not register SIGTERM handler: {e}")
-                
+
             try:
                 loop.add_signal_handler(signal.SIGINT, handle_sigint)
                 logger.info("SIGINT handler registered")
@@ -85,7 +85,6 @@ def _run_with_sigterm(coro_fn: Callable[..., Any], *args: Any, **kwargs: Any) ->
         except* asyncio.CancelledError:
             # This ensures the task group cleans up properly
             logger.info("Task group cancelled, cleaning up...")
-            pass
 
     anyio.run(_runner)
 
@@ -125,7 +124,7 @@ class MCPServer(FastMCP):
                     logger.info("Lifespan `finally` block reached. Checking for SIGTERM.")
                     # Force flush logs to ensure they're visible
                     sys.stderr.flush()
-                    
+
                     if self._shutdown_fn is not None and _sigterm_received:
                         logger.info("SIGTERM detected! Calling @mcp.shutdown handler...")
                         sys.stderr.flush()
@@ -138,7 +137,9 @@ class MCPServer(FastMCP):
                             sys.stderr.flush()
                         _sigterm_received = False
                     elif self._shutdown_fn is not None:
-                        logger.info("No SIGTERM. This is a hot reload (SIGINT) or normal exit. Skipping @mcp.shutdown handler.")
+                        logger.info(
+                            "No SIGTERM. This is a hot reload (SIGINT) or normal exit. Skipping @mcp.shutdown handler."
+                        )
                         sys.stderr.flush()
                     else:
                         logger.info("No shutdown handler registered.")

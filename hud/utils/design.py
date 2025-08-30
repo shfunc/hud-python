@@ -35,7 +35,7 @@ class HUDDesign:
 
     def __init__(self, logger: logging.Logger | None = None) -> None:
         """Initialize the design system.
-        
+
         Args:
             logger: Logger to check for log levels. If None, uses the root logger.
         """
@@ -264,7 +264,7 @@ class HUDDesign:
 
     def set_verbose(self, verbose: bool) -> None:
         """Set the logging level based on verbose flag.
-        
+
         Args:
             verbose: If True, show INFO level messages. If False, only show WARNING and above.
         """
@@ -274,60 +274,60 @@ class HUDDesign:
             self._logger.setLevel(logging.WARNING)
 
     # Logging-aware methods that check logging levels before printing
-    
+
     def debug(self, message: str, stderr: bool = True) -> None:
         """Print a debug message only if DEBUG logging is enabled.
-        
+
         Args:
             message: The debug message
             stderr: If True, output to stderr (default), otherwise stdout
         """
         if self._logger.isEnabledFor(logging.DEBUG):
             self.dim_info("[DEBUG]", message, stderr=stderr)
-    
+
     def info_log(self, message: str, stderr: bool = True) -> None:
         """Print an info message only if INFO logging is enabled.
-        
+
         Args:
             message: The info message
             stderr: If True, output to stderr (default), otherwise stdout
         """
         if self._logger.isEnabledFor(logging.INFO):
             self.info(message, stderr=stderr)
-    
+
     def progress_log(self, message: str, stderr: bool = True) -> None:
         """Print a progress message only if INFO logging is enabled.
-        
+
         Args:
             message: The progress message
             stderr: If True, output to stderr (default), otherwise stdout
         """
         if self._logger.isEnabledFor(logging.INFO):
             self.progress_message(message, stderr=stderr)
-    
+
     def success_log(self, message: str, stderr: bool = True) -> None:
         """Print a success message only if INFO logging is enabled.
-        
+
         Args:
             message: The success message
             stderr: If True, output to stderr (default), otherwise stdout
         """
         if self._logger.isEnabledFor(logging.INFO):
             self.success(message, stderr=stderr)
-    
+
     def warning_log(self, message: str, stderr: bool = True) -> None:
         """Print a warning message only if WARNING logging is enabled.
-        
+
         Args:
             message: The warning message
             stderr: If True, output to stderr (default), otherwise stdout
         """
         if self._logger.isEnabledFor(logging.WARNING):
             self.warning(message, stderr=stderr)
-    
+
     def error_log(self, message: str, stderr: bool = True) -> None:
         """Print an error message only if ERROR logging is enabled.
-        
+
         Args:
             message: The error message
             stderr: If True, output to stderr (default), otherwise stdout
@@ -353,7 +353,7 @@ class HUDDesign:
         """
         # Convert choices to questionary format
         q_choices = []
-        
+
         for choice in choices:
             if isinstance(choice, dict):
                 name = choice.get("name", str(choice.get("value", "")))
@@ -361,57 +361,57 @@ class HUDDesign:
                 q_choices.append(questionary.Choice(title=name, value=value))
             else:
                 q_choices.append(choice)
-        
+
         result = questionary.select(
             message,
             choices=q_choices,
             instruction="(Use ↑/↓ arrows, Enter to select)",
         ).ask()
-        
+
         # If no selection made (Ctrl+C or ESC), exit
         if result is None:
             raise typer.Exit(1)
-            
+
         return result
 
     def format_tool_call(self, name: str, arguments: dict[str, Any] | None = None) -> str:
         """Format a tool call in compact HUD style.
-        
+
         Args:
             name: Tool name
             arguments: Tool arguments dictionary
-            
+
         Returns:
             Formatted string with Rich markup
         """
         import json
-        
+
         args_str = ""
         if arguments:
             try:
                 # Compact JSON representation
-                args_str = json.dumps(arguments, separators=(',', ':'))
+                args_str = json.dumps(arguments, separators=(",", ":"))
                 if len(args_str) > 60:
                     args_str = args_str[:57] + "..."
             except (TypeError, ValueError):
                 args_str = str(arguments)[:60]
-        
+
         return f"[{GOLD}]→[/{GOLD}] [bold]{name}[/bold][{DIM}]({args_str})[/{DIM}]"
 
     def format_tool_result(self, content: str, is_error: bool = False) -> str:
         """Format a tool result in compact HUD style.
-        
+
         Args:
             content: Result content (will be truncated if too long)
             is_error: Whether this is an error result
-            
+
         Returns:
             Formatted string with Rich markup
         """
         # Truncate content if needed
         if len(content) > 80:
             content = content[:77] + "..."
-            
+
         # Format with status using HUD colors
         if is_error:
             return f"  [{RED}]✗[/{RED}] [{DIM}]{content}[/{DIM}]"

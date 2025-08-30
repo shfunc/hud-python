@@ -435,9 +435,9 @@ def build_environment(
     if analysis["tools"]:
         lock_content["tools"] = [
             {
-                "name": tool["name"], 
+                "name": tool["name"],
                 "description": tool.get("description", ""),
-                "inputSchema": tool.get("inputSchema", {})
+                "inputSchema": tool.get("inputSchema", {}),
             }
             for tool in analysis["tools"]
         ]

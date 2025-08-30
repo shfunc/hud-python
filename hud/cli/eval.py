@@ -110,8 +110,7 @@ async def run_single_task(
                     )
                     raise typer.Exit(1) from e
 
-                agent_config: dict[str, Any] = {
-                }
+                agent_config: dict[str, Any] = {}
                 if allowed_tools:
                     agent_config["allowed_tools"] = allowed_tools
 
@@ -202,7 +201,7 @@ async def run_full_dataset(
     max_concurrent_per_worker: int = 25,
 ) -> list[Any]:
     """Run evaluation across the entire dataset.
-    
+
     Uses either asyncio-based run_dataset or process-based parallel execution
     depending on the parallel flag."""
 
@@ -246,8 +245,7 @@ async def run_full_dataset(
             )
             raise typer.Exit(1) from e
 
-        agent_config: dict[str, Any] = {
-        }
+        agent_config: dict[str, Any] = {}
         if allowed_tools:
             agent_config["allowed_tools"] = allowed_tools
 
@@ -270,7 +268,9 @@ async def run_full_dataset(
             agent_config["allowed_tools"] = allowed_tools
 
     if parallel:
-        design.info(f"🚀 Running PARALLEL evaluation (workers: {max_workers or 'auto'}, max_concurrent: {max_concurrent})…")
+        design.info(
+            f"🚀 Running PARALLEL evaluation (workers: {max_workers or 'auto'}, max_concurrent: {max_concurrent})…"
+        )
         if max_workers is None:
             # Use auto-optimization (now the default run_dataset_parallel)
             return await run_dataset_parallel(

@@ -32,8 +32,9 @@ def install_mcp_instrumentation(provider: TracerProvider) -> None:
     try:
         # First, patch the _instruments to use our fork
         import opentelemetry.instrumentation.mcp.instrumentation as mcp_inst
+
         mcp_inst._instruments = ("hud-mcp-python-sdk >= 3.13.1",)
-        
+
         from opentelemetry.instrumentation.mcp.instrumentation import (
             McpInstrumentor,
         )

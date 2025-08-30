@@ -21,9 +21,13 @@ class TestOperatorAgent:
         # Set up the mcp_config attribute as a regular dict, not a coroutine
         mcp_client.mcp_config = {"test_server": {"url": "http://test"}}
         # Mock list_tools to return the required openai_computer tool
-        mcp_client.list_tools = AsyncMock(return_value=[
-            types.Tool(name="openai_computer", description="OpenAI computer use tool", inputSchema={})
-        ])
+        mcp_client.list_tools = AsyncMock(
+            return_value=[
+                types.Tool(
+                    name="openai_computer", description="OpenAI computer use tool", inputSchema={}
+                )
+            ]
+        )
         mcp_client.initialize = AsyncMock()
         return mcp_client
 
@@ -146,7 +150,7 @@ class TestOperatorAgent:
         mock_output_message.type = "message"
         mock_output_message.content = [mock_output_text]
         mock_response.output = [mock_output_message]
-        
+
         mock_openai.responses.create = AsyncMock(return_value=mock_response)
 
         messages = [{"prompt": "What's on the screen?", "screenshot": None}]
@@ -172,7 +176,7 @@ class TestOperatorAgent:
         mock_output_message.type = "message"
         mock_output_message.content = [mock_output_text]
         mock_response.output = [mock_output_message]
-        
+
         mock_openai.responses.create = AsyncMock(return_value=mock_response)
 
         messages = [{"prompt": "Hi", "screenshot": None}]
@@ -195,7 +199,9 @@ class TestOperatorAgent:
         mock_tool_call.type = "computer_call"  # Should be computer_call not computer_use_preview
         mock_tool_call.call_id = "call_123"
         mock_tool_call.action = MagicMock()
-        mock_tool_call.action.model_dump = MagicMock(return_value={"action": "screenshot", "coordinate": [0, 0]})
+        mock_tool_call.action.model_dump = MagicMock(
+            return_value={"action": "screenshot", "coordinate": [0, 0]}
+        )
         mock_tool_call.pending_safety_checks = []
         # Mock the output text in message format
         mock_output_text = MagicMock()
@@ -205,7 +211,7 @@ class TestOperatorAgent:
         mock_output_message.type = "message"
         mock_output_message.content = [mock_output_text]
         mock_response.output = [mock_tool_call, mock_output_message]
-        
+
         mock_openai.responses.create = AsyncMock(return_value=mock_response)
 
         # Mock tool execution

@@ -450,20 +450,20 @@ async def start_mcp_proxy(
     proxy = create_proxy_server(
         directory, image_name, no_reload, full_reload, verbose, docker_args or [], interactive
     )
-    
+
     # Set up signal handlers for graceful shutdown
     shutdown_event = asyncio.Event()
-    
+
     def signal_handler(signum: int, frame: Any) -> None:
         """Handle signals by setting shutdown event."""
         design.info(f"\n📡 Received signal {signum}, shutting down gracefully...")
         shutdown_event.set()
-    
+
     # Register signal handlers - SIGINT is available on all platforms
     signal.signal(signal.SIGINT, signal_handler)
-    
+
     # SIGTERM is not available on Windows
-    if hasattr(signal, 'SIGTERM'):
+    if hasattr(signal, "SIGTERM"):
         signal.signal(signal.SIGTERM, signal_handler)
 
     # One more attempt to suppress the FastMCP server log
@@ -501,14 +501,14 @@ async def start_mcp_proxy(
 
     # Track if container has been stopped to avoid duplicate stops
     container_stopped = False
-    
+
     # Function to stop the container gracefully
     async def stop_container() -> None:
         """Stop the Docker container gracefully with SIGTERM, wait 30s, then SIGKILL if needed."""
         nonlocal container_stopped
         if container_stopped:
             return  # Already stopped, don't do it again
-            
+
         try:
             # Check if container exists
             check_result = await asyncio.create_subprocess_exec(
@@ -522,7 +522,7 @@ async def start_mcp_proxy(
                 stderr=asyncio.subprocess.DEVNULL,
             )
             stdout, _ = await check_result.communicate()
-            
+
             if container_name in stdout.decode():
                 design.info("🛑 Stopping container gracefully...")
                 # Stop with 30 second timeout before SIGKILL
@@ -590,7 +590,7 @@ async def start_mcp_proxy(
         raise
     except KeyboardInterrupt:
         design.info("\n👋 Shutting down...")
-        
+
         # Stop the container before showing next steps
         await stop_container()
 
@@ -628,7 +628,7 @@ async def start_mcp_proxy(
                 await log_task
             except asyncio.CancelledError:
                 contextlib.suppress(asyncio.CancelledError)
-        
+
         # Always try to stop container on exit
         await stop_container()
 

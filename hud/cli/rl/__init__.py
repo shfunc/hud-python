@@ -26,22 +26,23 @@ design = HUDDesign()
 def rl_main(
     ctx: typer.Context,
     model: str = typer.Option("Qwen/Qwen2.5-3B-Instruct", "--model", "-m", help="Model to train"),
-    dataset: str | None = typer.Option(None, "--dataset", "-d", help="Override dataset from lock file"),
+    dataset: str | None = typer.Option(
+        None, "--dataset", "-d", help="Override dataset from lock file"
+    ),
     config: Path | None = typer.Option(None, "--config", "-c", help="Config YAML path"),
-
     gpus: str = typer.Option("2xA100", "--gpus", help="GPU configuration (e.g., 2xA100, 4xH100)"),
     provider: str = typer.Option("prime", "--provider", help="Infrastructure provider"),
     output_dir: Path = typer.Option("./checkpoints", "--output", "-o", help="Output directory"),
 ) -> None:
     """🤖 Train RL models on HUD environments.
-    
+
     Runs training on remote GPU infrastructure with automatic setup.
     The command will:
     1. Check for required files (config, dataset)
     2. Offer to generate missing files
     3. Push environment to registry if needed
     4. Start remote training on Prime Intellect
-    
+
     Examples:
         hud rl                    # Interactive mode with prompts
         hud rl --model gpt2       # Train with specific model
@@ -51,7 +52,7 @@ def rl_main(
     # Only run main command if no subcommand was invoked
     if ctx.invoked_subcommand is None:
         from .train import train_command_wrapper
-        
+
         train_command_wrapper(
             model=model,
             dataset=dataset,
@@ -70,10 +71,10 @@ def init(
     build: bool = typer.Option(False, "--build", "-b", help="Build environment if no lock file"),
 ) -> None:
     """🔧 Generate hud-vf-gym config from environment.
-    
+
     Generates a YAML configuration file compatible with the hud-vf-gym adapter
     from either a directory with hud.lock.yaml or a Docker image.
-    
+
     Examples:
         hud rl init                    # Use current directory
         hud rl init environments/test  # Use specific directory
@@ -81,5 +82,5 @@ def init(
         hud rl init . -o configs/2048.yaml --build
     """
     from .init import init_command_wrapper
-    
+
     init_command_wrapper(directory, output, force, build)

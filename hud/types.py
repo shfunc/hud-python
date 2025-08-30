@@ -17,6 +17,7 @@ class MCPToolCall(CallToolRequestParams):
     def __str__(self) -> str:
         """Format tool call with Rich markup for HUD design."""
         from hud.utils.design import design
+
         return design.format_tool_call(self.name, self.arguments)
 
 
@@ -26,7 +27,7 @@ class MCPToolResult(CallToolResult):
     def __str__(self) -> str:
         """Format tool result with Rich markup for HUD design - compact version."""
         from hud.utils.design import design
-        
+
         # Extract content summary
         content_summary = ""
         if self.content:
@@ -34,20 +35,20 @@ class MCPToolResult(CallToolResult):
                 if isinstance(block, types.TextContent):
                     # Get first line or truncate
                     text = block.text.strip()
-                    first_line = text.split('\n')[0] if '\n' in text else text
+                    first_line = text.split("\n")[0] if "\n" in text else text
                     content_summary = first_line
                     break
                 elif isinstance(block, types.ImageContent):
                     content_summary = "📷 Image"
                     break
-        
+
         # Or use structured content if no text content
         if not content_summary and self.structuredContent:
             try:
-                content_summary = json.dumps(self.structuredContent, separators=(',', ':'))
+                content_summary = json.dumps(self.structuredContent, separators=(",", ":"))
             except (TypeError, ValueError):
                 content_summary = str(self.structuredContent)
-        
+
         return design.format_tool_result(content_summary, self.isError)
 
 
