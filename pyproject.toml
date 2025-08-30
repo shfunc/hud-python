@@ -1,6 +1,6 @@
 [project]
 name = "hud-python"
-version = "0.4.15"
+version = "0.4.16"
 description = "SDK for the HUD platform."
 readme = "README.md"
 requires-python = ">=3.11, <3.14"
@@ -58,7 +58,7 @@ exclude = [
     "environments/",
     "docs/",
     "examples/",
-    "rl/",
+    "/rl/",  # Only exclude top-level rl directory, not hud/cli/rl/
 ]
 
 [tool.hud.clone]
@@ -80,7 +80,12 @@ style = "blue"
 allow-direct-references = true
 
 [tool.hatch.build.targets.sdist]
-include = ["hud/**", "README.md", "LICENSE", "pyproject.toml"]
+include = [
+    "hud/**",  # Include all files under hud/, including hud/cli/rl/
+    "README.md",
+    "LICENSE",
+    "pyproject.toml"
+]
 exclude = [
     "*/tests/",
     "*/__pycache__/",
