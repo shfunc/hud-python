@@ -24,7 +24,7 @@ async def run_dataset(
     agent_config: dict[str, Any] | None = None,
     max_concurrent: int = 50,
     metadata: dict[str, Any] | None = None,
-    max_steps: int = 40,
+    max_steps: int = 10,
     split: str = "train",
     auto_respond: bool = False,
     custom_system_prompt: str | None = None,
@@ -98,7 +98,7 @@ async def run_dataset(
         sem = asyncio.Semaphore(max_concurrent)
         results: list[Any | None] = [None] * len(dataset)
 
-        async def _worker(index: int, task_dict: Any, max_steps: int = 40) -> None:
+        async def _worker(index: int, task_dict: Any, max_steps: int = 10) -> None:
             async with sem:
                 # Create trace for this task
                 task_name = task_dict.get("prompt") or f"Task {index}"

@@ -15,6 +15,9 @@ Usage examples
 # Run a single OSWorld-Verified task with OpenAI Operator agent (default single-task mode)
 python examples/run_evaluation.py hud-evals/OSWorld-Verified-XLang --agent openai
 
+# Same but with detailed agent step logs visible
+python examples/run_evaluation.py hud-evals/OSWorld-Verified-XLang --agent openai --verbose
+
 # Evaluate the FULL SheetBench dataset with Claude (Single Process concurrency)
 python examples/run_evaluation.py hud-evals/SheetBench-50 --full --agent claude --max-concurrent 25
 
@@ -48,7 +51,6 @@ from hud.datasets import (
 )
 
 logger = logging.getLogger(__name__)
-
 
 # ---------------------------------------------------------------------------
 # Agent factory helpers
@@ -93,7 +95,7 @@ async def run_single_task(
     agent_type: Literal["claude", "openai"] = "claude",
     model: str | None = None,
     allowed_tools: list[str] | None = None,
-    max_steps: int = 50,
+    max_steps: int = 10,
 ) -> None:
     """Load *one* task from *dataset_name* and execute it."""
 
@@ -129,7 +131,7 @@ async def run_full_dataset(
     model: str | None = None,
     allowed_tools: list[str] | None = None,
     max_concurrent: int = 30,
-    max_steps: int = 50,
+    max_steps: int = 10,
     parallel: bool = False,
     max_workers: int | None = None,
     max_concurrent_per_worker: int = 25,
@@ -226,8 +228,8 @@ Examples:
                         help="Max concurrent tasks (default: 50)")
     
     # Task settings
-    parser.add_argument("--max-steps", dest="max_steps", type=int, default=50,
-                        help="Max steps per task (default: 50)")
+    parser.add_argument("--max-steps", dest="max_steps", type=int, default=10,
+                        help="Max steps per task (default: 10)")
     
     # Parallel mode (100+ tasks)
     parser.add_argument("--parallel", action="store_true", help="Use parallel execution for large datasets")
@@ -235,11 +237,25 @@ Examples:
     parser.add_argument("--max-concurrent-per-worker", dest="max_concurrent_per_worker", type=int, default=25,
                         help="Max concurrent tasks per worker")
     
+    # Logging
+    parser.add_argument("--verbose", "-v", action="store_true", help="Show detailed agent step logs")
+    
     return parser.parse_args()
 
 
 async def main() -> None:
     args = parse_args()
+    
+    if args.verbose:
+        # Detailed logs - show everything including agent steps
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(message)s',
+            datefmt='%H:%M:%S'
+        )
+        # Ensure HUD agent logs are visible
+        logging.getLogger("hud.agents").setLevel(logging.INFO)
+        logging.getLogger("hud.agents.base").setLevel(logging.INFO)
 
     allowed_tools = (
         [t.strip() for t in args.allowed_tools.split(",") if t.strip()]
@@ -283,6 +299,7 @@ async def main() -> None:
         print(f"Successful tasks: {successful}/{len(results)} ({100*successful/len(results):.1f}%)")
         
     else:
+        print(f"Execution mode: Single Task (max_steps: {args.max_steps})")
         await run_single_task(
             args.dataset,
             agent_type=args.agent,

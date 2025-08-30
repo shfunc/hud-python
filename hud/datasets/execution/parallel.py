@@ -173,7 +173,7 @@ async def run_dataset_parallel_manual(
     max_concurrent_per_worker: int = 25,
     max_concurrent: int | None = None,
     metadata: dict[str, Any] | None = None,
-    max_steps: int = 40,
+    max_steps: int = 10,
     split: str = "train",
     auto_respond: bool = False,
     custom_system_prompt: str | None = None,
@@ -482,7 +482,7 @@ async def run_dataset_parallel(
     agent_config: dict[str, Any] | None = None,
     max_concurrent: int | None = None,
     metadata: dict[str, Any] | None = None,
-    max_steps: int = 40,
+    max_steps: int = 10,
     **kwargs
 ) -> list[Any]:
     """

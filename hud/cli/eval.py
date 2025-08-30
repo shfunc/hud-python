@@ -196,7 +196,7 @@ async def run_full_dataset(
     model: str | None = None,
     allowed_tools: list[str] | None = None,
     max_concurrent: int = 50,
-    max_steps: int = 50,
+    max_steps: int = 10,
     parallel: bool = False,
     max_workers: int | None = None,
     max_concurrent_per_worker: int = 25,

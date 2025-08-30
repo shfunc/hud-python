@@ -147,12 +147,12 @@ results = await run_dataset_parallel(
 ```
 
 **Benefits:**
-- Maximum throughput (100s-1000s of tasks)
+- Maximum throughput (1000s of tasks)
 - True process-based parallelism
 - Efficient resource utilization
 
 <Warning>
-**Important:** Multiprocess parallelization makes debugging significantly harder as logs from different processes interleave. Always validate your agent and environment with single tasks and asyncio batches before using parallel runners. This progression ensures you catch issues early when they're easiest to debug.
+**Important:** Multiprocess parallelization makes debugging harder as logs from different processes interleave. Always validate your agent and environment with single tasks and asyncio batches before using parallel runners. This progression ensures you catch issues early when they're easiest to debug.
 </Warning>
 
 ### Quick Reference
@@ -161,7 +161,7 @@ results = await run_dataset_parallel(
 |-------|--------|-------------|----------|-----------|
 | Development | Single task | 1 | Initial debugging | Excellent |
 | Testing | `run_dataset` | 30 | Validate at scale | Good |
-| Production | `run_dataset_parallel` | 100s | Fast evaluation | Limited |
+| Production | `run_dataset_parallel` | 1000s | Fast evaluation | Limited |
 
 ## Dataset Functions
 
@@ -176,7 +176,7 @@ results = await run_dataset_parallel(
     dataset="hud-evals/SheetBench-50",  # or Dataset object or list[dict]
     agent_class=ClaudeAgent,
     agent_config={"model": "claude-3-5-sonnet"},
-    max_steps=40
+    max_steps=50
     # Automatically optimizes worker processes based on CPU cores
 )
 ```
@@ -196,7 +196,7 @@ results = await run_dataset_parallel_manual(
     agent_config={"model": "claude-3-5-sonnet"},
     max_workers=8,                # 8 worker processes
     max_concurrent_per_worker=10, # 10 concurrent tasks per worker
-    max_steps=40
+    max_steps=50
 )
 
 # Or with total concurrent limit
@@ -206,7 +206,7 @@ results = await run_dataset_parallel_manual(
     agent_class=ClaudeAgent,
     max_workers=8,
     max_concurrent=20,  # Max 20 total concurrent (overrides per-worker)
-    max_steps=40
+    max_steps=50
 )
 ```
 
