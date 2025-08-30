@@ -795,14 +795,29 @@ def eval(
         help="Comma-separated list of allowed tools",
     ),
     max_concurrent: int = typer.Option(
-        30,
+        50,
         "--max-concurrent",
-        help="Concurrency level for full-dataset mode",
+        help="Max concurrent tasks (prevents rate limits in both asyncio and parallel modes)",
     ),
     max_steps: int = typer.Option(
         30,
         "--max-steps",
         help="Maximum steps per task (default: 10 for single, 50 for full)",
+    ),
+    parallel: bool = typer.Option(
+        False,
+        "--parallel",
+        help="Use process-based parallel execution for large datasets (100+ tasks)",
+    ),
+    max_workers: int | None = typer.Option(
+        None,
+        "--max-workers",
+        help="Number of worker processes for parallel mode (auto-optimized if not set)",
+    ),
+    max_concurrent_per_worker: int = typer.Option(
+        20,
+        "--max-concurrent-per-worker",
+        help="Maximum concurrent tasks per worker in parallel mode",
     ),
 ) -> None:
     """🚀 Run evaluation on datasets or individual tasks with agents."""
@@ -891,6 +906,9 @@ def eval(
         allowed_tools=allowed_tools,
         max_concurrent=max_concurrent,
         max_steps=max_steps,
+        parallel=parallel,
+        max_workers=max_workers,
+        max_concurrent_per_worker=max_concurrent_per_worker,
     )
 
 
