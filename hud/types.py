@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import uuid
 from typing import Any, Literal
 
+import mcp.types as types
 from mcp.types import CallToolRequestParams, CallToolResult
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -13,22 +15,40 @@ class MCPToolCall(CallToolRequestParams):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))  # Unique identifier for reference
 
     def __str__(self) -> str:
-        response = f"Tool: {self.name}"
-        if self.arguments:
-            response += f"\nArguments: {self.arguments}"
-        return response
+        """Format tool call with Rich markup for HUD design."""
+        from hud.utils.design import design
+        return design.format_tool_call(self.name, self.arguments)
 
 
 class MCPToolResult(CallToolResult):
     """A tool result."""
 
     def __str__(self) -> str:
-        response = f"Content: {self.content}"
-        if self.structuredContent:
-            response += f"\nStructured Content: {self.structuredContent}"
-        if self.isError:
-            response += f"\nError: {self.isError}"
-        return response
+        """Format tool result with Rich markup for HUD design - compact version."""
+        from hud.utils.design import design
+        
+        # Extract content summary
+        content_summary = ""
+        if self.content:
+            for block in self.content:
+                if isinstance(block, types.TextContent):
+                    # Get first line or truncate
+                    text = block.text.strip()
+                    first_line = text.split('\n')[0] if '\n' in text else text
+                    content_summary = first_line
+                    break
+                elif isinstance(block, types.ImageContent):
+                    content_summary = "📷 Image"
+                    break
+        
+        # Or use structured content if no text content
+        if not content_summary and self.structuredContent:
+            try:
+                content_summary = json.dumps(self.structuredContent, separators=(',', ':'))
+            except (TypeError, ValueError):
+                content_summary = str(self.structuredContent)
+        
+        return design.format_tool_result(content_summary, self.isError)
 
 
 class AgentResponse(BaseModel):

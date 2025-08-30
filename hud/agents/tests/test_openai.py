@@ -20,6 +20,11 @@ class TestOperatorAgent:
         mcp_client = AsyncMock()
         # Set up the mcp_config attribute as a regular dict, not a coroutine
         mcp_client.mcp_config = {"test_server": {"url": "http://test"}}
+        # Mock list_tools to return the required openai_computer tool
+        mcp_client.list_tools = AsyncMock(return_value=[
+            types.Tool(name="openai_computer", description="OpenAI computer use tool", inputSchema={})
+        ])
+        mcp_client.initialize = AsyncMock()
         return mcp_client
 
     @pytest.fixture
@@ -129,33 +134,51 @@ class TestOperatorAgent:
             types.Tool(name="computer_openai", description="Computer tool", inputSchema={})
         ]
 
-        # Since OpenAI checks isinstance() on response types, we need to mock that
-        # For now, let's just test that we get the expected "No computer use tools available"
-        # when there are no matching tools
-        agent._available_tools = [
-            types.Tool(name="other_tool", description="Other tool", inputSchema={})
-        ]
+        # Mock OpenAI API response for a successful computer use response
+        mock_response = MagicMock()
+        mock_response.id = "response_123"
+        mock_response.state = "completed"
+        # Mock the output message structure
+        mock_output_text = MagicMock()
+        mock_output_text.type = "output_text"
+        mock_output_text.text = "I can see the screen content."
+        mock_output_message = MagicMock()
+        mock_output_message.type = "message"
+        mock_output_message.content = [mock_output_text]
+        mock_response.output = [mock_output_message]
+        
+        mock_openai.responses.create = AsyncMock(return_value=mock_response)
 
         messages = [{"prompt": "What's on the screen?", "screenshot": None}]
         response = await agent.get_response(messages)
 
-        assert response.content == "No computer use tools available"
-        assert response.tool_calls == []
+        assert response.content == "I can see the screen content."
         assert response.done is True
 
     @pytest.mark.asyncio
     async def test_get_model_response_text_only(self, mock_mcp_client, mock_openai):
-        """Test getting text-only response when no computer tools available."""
+        """Test getting text-only response."""
         agent = OperatorAgent(mcp_client=mock_mcp_client, model_client=mock_openai)
 
-        # Set up with no computer tools
-        agent._available_tools = []
+        # Mock OpenAI API response
+        mock_response = MagicMock()
+        mock_response.id = "response_456"
+        mock_response.state = "completed"
+        # Mock the output message structure
+        mock_output_text = MagicMock()
+        mock_output_text.type = "output_text"
+        mock_output_text.text = "Hello! How can I help you?"
+        mock_output_message = MagicMock()
+        mock_output_message.type = "message"
+        mock_output_message.content = [mock_output_text]
+        mock_response.output = [mock_output_message]
+        
+        mock_openai.responses.create = AsyncMock(return_value=mock_response)
 
         messages = [{"prompt": "Hi", "screenshot": None}]
         response = await agent.get_response(messages)
 
-        assert response.content == "No computer use tools available"
-        assert response.tool_calls == []
+        assert response.content == "Hello! How can I help you?"
         assert response.done is True
 
     @pytest.mark.asyncio
@@ -163,56 +186,41 @@ class TestOperatorAgent:
         """Test running agent with tool usage."""
         agent = OperatorAgent(mcp_client=mock_mcp_client, model_client=mock_openai)
 
-        # Mock tool availability
-        agent._available_tools = [
-            types.Tool(name="search", description="Search tool", inputSchema={"type": "object"})
-        ]
-        # Base agent doesn't require server mapping for tool execution
-
-        # Mock initial response with tool use
-        initial_choice = MagicMock()
-        initial_choice.message = MagicMock(
-            content=None,
-            tool_calls=[
-                MagicMock(
-                    id="call_search",
-                    function=MagicMock(name="search", arguments='{"query": "OpenAI news"}'),
-                )
-            ],
-        )
-
-        initial_response = MagicMock()
-        initial_response.choices = [initial_choice]
-        initial_response.usage = MagicMock(prompt_tokens=10, completion_tokens=15, total_tokens=25)
-
-        # Mock follow-up response
-        final_choice = MagicMock()
-        final_choice.message = MagicMock(
-            content="Here are the latest OpenAI news...", tool_calls=None
-        )
-
-        final_response = MagicMock()
-        final_response.choices = [final_choice]
-        final_response.usage = MagicMock(prompt_tokens=20, completion_tokens=10, total_tokens=30)
-
-        mock_openai.chat.completions.create = AsyncMock(
-            side_effect=[initial_response, final_response]
-        )
+        # Mock OpenAI API response that uses the computer tool
+        mock_response = MagicMock()
+        mock_response.id = "response_789"
+        mock_response.state = "completed"
+        # Mock the computer tool call
+        mock_tool_call = MagicMock()
+        mock_tool_call.type = "computer_call"  # Should be computer_call not computer_use_preview
+        mock_tool_call.call_id = "call_123"
+        mock_tool_call.action = MagicMock()
+        mock_tool_call.action.model_dump = MagicMock(return_value={"action": "screenshot", "coordinate": [0, 0]})
+        mock_tool_call.pending_safety_checks = []
+        # Mock the output text in message format
+        mock_output_text = MagicMock()
+        mock_output_text.type = "output_text"
+        mock_output_text.text = "I took a screenshot of the screen."
+        mock_output_message = MagicMock()
+        mock_output_message.type = "message"
+        mock_output_message.content = [mock_output_text]
+        mock_response.output = [mock_tool_call, mock_output_message]
+        
+        mock_openai.responses.create = AsyncMock(return_value=mock_response)
 
         # Mock tool execution
         mock_mcp_client.call_tool = AsyncMock(
             return_value=MCPToolResult(
-                content=[types.TextContent(type="text", text="Search results...")], isError=False
+                content=[types.TextContent(type="text", text="Screenshot taken")], isError=False
             )
         )
 
         # Use a string prompt instead of a task
-        result = await agent.run("Search for OpenAI news")
+        result = await agent.run("Take a screenshot")
 
-        # Since OpenAI integration currently returns "No computer use tools available"
-        # when the tool isn't a computer tool, we expect this
-        assert result.content == "No computer use tools available"
+        # Verify the agent completed the task
         assert result.done is True
+        assert "screenshot" in result.content.lower() if result.content else False
 
     @pytest.mark.asyncio
     async def test_handle_empty_response(self, mock_mcp_client, mock_openai):

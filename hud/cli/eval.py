@@ -76,8 +76,6 @@ async def run_single_task(
 ) -> None:
     """Load one task and execute it, or detect if JSON contains a list and run as dataset."""
 
-    design.info("📊 Loading dataset…")
-
     # Import Task and run_dataset lazily
     try:
         from hud.datasets import Task, run_dataset
@@ -91,6 +89,7 @@ async def run_single_task(
     # Check if it's a JSON file
     path = Path(source)
     if path.exists() and path.suffix == ".json":
+        design.info("📊 Loading task file…")
         with open(path) as f:  # noqa: ASYNC230
             json_data = json.load(f)
 
@@ -161,6 +160,7 @@ async def run_single_task(
             raise typer.Exit(1)
     else:
         # Load from HuggingFace dataset
+        design.info(f"📊 Loading dataset from HuggingFace: {source}…")
         try:
             from datasets import load_dataset
         except ImportError as e:
@@ -332,25 +332,22 @@ def eval_command(
         # Run with OpenAI Operator agent
         hud eval hud-evals/OSWorld-Gold-Beta --agent openai
     """
-    import os
-
     from hud.settings import settings
 
     # Check for required API keys
     if agent == "claude":
-        if not settings.anthropic_api_key or not os.environ.get("ANTHROPIC_API_KEY"):
+        if not settings.anthropic_api_key:
             design.error("ANTHROPIC_API_KEY is required for Claude agent")
             design.info("Set it in your environment or .env file: ANTHROPIC_API_KEY=your-key-here")
             raise typer.Exit(1)
-    elif agent == "openai" and (
-        not settings.openai_api_key or not os.environ.get("OPENAI_API_KEY")
-    ):
-        design.error("OPENAI_API_KEY is required for OpenAI agent")
-        design.info("Set it in your environment or .env file: OPENAI_API_KEY=your-key-here")
-        raise typer.Exit(1)
+    elif agent == "openai":
+        if not settings.openai_api_key:
+            design.error("OPENAI_API_KEY is required for OpenAI agent")
+            design.info("Set it in your environment or .env file: OPENAI_API_KEY=your-key-here")
+            raise typer.Exit(1)
 
     # Check for HUD_API_KEY if using HUD services
-    if not settings.api_key or not os.environ.get("HUD_API_KEY"):
+    if not settings.api_key:
         design.warning("HUD_API_KEY not set. Some features may be limited.")
         design.info("Get your API key at: https://app.hud.so")
 
