@@ -112,6 +112,16 @@ setup = [
 
 ## Dataset Functions
 
+<Note>
+**Recommended Evaluation Workflow:**
+
+1. **Development:** Start with single tasks for full debugging visibility (`agent.run(task)`)
+2. **Testing:** Use `run_dataset` with `max_concurrent=30` for rich CLI logs and pattern detection
+3. **Production:** Use `run_dataset_parallel` for maximum speed once stable
+
+⚠️ Multiprocess parallelization makes debugging harder due to interleaved logs. We suggest to validate with single tasks and asyncio batches before using massively parallel runners.
+</Note>
+
 ### Loading Tasks from Datasets
 
 Load tasks from HuggingFace datasets using the standard datasets library:
@@ -164,24 +174,47 @@ save_tasks(
   Git revision/branch name
 </ParamField>
 
-### run_dataset
+### run_dataset_parallel
 
-Run agent on entire dataset with automatic parallelization.
+Run agent on entire dataset with automatic process-based parallelization.
 
 ```python
-from hud.datasets import run_dataset
+from hud.datasets import run_dataset_parallel
 from hud.agents import ClaudeAgent
 
-results = await run_dataset(
+# Automatic optimization
+results = await run_dataset_parallel(
     name: str,
     dataset: str | Dataset | list[dict[str, Any]],
     agent_class: type[MCPAgent],
     agent_config: dict[str, Any] | None = None,
-    max_concurrent: int = 50,
+    metadata: dict[str, Any] | None = None,
+    max_steps: int = 40,
+    **kwargs
+) -> list[Any]
+```
+
+### run_dataset_parallel_manual
+
+Run with manual control over parallelization.
+
+```python
+from hud.datasets import run_dataset_parallel_manual
+
+# Full control over workers and concurrency
+results = await run_dataset_parallel_manual(
+    name: str,
+    dataset: str | Dataset | list[dict[str, Any]],
+    agent_class: type[MCPAgent],
+    agent_config: dict[str, Any] | None = None,
+    max_workers: int | None = None,
+    max_concurrent_per_worker: int = 10,
+    max_concurrent: int | None = None,
     metadata: dict[str, Any] | None = None,
     max_steps: int = 40,
     split: str = "train",
-    auto_respond: bool = False
+    auto_respond: bool = True,
+    custom_system_prompt: str | None = None
 ) -> list[Any]
 ```
 
@@ -201,8 +234,16 @@ results = await run_dataset(
   Configuration for agent (model, temperature, etc.)
 </ParamField>
 
-<ParamField body="max_concurrent" type="int" default="50">
-  Maximum parallel task execution
+<ParamField body="max_workers" type="int | None" optional>
+  Number of worker processes. Defaults to CPU count if not set.
+</ParamField>
+
+<ParamField body="max_concurrent_per_worker" type="int" default="10">
+  Maximum concurrent tasks within each worker process
+</ParamField>
+
+<ParamField body="max_concurrent" type="int | None" optional>
+  Total concurrent limit across all workers (overrides per-worker setting)
 </ParamField>
 
 <ParamField body="metadata" type="dict" optional>
@@ -233,7 +274,7 @@ with job(
     dataset_link: str | None = None
 ) as j:
     # Run evaluations
-    results = await run_dataset(...)
+    results = await run_dataset_parallel(...)
 ```
 
 <ParamField body="name" type="str" required>
@@ -331,7 +372,7 @@ medium_tasks = [
 ]
 
 # Run subset
-results = await run_dataset(
+results = await run_dataset_parallel(
     name="Medium Tasks Only",
     dataset=medium_tasks,  # Can pass list directly
     agent_class=ClaudeAgent,
@@ -376,7 +417,7 @@ from hud.datasets import run_dataset
 
 # Run with job tracking
 with job("Nightly Benchmark Run", metadata={"version": "v2.1"}):
-    results = await run_dataset(
+    results = await run_dataset_parallel(
         name="SheetBench Evaluation",
         dataset="hud-evals/sheetbench-50",
         agent_class=ClaudeAgent,
@@ -433,7 +474,7 @@ async def evaluate_multi_criteria(agent, task):
 
 ```python
 try:
-    results = await run_dataset(
+    results = await run_dataset_parallel(
         dataset="my-tasks",
         agent_class=ClaudeAgent
     )
