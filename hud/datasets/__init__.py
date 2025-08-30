@@ -21,12 +21,12 @@ from .utils import fetch_system_prompt_from_dataset, save_tasks
 __all__ = [
     # Core data model
     "Task",
+    "calculate_optimal_workers",
     # Utilities
     "fetch_system_prompt_from_dataset",
-    "save_tasks",
     # Execution
     "run_dataset",
     "run_dataset_parallel",
     "run_dataset_parallel_manual",
-    "calculate_optimal_workers",
+    "save_tasks",
 ]

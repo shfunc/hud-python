@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-import asyncio
-import json
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 import typer
-import yaml
 
 from hud.utils.design import HUDDesign
 
+if TYPE_CHECKING:
+    from pathlib import Path
 # Create the RL subcommand app
 rl_app = typer.Typer(
     name="rl",
@@ -29,10 +27,10 @@ def rl_main(
     dataset: str | None = typer.Option(
         None, "--dataset", "-d", help="Override dataset from lock file"
     ),
-    config: Path | None = typer.Option(None, "--config", "-c", help="Config YAML path"),
+    config: Path | None = typer.Option(None, "--config", "-c", help="Config YAML path"),  # noqa: B008
     gpus: str = typer.Option("2xA100", "--gpus", help="GPU configuration (e.g., 2xA100, 4xH100)"),
     provider: str = typer.Option("prime", "--provider", help="Infrastructure provider"),
-    output_dir: Path = typer.Option("./checkpoints", "--output", "-o", help="Output directory"),
+    output_dir: Path = typer.Option("./checkpoints", "--output", "-o", help="Output directory"),  # noqa: B008
 ) -> None:
     """🤖 Train RL models on HUD environments.
 
@@ -66,7 +64,7 @@ def rl_main(
 @rl_app.command()
 def init(
     directory: str = typer.Argument(".", help="Environment directory or Docker image"),
-    output: Path = typer.Option(None, "--output", "-o", help="Output config file path"),
+    output: Path = typer.Option(None, "--output", "-o", help="Output config file path"),  # noqa: B008
     force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing config"),
     build: bool = typer.Option(False, "--build", "-b", help="Build environment if no lock file"),
 ) -> None:

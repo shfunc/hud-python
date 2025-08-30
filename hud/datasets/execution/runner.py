@@ -9,8 +9,7 @@ from typing import TYPE_CHECKING, Any, cast
 from datasets import Dataset, load_dataset
 
 from hud.agents.misc import ResponseAgent
-
-from ..task import Task
+from hud.datasets.task import Task
 
 if TYPE_CHECKING:
     from hud.agents import MCPAgent
@@ -92,7 +91,7 @@ async def run_dataset(
             dataset_name = general_info[4].split("@")[0]
             dataset_link = f"{project}/{dataset_name}"
         except Exception:
-            pass  # Ignore extraction errors
+            logger.warning("Failed to extract dataset verification info")
 
     with hud.job(name, metadata=job_metadata, dataset_link=dataset_link) as job_obj:
         # Run tasks with semaphore for concurrency control

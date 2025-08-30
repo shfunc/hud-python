@@ -269,7 +269,7 @@ async def run_full_dataset(
 
     if parallel:
         design.info(
-            f"🚀 Running PARALLEL evaluation (workers: {max_workers or 'auto'}, max_concurrent: {max_concurrent})…"
+            f"🚀 Running PARALLEL evaluation (workers: {max_workers or 'auto'}, max_concurrent: {max_concurrent})…"  # noqa: E501
         )
         if max_workers is None:
             # Use auto-optimization (now the default run_dataset_parallel)
@@ -396,11 +396,10 @@ def eval_command(
             design.error("ANTHROPIC_API_KEY is required for Claude agent")
             design.info("Set it in your environment or .env file: ANTHROPIC_API_KEY=your-key-here")
             raise typer.Exit(1)
-    elif agent == "openai":
-        if not settings.openai_api_key:
-            design.error("OPENAI_API_KEY is required for OpenAI agent")
-            design.info("Set it in your environment or .env file: OPENAI_API_KEY=your-key-here")
-            raise typer.Exit(1)
+    elif agent == "openai" and not settings.openai_api_key:
+        design.error("OPENAI_API_KEY is required for OpenAI agent")
+        design.info("Set it in your environment or .env file: OPENAI_API_KEY=your-key-here")
+        raise typer.Exit(1)
 
     # Check for HUD_API_KEY if using HUD services
     if not settings.api_key:

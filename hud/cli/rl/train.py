@@ -147,8 +147,8 @@ def train_command_wrapper(
                     design.info("")
 
                     # Run hf command
-                    result = subprocess.run(
-                        ["hud", "hf", "tasks.json", "--name", dataset_name],
+                    result = subprocess.run(  # noqa: S603
+                        ["hud", "hf", "tasks.json", "--name", dataset_name],  # noqa: S607
                         capture_output=True,
                         text=True,
                     )
@@ -173,7 +173,7 @@ def train_command_wrapper(
     if provider == "prime":
         # Check if team ID is globally configured
         team_check = subprocess.run(
-            ["prime", "config", "view"],
+            ["prime", "config", "view"],  # noqa: S607
             capture_output=True,
             text=True,
         )
@@ -205,7 +205,7 @@ def train_command_wrapper(
                 team_id = typer.prompt("Enter your team ID (e.g., team_abc123def456)")
 
                 # Save it globally automatically
-                subprocess.run(["prime", "config", "set-team-id", team_id])
+                subprocess.run(["prime", "config", "set-team-id", team_id])  # noqa: S603, S607
                 design.success("Team ID saved globally")
 
                 auto_create_pod = (
@@ -371,8 +371,8 @@ def create_dataset_interactive() -> str | None:
         return None
 
     # Run hf command
-    result = subprocess.run(
-        ["hud", "hf", "tasks.json", "--name", dataset_name],
+    result = subprocess.run(  # noqa: S603
+        ["hud", "hf", "tasks.json", "--name", dataset_name],  # noqa: S607
         capture_output=True,
         text=True,
     )

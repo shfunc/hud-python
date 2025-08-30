@@ -7,7 +7,7 @@ import re
 import string
 import subprocess
 import time
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
 from rich.console import Console
@@ -19,6 +19,8 @@ from hud.utils.design import HUDDesign
 
 from .ssh import check_and_configure_ssh_key, connect_and_train
 
+if TYPE_CHECKING:
+    from pathlib import Path
 design = HUDDesign()
 
 
@@ -28,9 +30,9 @@ def parse_gpu_config(gpus: str) -> tuple[int, str]:
         count_str, gpu_type = gpus.split("x", 1)
         try:
             count = int(count_str)
-        except ValueError:
+        except ValueError as e:
             design.error(f"Invalid GPU count: {count_str}")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from e
     else:
         # Default to 1 GPU if no count specified
         count = 1
@@ -84,8 +86,8 @@ async def create_and_connect_prime_pod(
     # Check for global team config first
     has_global_team = False
     if not team_id:  # Only check if not explicitly provided
-        team_check = subprocess.run(
-            ["prime", "config", "view"],
+        team_check = subprocess.run(  # noqa: ASYNC221
+            ["prime", "config", "view"],  # noqa: S607
             capture_output=True,
             text=True,
         )
@@ -122,7 +124,7 @@ async def create_and_connect_prime_pod(
     design.info("Checking available providers...")
 
     # Run command with just a newline to see provider list
-    provider_check = subprocess.run(
+    provider_check = subprocess.run(  # noqa: S603, ASYNC221
         create_cmd,
         input="\n",  # Just send newline to see providers
         text=True,
@@ -187,7 +189,7 @@ async def create_and_connect_prime_pod(
         design.debug("  Using personal account: default option [1]")
 
     design.debug(
-        f"  Input sequence: provider={provider_choice}, disk={disk_size or 'default'}, image={image_choice}, team={team_choice if 'team_choice' in locals() else 'default'}"
+        f"  Input sequence: provider={provider_choice}, disk={disk_size or 'default'}, image={image_choice}, team={team_choice if 'team_choice' in locals() else 'default'}"  # noqa: E501
     )
 
     # Show found providers
@@ -205,7 +207,7 @@ async def create_and_connect_prime_pod(
             console=console,
             refresh_per_second=10,
         ):
-            result = subprocess.run(
+            result = subprocess.run(  # noqa: S603, ASYNC221
                 create_cmd,
                 input=inputs,
                 text=True,
@@ -240,7 +242,7 @@ async def create_and_connect_prime_pod(
                     "The Prime CLI interface may have changed. Try running the command manually:"
                 )
                 design.command_example(
-                    f"prime pods create --gpu-type {gpu_type} --gpu-count {gpu_count} --name {pod_name}"
+                    f"prime pods create --gpu-type {gpu_type} --gpu-count {gpu_count} --name {pod_name}"  # noqa: E501
                 )
 
             # Show error details
@@ -299,16 +301,12 @@ async def create_and_connect_prime_pod(
             if "Successfully created pod" in line:
                 # Extract just the pod ID (alphanumeric characters)
                 match = re.search(r"pod\s+([a-f0-9]+)", line)
-                if match:
-                    pod_id = match.group(1)
-                else:
-                    # Fallback to last word
-                    pod_id = line.split()[-1].strip()
+                pod_id = match.group(1) if match else line.split()[-1].strip()
                 break
 
         if not pod_id:
             design.error("Could not extract pod ID from output")
-            design.info("Output:", result.stdout)
+            design.info(f"Output: {result.stdout}")
             raise typer.Exit(1)
 
         design.success(f"Created pod: {pod_id}")
@@ -373,7 +371,7 @@ async def create_and_connect_prime_pod(
 
     except subprocess.CalledProcessError as e:
         design.error(f"Failed to create pod: {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 async def poll_pod_status(pod_id: str) -> str | None:
@@ -394,8 +392,8 @@ async def poll_pod_status(pod_id: str) -> str | None:
                 if attempt % 6 == 0:  # Every minute
                     pass  # Will update in spinner text below
 
-                result = subprocess.run(
-                    ["prime", "pods", "status", pod_id],
+                result = subprocess.run(  # noqa: S603, ASYNC221
+                    ["prime", "pods", "status", pod_id],  # noqa: S607
                     capture_output=True,
                     text=True,
                 )
@@ -429,7 +427,7 @@ async def poll_pod_status(pod_id: str) -> str | None:
                     if status_value:
                         # Include SSH status in spinner text
                         ssh_status = f" | SSH: {ssh_value}" if ssh_value else ""
-                        spinner.text = f"Pod status: {status_value} ({elapsed_minutes}m elapsed, should take 5-20 min){ssh_status}"
+                        spinner.text = f"Pod status: {status_value} ({elapsed_minutes}m elapsed, should take 5-20 min){ssh_status}"  # noqa: E501
 
                     # Check if SSH is available (and not N/A)
                     if ssh_value and ssh_value.strip() and ssh_value.strip() != "N/A":
@@ -438,12 +436,12 @@ async def poll_pod_status(pod_id: str) -> str | None:
                         design.success(f"SSH is available: {ssh_value}")
                         return ssh_value
 
-                time.sleep(10)  # Wait 10 seconds
+                time.sleep(10)  # Wait 10 seconds # noqa: ASYNC251
                 attempt += 1
 
             except Exception as e:
                 spinner.text = f"[bold red]Status check failed: {e}[/bold red]"
-                time.sleep(10)
+                time.sleep(10)  # noqa: ASYNC251
                 attempt += 1
 
     # Spinner is done, now we can use design.error
@@ -477,7 +475,7 @@ async def run_prime_training(
 
     # Generate short pod name (no dots allowed)
     model_suffix = model.split("/")[-1].replace(".", "-").lower()
-    short_id = "".join(random.choices(string.ascii_lowercase + string.digits, k=4))
+    short_id = "".join(random.choices(string.ascii_lowercase + string.digits, k=4))  # noqa: S311
     pod_name = f"hud-rl-{model_suffix}-{short_id}"[:30]  # Keep it short
 
     # Always create pod automatically

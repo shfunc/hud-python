@@ -921,7 +921,7 @@ app.add_typer(rl_app, name="rl")
 
 @app.command()
 def hf(
-    tasks_file: Path | None = typer.Argument(
+    tasks_file: Path | None = typer.Argument(  # noqa: B008
         None, help="JSON file containing tasks (auto-detected if not provided)"
     ),
     name: str | None = typer.Option(

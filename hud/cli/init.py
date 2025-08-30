@@ -208,7 +208,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-'''
+'''  # noqa: E501
 
 NOTEBOOK_TEMPLATE = """{{
  "cells": [
@@ -429,7 +429,7 @@ NOTEBOOK_TEMPLATE = """{{
  "nbformat": 4,
  "nbformat_minor": 4
 }}
-"""
+"""  # noqa: E501
 
 ENV_FILE_TEMPLATE = """# HUD API Configuration
 # Get your API key from https://app.hud.so/account
@@ -523,7 +523,7 @@ hud eval "your-org/your-dataset" --agent claude
 **Note**: Only public HuggingFace datasets appear as leaderboards!
 
 📚 Learn more: [Creating Benchmarks](https://docs.hud.so/evaluate-agents/create-benchmarks) | [Leaderboards](https://docs.hud.so/evaluate-agents/leaderboards)
-"""
+"""  # noqa: E501
 
 
 def sanitize_name(name: str) -> str:

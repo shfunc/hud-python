@@ -1,4 +1,5 @@
 """Dataset execution module."""
+
 from __future__ import annotations
 
 from .parallel import calculate_optimal_workers, run_dataset_parallel, run_dataset_parallel_manual

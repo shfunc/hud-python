@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 import typer
 
+from hud.cli.rl.utils import get_mcp_config_from_lock, read_lock_file, write_lock_file
 from hud.utils.design import HUDDesign
 
 design = HUDDesign()
@@ -75,7 +77,7 @@ def hf_command(
             design.success(f"Selected: {tasks_file}")
 
     # Validate inputs
-    if not tasks_file.exists():
+    if tasks_file and not tasks_file.exists():
         design.error(f"Tasks file not found: {tasks_file}")
         raise typer.Exit(1)
 
@@ -92,18 +94,20 @@ def hf_command(
             api = HfApi(token=token)
             user_info = api.whoami()
             hf_username = user_info.get("name", None)
-        except:
+        except Exception:
             # Try git config as fallback
             try:
                 import subprocess
 
                 result = subprocess.run(
-                    ["git", "config", "user.name"], capture_output=True, text=True
+                    ["git", "config", "user.name"],  # noqa: S607
+                    capture_output=True,
+                    text=True,
                 )
                 if result.returncode == 0 and result.stdout.strip():
                     hf_username = result.stdout.strip().lower().replace(" ", "-")
-            except:
-                pass
+            except Exception:
+                design.warning("Failed to get HF username from git config")
 
         # Get environment name from current directory or lock file
         env_name = Path.cwd().name
@@ -121,8 +125,8 @@ def hf_command(
                         image_name = lock_data["image"].split(":")[0].split("/")[-1]
                         if image_name and image_name != "local":
                             env_name = image_name
-            except:
-                pass
+            except Exception as e:
+                design.warning(f"Failed to get HF username from lock file: {e}")
 
         # Generate suggestions
         suggestions = []
@@ -146,7 +150,7 @@ def hf_command(
         design.success(f"Using dataset name: {name}")
 
     # Validate dataset name format
-    if push and "/" not in name:
+    if push and name and "/" not in name:
         design.error("Dataset name must include organization (e.g., 'my-org/my-dataset')")
         design.info("For local-only datasets, use --no-push")
         raise typer.Exit(1)
@@ -154,11 +158,13 @@ def hf_command(
     # Load tasks
     design.info(f"Loading tasks from: {tasks_file}")
     try:
+        if tasks_file is None:
+            raise ValueError("Tasks file is required")
         with open(tasks_file) as f:
             tasks_data = json.load(f)
     except json.JSONDecodeError as e:
         design.error(f"Invalid JSON file: {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     # Handle both single task and list of tasks
     if isinstance(tasks_data, dict):
@@ -211,7 +217,7 @@ def hf_command(
     # Check if dataset is suitable for training
     if len(valid_tasks) < 4:
         design.warning(
-            f"Dataset has only {len(valid_tasks)} task(s). RL training typically requires at least 4 tasks."
+            f"Dataset has only {len(valid_tasks)} task(s). RL training typically requires at least 4 tasks."  # noqa: E501
         )
         use_for_training = design.select(
             "Will this dataset be used for RL training?",
@@ -244,7 +250,7 @@ def hf_command(
     remote_image = None
 
     # Check all server configs (could be named anything, not just "hud")
-    for server_name, server_config in sample_mcp_config.items():
+    for server_config in sample_mcp_config.values():
         if isinstance(server_config, dict) and "url" in server_config:
             url = server_config.get("url", "")
             if "mcp.hud.so" in url:
@@ -270,7 +276,7 @@ def hf_command(
 
         if convert_to_remote == "Yes, convert to remote (requires public image)":
             # Get the image name from lock file
-            from .rl.utils import get_image_from_lock
+            from hud.cli.rl.utils import get_image_from_lock
 
             image = get_image_from_lock()
 
@@ -292,7 +298,7 @@ def hf_command(
                 if push_image == "Yes, push image":
                     design.info("Running 'hud push' to publish image...")
                     # Import here to avoid circular imports
-                    from .push import push_command
+                    from hud.cli.push import push_command
 
                     # Run push command (it's synchronous)
                     push_command(directory=".", yes=True)
@@ -313,7 +319,10 @@ def hf_command(
                     remote_config = {
                         "hud": {
                             "url": "https://mcp.hud.so/v3/mcp",
-                            "headers": {"Authorization": "Bearer $HUD_API_KEY", "Mcp-Image": image},
+                            "headers": {
+                                "Authorization": "Bearer $HUD_API_KEY",
+                                "Mcp-Image": image,
+                            },
                         }
                     }
                     task["mcp_config"] = remote_config
@@ -342,10 +351,10 @@ def hf_command(
     if push:
         try:
             from datasets import Dataset
-        except ImportError:
+        except ImportError as e:
             design.error("datasets library not installed")
             design.info("Install with: pip install datasets")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from e
 
         design.info(f"Creating HuggingFace dataset: {name}")
         dataset = Dataset.from_dict(dataset_dict)
@@ -358,14 +367,18 @@ def hf_command(
 
         design.info(f"Pushing to Hub (private={private})...")
         try:
+            if name is None:
+                raise ValueError("Dataset name is required")
             dataset.push_to_hub(name, private=private)
             design.success(f"Dataset published: https://huggingface.co/datasets/{name}")
         except Exception as e:
             design.error(f"Failed to push to Hub: {e}")
             design.hint("Make sure you're logged in: huggingface-cli login")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from e
     else:
         # Save locally
+        if name is None:
+            raise ValueError("Dataset name is required")
         output_file = Path(f"{name.replace('/', '_')}_dataset.json")
         with open(output_file, "w") as f:
             json.dump(dataset_dict, f, indent=2)
@@ -374,9 +387,6 @@ def hf_command(
     # Update hud.lock.yaml if requested
     if update_lock:
         update_lock_file(name, len(valid_tasks))
-
-
-from .rl.utils import get_mcp_config_from_lock, read_lock_file, write_lock_file
 
 
 def update_lock_file(dataset_name: str, task_count: int) -> None:
@@ -394,9 +404,3 @@ def update_lock_file(dataset_name: str, task_count: int) -> None:
     # Write back
     if write_lock_file(lock_data):
         design.success(f"Updated hud.lock.yaml with dataset: {dataset_name}")
-
-
-# Import for timestamp
-from datetime import datetime
-
-# Import typer at module level for proper registration

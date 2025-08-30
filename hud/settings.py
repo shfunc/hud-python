@@ -44,6 +44,18 @@ class Settings(BaseSettings):
         validation_alias="OPENAI_API_KEY",
     )
 
+    wandb_api_key: str | None = Field(
+        default=None,
+        description="API key for Weights & Biases",
+        validation_alias="WANDB_API_KEY",
+    )
+
+    prime_api_key: str | None = Field(
+        default=None,
+        description="API key for Prime Intellect",
+        validation_alias="PRIME_API_KEY",
+    )
+
     telemetry_enabled: bool = Field(
         default=True,
         description="Enable telemetry for the HUD SDK",

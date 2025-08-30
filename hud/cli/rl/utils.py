@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,8 @@ import yaml
 from hud.utils.design import HUDDesign
 
 design = HUDDesign()
+
+logger = logging.getLogger(__name__)
 
 
 def read_lock_file() -> dict[str, Any]:
@@ -94,7 +97,7 @@ def detect_image_name() -> str | None:
             if name:
                 return f"{name}:latest"
         except Exception:
-            pass
+            logger.warning("Failed to load pyproject.toml")
 
     # Use directory name as last resort
     return f"{Path.cwd().name}:latest"

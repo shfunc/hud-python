@@ -82,21 +82,21 @@ def _process_worker(
         module = importlib.import_module(agent_class_module)
         agent_class = getattr(module, agent_class_name)
     except (ImportError, AttributeError) as e:
-        logger.error(f"Worker {worker_id}: Failed to import agent class: {e}")
+        logger.error("Worker %s: Failed to import agent class: %s", worker_id, e)
         return [(idx, {"error": str(e), "isError": True}) for idx, _ in task_batch]
 
     # Create new event loop for this process
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
-    async def process_batch():
+    async def process_batch() -> list[tuple[int, Any]]:
         """Process all tasks in the batch asynchronously."""
         results = []
 
         # Use semaphore to limit concurrency within the process
         sem = asyncio.Semaphore(max_concurrent_per_worker)
 
-        async def process_single_task(index: int, task_dict: dict[str, Any]):
+        async def process_single_task(index: int, task_dict: dict[str, Any]) -> tuple[int, Any]:
             """Process a single task with telemetry tracking."""
             async with sem:
                 try:
@@ -119,18 +119,28 @@ def _process_worker(
 
                         # Extract and print evaluation score for visibility
                         reward = getattr(result, "reward", "N/A")
-                        print(f"[Worker {worker_id}] Task {index}: ✓ Completed (reward: {reward})")
+                        logger.info(
+                            "[Worker %s] Task %s: ✓ Completed (reward: %s)",
+                            worker_id,
+                            index,
+                            reward,
+                        )
 
                         logger.info(
-                            f"Worker {worker_id}: Completed task {index} (reward: {reward})"
+                            "[Worker %s] Completed task %s (reward: %s)",
+                            worker_id,
+                            index,
+                            reward,
                         )
 
                         return (index, result)
 
                 except Exception as e:
                     error_msg = f"Worker {worker_id}: Task {index} failed: {e}"
-                    print(f"[Worker {worker_id}] Task {index}: ✗ Failed ({str(e)[:100]})")
-                    logger.error(f"{error_msg}\n{traceback.format_exc()}")
+                    logger.error(
+                        "[Worker %s] Task %s: ✗ Failed (%s)", worker_id, index, str(e)[:100]
+                    )
+                    logger.error("%s\n%s", error_msg, traceback.format_exc())
 
                     return (
                         index,
@@ -167,19 +177,19 @@ def _process_worker(
             # The method returns True if successful, False if timeout
             success = provider.force_flush(timeout_millis=5000)  # 5 second timeout # type: ignore
             if not success:
-                logger.warning(f"Worker {worker_id}: Telemetry flush timed out")
+                logger.warning("Worker %s: Telemetry flush timed out", worker_id)
 
         return results
     except Exception as e:
-        print(f"[Worker {worker_id}] Batch processing failed: {e}")
-        logger.error(f"Worker {worker_id} batch processing failed: {e}")
+        logger.error("[Worker %s] Batch processing failed: %s", worker_id, e)
+        logger.error("Worker %s batch processing failed: %s", worker_id, e)
         return [(idx, {"error": str(e), "isError": True}) for idx, _ in task_batch]
     finally:
         # Clean up the event loop
         try:
             loop.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Worker %s: Failed to close event loop: %s", worker_id, e)
 
 
 async def run_dataset_parallel_manual(
@@ -255,13 +265,15 @@ async def run_dataset_parallel_manual(
         # Each worker should get a fair share of the total concurrent limit
         max_concurrent_per_worker = max(1, max_concurrent // max_workers)
         logger.info(
-            f"Limiting to {max_concurrent} total concurrent tasks "
-            f"({max_concurrent_per_worker} per worker)"
+            "Limiting to %s total concurrent tasks %s per worker)",
+            max_concurrent,
+            max_concurrent_per_worker,
         )
 
     logger.info(
-        f"Starting parallel dataset run with {max_workers} workers "
-        f"({max_concurrent_per_worker} concurrent per worker)"
+        "Starting parallel dataset run with %s workers (%s concurrent per worker)",
+        max_workers,
+        max_concurrent_per_worker,
     )
 
     # Load dataset if needed
@@ -269,7 +281,7 @@ async def run_dataset_parallel_manual(
     task_dicts: list[dict[str, Any]]
 
     if isinstance(dataset, str):
-        logger.info(f"Loading dataset {dataset} from HuggingFace...")
+        logger.info("Loading dataset %s from HuggingFace...", dataset)
         dataset_link = dataset
         loaded_dataset = hf_load_dataset(dataset, split=split)
         task_dicts = list(loaded_dataset)  # type: ignore
@@ -307,7 +319,7 @@ async def run_dataset_parallel_manual(
             dataset_name = general_info[4].split("@")[0]
             dataset_link = f"{project}/{dataset_name}"
         except Exception:
-            pass  # Ignore extraction errors
+            logger.warning("Failed to extract dataset verification info")
 
     # Create job context
     with hud.job(name, metadata=job_metadata, dataset_link=dataset_link) as job_obj:
@@ -329,8 +341,10 @@ async def run_dataset_parallel_manual(
                 task_batches.append(batch)
 
         logger.info(
-            f"Distributing {num_tasks} tasks across {len(task_batches)} workers "
-            f"(~{tasks_per_worker} tasks per worker)"
+            "Distributing %s tasks across %s workers (~%s tasks per worker)",
+            num_tasks,
+            len(task_batches),
+            tasks_per_worker,
         )
 
         # Initialize results list
@@ -389,12 +403,11 @@ async def run_dataset_parallel_manual(
                         f"({100 * successful_so_far / completed:.1f}%)"
                     )
 
-                    print(progress_msg)
                     logger.info(progress_msg)
 
                 except Exception as e:
                     # Handle worker failure
-                    logger.error(f"Worker failed with exception: {e}\n{traceback.format_exc()}")
+                    logger.error("Worker failed with exception: %s\n%s", e, traceback.format_exc())
 
                     # Mark all tasks in this batch as failed
                     for index, _ in batch:
@@ -410,7 +423,7 @@ async def run_dataset_parallel_manual(
         # Verify all results are populated
         missing = [i for i, r in enumerate(results) if r is None]
         if missing:
-            logger.warning(f"Missing results for task indices: {missing[:10]}...")
+            logger.warning("Missing results for task indices: %s...", missing[:10])
             for idx in missing:
                 results[idx] = {
                     "error": "No result returned from worker",
@@ -425,18 +438,21 @@ async def run_dataset_parallel_manual(
         successful_tasks = sum(1 for r in results if getattr(r, "reward", 0) > 0)
         failed_tasks = sum(1 for r in results if isinstance(r, dict) and r.get("isError", False))
 
-        print("\n" + "=" * 60)
-        print("📊 Parallel Evaluation Complete!")
-        print("=" * 60)
-        print(f"Total tasks: {total_tasks}")
-        print(f"Successful: {successful_tasks} ({100 * successful_tasks / total_tasks:.1f}%)")
-        print(f"Failed: {failed_tasks}")
-        print(f"Workers used: {max_workers}")
-        print("=" * 60)
+        logger.info("\n")
+        logger.info("=" * 60)
+        logger.info("📊 Parallel Evaluation Complete!")
+        logger.info("=" * 60)
+        logger.info("Total tasks: %s", total_tasks)
+        logger.info("Successful: %s (%s%%)", successful_tasks, 100 * successful_tasks / total_tasks)
+        logger.info("Failed: %s", failed_tasks)
+        logger.info("Workers used: %s", max_workers)
+        logger.info("=" * 60)
 
         logger.info(
-            f"Parallel dataset run completed: {total_tasks} tasks, "
-            f"{successful_tasks} successful ({100 * successful_tasks / total_tasks:.1f}%)"
+            "Parallel dataset run completed: %s tasks, %s successful (%s%%)",
+            total_tasks,
+            successful_tasks,
+            100 * successful_tasks / total_tasks,
         )
 
     return results
@@ -495,7 +511,7 @@ async def run_dataset_parallel(
     max_concurrent: int | None = None,
     metadata: dict[str, Any] | None = None,
     max_steps: int = 10,
-    **kwargs,
+    **kwargs: Any,
 ) -> list[Any]:
     """
     Run all tasks in a dataset using automatically optimized process-based parallelism.
@@ -549,8 +565,10 @@ async def run_dataset_parallel(
         max_concurrent_per_worker = max(1, max_concurrent // num_workers)
 
     logger.info(
-        f"Auto-configured for {num_tasks} tasks: "
-        f"{num_workers} workers, {max_concurrent_per_worker} concurrent per worker"
+        "Auto-configured for %s tasks: %s workers, %s concurrent per worker",
+        num_tasks,
+        num_workers,
+        max_concurrent_per_worker,
     )
 
     # Add auto-configuration info to metadata

@@ -17,8 +17,8 @@ design = HUDDesign()
 async def check_and_configure_ssh_key() -> bool:
     """Check if SSH key is configured, prompt for it if not."""
     # Check current SSH key configuration
-    result = subprocess.run(
-        ["prime", "config", "view"],
+    result = subprocess.run(  # noqa: ASYNC221
+        ["prime", "config", "view"],  # noqa: S607
         capture_output=True,
         text=True,
     )
@@ -28,7 +28,7 @@ async def check_and_configure_ssh_key() -> bool:
         # Parse the output for SSH key path
         for line in result.stdout.split("\n"):
             if "SSH Key Path" in line:
-                # Handle table format: "| SSH Key Path        | C:\\Users\\saecl\\.ssh\\private_key.pem |"
+                # Handle table format: "| SSH Key Path        | C:\\Users\\saecl\\.ssh\\private_key.pem |" # noqa: E501
                 if "|" in line:
                     parts = line.split("|")
                     if len(parts) >= 3:
@@ -72,12 +72,12 @@ async def check_and_configure_ssh_key() -> bool:
 
     # Set permissions if not Windows
     if os.name != "nt":
-        subprocess.run(["chmod", "400", str(key_path)])
+        subprocess.run(["chmod", "400", str(key_path)])  # noqa: S603, S607, ASYNC221
         design.success("Set proper permissions on key file")
 
     # Configure the SSH key globally
-    result = subprocess.run(
-        ["prime", "config", "set-ssh-key-path", str(key_path)],
+    result = subprocess.run(  # noqa: S603, ASYNC221
+        ["prime", "config", "set-ssh-key-path", str(key_path)],  # noqa: S607
         capture_output=True,
         text=True,
     )
@@ -100,7 +100,7 @@ async def connect_and_train(
     config: Path,
     output_dir: Path,
     image: str,
-    dataset_size: int = None,
+    dataset_size: int | None = None,
 ) -> None:
     """Connect to the pod via SSH and run training commands."""
     design.section_title("🚀 Starting Remote Training")
@@ -112,8 +112,8 @@ async def connect_and_train(
     ssh_port = ssh_parts[2] if len(ssh_parts) > 2 else "22"  # 1234 or default 22
 
     # Get SSH key path from Prime config
-    result = subprocess.run(
-        ["prime", "config", "view"],
+    result = subprocess.run(  # noqa: ASYNC221
+        ["prime", "config", "view"],  # noqa: S607
         capture_output=True,
         text=True,
     )
@@ -164,7 +164,7 @@ async def connect_and_train(
             f"{ssh_user_host}:/root/config.yaml",
         ]
         design.debug(f"Running: {' '.join(scp_cmd)}")
-        subprocess.run(scp_cmd, check=True)
+        subprocess.run(scp_cmd, check=True)  # noqa: S603, ASYNC221
         design.success("Config file copied")
     except subprocess.CalledProcessError as e:
         design.error(f"Failed to copy config file: {e}")
@@ -173,7 +173,7 @@ async def connect_and_train(
             design.info("If using older Windows, install Git for Windows which includes SSH/SCP.")
         else:
             design.info("Make sure scp is installed and in your PATH")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     design.info("Setting up environment and starting training...")
     design.info("This will take a few minutes for initial setup, then training will begin.")
@@ -251,7 +251,7 @@ async def connect_and_train(
         f"{training_script} && "
         "echo '✓ Training script created' && "
         # Start vLLM server in tmux (on GPU 0)
-        f"tmux new-session -d -s vllm-server 'CUDA_VISIBLE_DEVICES=0 vf-vllm --model {model} --enforce-eager --disable-log-requests' && "
+        f"tmux new-session -d -s vllm-server 'CUDA_VISIBLE_DEVICES=0 vf-vllm --model {model} --enforce-eager --disable-log-requests' && "  # noqa: E501
         "echo '✓ vLLM server started in tmux' && "
         # Wait a bit for server to start
         "echo 'Waiting for vLLM server to initialize...' && "
@@ -276,11 +276,11 @@ async def connect_and_train(
             ssh_user_host,
             full_command,
         ]
-        subprocess.run(ssh_cmd, check=True)
+        subprocess.run(ssh_cmd, check=True)  # noqa: S603, ASYNC221
 
     except subprocess.CalledProcessError as e:
         design.error(f"Training failed: {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
     except KeyboardInterrupt:
         design.warning("Training interrupted by user")
         design.info(f"To reconnect: prime pods ssh {pod_id}")

@@ -31,13 +31,13 @@ def init_command_wrapper(directory: str, output: Path | None, force: bool, build
             if build:
                 # Auto-build was requested
                 design.info("Building environment...")
-                from ..build import build_command
+                from hud.cli.build import build_command
 
                 build_command(str(directory), None, False, False, {})
                 # After build, lock file should exist
             else:
                 # Try to get image from pyproject.toml or auto-generate
-                from ..utils.environment import get_image_name, image_exists
+                from hud.cli.utils.environment import get_image_name, image_exists
 
                 image, source = get_image_name(directory)
 
@@ -51,7 +51,7 @@ def init_command_wrapper(directory: str, output: Path | None, force: bool, build
 
                     if action == "Build the environment":
                         design.info("Building environment...")
-                        from ..build import build_command
+                        from hud.cli.build import build_command
 
                         build_command(str(directory), None, False, False, {})
                         # After build, lock file should exist
@@ -105,7 +105,7 @@ async def init_command(directory: str, output: Path | None, force: bool, build: 
         else:
             # No lock file - try to use cached image
             # Build should have been handled in the wrapper
-            from ..utils.environment import get_image_name, image_exists
+            from hud.cli.utils.environment import get_image_name, image_exists
 
             image, source = get_image_name(directory)
 
@@ -175,7 +175,7 @@ async def generate_from_lock(
     config = await generate_config(image, full_tools)
 
     # Write to file
-    with open(output, "w") as f:
+    with open(output, "w") as f:  # noqa: ASYNC230
         yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
     design.success(f"Generated config: {output}")
@@ -228,7 +228,7 @@ async def analyze_and_generate(image: str, output: Path | None, force: bool) -> 
             config = await generate_config(image, tools)
 
             # Write to file
-            with open(output, "w") as f:
+            with open(output, "w") as f:  # noqa: ASYNC230
                 yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
             design.success(f"Generated config: {output}")
@@ -248,7 +248,7 @@ async def analyze_and_generate(image: str, output: Path | None, force: bool) -> 
     except Exception as e:
         design.error(f"Failed to analyze environment: {e}")
         design.hint("Make sure the Docker image exists and contains a valid MCP server")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 async def generate_config(image: str, tools: list[dict[str, Any]]) -> dict[str, Any]:
@@ -263,7 +263,7 @@ async def generate_config(image: str, tools: list[dict[str, Any]]) -> dict[str, 
     # Generate system prompt
     tool_descriptions = []
     for tool in interaction_tools:
-        # Check if we have detailed schema (from direct analysis) or just name/description (from lock file)
+        # Check if we have schema (from direct analysis) or just name/description (from lock file)
         has_schema = "inputSchema" in tool and tool["inputSchema"].get("properties")
 
         if has_schema:
