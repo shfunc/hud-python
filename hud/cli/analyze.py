@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from pathlib import Path  # noqa: TC003
+from typing import Any
 
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -13,9 +14,6 @@ from rich.tree import Tree
 
 from hud.clients import MCPClient
 from hud.utils.design import HUDDesign
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 console = Console()
 design = HUDDesign()

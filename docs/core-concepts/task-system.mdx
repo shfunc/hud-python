@@ -146,17 +146,16 @@ Tasks integrate with HuggingFace datasets:
 
 ```python
 from datasets import load_dataset
-from hud.datasets import run_dataset
+from hud.datasets import run_dataset_parallel
 
 # Load dataset from HuggingFace
 dataset = load_dataset("hud-evals/sheetbench-50", split="train")
 
-# Run agent on entire dataset
-results = await run_dataset(
+# Run agent on entire dataset with automatic parallelization
+results = await run_dataset_parallel(
     "SheetBench Run",
     dataset,  # Pass the dataset object or name (e.g. "hud-evals/sheetbench-50")
-    agent_class=ClaudeAgent,
-    max_concurrent=5
+    agent_class=ClaudeAgent
 )
 ```
 

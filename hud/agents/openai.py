@@ -38,6 +38,7 @@ class OperatorAgent(MCPAgent):
         "display_width": computer_settings.OPENAI_COMPUTER_WIDTH,
         "display_height": computer_settings.OPENAI_COMPUTER_HEIGHT,
     }
+    required_tools: ClassVar[list[str]] = ["openai_computer"]
 
     def __init__(
         self,
@@ -143,20 +144,8 @@ class OperatorAgent(MCPAgent):
         """Get response from OpenAI including any tool calls."""
         # OpenAI's API is stateful, so we handle messages differently
 
-        # Check if we have computer tools available
-        computer_tool_name = None
-        for tool in self._available_tools:
-            if tool.name in ["openai_computer", "computer"]:
-                computer_tool_name = tool.name
-                break
-
-        if not computer_tool_name:
-            # No computer tools available, just return a text response
-            return AgentResponse(
-                content="No computer use tools available",
-                tool_calls=[],
-                done=True,
-            )
+        # Get the computer tool (guaranteed to exist due to required_tools)
+        computer_tool_name = "openai_computer"
 
         # Define the computer use tool
         computer_tool: ToolParam = {  # type: ignore[reportAssignmentType]
@@ -209,7 +198,7 @@ class OperatorAgent(MCPAgent):
                         break
 
                 if not latest_screenshot:
-                    logger.warning("No screenshot provided for response to action")
+                    self.design.warning_log("No screenshot provided for response to action")
                     return AgentResponse(
                         content="No screenshot available for next action",
                         tool_calls=[],
@@ -332,7 +321,7 @@ class OperatorAgent(MCPAgent):
                 for content in result.content:
                     if isinstance(content, types.TextContent):
                         # Don't add error text as input_text, just track it
-                        logger.error("Tool error: %s", content.text)
+                        self.design.error_log(f"Tool error: {content.text}")
                     elif isinstance(content, types.ImageContent):
                         # Even error results might have images
                         latest_screenshot = content.data

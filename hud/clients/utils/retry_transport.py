@@ -114,7 +114,7 @@ class RetryTransport(AsyncHTTPTransport):
                 if "localhost" in url or "127.0.0.1" in url:
                     raise httpx.ConnectError(
                         f"Failed to connect to {url} after {self.max_retries} attempts. "
-                        f"Make sure the local MCP server is running (e.g., 'hud dev' in another terminal).",
+                        f"Make sure the local MCP server is running (e.g., 'hud dev' in another terminal).",  # noqa: E501
                         request=request,
                     ) from last_exception
                 else:

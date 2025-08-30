@@ -6,11 +6,12 @@ import asyncio
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import mcp.types as types
 
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult, Trace
+from hud.utils.design import HUDDesign
 from hud.utils.mcp import MCPConfigPatch, patch_mcp_config, setup_hud_telemetry
 
 if TYPE_CHECKING:
@@ -35,6 +36,7 @@ class MCPAgent(ABC):
     """
 
     metadata: dict[str, Any]
+    required_tools: ClassVar[list[str]] = []  # Tools that must be available
 
     def __init__(
         self,
@@ -51,6 +53,7 @@ class MCPAgent(ABC):
         model_name: str = "mcp-agent",
         response_agent: ResponseAgent | None = None,
         auto_trace: bool = True,
+        verbose: bool = False,
     ) -> None:
         """
         Initialize the base MCP agent.
@@ -63,12 +66,18 @@ class MCPAgent(ABC):
             initial_screenshot: Whether to capture screenshot before first prompt
             system_prompt: System prompt to use
             append_setup_output: Whether to append setup tool output to initial messages
+            verbose: If True, sets logging level to INFO. If False, only WARNING and above.
         """
 
         self.mcp_client = mcp_client
         self._auto_created_client = False  # Track if we created the client
 
         self.model_name = model_name
+        self.design = HUDDesign(logger=logger)
+
+        # Set verbose mode if requested
+        if verbose:
+            self.design.set_verbose(True)
 
         # Filtering
         self.allowed_tools = allowed_tools
@@ -101,7 +110,7 @@ class MCPAgent(ABC):
 
             self.mcp_client = MCPClient(mcp_config=task.mcp_config)
             self._auto_created_client = True
-            logger.info("Auto-created MCPClient from task.mcp_config")
+            self.design.info_log("Auto-created MCPClient from task.mcp_config")
 
         # Ensure we have a client
         if self.mcp_client is None:
@@ -112,7 +121,10 @@ class MCPAgent(ABC):
         await self._setup_config(self.mcp_client.mcp_config)
 
         # Initialize client if needed
-        await self.mcp_client.initialize()
+        try:
+            await self.mcp_client.initialize()
+        except Exception as e:
+            self._handle_connection_error(e)
 
         # If task is provided, add lifecycle tools
         if isinstance(task, Task):
@@ -134,9 +146,9 @@ class MCPAgent(ABC):
         # Re-apply filtering with updated lifecycle tools
         await self._filter_tools()
 
-        logger.info(
-            "Agent initialized with %d available tools (after filtering)",
-            len(self._available_tools),
+        num_tools = len(self._available_tools)
+        self.design.success_log(
+            f"Agent initialized with {num_tools} available tools (after filtering)"
         )
 
     async def run(self, prompt_or_task: str | Task | dict[str, Any], max_steps: int = 10) -> Trace:
@@ -173,6 +185,16 @@ class MCPAgent(ABC):
 
             else:
                 raise TypeError(f"prompt_or_task must be str or Task, got {type(prompt_or_task)}")
+        except Exception as e:
+            if self._is_connection_error(e):
+                # Return error trace for connection failures
+                return Trace(
+                    reward=0.0,
+                    done=True,
+                    content=self._get_connection_error_message(e),
+                    isError=True,
+                )
+            raise
         finally:
             # Cleanup auto-created resources
             await self._cleanup()
@@ -200,7 +222,7 @@ class MCPAgent(ABC):
 
             # Execute the setup tool and append the initial observation to the context
             if task.setup_tool is not None:
-                logger.info("Setting up tool phase: %s", task.setup_tool)
+                self.design.progress_log(f"Setting up tool phase: {task.setup_tool}")
                 results = await self.call_tools(task.setup_tool)
                 if any(result.isError for result in results):
                     raise RuntimeError(f"{results}")
@@ -214,7 +236,7 @@ class MCPAgent(ABC):
             prompt_result = await self._run_context(start_context, max_steps=max_steps)
 
         except Exception as e:
-            logger.error("Task execution failed: %s", e)
+            self.design.error_log(f"Task execution failed: {e}")
             # Create an error result but don't return yet - we still want to evaluate
             prompt_result = Trace(reward=0.0, done=True, content=str(e), isError=True)
             prompt_result.populate_from_context()
@@ -222,7 +244,7 @@ class MCPAgent(ABC):
         # Always evaluate if we have a prompt result and evaluate tool
         if prompt_result is not None and task.evaluate_tool is not None:
             try:
-                logger.info("Evaluating tool phase: %s", task.evaluate_tool)
+                self.design.progress_log(f"Evaluating tool phase: {task.evaluate_tool}")
                 results = await self.call_tools(task.evaluate_tool)
 
                 if any(result.isError for result in results):
@@ -245,7 +267,7 @@ class MCPAgent(ABC):
                             prompt_result.content = eval_content
 
             except Exception as e:
-                logger.error("Evaluation phase failed: %s", e)
+                self.design.error_log(f"Evaluation phase failed: {e}")
                 # Continue with the prompt result even if evaluation failed
 
         return (
@@ -276,21 +298,21 @@ class MCPAgent(ABC):
 
             # Add initial context
             messages.extend(await self.format_message(context))
-            logger.debug("Messages: %s", messages)
+            self.design.debug(f"Messages: {messages}")
 
             step_count = 0
             while max_steps == -1 or step_count < max_steps:
                 step_count += 1
                 if max_steps == -1:
-                    logger.info("Step %s (unlimited)", step_count)
+                    self.design.debug(f"Step {step_count} (unlimited)")
                 else:
-                    logger.info("Step %s/%s", step_count, max_steps)
+                    self.design.debug(f"Step {step_count}/{max_steps}")
 
                 try:
                     # 1. Get model response
                     response = await self.get_response(messages)
 
-                    logger.info("Agent:\n%s", response)
+                    self.design.debug(f"Agent:\n{response}")
 
                     # Check if we should stop
                     if response.done or not response.tool_calls:
@@ -302,16 +324,16 @@ class MCPAgent(ABC):
                                     response.content
                                 )
                             except Exception as e:
-                                logger.warning("ResponseAgent failed: %s", e)
+                                self.design.warning_log(f"ResponseAgent failed: {e}")
                         if decision == "STOP":
                             # Try to submit response through lifecycle tool
                             await self._maybe_submit_response(response, messages)
 
-                            logger.info("Stopping execution")
+                            self.design.debug("Stopping execution")
                             final_response = response
                             break
                         else:
-                            logger.info("Continuing execution")
+                            self.design.debug("Continuing execution")
                             messages.extend(await self.format_message(decision))
                             continue
 
@@ -323,19 +345,31 @@ class MCPAgent(ABC):
                     tool_messages = await self.format_tool_results(tool_calls, tool_results)
                     messages.extend(tool_messages)
 
+                    # Compact step completion display
+                    step_info = f"\n[bold]Step {step_count}"
+                    if max_steps != -1:
+                        step_info += f"/{max_steps}"
+                    step_info += "[/bold]"
+
+                    # Show tool calls and results in compact format
+                    for call, result in zip(tool_calls, tool_results, strict=False):
+                        step_info += f"\n{call}\n{result}"
+
+                    self.design.info_log(step_info)
+
                 except Exception as e:
-                    logger.error("Step failed: %s", e)
+                    self.design.error_log(f"Step failed: {e}")
                     error = str(e)
                     break
 
         except KeyboardInterrupt:
-            logger.info("Agent execution interrupted by user")
+            self.design.warning_log("Agent execution interrupted by user")
             error = "Interrupted by user"
         except asyncio.CancelledError:
-            logger.info("Agent execution cancelled")
+            self.design.warning_log("Agent execution cancelled")
             error = "Cancelled"
         except Exception as e:
-            logger.error("Unexpected error: %s", e)
+            self.design.error_log(f"Unexpected error: {e}")
             error = str(e)
 
         # Build result
@@ -376,17 +410,17 @@ class MCPAgent(ABC):
         results: list[MCPToolResult] = []
         for tc in tool_call:
             try:
-                logger.info("Calling tool: %s", tc)
+                self.design.debug(f"Calling tool: {tc}")
                 results.append(await self.mcp_client.call_tool(tc))
             except TimeoutError as e:
-                logger.error("Tool execution timed out: %s", e)
+                self.design.error_log(f"Tool execution timed out: {e}")
                 try:
                     await self.mcp_client.shutdown()
                 except Exception as close_err:
-                    logger.debug("Failed to close MCP client cleanly: %s", close_err)
+                    self.design.debug(f"Failed to close MCP client cleanly: {close_err}")
                 raise
             except Exception as e:
-                logger.error("Tool execution failed: %s", e)
+                self.design.error_log(f"Tool execution failed: {e}")
                 results.append(_format_error_result(str(e)))
         return results
 
@@ -490,8 +524,20 @@ class MCPAgent(ABC):
 
             # Auto-detect response tool as a lifecycle tool
             if tool.name == "response" and "response" not in self.lifecycle_tools:
-                logger.debug("Auto-detected 'response' tool as a lifecycle tool")
+                self.design.debug("Auto-detected 'response' tool as a lifecycle tool")
                 self.lifecycle_tools.append("response")
+
+        # Check if all required tools are available
+        if self.required_tools:
+            available_tool_names = {tool.name for tool in self._available_tools}
+            missing_tools = [
+                tool for tool in self.required_tools if tool not in available_tool_names
+            ]
+            if missing_tools:
+                raise ValueError(
+                    f"Required tools not available: {missing_tools}. "
+                    f"Available tools: {list(available_tool_names)}"
+                )
 
     async def _maybe_submit_response(self, response: AgentResponse, messages: list[Any]) -> None:
         """Submit response through lifecycle tool if available.
@@ -502,7 +548,7 @@ class MCPAgent(ABC):
         """
         # Check if we have a response lifecycle tool
         if "response" in self.lifecycle_tools and "response" in self._tool_map:
-            logger.debug("Calling response lifecycle tool")
+            self.design.debug("Calling response lifecycle tool")
             try:
                 # Call the response tool with the agent's response
                 response_tool_call = MCPToolCall(
@@ -517,9 +563,9 @@ class MCPAgent(ABC):
                 messages.extend(response_messages)
 
                 # Mark the task as done
-                logger.info("Response lifecycle tool executed, marking task as done")
+                self.design.debug("Response lifecycle tool executed, marking task as done")
             except Exception as e:
-                logger.error("Response lifecycle tool failed: %s", e)
+                self.design.error_log(f"Response lifecycle tool failed: {e}")
 
     async def _setup_config(self, mcp_config: dict[str, dict[str, Any]]) -> None:
         """Inject metadata into the metadata of the initialize request."""
@@ -573,9 +619,9 @@ class MCPAgent(ABC):
         if self._auto_trace_cm:
             try:
                 self._auto_trace_cm.__exit__(None, None, None)
-                logger.info("Closed auto-created trace")
+                self.design.debug("Closed auto-created trace")
             except Exception as e:
-                logger.warning("Failed to close auto-created trace: %s", e)
+                self.design.warning_log(f"Failed to close auto-created trace: {e}")
             finally:
                 self._auto_trace_cm = None
 
@@ -583,12 +629,51 @@ class MCPAgent(ABC):
         if self._auto_created_client and self.mcp_client:
             try:
                 await self.mcp_client.shutdown()
-                logger.info("Closed auto-created MCPClient")
+                self.design.debug("Closed auto-created MCPClient")
             except Exception as e:
-                logger.warning("Failed to close auto-created client: %s", e)
+                self.design.warning_log(f"Failed to close auto-created client: {e}")
             finally:
                 self.mcp_client = None
                 self._auto_created_client = False
+
+    def _is_connection_error(self, e: Exception) -> bool:
+        """Check if an exception is a connection error."""
+        error_msg = str(e).lower()
+        return any(
+            pattern in error_msg
+            for pattern in [
+                "connection",
+                "connect",
+                "refused",
+                "failed",
+                "could not connect",
+                "mcp server",
+            ]
+        )
+
+    def _get_connection_error_message(self, e: Exception) -> str:
+        """Extract a helpful connection error message."""
+        import re
+
+        url_match = re.search(r"https?://[^\s]+", str(e))
+        url = url_match.group(0) if url_match else "the MCP server"
+        return f"Connection failed: Could not connect to {url}. Is your MCP client/server running?"
+
+    def _handle_connection_error(self, e: Exception) -> None:
+        """Handle connection errors with helpful messages."""
+        if self._is_connection_error(e):
+            msg = self._get_connection_error_message(e)
+            # Always show connection errors, not just when logging is enabled
+            self.design.error(f"❌ {msg}")
+            self.design.info("💡 Make sure the MCP server is started before running the agent.")
+
+            # For localhost, provide specific instructions
+            error_str = str(e).lower()
+            if "localhost" in error_str or "127.0.0.1" in error_str:
+                self.design.info("   Run 'hud dev' in another terminal to start the MCP server")
+
+            raise RuntimeError(msg) from e
+        raise
 
 
 def _format_error_result(error_message: str) -> MCPToolResult:
