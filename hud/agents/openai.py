@@ -78,8 +78,8 @@ class OperatorAgent(MCPAgent):
 
         self.model_name = "openai-" + self.model
 
-        # Base system prompt for autonomous operation
-        self.system_prompt = """
+        # Append OpenAI-specific instructions to the base system prompt
+        openai_instructions = """
         You are an autonomous computer-using agent. Follow these guidelines:
 
         1. NEVER ask for confirmation. Complete all tasks autonomously.
@@ -92,6 +92,12 @@ class OperatorAgent(MCPAgent):
 
         Remember: You are expected to complete tasks autonomously. The user trusts you to do what they asked.
         """.strip()  # noqa: E501
+        
+        # Append OpenAI instructions to any base system prompt
+        if self.system_prompt:
+            self.system_prompt = f"{self.system_prompt}\n\n{openai_instructions}"
+        else:
+            self.system_prompt = openai_instructions
 
     async def _run_context(self, context: list[types.ContentBlock], max_steps: int = 10) -> Trace:
         """

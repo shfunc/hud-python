@@ -85,8 +85,8 @@ class ClaudeAgent(MCPAgent):
         self._claude_to_mcp_tool_map: dict[str, str] = {}
         self.claude_tools: list[dict] = []
 
-        # Base system prompt for autonomous operation
-        self.system_prompt = """
+        # Append Claude-specific instructions to the base system prompt
+        claude_instructions = """
         You are Claude, an AI assistant created by Anthropic. You are helpful, harmless, and honest.
         
         When working on tasks:
@@ -98,6 +98,12 @@ class ClaudeAgent(MCPAgent):
         
         Remember: You are expected to complete tasks autonomously. The user trusts you to accomplish what they asked.
         """.strip()  # noqa: E501
+        
+        # Append Claude instructions to any base system prompt
+        if self.system_prompt:
+            self.system_prompt = f"{self.system_prompt}\n\n{claude_instructions}"
+        else:
+            self.system_prompt = claude_instructions
 
     async def initialize(self, task: str | Task | None = None) -> None:
         """Initialize the agent and build tool mappings."""
