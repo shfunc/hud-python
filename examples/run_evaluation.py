@@ -21,8 +21,11 @@ python examples/run_evaluation.py hud-evals/SheetBench-50 --full --agent claude 
 # Run OSWorld-Verified dataset full with PARALLEL execution (300+ tasks)
 python examples/run_evaluation.py hud-evals/OSWorld-Verified-XLang --agent openai --full --parallel
 
-# Parallel mode with manual configuration (16 workers, 25 tasks each)
-python examples/run_evaluation.py hud-evals/OSWorld-Verified-XLang --agent openai --full --parallel --max-workers 16 --tasks-per-worker 25
+# Parallel mode with manual configuration (8 workers, 10 concurrent per worker)
+python examples/run_evaluation.py hud-evals/OSWorld-Verified-XLang --agent openai --full --parallel --max-workers 8 --max-concurrent-per-worker 10
+
+# Custom max steps per task (useful for complex tasks)
+python examples/run_evaluation.py hud-evals/SheetBench-50 --full --max-steps 100
 """
 
 from __future__ import annotations
@@ -90,6 +93,7 @@ async def run_single_task(
     agent_type: Literal["claude", "openai"] = "claude",
     model: str | None = None,
     allowed_tools: list[str] | None = None,
+    max_steps: int = 50,
 ) -> None:
     """Load *one* task from *dataset_name* and execute it."""
 
@@ -109,7 +113,7 @@ async def run_single_task(
             allowed_tools=allowed_tools,
         )
         print(task.prompt)
-        result = await agent.run(task, max_steps=10)
+        result = await agent.run(task, max_steps=max_steps)
         print("✅ Reward:", result.reward)
 
 
@@ -128,7 +132,7 @@ async def run_full_dataset(
     max_steps: int = 50,
     parallel: bool = False,
     max_workers: int | None = None,
-    tasks_per_worker: int = 25,
+    max_concurrent_per_worker: int = 25,
 ) -> list[Any]:
     """Run evaluation across the entire dataset.
     
@@ -173,8 +177,7 @@ async def run_full_dataset(
                 agent_class=agent_class,
                 agent_config=agent_config,
                 max_workers=max_workers,
-                tasks_per_worker=tasks_per_worker,
-                max_concurrent_per_worker=10,  # Reasonable default
+                max_concurrent_per_worker=max_concurrent_per_worker,
                 metadata={"dataset": dataset_name, "parallel": True},
                 max_steps=max_steps,
                 auto_respond=True,
@@ -222,10 +225,15 @@ Examples:
     parser.add_argument("--max-concurrent", dest="max_concurrent", type=int, default=50, 
                         help="Max concurrent tasks (default: 50)")
     
+    # Task settings
+    parser.add_argument("--max-steps", dest="max_steps", type=int, default=50,
+                        help="Max steps per task (default: 50)")
+    
     # Parallel mode (100+ tasks)
     parser.add_argument("--parallel", action="store_true", help="Use parallel execution for large datasets")
     parser.add_argument("--max-workers", dest="max_workers", type=int, help="Worker processes")
-    parser.add_argument("--tasks-per-worker", dest="tasks_per_worker", type=int, default=25)
+    parser.add_argument("--max-concurrent-per-worker", dest="max_concurrent_per_worker", type=int, default=25,
+                        help="Max concurrent tasks per worker")
     
     return parser.parse_args()
 
@@ -249,9 +257,10 @@ async def main() -> None:
             model=args.model,
             allowed_tools=allowed_tools,
             max_concurrent=args.max_concurrent,
+            max_steps=args.max_steps,
             parallel=args.parallel,
             max_workers=args.max_workers,
-            tasks_per_worker=args.tasks_per_worker,
+            max_concurrent_per_worker=args.max_concurrent_per_worker,
         )
         
         elapsed = time.time() - start_time
@@ -279,6 +288,7 @@ async def main() -> None:
             agent_type=args.agent,
             model=args.model,
             allowed_tools=allowed_tools,
+            max_steps=args.max_steps,
         )
 
 

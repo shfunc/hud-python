@@ -195,11 +195,11 @@ async def run_full_dataset(
     agent_type: Literal["claude", "openai"] = "claude",
     model: str | None = None,
     allowed_tools: list[str] | None = None,
-    max_concurrent: int = 30,
+    max_concurrent: int = 50,
     max_steps: int = 50,
     parallel: bool = False,
     max_workers: int | None = None,
-    tasks_per_worker: int = 25,
+    max_concurrent_per_worker: int = 25,
 ) -> list[Any]:
     """Run evaluation across the entire dataset.
     
@@ -270,7 +270,7 @@ async def run_full_dataset(
             agent_config["allowed_tools"] = allowed_tools
 
     if parallel:
-        design.info(f"🚀 Running PARALLEL evaluation (workers: {max_workers or 'auto'})…")
+        design.info(f"🚀 Running PARALLEL evaluation (workers: {max_workers or 'auto'}, max_concurrent: {max_concurrent})…")
         if max_workers is None:
             # Use auto-optimization (now the default run_dataset_parallel)
             return await run_dataset_parallel(
@@ -278,6 +278,7 @@ async def run_full_dataset(
                 dataset=dataset_or_tasks,
                 agent_class=agent_class,
                 agent_config=agent_config,
+                max_concurrent=max_concurrent,
                 metadata={"dataset": source, "parallel": True},
                 max_steps=max_steps,
                 auto_respond=True,
@@ -290,8 +291,8 @@ async def run_full_dataset(
                 agent_class=agent_class,
                 agent_config=agent_config,
                 max_workers=max_workers,
-                tasks_per_worker=tasks_per_worker,
-                max_concurrent_per_worker=10,  # Reasonable default
+                max_concurrent_per_worker=max_concurrent_per_worker,
+                max_concurrent=max_concurrent,
                 metadata={"dataset": source, "parallel": True},
                 max_steps=max_steps,
                 auto_respond=True,
@@ -339,7 +340,7 @@ def eval_command(
         "--max-concurrent",
         help="Concurrency level for asyncio mode (ignored in parallel mode)",
     ),
-    max_steps: int = typer.Option(
+    max_steps: int | None = typer.Option(
         None,
         "--max-steps",
         help="Maximum steps per task (default: 10 for single, 50 for full)",
@@ -354,10 +355,10 @@ def eval_command(
         "--max-workers",
         help="Number of worker processes for parallel mode (auto-optimized if not set)",
     ),
-    tasks_per_worker: int = typer.Option(
-        25,
-        "--tasks-per-worker",
-        help="Maximum tasks per worker in parallel mode",
+    max_concurrent_per_worker: int = typer.Option(
+        20,
+        "--max-concurrent-per-worker",
+        help="Maximum concurrent tasks per worker in parallel mode",
     ),
 ) -> None:
     """🚀 Run evaluation on datasets or individual tasks with agents.
@@ -374,6 +375,9 @@ def eval_command(
 
         # Parallel mode with manual configuration (16 workers, 25 tasks each)
         hud eval hud-evals/OSWorld-Verified-XLang --full --parallel --max-workers 16
+
+        # Limit total concurrent tasks to prevent rate limits
+        hud eval hud-evals/SheetBench-50 --full --parallel --max-concurrent 20
 
         # Run a single task from a JSON file
         hud eval task.json
@@ -427,7 +431,7 @@ def eval_command(
                 max_steps=max_steps,
                 parallel=parallel,
                 max_workers=max_workers,
-                tasks_per_worker=tasks_per_worker,
+                max_concurrent_per_worker=max_concurrent_per_worker,
             )
         )
     else:

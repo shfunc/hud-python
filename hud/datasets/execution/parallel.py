@@ -57,10 +57,18 @@ def _process_worker(
         List of (index, result) tuples
     """
     # Import inside worker to avoid pickling issues
+    import sys
     import hud
     from hud.datasets.task import Task
     from hud.agents.misc.response_agent import ResponseAgent
     from hud.otel import configure_telemetry
+    
+    # Ensure stdout is not buffered for immediate output
+    try:
+        sys.stdout.reconfigure(line_buffering=True)  # type: ignore
+        sys.stderr.reconfigure(line_buffering=True)  # type: ignore
+    except AttributeError:
+        pass
     
     # Reinitialize telemetry in this process
     configure_telemetry()
@@ -106,18 +114,22 @@ def _process_worker(
                         # Run the task
                         result = await agent.run(task, max_steps=max_steps)
                         
+                        # Extract and print evaluation score for visibility
+                        reward = getattr(result, 'reward', 'N/A')
+                        print(f"[Worker {worker_id}] Task {index}: ✓ Completed (reward: {reward})")
+                        
                         logger.info(
                             f"Worker {worker_id}: Completed task {index} "
-                            f"(reward: {getattr(result, 'reward', 'N/A')})"
+                            f"(reward: {reward})"
                         )
                         
                         return (index, result)
                         
                 except Exception as e:
-                    logger.error(
-                        f"Worker {worker_id}: Task {index} failed: {e}\n"
-                        f"{traceback.format_exc()}"
-                    )
+                    error_msg = f"Worker {worker_id}: Task {index} failed: {e}"
+                    print(f"[Worker {worker_id}] Task {index}: ✗ Failed ({str(e)[:100]})")
+                    logger.error(f"{error_msg}\n{traceback.format_exc()}")
+                    
                     return (index, {
                         "error": str(e),
                         "traceback": traceback.format_exc(),
@@ -141,6 +153,7 @@ def _process_worker(
         results = loop.run_until_complete(process_batch())
         return results
     except Exception as e:
+        print(f"[Worker {worker_id}] Batch processing failed: {e}")
         logger.error(f"Worker {worker_id} batch processing failed: {e}")
         return [(idx, {"error": str(e), "isError": True}) for idx, _ in task_batch]
     finally:
@@ -157,8 +170,8 @@ async def run_dataset_parallel_manual(
     agent_class: type[MCPAgent],
     agent_config: dict[str, Any] | None = None,
     max_workers: int | None = None,
-    tasks_per_worker: int = 25,
-    max_concurrent_per_worker: int = 10,
+    max_concurrent_per_worker: int = 25,
+    max_concurrent: int | None = None,
     metadata: dict[str, Any] | None = None,
     max_steps: int = 40,
     split: str = "train",
@@ -168,19 +181,18 @@ async def run_dataset_parallel_manual(
     """
     Run all tasks in a dataset using process-based parallelism with manual configuration.
     
-    This function distributes tasks across multiple processes to achieve true parallelism,
-    bypassing Python's GIL limitations. Each process runs its own event loop with a batch
-    of tasks, and telemetry is properly tracked across all processes under a single job.
+    This function distributes tasks evenly across multiple processes to achieve true parallelism,
+    bypassing Python's GIL limitations. Each process runs its own event loop with concurrent
+    task execution controlled by max_concurrent_per_worker or max_concurrent.
     
     Args:
         name: Name for the job (shown in telemetry)
-        dataset: HuggingFace dataset identifier (e.g. "hud-evals/SheetBench-50"),
-                Dataset object, OR list of task dicts
+        dataset: HuggingFace dataset identifier, Dataset object, or list of task dicts
         agent_class: Agent class to use (must be importable in worker processes)
         agent_config: Configuration for agent initialization
         max_workers: Number of processes (defaults to CPU count)
-        tasks_per_worker: Max tasks per worker (for memory management)
-        max_concurrent_per_worker: Maximum concurrent tasks within each worker process
+        max_concurrent_per_worker: Max concurrent tasks within each worker
+        max_concurrent: Optional total concurrent limit across all workers (overrides per-worker)
         metadata: Optional metadata for the job
         max_steps: Maximum steps per task
         split: Dataset split when loading from string
@@ -194,13 +206,22 @@ async def run_dataset_parallel_manual(
         >>> from hud.agents import ClaudeAgent
         >>> from hud.datasets import run_dataset_parallel_manual
         >>> 
-        >>> # Run 400 tasks across 16 processes with manual configuration
+        >>> # Run with 8 workers, 10 concurrent per worker (80 total concurrent)
         >>> results = await run_dataset_parallel_manual(
         ...     "Large Scale Eval",
         ...     "hud-evals/benchmark-400",
         ...     ClaudeAgent,
-        ...     max_workers=16,
-        ...     tasks_per_worker=25  # 16 * 25 = 400 tasks
+        ...     max_workers=8,
+        ...     max_concurrent_per_worker=10
+        ... )
+        >>> 
+        >>> # OR limit total concurrent to prevent rate limits
+        >>> results = await run_dataset_parallel_manual(
+        ...     "Rate Limited Eval",
+        ...     dataset,
+        ...     ClaudeAgent,
+        ...     max_workers=8,
+        ...     max_concurrent=20  # Only 20 total concurrent
         ... )
     """
     import hud
@@ -211,9 +232,19 @@ async def run_dataset_parallel_manual(
     if max_workers is None:
         max_workers = min(os.cpu_count() or 4, 16)  # Cap at 16 to be reasonable
     
+    # If max_concurrent is specified, calculate per-worker concurrency
+    if max_concurrent is not None:
+        # Distribute concurrent limit across workers
+        # Each worker should get a fair share of the total concurrent limit
+        max_concurrent_per_worker = max(1, max_concurrent // max_workers)
+        logger.info(
+            f"Limiting to {max_concurrent} total concurrent tasks "
+            f"({max_concurrent_per_worker} per worker)"
+        )
+    
     logger.info(
         f"Starting parallel dataset run with {max_workers} workers "
-        f"(up to {tasks_per_worker} tasks per worker)"
+        f"({max_concurrent_per_worker} concurrent per worker)"
     )
     
     # Load dataset if needed
@@ -245,7 +276,7 @@ async def run_dataset_parallel_manual(
         "agent_config": agent_config,
         "parallel_mode": "process_pool",
         "max_workers": max_workers,
-        "tasks_per_worker": tasks_per_worker,
+        "max_concurrent_per_worker": max_concurrent_per_worker,
         "total_tasks": len(task_dicts)
     })
     
@@ -266,9 +297,12 @@ async def run_dataset_parallel_manual(
         agent_module = agent_class.__module__
         agent_name = agent_class.__name__
         
-        # Divide tasks into batches for each worker
+        # Divide tasks evenly among workers
+        num_tasks = len(task_dicts)
+        tasks_per_worker = (num_tasks + max_workers - 1) // max_workers  # Ceiling division
+        
         task_batches: list[list[tuple[int, dict[str, Any]]]] = []
-        for i in range(0, len(task_dicts), tasks_per_worker):
+        for i in range(0, num_tasks, tasks_per_worker):
             batch = [
                 (idx, task_dict) 
                 for idx, task_dict in enumerate(task_dicts[i:i + tasks_per_worker], start=i)
@@ -277,8 +311,8 @@ async def run_dataset_parallel_manual(
                 task_batches.append(batch)
         
         logger.info(
-            f"Created {len(task_batches)} task batches for {max_workers} workers "
-            f"(average {len(task_dicts) / len(task_batches):.1f} tasks per batch)"
+            f"Distributing {num_tasks} tasks across {len(task_batches)} workers "
+            f"(~{tasks_per_worker} tasks per worker)"
         )
         
         # Initialize results list
@@ -327,10 +361,21 @@ async def run_dataset_parallel_manual(
                         results[index] = result
                         completed += 1
                     
-                    logger.info(
-                        f"Progress: {completed}/{total} tasks completed "
-                        f"({100 * completed / total:.1f}%)"
+                    # Calculate success rate so far
+                    successful_so_far = sum(
+                        1 for r in results[:completed] 
+                        if r is not None and getattr(r, 'reward', 0) > 0
                     )
+                    
+                    progress_msg = (
+                        f"Progress: {completed}/{total} tasks completed "
+                        f"({100 * completed / total:.1f}%) | "
+                        f"Success rate: {successful_so_far}/{completed} "
+                        f"({100 * successful_so_far / completed:.1f}%)"
+                    )
+                    
+                    print(progress_msg)
+                    logger.info(progress_msg)
                     
                 except Exception as e:
                     # Handle worker failure
@@ -360,7 +405,24 @@ async def run_dataset_parallel_manual(
                     "content": "Task was not processed"
                 }
         
-        logger.info(f"Parallel dataset run completed: {len(results)} results")
+        # Print final summary
+        total_tasks = len(results)
+        successful_tasks = sum(1 for r in results if getattr(r, 'reward', 0) > 0)
+        failed_tasks = sum(1 for r in results if isinstance(r, dict) and r.get('isError', False))
+        
+        print("\n" + "=" * 60)
+        print(f"📊 Parallel Evaluation Complete!")
+        print("=" * 60)
+        print(f"Total tasks: {total_tasks}")
+        print(f"Successful: {successful_tasks} ({100 * successful_tasks / total_tasks:.1f}%)")
+        print(f"Failed: {failed_tasks}")
+        print(f"Workers used: {max_workers}")
+        print("=" * 60)
+        
+        logger.info(
+            f"Parallel dataset run completed: {total_tasks} tasks, "
+            f"{successful_tasks} successful ({100 * successful_tasks / total_tasks:.1f}%)"
+        )
         
     return results
 
@@ -368,21 +430,21 @@ async def run_dataset_parallel_manual(
 def calculate_optimal_workers(
     num_tasks: int,
     reserve_system_resources: bool = True
-) -> tuple[int, int]:
+) -> int:
     """
-    Calculate optimal number of workers and tasks per worker.
+    Calculate optimal number of workers based on CPU cores and task count.
     
     Simple heuristic: 
     - 1 worker per CPU core (minus 1-2 for system if reserve_system_resources)
-    - Assumes ~1GB RAM per worker
-    - Minimum 10 tasks per worker for efficiency
+    - But don't create more workers than tasks
+    - Cap at reasonable maximum
     
     Args:
         num_tasks: Total number of tasks to process
         reserve_system_resources: Whether to leave CPU cores for system (default True)
         
     Returns:
-        Tuple of (num_workers, tasks_per_worker)
+        Optimal number of workers
     """
     # Get CPU count
     cpu_count = os.cpu_count() or 4
@@ -401,22 +463,16 @@ def calculate_optimal_workers(
     # Cap at 32 workers to be reasonable
     max_workers = min(available_cpus, 32)
     
-    # Calculate tasks per worker
+    # Don't create more workers than tasks
+    # But try to have at least 5-10 tasks per worker for efficiency
     if num_tasks <= max_workers:
-        # Few tasks: one per worker
-        return min(num_tasks, max_workers), 1
+        return min(num_tasks, max_workers)
     else:
-        # Many tasks: distribute evenly
-        # Aim for at least 10 tasks per worker for efficiency
+        # For many tasks, use all available workers
+        # unless that would give us very few tasks per worker
         min_tasks_per_worker = 10
-        
-        # Calculate ideal workers based on task count
         ideal_workers = min(max_workers, max(1, num_tasks // min_tasks_per_worker))
-        
-        # Calculate tasks per worker (ceiling division)
-        tasks_per_worker = (num_tasks + ideal_workers - 1) // ideal_workers
-        
-        return ideal_workers, tasks_per_worker
+        return ideal_workers
 
 
 async def run_dataset_parallel(
@@ -424,6 +480,7 @@ async def run_dataset_parallel(
     dataset: str | Dataset | list[dict[str, Any]],
     agent_class: type[MCPAgent],
     agent_config: dict[str, Any] | None = None,
+    max_concurrent: int | None = None,
     metadata: dict[str, Any] | None = None,
     max_steps: int = 40,
     **kwargs
@@ -435,12 +492,23 @@ async def run_dataset_parallel(
     and batch sizes based on system resources and dataset size. For manual control
     over worker configuration, use `run_dataset_parallel_manual`.
     
+    Args:
+        name: Name for the job
+        dataset: Dataset to run
+        agent_class: Agent class to use
+        agent_config: Agent configuration
+        max_concurrent: Maximum total concurrent tasks across all workers (prevents rate limits)
+        metadata: Optional metadata
+        max_steps: Maximum steps per task
+        **kwargs: Additional arguments passed to run_dataset_parallel_manual
+    
     Example:
         >>> # Automatically handles 400+ tasks efficiently
         >>> results = await run_dataset_parallel(
         ...     "Large Evaluation",
         ...     "hud-evals/benchmark-400",
-        ...     ClaudeAgent
+        ...     ClaudeAgent,
+        ...     max_concurrent=50  # Limit to 50 concurrent API calls
         ... )
     """
     # Load dataset to get size
@@ -459,11 +527,17 @@ async def run_dataset_parallel(
         dataset = dataset_list
     
     # Calculate optimal configuration
-    num_workers, tasks_per_worker = calculate_optimal_workers(num_tasks)
+    num_workers = calculate_optimal_workers(num_tasks)
+    
+    # Set default max_concurrent_per_worker if not using total limit
+    if max_concurrent is None:
+        max_concurrent_per_worker = 25  # Reasonable default
+    else:
+        max_concurrent_per_worker = max(1, max_concurrent // num_workers)
     
     logger.info(
         f"Auto-configured for {num_tasks} tasks: "
-        f"{num_workers} workers x {tasks_per_worker} tasks/worker"
+        f"{num_workers} workers, {max_concurrent_per_worker} concurrent per worker"
     )
     
     # Add auto-configuration info to metadata
@@ -471,7 +545,6 @@ async def run_dataset_parallel(
         metadata = {}
     metadata["auto_configured"] = True
     metadata["auto_num_workers"] = num_workers
-    metadata["auto_tasks_per_worker"] = tasks_per_worker
     
     # Run with optimized settings
     return await run_dataset_parallel_manual(
@@ -480,7 +553,8 @@ async def run_dataset_parallel(
         agent_class=agent_class,
         agent_config=agent_config,
         max_workers=num_workers,
-        tasks_per_worker=tasks_per_worker,
+        max_concurrent_per_worker=max_concurrent_per_worker,
+        max_concurrent=max_concurrent,
         metadata=metadata,
         max_steps=max_steps,
         **kwargs

@@ -68,8 +68,7 @@ async def main():
         agent_class=ClaudeAgent,
         agent_config={"model": "claude-3-haiku-20240307"},  # Use fast model for demo
         max_workers=4,  # Use 4 processes
-        tasks_per_worker=25,  # 25 tasks per process
-        max_concurrent_per_worker=10,  # 10 concurrent tasks within each worker
+        max_concurrent_per_worker=25,  # 25 concurrent tasks within each worker
         metadata={
             "experiment": "parallel_test",
             "timestamp": start_time.isoformat()
