@@ -64,7 +64,7 @@ def train_command_wrapper(
             design.command_example(f"export {var}=your-{var.lower().replace('_', '-')}")
         design.info("")
         design.info("2. Create a .env file in your project root:")
-        design.code_block(
+        design.command_example(
             "\n".join([f"{var}=your-{var.lower().replace('_', '-')}" for var in missing_vars]),
             "env",
         )
@@ -111,7 +111,7 @@ def train_command_wrapper(
                     # Import here to avoid circular imports
                     from .init import init_command_wrapper
 
-                    init_command_wrapper(None)
+                    init_command_wrapper(".", None, False, False)
 
                     # Look for generated config
                     config_dir = Path("configs")
@@ -259,7 +259,7 @@ async def train_command(
             ds_info = ds_builder.info
 
             # Check split sizes
-            train_size = ds_info.splits.get("train", None)
+            train_size = ds_info.splits.get("train", None) if ds_info.splits else None
             if train_size and train_size.num_examples < 4:
                 design.error(f"Dataset '{dataset}' has only {train_size.num_examples} tasks")
                 design.info("RL training requires at least 4 tasks for proper batching")
@@ -295,6 +295,16 @@ async def train_command(
             indent=2,
         )
     )
+
+    if not config:
+        design.error("No config file found")
+        design.hint("Run 'hud rl init' to generate a config file")
+        raise typer.Exit(1)
+
+    if not dataset:
+        design.error("No dataset found")
+        design.hint("Run 'hud hf tasks.json' to create a dataset")
+        raise typer.Exit(1)
 
     # Always run remote training
     await run_remote_training(
@@ -343,7 +353,7 @@ def generate_config_interactive() -> Path | None:
     from .init import init_command
 
     # Run init command
-    asyncio.run(init_command(None))
+    asyncio.run(init_command(".", None, False, False))
 
     # Look for generated config
     config_dir = Path("configs")

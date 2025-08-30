@@ -338,7 +338,7 @@ class HUDDesign:
     def select(
         self,
         message: str,
-        choices: list[str | dict[str, Any]],
+        choices: list[str | dict[str, Any]] | list[str],
         default: str | None = None,
     ) -> str:
         """Interactive selection with arrow key navigation.
