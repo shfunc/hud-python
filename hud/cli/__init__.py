@@ -805,7 +805,7 @@ def eval(
         help="Number of worker processes for parallel mode (auto-optimized if not set)",
     ),
     max_concurrent_per_worker: int = typer.Option(
-        10,
+        20,
         "--max-concurrent-per-worker",
         help="Maximum concurrent tasks per worker in parallel mode",
     ),
