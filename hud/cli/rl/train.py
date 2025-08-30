@@ -23,6 +23,40 @@ from .utils import (
 design = HUDDesign()
 
 
+def find_task_json_files() -> list[Path]:
+    """Find JSON files containing tasks in the current directory."""
+    json_files = []
+    patterns = [
+        "*task*.json",
+        "*eval*.json",
+        "*Task*.json",
+        "*Eval*.json",
+        "*TASK*.json",
+        "*EVAL*.json",
+        "tasks.json",  # Most common name
+    ]
+
+    # First check current directory
+    for pattern in patterns:
+        json_files.extend(Path(".").glob(pattern))
+
+    # If no files found, search one level deep
+    if not json_files:
+        for pattern in patterns:
+            json_files.extend(Path(".").glob(f"*/{pattern}"))
+
+    # Remove duplicates and sort, prioritizing "tasks.json"
+    json_files = sorted(set(json_files))
+
+    # Put tasks.json first if it exists
+    tasks_json = Path("tasks.json")
+    if tasks_json in json_files:
+        json_files.remove(tasks_json)
+        json_files.insert(0, tasks_json)
+
+    return json_files
+
+
 def train_command_wrapper(
     model: str,
     dataset: str | None,
@@ -128,45 +162,22 @@ def train_command_wrapper(
                     raise typer.Exit(1)
 
         if "dataset" in missing:
-            # Check if we have tasks.json
-            tasks_file = Path("tasks.json")
-            if tasks_file.exists():
-                create_dataset = design.select(
-                    "Found tasks.json. Would you like to upload it as a dataset?",
-                    ["Yes, upload to HuggingFace", "No, I'll handle it manually"],
+            if missing["dataset"] == "multiple_json":
+                # Multiple JSON files found, let user choose
+                json_files = find_task_json_files()
+                design.info("Multiple task files found:")
+                file_choice = design.select(
+                    "Select a task file to use:",
+                    choices=[str(f) for f in json_files],
                 )
-
-                if create_dataset == "Yes, upload to HuggingFace":
-                    dataset_name = typer.prompt("Enter dataset name (e.g., username/dataset-name)")
-
-                    if not validate_dataset_name(dataset_name):
-                        design.error("Invalid dataset name format. Expected: username/dataset-name")
-                        raise typer.Exit(1)
-
-                    design.info(f"Running 'hud hf tasks.json --name {dataset_name}'...")
-                    design.info("")
-
-                    # Run hf command
-                    result = subprocess.run(  # noqa: S603
-                        ["hud", "hf", "tasks.json", "--name", dataset_name],  # noqa: S607
-                        capture_output=True,
-                        text=True,
-                    )
-
-                    if result.returncode == 0:
-                        design.success("Dataset uploaded successfully")
-                        dataset = dataset_name
-                    else:
-                        design.error("Failed to upload dataset")
-                        if result.stderr:
-                            design.error(result.stderr)
-                        raise typer.Exit(1)
-                else:
-                    design.info("Please specify a dataset with --dataset")
-                    raise typer.Exit(1)
-            else:
-                design.error("No dataset specified and no tasks.json found")
-                design.info("Use --dataset to specify a HuggingFace dataset")
+                dataset = file_choice
+                design.success(f"Selected: {dataset}")
+            elif missing["dataset"] == "none":
+                design.error("No dataset specified and no task JSON files found")
+                design.info("Please use --dataset or create a tasks.json file")
+                design.hint(
+                    "Example: hud hf --name my-org/my-tasks  # Generate tasks from HUD evaluation"
+                )
                 raise typer.Exit(1)
 
     # Ask about pod creation for Prime training
@@ -247,9 +258,63 @@ async def train_command(
         design.hint("Run 'hud build' first or specify with 'hud rl init <image>'")
         raise typer.Exit(1)
 
-    # Validate dataset has sufficient tasks for training
+    # Handle dataset (JSON file or HuggingFace dataset)
     dataset_size = None
-    if dataset:
+    is_json_file = False
+
+    # Use dataset from command or look for JSON files
+    if not dataset:
+        # Check for JSON files if no dataset specified
+        json_files = find_task_json_files()
+        if json_files:
+            if len(json_files) == 1:
+                dataset = str(json_files[0])
+                design.info(f"Found task file: {dataset}")
+                is_json_file = True
+            else:
+                # This case should have been handled in train_command_wrapper
+                design.error("Multiple task files found but none selected")
+                raise typer.Exit(1)
+        else:
+            # Use dataset from lock file
+            dataset = get_primary_dataset()
+            if dataset:
+                design.info(f"Using dataset from lock file: {dataset}")
+
+    # Check if dataset is a file path
+    if dataset and Path(dataset).exists() and dataset.endswith(".json"):
+        is_json_file = True
+
+    # Validate dataset
+    if dataset and is_json_file:
+        # Load and validate JSON file
+        design.info(f"Validating task file: {dataset}")
+        try:
+            with open(dataset) as f: # noqa: ASYNC230
+                tasks_data = json.load(f)
+
+            # Handle both single task and array of tasks
+            if isinstance(tasks_data, dict):
+                tasks = [tasks_data]
+            elif isinstance(tasks_data, list):
+                tasks = tasks_data
+            else:
+                design.error("Invalid tasks file format")
+                raise typer.Exit(1)
+
+            dataset_size = len(tasks)
+            if dataset_size < 4:
+                design.error(f"Task file has only {dataset_size} tasks")
+                design.info("RL training requires at least 4 tasks for proper batching")
+                design.hint("Consider adding more tasks to your JSON file")
+                raise typer.Exit(1)
+
+            design.success(f"✓ Task file has {dataset_size} tasks")
+        except json.JSONDecodeError as e:
+            design.error(f"Invalid JSON in task file: {e}")
+            raise typer.Exit(1) from e
+    elif dataset:
+        # Validate HuggingFace dataset
         design.info(f"Validating dataset: {dataset}")
         try:
             # Try to load dataset info from HuggingFace
@@ -272,12 +337,6 @@ async def train_command(
             # If we can't validate, warn but continue
             design.warning(f"Could not validate dataset size: {e}")
             design.info("Proceeding with training - ensure dataset has at least 4 tasks")
-
-    # Use dataset from command or lock file
-    if not dataset:
-        dataset = get_primary_dataset()
-        if dataset:
-            design.info(f"Using dataset from lock file: {dataset}")
 
     # Display configuration
     design.section_title("📋 Training Configuration")
@@ -318,6 +377,7 @@ async def train_command(
         auto_create_pod=auto_create_pod,
         team_id=team_id,
         dataset_size=dataset_size,
+        is_json_file=is_json_file,
     )
 
 
@@ -340,10 +400,19 @@ def check_requirements(config: Path | None, dataset: str | None) -> dict[str, An
 
     # Check dataset
     if not dataset:
-        # Check lock file for dataset
-        primary_dataset = get_primary_dataset()
-        if not primary_dataset:
-            missing["dataset"] = "none"
+        # First check for JSON files (preferred method)
+        json_files = find_task_json_files()
+        if json_files:
+            if len(json_files) == 1:
+                # Will be auto-selected
+                pass
+            else:
+                missing["dataset"] = "multiple_json"
+        else:
+            # Check lock file for HuggingFace dataset
+            primary_dataset = get_primary_dataset()
+            if not primary_dataset:
+                missing["dataset"] = "none"
 
     return missing
 
@@ -407,13 +476,23 @@ async def run_remote_training(
     auto_create_pod: str | None = None,
     team_id: str | None = None,
     dataset_size: int | None = None,
+    is_json_file: bool = False,
 ) -> None:
     """Run training on remote infrastructure."""
     design.section_title("🚀 Remote Training")
 
     if provider == "prime":
         await run_prime_training(
-            model, dataset, config, gpus, output_dir, image, auto_create_pod, team_id, dataset_size
+            model,
+            dataset,
+            config,
+            gpus,
+            output_dir,
+            image,
+            auto_create_pod,
+            team_id,
+            dataset_size,
+            is_json_file,
         )
     else:
         design.error(f"Provider '{provider}' not yet supported")

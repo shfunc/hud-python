@@ -23,7 +23,10 @@ def rl_main(
     ctx: typer.Context,
     model: str = typer.Option("Qwen/Qwen2.5-3B-Instruct", "--model", "-m", help="Model to train"),
     dataset: str | None = typer.Option(
-        None, "--dataset", "-d", help="Override dataset from lock file"
+        None,
+        "--dataset",
+        "-d",
+        help="Dataset: JSON file path or HuggingFace name (auto-detects if not provided)",
     ),
     config: Path | None = typer.Option(None, "--config", "-c", help="Config YAML path"),  # noqa: B008
     gpus: str = typer.Option("2xA100", "--gpus", help="GPU configuration (e.g., 2xA100, 4xH100)"),
@@ -39,9 +42,15 @@ def rl_main(
     3. Push environment to registry if needed
     4. Start remote training on Prime Intellect
 
+    Dataset can be:
+    - A local JSON file with tasks (e.g., tasks.json)
+    - A HuggingFace dataset name (e.g., 'username/dataset-name')
+    - Auto-detected from current directory if not specified
+
     Examples:
-        hud rl                    # Interactive mode with prompts
+        hud rl                    # Interactive mode, auto-detect tasks.json
         hud rl --model gpt2       # Train with specific model
+        hud rl --dataset tasks.json  # Use local task file
         hud rl --gpus 4xH100      # Use different GPU configuration
         hud rl init my-env:latest # Generate config for environment
     """

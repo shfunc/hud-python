@@ -62,6 +62,7 @@ async def create_and_connect_prime_pod(
     image: str,
     team_id: str | None = None,
     dataset_size: int | None = None,
+    is_json_file: bool = False,
 ) -> None:
     """Create a Prime Intellect pod and connect to it for training."""
     design.section_title("🌐 Creating Prime Intellect Pod")
@@ -330,6 +331,7 @@ async def create_and_connect_prime_pod(
                     output_dir=output_dir,
                     image=image,
                     dataset_size=dataset_size,
+                    is_json_file=is_json_file,
                 )
             else:
                 # Manual fallback
@@ -457,6 +459,7 @@ async def run_prime_training(
     auto_create_pod: str | None = None,
     team_id: str | None = None,
     dataset_size: int | None = None,
+    is_json_file: bool = False,
 ) -> None:
     """Run training on Prime Intellect infrastructure."""
     # Check API key
@@ -488,4 +491,5 @@ async def run_prime_training(
         image=image,
         team_id=team_id,
         dataset_size=dataset_size,
+        is_json_file=is_json_file,
     )
