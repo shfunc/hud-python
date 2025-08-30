@@ -7,7 +7,7 @@ import re
 import string
 import subprocess
 import time
-from typing import TYPE_CHECKING
+from pathlib import Path  # noqa: TC003
 
 import typer
 from rich.console import Console
@@ -19,8 +19,6 @@ from hud.utils.design import HUDDesign
 
 from .ssh import check_and_configure_ssh_key, connect_and_train
 
-if TYPE_CHECKING:
-    from pathlib import Path
 design = HUDDesign()
 
 

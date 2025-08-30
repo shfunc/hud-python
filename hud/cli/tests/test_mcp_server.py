@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from pathlib import Path  # noqa: TC003
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -15,9 +15,6 @@ from hud.cli.dev import (
     run_mcp_dev_server,
     update_pyproject_toml,
 )
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 class TestCreateMCPServer:
