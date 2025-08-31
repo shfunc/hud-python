@@ -101,6 +101,7 @@ async def connect_and_train(
     output_dir: Path,
     image: str,
     dataset_size: int | None = None,
+    is_json_file: bool = False,
 ) -> None:
     """Connect to the pod via SSH and run training commands."""
     design.section_title("🚀 Starting Remote Training")
@@ -175,6 +176,37 @@ async def connect_and_train(
             design.info("Make sure scp is installed and in your PATH")
         raise typer.Exit(1) from e
 
+    # If dataset is a JSON file, copy it too
+    remote_dataset = dataset  # Default to unchanged
+    if is_json_file:
+        design.info("Copying task file to pod...")
+        try:
+            # On Windows, we need to ensure proper path formatting
+            dataset_path = str(dataset).replace("\\", "/")
+            # Extract just the filename for the remote path
+            dataset_filename = os.path.basename(dataset)
+            remote_dataset = f"/root/{dataset_filename}"
+
+            scp_cmd = [
+                "scp",
+                "-i",
+                str(ssh_key_path),
+                "-P",
+                ssh_port,
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
+                dataset_path,
+                f"{ssh_user_host}:{remote_dataset}",
+            ]
+            design.debug(f"Running: {' '.join(scp_cmd)}")
+            subprocess.run(scp_cmd, check=True)  # noqa: S603, ASYNC221
+            design.success(f"Task file copied to {remote_dataset}")
+        except subprocess.CalledProcessError as e:
+            design.error(f"Failed to copy task file: {e}")
+            raise typer.Exit(1) from e
+
     design.info("Setting up environment and starting training...")
     design.info("This will take a few minutes for initial setup, then training will begin.")
     design.info("")
@@ -196,7 +228,7 @@ async def connect_and_train(
         "# Load environment",
         "env = vf.load_environment(",
         '    env_id="hud-vf-gym",',
-        f'    taskset="{dataset}",',
+        f'    taskset="{remote_dataset}",',
         '    config_path="/root/config.yaml",',
         f"    num_tasks={dataset_size},",
         ")",
@@ -242,7 +274,7 @@ async def connect_and_train(
         "uv venv --python 3.12 && "
         "source .venv/bin/activate && "
         # Install packages
-        "prime env install hud/hud-vf-gym@0.1.0 && "
+        "prime env install hud/hud-vf-gym@0.1.1 && "
         "uv pip install 'verifiers[train]' && "
         "uv pip install flash-attn --no-build-isolation && "
         # Set environment variables
