@@ -310,6 +310,64 @@ async def train_command(
                 raise typer.Exit(1)
 
             design.success(f"✓ Task file has {dataset_size} tasks")
+            
+            # Check and convert MCP configs to remote if needed
+            if tasks:
+                sample_task = tasks[0]
+                sample_mcp_config = sample_task.get("mcp_config", {})
+                
+                # Check if using local MCP configs
+                config_type = "unknown"
+                for server_name, server_config in sample_mcp_config.items():
+                    if isinstance(server_config, dict) and "url" in server_config:
+                        url = server_config.get("url", "")
+                        if "mcp.hud.so" in url:
+                            config_type = "remote"
+                            break
+                        else:
+                            config_type = "local"
+                
+                if config_type == "local":
+                    design.info("Converting local MCP configs to remote for training...")
+                    
+                    # Get the image name from lock file or environment
+                    from .utils import get_image_from_lock
+                    env_image = image or get_image_from_lock()
+                    
+                    if not env_image:
+                        design.error("No image found for remote MCP conversion")
+                        design.hint("Run 'hud build' first")
+                        raise typer.Exit(1)
+                    
+                    # Check if image needs to be pushed
+                    if "/" not in env_image or env_image.startswith("local/"):
+                        design.warning(f"Image '{env_image}' appears to be local only")
+                        design.info("Running 'hud push' to make it publicly available...")
+                        from ..push import push_command
+                        push_command(directory=".", yes=True)
+                        design.success("Image pushed successfully")
+                        # Re-read image name after push
+                        env_image = get_image_from_lock()
+                    
+                    # Convert all tasks to use remote MCP
+                    for task in tasks:
+                        remote_config = {
+                            "hud": {
+                                "url": "https://mcp.hud.so/v3/mcp",
+                                "headers": {
+                                    "Authorization": "Bearer $HUD_API_KEY",
+                                    "Mcp-Image": env_image
+                                }
+                            }
+                        }
+                        task["mcp_config"] = remote_config
+                    
+                    design.success("✓ Converted all tasks to use remote MCP configs")
+                    
+                    # Save the modified tasks back to the file
+                    with open(dataset, "w") as f:
+                        json.dump(tasks, f, indent=2)
+                    design.info("Updated task file with remote configs")
         except json.JSONDecodeError as e:
             design.error(f"Invalid JSON in task file: {e}")
             raise typer.Exit(1) from e

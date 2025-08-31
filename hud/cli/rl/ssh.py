@@ -274,7 +274,7 @@ async def connect_and_train(
         "uv venv --python 3.12 && "
         "source .venv/bin/activate && "
         # Install packages
-        "prime env install hud/hud-vf-gym@0.1.0 && "
+        "prime env install hud/hud-vf-gym@0.1.1 && "
         "uv pip install 'verifiers[train]' && "
         "uv pip install flash-attn --no-build-isolation && "
         # Set environment variables
