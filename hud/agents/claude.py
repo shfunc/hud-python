@@ -98,7 +98,7 @@ class ClaudeAgent(MCPAgent):
         
         Remember: You are expected to complete tasks autonomously. The user trusts you to accomplish what they asked.
         """.strip()  # noqa: E501
-        
+
         # Append Claude instructions to any base system prompt
         if self.system_prompt:
             self.system_prompt = f"{self.system_prompt}\n\n{claude_instructions}"

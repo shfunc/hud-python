@@ -43,12 +43,7 @@ from datasets import load_dataset
 from hud.agents import ClaudeAgent, OperatorAgent
 from hud.agents.misc.response_agent import ResponseAgent
 from hud.clients import MCPClient
-from hud.datasets import (
-    Task, 
-    run_dataset, 
-    run_dataset_parallel, 
-    run_dataset_parallel_manual
-)
+from hud.datasets import Task, run_dataset, run_dataset_parallel, run_dataset_parallel_manual
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +132,7 @@ async def run_full_dataset(
     max_concurrent_per_worker: int = 25,
 ) -> list[Any]:
     """Run evaluation across the entire dataset.
-    
+
     Uses either asyncio-based run_dataset or process-based run_dataset_parallel
     depending on the parallel flag.
     """
@@ -157,7 +152,7 @@ async def run_full_dataset(
         }
 
     eval_name = f"Evaluation {dataset_name.split('/')[-1]}"
-    
+
     if parallel:
         print(f"🚀 Running PARALLEL evaluation (workers: {max_workers or 'auto'})…")
         if max_workers is None:
@@ -214,44 +209,63 @@ Examples:
   %(prog)s hud-evals/LargeDataset --full --parallel   # Large dataset (100+ tasks)
         """,
     )
-    
+
     parser.add_argument("dataset", help="HuggingFace dataset ID")
     parser.add_argument("--full", action="store_true", help="Run entire dataset")
-    
+
     # Agent
     parser.add_argument("--agent", choices=["claude", "openai"], default="claude")
     parser.add_argument("--model", default=None, help="Model override")
-    parser.add_argument("--allowed-tools", dest="allowed_tools", help="Tool allowlist (comma-separated)")
-    
+    parser.add_argument(
+        "--allowed-tools", dest="allowed_tools", help="Tool allowlist (comma-separated)"
+    )
+
     # Concurrency
-    parser.add_argument("--max-concurrent", dest="max_concurrent", type=int, default=50, 
-                        help="Max concurrent tasks (default: 50)")
-    
+    parser.add_argument(
+        "--max-concurrent",
+        dest="max_concurrent",
+        type=int,
+        default=50,
+        help="Max concurrent tasks (default: 50)",
+    )
+
     # Task settings
-    parser.add_argument("--max-steps", dest="max_steps", type=int, default=10,
-                        help="Max steps per task (default: 10)")
-    
+    parser.add_argument(
+        "--max-steps",
+        dest="max_steps",
+        type=int,
+        default=10,
+        help="Max steps per task (default: 10)",
+    )
+
     # Parallel mode (100+ tasks)
-    parser.add_argument("--parallel", action="store_true", help="Use parallel execution for large datasets")
+    parser.add_argument(
+        "--parallel", action="store_true", help="Use parallel execution for large datasets"
+    )
     parser.add_argument("--max-workers", dest="max_workers", type=int, help="Worker processes")
-    parser.add_argument("--max-concurrent-per-worker", dest="max_concurrent_per_worker", type=int, default=25,
-                        help="Max concurrent tasks per worker")
-    
+    parser.add_argument(
+        "--max-concurrent-per-worker",
+        dest="max_concurrent_per_worker",
+        type=int,
+        default=25,
+        help="Max concurrent tasks per worker",
+    )
+
     # Logging
-    parser.add_argument("--verbose", "-v", action="store_true", help="Show detailed agent step logs")
-    
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="Show detailed agent step logs"
+    )
+
     return parser.parse_args()
 
 
 async def main() -> None:
     args = parse_args()
-    
+
     if args.verbose:
         # Detailed logs - show everything including agent steps
         logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(name)s - %(message)s',
-            datefmt='%H:%M:%S'
+            level=logging.INFO, format="%(asctime)s - %(name)s - %(message)s", datefmt="%H:%M:%S"
         )
         # Ensure HUD agent logs are visible
         logging.getLogger("hud.agents").setLevel(logging.INFO)
@@ -265,8 +279,9 @@ async def main() -> None:
 
     if args.full:
         import time
+
         start_time = time.time()
-        
+
         results = await run_full_dataset(
             args.dataset,
             agent_type=args.agent,
@@ -278,26 +293,28 @@ async def main() -> None:
             max_workers=args.max_workers,
             max_concurrent_per_worker=args.max_concurrent_per_worker,
         )
-        
+
         elapsed = time.time() - start_time
-        
+
         # Print statistics
         print("\n" + "=" * 50)
         print("📊 Evaluation Complete!")
         print("=" * 50)
         print(f"Total tasks: {len(results)}")
         print(f"Time elapsed: {elapsed:.2f} seconds")
-        print(f"Throughput: {len(results)/elapsed:.2f} tasks/second")
-        
+        print(f"Throughput: {len(results) / elapsed:.2f} tasks/second")
+
         if args.parallel:
             print(f"Execution mode: PARALLEL (workers: {args.max_workers or 'auto'})")
         else:
             print(f"Execution mode: ASYNCIO (max_concurrent: {args.max_concurrent})")
-        
+
         # Count successes
         successful = sum(1 for r in results if getattr(r, "reward", 0) > 0)
-        print(f"Successful tasks: {successful}/{len(results)} ({100*successful/len(results):.1f}%)")
-        
+        print(
+            f"Successful tasks: {successful}/{len(results)} ({100 * successful / len(results):.1f}%)"
+        )
+
     else:
         print(f"Execution mode: Single Task (max_steps: {args.max_steps})")
         await run_single_task(

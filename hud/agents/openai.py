@@ -92,7 +92,7 @@ class OperatorAgent(MCPAgent):
 
         Remember: You are expected to complete tasks autonomously. The user trusts you to do what they asked.
         """.strip()  # noqa: E501
-        
+
         # Append OpenAI instructions to any base system prompt
         if self.system_prompt:
             self.system_prompt = f"{self.system_prompt}\n\n{openai_instructions}"
