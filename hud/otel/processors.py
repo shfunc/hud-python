@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from opentelemetry import baggage
@@ -115,4 +116,6 @@ class HudEnrichmentProcessor(SpanProcessor):
         pass
 
     def force_flush(self, timeout_millis: int | None = None) -> bool:  # type: ignore[override]
+        if timeout_millis:
+            time.sleep(timeout_millis / 1000)
         return True

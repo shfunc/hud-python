@@ -16,6 +16,7 @@ import json
 import logging
 from collections import defaultdict
 from datetime import UTC, datetime
+import time
 from typing import TYPE_CHECKING, Any
 
 from mcp.types import ClientRequest, ServerResult
@@ -362,5 +363,7 @@ class HudSpanExporter(SpanExporter):
         pass
 
     def force_flush(self, timeout_millis: int | None = None) -> bool:  # type: ignore[override]
+        if timeout_millis:
+            time.sleep(timeout_millis / 1000)
         # Synchronous export, nothing buffered here
         return True
