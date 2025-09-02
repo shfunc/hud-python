@@ -40,6 +40,7 @@ def _process_worker(
     2. Creates its own event loop
     3. Processes a batch of tasks asynchronously
     4. Returns results with their original indices
+    5. Handles interruption signals gracefully
 
     Args:
         task_batch: List of (index, task_dict) tuples
@@ -58,6 +59,7 @@ def _process_worker(
         List of (index, result) tuples
     """
     # Import inside worker to avoid pickling issues
+    import signal
     import sys
 
     import hud
@@ -71,6 +73,14 @@ def _process_worker(
         sys.stderr.reconfigure(line_buffering=True)  # type: ignore
     except AttributeError:
         pass
+    
+    # Set up signal handler for clean interruption
+    def signal_handler(signum, frame):
+        logger.warning(f"Worker {worker_id}: Received interrupt signal")
+        # Raise KeyboardInterrupt to actually interrupt the worker
+        raise KeyboardInterrupt(f"Worker {worker_id} interrupted by user")
+    
+    signal.signal(signal.SIGINT, signal_handler)
 
     # Reinitialize telemetry in this process
     configure_telemetry()
@@ -157,8 +167,19 @@ def _process_worker(
         # Process all tasks in parallel within this process
         tasks = [process_single_task(idx, task_dict) for idx, task_dict in task_batch]
 
-        results = await asyncio.gather(*tasks, return_exceptions=False)
-        return results
+        try:
+            results = await asyncio.gather(*tasks, return_exceptions=False)
+            return results
+        except asyncio.CancelledError:
+            logger.info(f"Worker {worker_id}: Tasks cancelled due to interruption")
+            # Return error results for all tasks
+            return [(idx, {
+                "error": "Task cancelled (Ctrl+C)",
+                "isError": True,
+                "reward": 0.0,
+                "done": False,
+                "content": "Task cancelled"
+            }) for idx, _ in task_batch]
 
     try:
         # Run the async batch processing
@@ -180,6 +201,19 @@ def _process_worker(
                 logger.warning("Worker %s: Telemetry flush timed out", worker_id)
 
         return results
+    except KeyboardInterrupt:
+        logger.info(f"Worker {worker_id}: Interrupted by user, stopping gracefully")
+        # Return partial results for tasks that completed
+        partial_results = []
+        for idx, _ in task_batch:
+            partial_results.append((idx, {
+                "error": "Worker interrupted by user (Ctrl+C)",
+                "isError": True,
+                "reward": 0.0,
+                "done": False,
+                "content": "Task interrupted"
+            }))
+        return partial_results
     except Exception as e:
         logger.error("[Worker %s] Batch processing failed: %s", worker_id, e)
         logger.error("Worker %s batch processing failed: %s", worker_id, e)
@@ -365,7 +399,8 @@ async def run_dataset_parallel_manual(
         )
 
         # Process batches in parallel using ProcessPoolExecutor
-        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        executor = ProcessPoolExecutor(max_workers=max_workers)
+        try:
             # Submit all batches to workers
             future_to_batch = {
                 executor.submit(worker_func, batch, worker_id=i): batch
@@ -377,48 +412,76 @@ async def run_dataset_parallel_manual(
             total = len(task_dicts)
 
             # Process results as they complete
-            for future in as_completed(future_to_batch):
-                batch = future_to_batch[future]
+            try:
+                for future in as_completed(future_to_batch):
+                    batch = future_to_batch[future]
 
-                try:
-                    # Get results from this worker
-                    batch_results = future.result()
+                    try:
+                        # Get results from this worker
+                        batch_results = future.result()
 
-                    # Place results in correct positions
-                    for index, result in batch_results:
-                        results[index] = result
-                        completed += 1
+                        # Place results in correct positions
+                        for index, result in batch_results:
+                            results[index] = result
+                            completed += 1
 
-                    # Calculate success rate so far
-                    successful_so_far = sum(
-                        1
-                        for r in results[:completed]
-                        if r is not None and getattr(r, "reward", 0) > 0
-                    )
+                        # Calculate success rate so far
+                        successful_so_far = sum(
+                            1
+                            for r in results[:completed]
+                            if r is not None and getattr(r, "reward", 0) > 0
+                        )
 
-                    progress_msg = (
-                        f"Progress: {completed}/{total} tasks completed "
-                        f"({100 * completed / total:.1f}%) | "
-                        f"Success rate: {successful_so_far}/{completed} "
-                        f"({100 * successful_so_far / completed:.1f}%)"
-                    )
+                        progress_msg = (
+                            f"Progress: {completed}/{total} tasks completed "
+                            f"({100 * completed / total:.1f}%) | "
+                            f"Success rate: {successful_so_far}/{completed} "
+                            f"({100 * successful_so_far / completed:.1f}%)"
+                        )
 
-                    logger.info(progress_msg)
+                        logger.info(progress_msg)
 
-                except Exception as e:
-                    # Handle worker failure
-                    logger.error("Worker failed with exception: %s\n%s", e, traceback.format_exc())
+                    except Exception as e:
+                        # Handle worker failure
+                        logger.error("Worker failed with exception: %s\n%s", e, traceback.format_exc())
 
-                    # Mark all tasks in this batch as failed
-                    for index, _ in batch:
-                        results[index] = {
-                            "error": f"Worker process failed: {e}",
+                        # Mark all tasks in this batch as failed
+                        for index, _ in batch:
+                            results[index] = {
+                                "error": f"Worker process failed: {e}",
+                                "isError": True,
+                                "reward": 0.0,
+                                "done": False,
+                                "content": f"Worker process failed: {e}",
+                            }
+                            completed += 1
+            
+            except KeyboardInterrupt:
+                logger.warning("\n⚠️  Parallel evaluation interrupted by user (Ctrl+C)")
+                logger.info("Cancelling pending tasks...")
+                
+                # Cancel all pending futures
+                for future in future_to_batch:
+                    if not future.done():
+                        future.cancel()
+                
+                # Mark uncompleted tasks as interrupted
+                for i, r in enumerate(results):
+                    if r is None:
+                        results[i] = {
+                            "error": "Evaluation interrupted by user",
                             "isError": True,
                             "reward": 0.0,
                             "done": False,
-                            "content": f"Worker process failed: {e}",
+                            "content": "Task interrupted (Ctrl+C)",
                         }
-                        completed += 1
+                
+                logger.info(f"Interrupted after {completed}/{total} tasks")
+                raise  # Re-raise to propagate the interrupt
+        
+        finally:
+            # Always shutdown the executor properly
+            executor.shutdown(wait=False, cancel_futures=True)
 
         # Verify all results are populated
         missing = [i for i, r in enumerate(results) if r is None]
