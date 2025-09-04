@@ -111,8 +111,7 @@ async def run_single_task(
                     )
                     raise typer.Exit(1) from e
 
-                agent_config: dict[str, Any] = {
-                }
+                agent_config: dict[str, Any] = {}
                 if allowed_tools:
                     agent_config["allowed_tools"] = allowed_tools
 
@@ -240,8 +239,7 @@ async def run_full_dataset(
             )
             raise typer.Exit(1) from e
 
-        agent_config: dict[str, Any] = {
-        }
+        agent_config: dict[str, Any] = {}
         if allowed_tools:
             agent_config["allowed_tools"] = allowed_tools
 

@@ -30,16 +30,16 @@ async def main():
     # Initialize OpenAI client with environment variables
     base_url = os.getenv("OPENAI_BASE_URL")
     api_key = os.getenv("OPENAI_API_KEY")
-    
+
     openai_client = AsyncOpenAI(
         base_url=base_url if base_url else None,  # None will use default OpenAI endpoint
         api_key=api_key,
     )
-    
+
     mcp_config = {
         "local": {
             "command": "docker",
-            "args": ["run", "--rm", "-i", "hudevals/hud-text-2048:latest"]
+            "args": ["run", "--rm", "-i", "hudevals/hud-text-2048:latest"],
         }
     }
 
@@ -67,14 +67,17 @@ Example tool call: {"name": "move", "arguments": {"direction": "right"}}"""
     task = Task(
         prompt="""Aim for the 128 tile (atleast 800 points!)""",
         mcp_config=mcp_config,
-        setup_tool={"name": "setup","arguments": {"name": "board", "arguments": {"board_size": 4}},}, # type: ignore
-        evaluate_tool={"name": "evaluate", "arguments": {"name": "max_number", "arguments": {}}}, # type: ignore
+        setup_tool={
+            "name": "setup",
+            "arguments": {"name": "board", "arguments": {"board_size": 4}},
+        },  # type: ignore
+        evaluate_tool={"name": "evaluate", "arguments": {"name": "max_number", "arguments": {}}},  # type: ignore
     )
 
     # Initialize MCP client
     client = MCPClient(mcp_config=task.mcp_config)
 
-    model_name = "gpt-5-mini" # Replace with your model name
+    model_name = "gpt-5-mini"  # Replace with your model name
 
     # Create OpenAI agent with the text-2048 game tools
     agent = GenericOpenAIChatAgent(
@@ -92,12 +95,12 @@ Example tool call: {"name": "move", "arguments": {"direction": "right"}}"""
         try:
             print("🎮 Starting 2048 game with OpenAI agent...")
             print(f"🤖 Model: {agent.model_name}")
-            print("="*50)
-            
+            print("=" * 50)
+
             result = await agent.run(task, max_steps=-1)
-            
+
             # Display results
-            print("="*50)
+            print("=" * 50)
             print(f"✅ Game completed!")
             print(f"🏆 Final Score/Max Tile: {result.reward}")
             if result.info:
@@ -106,8 +109,8 @@ Example tool call: {"name": "move", "arguments": {"direction": "right"}}"""
             # Display conversation history
             print("🗣️ Conversation History:")
             for i, msg in enumerate(agent.conversation_history):
-                print(f"  {i+1} : {msg}")
-                print("-"*30)
+                print(f"  {i + 1} : {msg}")
+                print("-" * 30)
 
         except Exception as e:
             print(f"❌ Error during game: {e}")
@@ -116,5 +119,4 @@ Example tool call: {"name": "move", "arguments": {"direction": "right"}}"""
 
 
 if __name__ == "__main__":
-
     asyncio.run(main())

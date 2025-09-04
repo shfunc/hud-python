@@ -31,17 +31,17 @@ async def main():
     # Initialize OpenAI client with environment variables
     base_url = os.getenv("OPENAI_BASE_URL")
     api_key = os.getenv("OPENAI_API_KEY")
-    
+
     openai_client = AsyncOpenAI(
         base_url=base_url if base_url else None,
         api_key=api_key,
     )
-    
+
     # Configure the browser-2048 environment
     mcp_config = {
         "local": {
             "command": "docker",
-            "args": ["run", "--rm", "-i", "-p", "8080:8080", "hudevals/hud-browser:0.1.3"]
+            "args": ["run", "--rm", "-i", "-p", "8080:8080", "hudevals/hud-browser:0.1.3"],
         }
     }
 
@@ -83,10 +83,7 @@ Strategy tips:
         Take screenshots to see the game board, then make strategic moves using the browser interface.
         You can use arrow keys or mouse gestures to move tiles.""",
         mcp_config=mcp_config,
-        setup_tool={
-            "name": "launch_app",
-            "arguments": {"app_name": "2048"}
-        },  # type: ignore
+        setup_tool={"name": "launch_app", "arguments": {"app_name": "2048"}},  # type: ignore
         evaluate_tool={
             "name": "evaluate",
             "arguments": {"name": "game_2048_max_number", "arguments": {"target": 128}},
@@ -96,14 +93,14 @@ Strategy tips:
     # Initialize MCP client
     client = MCPClient(mcp_config=task.mcp_config)
 
-    model_name = "z-ai/glm-4.5v"
+    model_name = "gpt-5-mini"  # "z-ai/glm-4.5v", "Qwen/Qwen2.5-VL-7B-Instruct" etc...
 
     # Create OpenAI agent with browser automation tools
     agent = GenericOpenAIChatAgent(
         mcp_client=client,
         openai_client=openai_client,
         model_name=model_name,
-        allowed_tools=["computer"],  # Computer tool for browser automation
+        allowed_tools=["computer"],
         parallel_tool_calls=False,
         system_prompt=system_prompt,
     )
@@ -116,12 +113,12 @@ Strategy tips:
             print("🎮 Starting browser-based 2048 game with OpenAI agent...")
             print(f"🤖 Model: {agent.model_name}")
             print(f"🌐 Browser environment running on localhost:8080")
-            print("="*50)
-            
+            print("=" * 50)
+
             result = await agent.run(task, max_steps=10)
-            
+
             # Display results
-            print("="*50)
+            print("=" * 50)
             print(f"✅ Game completed!")
             print(f"🏆 Final Score/Max Tile: {result.reward}")
             if result.info:

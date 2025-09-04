@@ -103,7 +103,7 @@ class GenericOpenAIChatAgent(MCPAgent):
     )
     async def get_response(self, messages: list[Any]) -> AgentResponse:
         """Send chat request to OpenAI and convert the response."""
-        
+
         # Convert MCP tool schemas to OpenAI format
         mcp_schemas = self.get_tool_schemas()
 
@@ -117,15 +117,15 @@ class GenericOpenAIChatAgent(MCPAgent):
 
         choice = response.choices[0]
         msg = choice.message
-        
+
         assistant_msg: dict[str, Any] = {"role": "assistant"}
-        
+
         if msg.content:
             assistant_msg["content"] = msg.content
-        
+
         if msg.tool_calls:
             assistant_msg["tool_calls"] = msg.tool_calls
-        
+
         messages.append(assistant_msg)
 
         # Store the complete conversation history
