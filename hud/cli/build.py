@@ -431,10 +431,14 @@ def build_environment(
         if optional_env:
             lock_content["environment"]["variables"]["optional"] = optional_env
 
-    # Add tool summary (not full schemas to keep it concise)
+    # Add tools with full schemas for RL config generation
     if analysis["tools"]:
         lock_content["tools"] = [
-            {"name": tool["name"], "description": tool.get("description", "")}
+            {
+                "name": tool["name"],
+                "description": tool.get("description", ""),
+                "inputSchema": tool.get("inputSchema", {}),
+            }
             for tool in analysis["tools"]
         ]
 

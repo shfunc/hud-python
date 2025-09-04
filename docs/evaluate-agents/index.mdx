@@ -88,15 +88,14 @@ task = Task(
 
 ```python
 from datasets import load_dataset
-from hud.datasets import run_dataset
+from hud.datasets import run_dataset_parallel
 
-# Load and run SheetBench-50
+# Load and run SheetBench-50 (parallel execution)
 dataset = load_dataset("hud-evals/sheetbench-50", split="train")
-results = await run_dataset(
+results = await run_dataset_parallel(
     "My SheetBench Run",
     dataset,
-    agent_class=ClaudeAgent,
-    max_concurrent=5
+    agent_class=ClaudeAgent
 )
 ```
 
@@ -187,8 +186,8 @@ Run with --json for full details or pipe to grep for filtering.
 After running evaluations, view results on the leaderboard:
 
 ```python
-# Run evaluation
-results = await run_dataset(
+# Run evaluation (parallel)
+results = await run_dataset_parallel(
     "Claude-3.5 SheetBench",
     dataset="hud-evals/sheetbench-50",
     agent_class=ClaudeAgent

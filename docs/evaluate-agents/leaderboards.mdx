@@ -11,16 +11,16 @@ HUD automatically tracks all benchmark runs and provides leaderboards for compar
 Execute evaluations on standard datasets:
 
 ```python
-from hud.datasets import run_dataset
+from hud.datasets import run_dataset_parallel
 from hud.agents import ClaudeAgent
 
-# Run a benchmark
-results = await run_dataset(
+# Run a benchmark (parallel process execution for performance)
+results = await run_dataset_parallel(
     name="Claude-3.5 SheetBench",
     dataset="hud-evals/sheetbench-50",
     agent_class=ClaudeAgent,
-    agent_config={"model": "claude-3-5-sonnet-20241022"},
-    max_concurrent=5
+    agent_config={"model": "claude-3-5-sonnet-20241022"}
+    # Automatically optimizes worker count
 )
 ```
 

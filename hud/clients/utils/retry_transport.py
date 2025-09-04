@@ -83,20 +83,46 @@ class RetryTransport(AsyncHTTPTransport):
                 last_exception = e
                 if attempt < self.max_retries:
                     delay = self.retry_delay * (self.backoff_factor**attempt)
-                    logger.warning(
-                        "%s for %s, retrying in %.1fs (attempt %d/%d)",
-                        type(e).__name__,
-                        request.url,
-                        delay,
-                        attempt + 1,
-                        self.max_retries,
-                    )
+                    # More informative message for connection errors
+                    if isinstance(e, httpx.ConnectError):
+                        logger.warning(
+                            "Could not connect to %s, retrying in %.1fs (attempt %d/%d). "
+                            "Make sure the MCP server is running.",
+                            request.url,
+                            delay,
+                            attempt + 1,
+                            self.max_retries,
+                        )
+                    else:
+                        logger.warning(
+                            "%s for %s, retrying in %.1fs (attempt %d/%d)",
+                            type(e).__name__,
+                            request.url,
+                            delay,
+                            attempt + 1,
+                            self.max_retries,
+                        )
                     await asyncio.sleep(delay)
                     continue
                 raise
 
         # If we get here, we've exhausted retries
         if last_exception:
+            if isinstance(last_exception, httpx.ConnectError):
+                # Enhance the connection error message
+                url = str(request.url)
+                if "localhost" in url or "127.0.0.1" in url:
+                    raise httpx.ConnectError(
+                        f"Failed to connect to {url} after {self.max_retries} attempts. "
+                        f"Make sure the local MCP server is running (e.g., 'hud dev' in another terminal).",  # noqa: E501
+                        request=request,
+                    ) from last_exception
+                else:
+                    raise httpx.ConnectError(
+                        f"Failed to connect to {url} after {self.max_retries} attempts. "
+                        f"Check that the server is accessible and running.",
+                        request=request,
+                    ) from last_exception
             raise last_exception
         else:
             # This shouldn't happen, but just in case

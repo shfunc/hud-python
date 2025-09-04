@@ -81,7 +81,7 @@ class MCPUseHUDClient(BaseHUDClient):
                     ):
                         session.connector.client_session._validate_structured_outputs = (
                             self._strict_validation
-                        )  # noqa: E501
+                        )
             except ImportError:
                 # ValidationOptions may not be available in some mcp versions
                 pass

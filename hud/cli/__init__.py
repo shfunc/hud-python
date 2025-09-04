@@ -22,10 +22,14 @@ from .build import build_command
 from .clone import clone_repository, get_clone_message, print_error, print_tutorial
 from .debug import debug_mcp_stdio
 from .dev import run_mcp_dev_server
+
+# Import new commands
+from .hf import hf_command
 from .init import create_environment
 from .pull import pull_command
 from .push import push_command
 from .remove import remove_command
+from .rl import rl_app
 from .utils.cursor import get_cursor_config_path, list_cursor_servers, parse_cursor_config
 from .utils.logging import CaptureLogger
 
@@ -760,19 +764,24 @@ def quickstart() -> None:
 
 @app.command()
 def eval(
-    source: str = typer.Argument(
-        ...,
-        help="HuggingFace dataset identifier (e.g. 'hud-evals/SheetBench-50') or task JSON file",
+    source: str | None = typer.Argument(
+        None,
+        help=(
+            "HuggingFace dataset identifier (e.g. 'hud-evals/SheetBench-50') or task JSON file. "
+            "If not provided, looks for task.json in current directory."
+        ),
     ),
     full: bool = typer.Option(
         False,
         "--full",
         help="Run the entire dataset (omit for single-task debug mode)",
     ),
-    agent: str = typer.Option(
-        "claude",
+    agent: str | None = typer.Option(
+        None,
         "--agent",
-        help="Agent backend to use (claude or openai)",
+        help=(
+            "Agent backend to use (claude or openai). If not provided, will prompt interactively."
+        ),
     ),
     model: str | None = typer.Option(
         None,
@@ -785,23 +794,99 @@ def eval(
         help="Comma-separated list of allowed tools",
     ),
     max_concurrent: int = typer.Option(
-        30,
+        50,
         "--max-concurrent",
-        help="Concurrency level for full-dataset mode",
+        help="Max concurrent tasks (prevents rate limits in both asyncio and parallel modes)",
     ),
     max_steps: int = typer.Option(
         30,
         "--max-steps",
         help="Maximum steps per task (default: 10 for single, 50 for full)",
     ),
+    parallel: bool = typer.Option(
+        False,
+        "--parallel",
+        help="Use process-based parallel execution for large datasets (100+ tasks)",
+    ),
+    max_workers: int | None = typer.Option(
+        None,
+        "--max-workers",
+        help="Number of worker processes for parallel mode (auto-optimized if not set)",
+    ),
+    max_concurrent_per_worker: int = typer.Option(
+        20,
+        "--max-concurrent-per-worker",
+        help="Maximum concurrent tasks per worker in parallel mode",
+    ),
 ) -> None:
     """🚀 Run evaluation on datasets or individual tasks with agents."""
+    from hud.utils.design import HUDDesign
+
+    design = HUDDesign()
+
+    # If no source provided, look for task/eval JSON files in current directory
+    if source is None:
+        # Search for JSON files with "task" or "eval" in the name (case-insensitive)
+        json_files = []
+        patterns = [
+            "*task*.json",
+            "*eval*.json",
+            "*Task*.json",
+            "*Eval*.json",
+            "*TASK*.json",
+            "*EVAL*.json",
+        ]
+
+        # First check current directory
+        for pattern in patterns:
+            json_files.extend(Path(".").glob(pattern))
+
+        # If no files found, search recursively (but limit depth to avoid deep searches)
+        if not json_files:
+            for pattern in patterns:
+                # Search up to 2 levels deep
+                json_files.extend(Path(".").glob(f"*/{pattern}"))
+                json_files.extend(Path(".").glob(f"*/*/{pattern}"))
+
+        # Remove duplicates and sort
+        json_files = sorted(set(json_files))
+
+        if not json_files:
+            design.error(
+                "No source provided and no task/eval JSON files found in current directory"
+            )
+            design.info(
+                "Usage: hud eval <source> or create a task JSON file "
+                "(e.g., task.json, eval_config.json)"
+            )
+            raise typer.Exit(1)
+        elif len(json_files) == 1:
+            source = str(json_files[0])
+            design.info(f"Found task file: {source}")
+        else:
+            # Multiple files found, let user choose
+            design.info("Multiple task files found:")
+            file_choice = design.select(
+                "Select a task file to run:",
+                choices=[str(f) for f in json_files],
+            )
+            source = file_choice
+            design.success(f"Selected: {source}")
+
+    # If no agent specified, prompt for selection
+    if agent is None:
+        agent = design.select(
+            "Select an agent to use:",
+            choices=[
+                {"name": "Claude 4 Sonnet", "value": "claude"},
+                {"name": "OpenAI Computer Use", "value": "openai"},
+            ],
+            default="Claude 4 Sonnet",
+        )
+
     # Validate agent choice
     valid_agents = ["claude", "openai"]
     if agent not in valid_agents:
-        from hud.utils.design import HUDDesign
-
-        design = HUDDesign()
         design.error(f"Invalid agent: {agent}. Must be one of: {', '.join(valid_agents)}")
         raise typer.Exit(1)
 
@@ -809,9 +894,6 @@ def eval(
     try:
         from .eval import eval_command
     except ImportError as e:
-        from hud.utils.design import HUDDesign
-
-        design = HUDDesign()
         design.error(
             "Evaluation dependencies are not installed. "
             "Please install with: pip install 'hud-python[agent]'"
@@ -827,7 +909,43 @@ def eval(
         allowed_tools=allowed_tools,
         max_concurrent=max_concurrent,
         max_steps=max_steps,
+        parallel=parallel,
+        max_workers=max_workers,
+        max_concurrent_per_worker=max_concurrent_per_worker,
     )
+
+
+# Add the RL subcommand group
+app.add_typer(rl_app, name="rl")
+
+
+@app.command()
+def hf(
+    tasks_file: Path | None = typer.Argument(  # noqa: B008
+        None, help="JSON file containing tasks (auto-detected if not provided)"
+    ),
+    name: str | None = typer.Option(
+        None, "--name", "-n", help="Dataset name (e.g., 'my-org/my-dataset')"
+    ),
+    push: bool = typer.Option(True, "--push/--no-push", help="Push to HuggingFace Hub"),
+    private: bool = typer.Option(False, "--private", help="Make dataset private on Hub"),
+    update_lock: bool = typer.Option(
+        True, "--update-lock/--no-update-lock", help="Update hud.lock.yaml"
+    ),
+    token: str | None = typer.Option(None, "--token", help="HuggingFace API token"),
+) -> None:
+    """📊 Convert tasks to HuggingFace dataset format.
+
+    Automatically detects task files if not specified.
+    Suggests dataset name based on environment if not provided.
+
+    Examples:
+        hud hf                      # Auto-detect tasks and suggest name
+        hud hf tasks.json           # Use specific file, suggest name
+        hud hf --name my-org/my-tasks  # Auto-detect tasks, use name
+        hud hf tasks.json --name hud-evals/web-tasks --private
+    """
+    hf_command(tasks_file, name, push, private, update_lock, token)
 
 
 def main() -> None:
@@ -846,7 +964,11 @@ def main() -> None:
         console.print("  3. Build for production: [cyan]hud build[/cyan]")
         console.print("  4. Share your environment: [cyan]hud push[/cyan]")
         console.print("  5. Get shared environments: [cyan]hud pull <org/name:tag>[/cyan]")
-        console.print("  6. Run and test: [cyan]hud run <image>[/cyan]\n")
+        console.print("  6. Run and test: [cyan]hud run <image>[/cyan]")
+        console.print("\n[yellow]RL Training:[/yellow]")
+        console.print("  1. Generate config: [cyan]hud rl init my-env:latest[/cyan]")
+        console.print("  2. Create dataset: [cyan]hud hf tasks.json --name my-org/my-tasks[/cyan]")
+        console.print("  3. Start training: [cyan]hud rl --model Qwen/Qwen2.5-3B[/cyan]\n")
 
     app()
 

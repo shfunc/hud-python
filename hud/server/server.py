@@ -33,6 +33,8 @@ def _run_with_sigterm(coro_fn: Callable[..., Any], *args: Any, **kwargs: Any) ->
     """Run *coro_fn* via anyio.run() and cancel on SIGTERM or SIGINT (POSIX)."""
     global _sigterm_received
 
+    sys.stderr.flush()
+
     async def _runner() -> None:
         stop_evt: asyncio.Event | None = None
         if sys.platform != "win32" and os.getenv("FASTMCP_DISABLE_SIGTERM_HANDLER") != "1":
@@ -43,28 +45,46 @@ def _run_with_sigterm(coro_fn: Callable[..., Any], *args: Any, **kwargs: Any) ->
             def handle_sigterm() -> None:
                 global _sigterm_received
                 _sigterm_received = True
-                logger.info("Received SIGTERM signal")
+                logger.info("Received SIGTERM signal, setting shutdown flag")
+                stop_evt.set()
+
+            # Handle SIGINT for hot-reload
+            def handle_sigint() -> None:
+                logger.info("Received SIGINT signal, triggering hot reload...")
+                # Don't set _sigterm_received for SIGINT
                 stop_evt.set()
 
             # Handle both SIGTERM and SIGINT for graceful shutdown
-            if signal.getsignal(signal.SIGTERM) is signal.SIG_DFL:
+            # In Docker containers, we always want to register our handlers
+            try:
                 loop.add_signal_handler(signal.SIGTERM, handle_sigterm)
-            if signal.getsignal(signal.SIGINT) is signal.SIG_DFL:
-                loop.add_signal_handler(signal.SIGINT, stop_evt.set)
+                logger.info("SIGTERM handler registered")
+            except (ValueError, OSError) as e:
+                logger.warning("Could not register SIGTERM handler: %s", e)
 
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(coro_fn, *args, **kwargs)
+            try:
+                loop.add_signal_handler(signal.SIGINT, handle_sigint)
+                logger.info("SIGINT handler registered")
+            except (ValueError, OSError) as e:
+                logger.warning("Could not register SIGINT handler: %s", e)
 
-            if stop_evt is not None:
+        try:
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(coro_fn, *args, **kwargs)
 
-                async def _watch() -> None:
-                    logger.info("Waiting for SIGTERM or SIGINT")
-                    if stop_evt is not None:
-                        await stop_evt.wait()
-                    logger.debug("Received shutdown signal, cancelling tasks...")
-                    tg.cancel_scope.cancel()
+                if stop_evt is not None:
 
-                tg.start_soon(_watch)
+                    async def _watch() -> None:
+                        logger.info("Signal handler ready, waiting for SIGTERM or SIGINT")
+                        if stop_evt is not None:
+                            await stop_evt.wait()
+                        logger.info("Shutdown signal received, initiating graceful shutdown...")
+                        tg.cancel_scope.cancel()
+
+                    tg.start_soon(_watch)
+        except* asyncio.CancelledError:
+            # This ensures the task group cleans up properly
+            logger.info("Task group cancelled, cleaning up...")
 
     anyio.run(_runner)
 
@@ -101,12 +121,29 @@ class MCPServer(FastMCP):
                     yield {}
                 finally:
                     # Only call shutdown handler if SIGTERM was received
+                    logger.info("Lifespan `finally` block reached. Checking for SIGTERM.")
+                    # Force flush logs to ensure they're visible
+                    sys.stderr.flush()
+
                     if self._shutdown_fn is not None and _sigterm_received:
-                        logger.info("SIGTERM received, calling shutdown handler")
-                        await self._shutdown_fn()
+                        logger.info("SIGTERM detected! Calling @mcp.shutdown handler...")
+                        sys.stderr.flush()
+                        try:
+                            await self._shutdown_fn()
+                            logger.info("@mcp.shutdown handler completed successfully.")
+                            sys.stderr.flush()
+                        except Exception as e:
+                            logger.error("Error during @mcp.shutdown: %s", e)
+                            sys.stderr.flush()
                         _sigterm_received = False
                     elif self._shutdown_fn is not None:
-                        logger.debug("Normal shutdown (hot reload), skipping shutdown handler")
+                        logger.info(
+                            "No SIGTERM. This is a hot reload (SIGINT) or normal exit. Skipping @mcp.shutdown handler."  # noqa: E501
+                        )
+                        sys.stderr.flush()
+                    else:
+                        logger.info("No shutdown handler registered.")
+                        sys.stderr.flush()
 
             fastmcp_kwargs["lifespan"] = _lifespan
 

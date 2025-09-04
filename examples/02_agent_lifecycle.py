@@ -19,7 +19,7 @@ import hud
 from hud.datasets import Task
 from hud.clients import MCPClient
 from hud.agents.claude import ClaudeAgent
-from hud.agents.base import text_to_blocks, find_reward, find_content
+from hud.agents.base import find_reward, find_content
 
 
 async def main():

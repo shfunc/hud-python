@@ -286,6 +286,8 @@ class BaseHUDClient(AgentMCPClient):
                 logger.info("📡 Telemetry data fetched:")
                 if "live_url" in telemetry_data:
                     logger.info("   🖥️  Live URL: %s", telemetry_data["live_url"])
+                if "vnc_url" in telemetry_data:
+                    logger.info("   🖥️  VNC URL: %s", telemetry_data["vnc_url"])
                 if "cdp_url" in telemetry_data:
                     logger.info("   🦾  CDP URL: %s", telemetry_data["cdp_url"])
                 if "status" in telemetry_data:

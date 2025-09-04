@@ -76,8 +76,6 @@ async def run_single_task(
 ) -> None:
     """Load one task and execute it, or detect if JSON contains a list and run as dataset."""
 
-    design.info("📊 Loading dataset…")
-
     # Import Task and run_dataset lazily
     try:
         from hud.datasets import Task, run_dataset
@@ -91,6 +89,7 @@ async def run_single_task(
     # Check if it's a JSON file
     path = Path(source)
     if path.exists() and path.suffix == ".json":
+        design.info("📊 Loading task file…")
         with open(path) as f:  # noqa: ASYNC230
             json_data = json.load(f)
 
@@ -160,6 +159,7 @@ async def run_single_task(
             raise typer.Exit(1)
     else:
         # Load from HuggingFace dataset
+        design.info(f"📊 Loading dataset from HuggingFace: {source}…")
         try:
             from datasets import load_dataset
         except ImportError as e:
@@ -194,14 +194,20 @@ async def run_full_dataset(
     agent_type: Literal["claude", "openai"] = "claude",
     model: str | None = None,
     allowed_tools: list[str] | None = None,
-    max_concurrent: int = 30,
-    max_steps: int = 50,
+    max_concurrent: int = 50,
+    max_steps: int = 10,
+    parallel: bool = False,
+    max_workers: int | None = None,
+    max_concurrent_per_worker: int = 25,
 ) -> list[Any]:
-    """Run evaluation across the entire dataset using hud.datasets.run_dataset."""
+    """Run evaluation across the entire dataset.
+
+    Uses either asyncio-based run_dataset or process-based parallel execution
+    depending on the parallel flag."""
 
     # Import run_dataset lazily
     try:
-        from hud.datasets import run_dataset
+        from hud.datasets import run_dataset, run_dataset_parallel, run_dataset_parallel_manual
     except ImportError as e:
         design.error(
             "Dataset dependencies are not installed. "
@@ -261,16 +267,47 @@ async def run_full_dataset(
         if allowed_tools:
             agent_config["allowed_tools"] = allowed_tools
 
-    design.info("🚀 Running evaluation…")
-    return await run_dataset(
-        name=f"Evaluation {dataset_name}",
-        dataset=dataset_or_tasks,
-        agent_class=agent_class,
-        agent_config=agent_config,
-        max_concurrent=max_concurrent,
-        metadata={"dataset": source},
-        max_steps=max_steps,
-    )
+    if parallel:
+        design.info(
+            f"🚀 Running PARALLEL evaluation (workers: {max_workers or 'auto'}, max_concurrent: {max_concurrent})…"  # noqa: E501
+        )
+        if max_workers is None:
+            # Use auto-optimization (now the default run_dataset_parallel)
+            return await run_dataset_parallel(
+                name=f"Evaluation {dataset_name}",
+                dataset=dataset_or_tasks,
+                agent_class=agent_class,
+                agent_config=agent_config,
+                max_concurrent=max_concurrent,
+                metadata={"dataset": source, "parallel": True},
+                max_steps=max_steps,
+                auto_respond=True,
+            )
+        else:
+            # Use manual configuration
+            return await run_dataset_parallel_manual(
+                name=f"Evaluation {dataset_name}",
+                dataset=dataset_or_tasks,
+                agent_class=agent_class,
+                agent_config=agent_config,
+                max_workers=max_workers,
+                max_concurrent_per_worker=max_concurrent_per_worker,
+                max_concurrent=max_concurrent,
+                metadata={"dataset": source, "parallel": True},
+                max_steps=max_steps,
+                auto_respond=True,
+            )
+    else:
+        design.info(f"🚀 Running evaluation (max_concurrent: {max_concurrent})…")
+        return await run_dataset(
+            name=f"Evaluation {dataset_name}",
+            dataset=dataset_or_tasks,
+            agent_class=agent_class,
+            agent_config=agent_config,
+            max_concurrent=max_concurrent,
+            metadata={"dataset": source},
+            max_steps=max_steps,
+        )
 
 
 def eval_command(
@@ -301,12 +338,27 @@ def eval_command(
     max_concurrent: int = typer.Option(
         50,
         "--max-concurrent",
-        help="Concurrency level for full-dataset mode",
+        help="Concurrency level for asyncio mode (ignored in parallel mode)",
     ),
-    max_steps: int = typer.Option(
+    max_steps: int | None = typer.Option(
         None,
         "--max-steps",
         help="Maximum steps per task (default: 10 for single, 50 for full)",
+    ),
+    parallel: bool = typer.Option(
+        False,
+        "--parallel",
+        help="Use process-based parallel execution for large datasets (100+ tasks)",
+    ),
+    max_workers: int | None = typer.Option(
+        None,
+        "--max-workers",
+        help="Number of worker processes for parallel mode (auto-optimized if not set)",
+    ),
+    max_concurrent_per_worker: int = typer.Option(
+        20,
+        "--max-concurrent-per-worker",
+        help="Maximum concurrent tasks per worker in parallel mode",
     ),
 ) -> None:
     """🚀 Run evaluation on datasets or individual tasks with agents.
@@ -315,40 +367,42 @@ def eval_command(
         # Evaluate a single task from SheetBench
         hud eval hud-evals/SheetBench-50
 
-        # Evaluate the FULL SheetBench dataset with Claude
+        # Evaluate the FULL SheetBench dataset with Claude (asyncio mode)
         hud eval hud-evals/SheetBench-50 --full --agent claude
+
+        # Run large dataset with PARALLEL execution (auto-optimized)
+        hud eval hud-evals/OSWorld-Verified-XLang --full --parallel
+
+        # Parallel mode with manual configuration (16 workers, 25 tasks each)
+        hud eval hud-evals/OSWorld-Verified-XLang --full --parallel --max-workers 16
+
+        # Limit total concurrent tasks to prevent rate limits
+        hud eval hud-evals/SheetBench-50 --full --parallel --max-concurrent 20
 
         # Run a single task from a JSON file
         hud eval task.json
 
-        # Run multiple tasks from a JSON file (auto-detects list)
-        hud eval tasks.json  # If tasks.json contains a list, runs all tasks
-
-        # Run JSON list with full dataset mode and concurrency
-        hud eval tasks.json --full --max-concurrent 10
+        # Run multiple tasks from a JSON file with parallel execution
+        hud eval tasks.json --full --parallel
 
         # Run with OpenAI Operator agent
         hud eval hud-evals/OSWorld-Gold-Beta --agent openai
     """
-    import os
-
     from hud.settings import settings
 
     # Check for required API keys
     if agent == "claude":
-        if not settings.anthropic_api_key or not os.environ.get("ANTHROPIC_API_KEY"):
+        if not settings.anthropic_api_key:
             design.error("ANTHROPIC_API_KEY is required for Claude agent")
             design.info("Set it in your environment or .env file: ANTHROPIC_API_KEY=your-key-here")
             raise typer.Exit(1)
-    elif agent == "openai" and (
-        not settings.openai_api_key or not os.environ.get("OPENAI_API_KEY")
-    ):
+    elif agent == "openai" and not settings.openai_api_key:
         design.error("OPENAI_API_KEY is required for OpenAI agent")
         design.info("Set it in your environment or .env file: OPENAI_API_KEY=your-key-here")
         raise typer.Exit(1)
 
     # Check for HUD_API_KEY if using HUD services
-    if not settings.api_key or not os.environ.get("HUD_API_KEY"):
+    if not settings.api_key:
         design.warning("HUD_API_KEY not set. Some features may be limited.")
         design.info("Get your API key at: https://app.hud.so")
 
@@ -371,6 +425,9 @@ def eval_command(
                 allowed_tools=allowed_tools_list,
                 max_concurrent=max_concurrent,
                 max_steps=max_steps,
+                parallel=parallel,
+                max_workers=max_workers,
+                max_concurrent_per_worker=max_concurrent_per_worker,
             )
         )
     else:
