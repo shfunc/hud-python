@@ -13,7 +13,7 @@ Requirements:
 - export OPENAI_API_KEY="your-api-key"  # Or set OPENAI_BASE_URL for custom endpoints
 
 Environment Variables:
-- OPENAI_BASE_URL: Custom OpenAI-compatible API endpoint (optional)
+- OPENAI_BASE_URL: Custom OpenAI-compatible API endpoint
 - OPENAI_API_KEY: API key for authentication
 """
 
@@ -25,39 +25,47 @@ from hud.agents.openai_chat_generic import GenericOpenAIChatAgent
 from hud.clients import MCPClient
 from hud.datasets import Task
 
-from hud.agents.misc import ResponseAgent
-
 
 async def main():
     # Initialize OpenAI client with environment variables
-    base_url = os.getenv("OPENAI_BASE_URL")  # Optional custom endpoint
-    api_key = os.getenv("OPENAI_API_KEY", "EMPTY")  # Default to "EMPTY" for local servers
+    base_url = os.getenv("OPENAI_BASE_URL")
+    api_key = os.getenv("OPENAI_API_KEY")
     
     openai_client = AsyncOpenAI(
-        base_url=base_url,  # None will use default OpenAI endpoint
+        base_url=base_url if base_url else None,  # None will use default OpenAI endpoint
         api_key=api_key,
     )
     
-    # Configure the text-2048 environment
     mcp_config = {
         "local": {
             "command": "docker",
             "args": ["run", "--rm", "-i", "hudevals/hud-text-2048:latest"]
         }
     }
-    
+
+    system_prompt = """You are an expert 2048 game player. Your goal is to reach the tile specified by the user.
+
+HOW 2048 WORKS:
+- 4x4 grid with numbered tiles (2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048...)
+- When you move, all tiles slide in that direction
+- When two tiles with SAME number touch, they merge into one (2+2=4, 4+4=8, etc.)
+- After each move, a new tile (2 or 4) appears randomly
+- Game ends when grid is full and no merges possible
+
+CRITICAL RULES:
+- ALWAYS analyze the board before moving
+- ALWAYS make a tool call for your move
+- Use the 'move' tool with these choices: "up", "down", "left", or "right"
+- Remember: ALL strings in JSON must have quotes!
+- Make exactly ONE move per turn
+- NEVER ask for permission - just keep playing until the game ends
+- Don't ask "Should I continue?" - just make your next move
+
+Example tool call: {"name": "move", "arguments": {"direction": "right"}}"""
+
     # Define the task with game setup and evaluation
     task = Task(
-        prompt="""Play the 2048 game strategically. 
-        
-        Tips for high scores:
-        - Keep your highest tile in a corner (preferably bottom-right)
-        - Build tiles in descending order from that corner
-        - Avoid moving up unless absolutely necessary
-        - Try to keep tiles of similar values adjacent
-        
-        Use the 'move' tool with directions: up, down, left, or right.
-        Aim for the highest possible score!""",
+        prompt="""Aim for the 128 tile (atleast 800 points!)""",
         mcp_config=mcp_config,
         setup_tool={"name": "setup","arguments": {"name": "board", "arguments": {"board_size": 4}},}, # type: ignore
         evaluate_tool={"name": "evaluate", "arguments": {"name": "max_number", "arguments": {}}}, # type: ignore
@@ -65,30 +73,27 @@ async def main():
 
     # Initialize MCP client
     client = MCPClient(mcp_config=task.mcp_config)
-    
+
+    model_name = "gpt-5-mini" # Replace with your model name
+
     # Create OpenAI agent with the text-2048 game tools
     agent = GenericOpenAIChatAgent(
         mcp_client=client,
         openai_client=openai_client,
-        model_name="Qwen/Qwen2.5-3B-Instruct",
+        model_name=model_name,
         allowed_tools=["move"],
         parallel_tool_calls=False,
-        response_agent=ResponseAgent(),
-        system_prompt="""You are an expert 2048 game player. 
-        Make strategic moves to achieve the highest score possible.
-        Always analyze the board state before making a move.""",
+        system_prompt=system_prompt,
     )
 
     agent.metadata = {}
 
-    # Run the game with tracing
     with hud.trace("OpenAI 2048 Game"):
         try:
             print("🎮 Starting 2048 game with OpenAI agent...")
             print(f"🤖 Model: {agent.model_name}")
             print("="*50)
             
-            # Run the task with unlimited steps (game ends when no moves available)
             result = await agent.run(task, max_steps=-1)
             
             # Display results
@@ -111,17 +116,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    # Check for API configuration
-    if not os.getenv("OPENAI_API_KEY") and not os.getenv("OPENAI_BASE_URL"):
-        print("⚠️  Please configure OpenAI API access:")
-        print("   For OpenAI API: export OPENAI_API_KEY='your-api-key'")
-        print("   For local/custom endpoints: export OPENAI_BASE_URL='your-custom-endpoint'")
-        exit(1)
-    
-    # Display configuration
-    if os.getenv("OPENAI_BASE_URL"):
-        print(f"🔗 Using endpoint: {os.getenv('OPENAI_BASE_URL')}")
-    else:
-        print("🔗 Using default OpenAI API endpoint")
-    
+
     asyncio.run(main())
