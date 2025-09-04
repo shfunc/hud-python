@@ -73,13 +73,13 @@ def _process_worker(
         sys.stderr.reconfigure(line_buffering=True)  # type: ignore
     except AttributeError:
         pass
-    
+
     # Set up signal handler for clean interruption
     def signal_handler(signum, frame):
         logger.warning(f"Worker {worker_id}: Received interrupt signal")
         # Raise KeyboardInterrupt to actually interrupt the worker
         raise KeyboardInterrupt(f"Worker {worker_id} interrupted by user")
-    
+
     signal.signal(signal.SIGINT, signal_handler)
 
     # Reinitialize telemetry in this process
@@ -173,13 +173,19 @@ def _process_worker(
         except asyncio.CancelledError:
             logger.info(f"Worker {worker_id}: Tasks cancelled due to interruption")
             # Return error results for all tasks
-            return [(idx, {
-                "error": "Task cancelled (Ctrl+C)",
-                "isError": True,
-                "reward": 0.0,
-                "done": False,
-                "content": "Task cancelled"
-            }) for idx, _ in task_batch]
+            return [
+                (
+                    idx,
+                    {
+                        "error": "Task cancelled (Ctrl+C)",
+                        "isError": True,
+                        "reward": 0.0,
+                        "done": False,
+                        "content": "Task cancelled",
+                    },
+                )
+                for idx, _ in task_batch
+            ]
 
     try:
         # Run the async batch processing
@@ -206,13 +212,18 @@ def _process_worker(
         # Return partial results for tasks that completed
         partial_results = []
         for idx, _ in task_batch:
-            partial_results.append((idx, {
-                "error": "Worker interrupted by user (Ctrl+C)",
-                "isError": True,
-                "reward": 0.0,
-                "done": False,
-                "content": "Task interrupted"
-            }))
+            partial_results.append(
+                (
+                    idx,
+                    {
+                        "error": "Worker interrupted by user (Ctrl+C)",
+                        "isError": True,
+                        "reward": 0.0,
+                        "done": False,
+                        "content": "Task interrupted",
+                    },
+                )
+            )
         return partial_results
     except Exception as e:
         logger.error("[Worker %s] Batch processing failed: %s", worker_id, e)
@@ -443,7 +454,9 @@ async def run_dataset_parallel_manual(
 
                     except Exception as e:
                         # Handle worker failure
-                        logger.error("Worker failed with exception: %s\n%s", e, traceback.format_exc())
+                        logger.error(
+                            "Worker failed with exception: %s\n%s", e, traceback.format_exc()
+                        )
 
                         # Mark all tasks in this batch as failed
                         for index, _ in batch:
@@ -455,16 +468,16 @@ async def run_dataset_parallel_manual(
                                 "content": f"Worker process failed: {e}",
                             }
                             completed += 1
-            
+
             except KeyboardInterrupt:
                 logger.warning("\n⚠️  Parallel evaluation interrupted by user (Ctrl+C)")
                 logger.info("Cancelling pending tasks...")
-                
+
                 # Cancel all pending futures
                 for future in future_to_batch:
                     if not future.done():
                         future.cancel()
-                
+
                 # Mark uncompleted tasks as interrupted
                 for i, r in enumerate(results):
                     if r is None:
@@ -475,10 +488,10 @@ async def run_dataset_parallel_manual(
                             "done": False,
                             "content": "Task interrupted (Ctrl+C)",
                         }
-                
+
                 logger.info(f"Interrupted after {completed}/{total} tasks")
                 raise  # Re-raise to propagate the interrupt
-        
+
         finally:
             # Always shutdown the executor properly
             executor.shutdown(wait=False, cancel_futures=True)
