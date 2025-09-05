@@ -93,7 +93,7 @@ Strategy tips:
     # Initialize MCP client
     client = MCPClient(mcp_config=task.mcp_config)
 
-    model_name = "z-ai/glm-4.5v"  # "z-ai/glm-4.5v", "Qwen/Qwen2.5-VL-7B-Instruct" etc...
+    model_name = "gpt-5-mini"  # "z-ai/glm-4.5v", "Qwen/Qwen2.5-VL-7B-Instruct" etc...
 
     # Create OpenAI agent with browser automation tools
     agent = GenericOpenAIChatAgent(
@@ -107,15 +107,16 @@ Strategy tips:
 
     agent.metadata = {}
 
-    # Run the game with tracing
-    with hud.trace("OpenAI Browser 2048 Game"):
+    # Run the game with job tracking
+    with hud.job("OpenAI Browser 2048 Game", metadata={"model": model_name}) as job:
         try:
             print("🎮 Starting browser-based 2048 game with OpenAI agent...")
             print(f"🤖 Model: {agent.model_name}")
             print(f"🌐 Browser environment running on localhost:8080")
             print("=" * 50)
 
-            result = await agent.run(task, max_steps=100)
+            with hud.trace("Game Execution", job_id=job.id):
+                result = await agent.run(task, max_steps=100)
 
             # Display results
             print("=" * 50)
@@ -124,13 +125,9 @@ Strategy tips:
             if result.info:
                 print(f"📊 Game Stats: {result.info}")
 
-            print("\n📝 Full interaction trace:")
-            for i, msg in enumerate(agent.conversation_history):
-                print(f"  {i + 1} : {msg}")
-                print("-" * 30)
-
         except Exception as e:
             print(f"❌ Error during game: {e}")
+            raise
         finally:
             await client.shutdown()
 

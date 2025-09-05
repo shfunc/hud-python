@@ -94,13 +94,14 @@ Example tool call: {"name": "move", "arguments": {"direction": "right"}}"""
 
     agent.metadata = {}
 
-    with hud.trace("OpenAI 2048 Game"):
+    with hud.job("OpenAI 2048 Game", metadata={"model": model_name}) as job:
         try:
             print("🎮 Starting 2048 game with OpenAI agent...")
             print(f"🤖 Model: {agent.model_name}")
             print("=" * 50)
 
-            result = await agent.run(task, max_steps=100)
+            with hud.trace("Game Execution", job_id=job.id):
+                result = await agent.run(task, max_steps=100)
 
             # Display results
             print("=" * 50)
@@ -108,12 +109,6 @@ Example tool call: {"name": "move", "arguments": {"direction": "right"}}"""
             print(f"🏆 Final Score/Max Tile: {result.reward}")
             if result.info:
                 print(f"📊 Game Stats: {result.info}")
-
-            # Display conversation history
-            print("🗣️ Conversation History:")
-            for i, msg in enumerate(agent.conversation_history):
-                print(f"  {i + 1} : {msg}")
-                print("-" * 30)
 
         except Exception as e:
             print(f"❌ Error during game: {e}")
