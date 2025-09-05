@@ -65,13 +65,13 @@ Example tool call: {"name": "move", "arguments": {"direction": "right"}}"""
 
     # Define the task with game setup and evaluation
     task = Task(
-        prompt="""Aim for the 128 tile (atleast 800 points!)""",
+        prompt="""Aim for the 128 tile (atleast a score of 800!)""",
         mcp_config=mcp_config,
         setup_tool={
             "name": "setup",
             "arguments": {"name": "board", "arguments": {"board_size": 4}},
         },  # type: ignore
-        evaluate_tool={"name": "evaluate", "arguments": {"name": "max_number", "arguments": {}}},  # type: ignore
+        evaluate_tool={"name": "evaluate", "arguments": {"name": "max_number", "arguments": {"target": 128}}},  # type: ignore
     )
 
     # Initialize MCP client
@@ -97,7 +97,7 @@ Example tool call: {"name": "move", "arguments": {"direction": "right"}}"""
             print(f"🤖 Model: {agent.model_name}")
             print("=" * 50)
 
-            result = await agent.run(task, max_steps=-1)
+            result = await agent.run(task, max_steps=100)
 
             # Display results
             print("=" * 50)

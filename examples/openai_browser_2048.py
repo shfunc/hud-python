@@ -55,9 +55,10 @@ HOW 2048 WORKS:
 - Game ends when grid is full and no merges possible
 
 BROWSER INTERACTION USING THE COMPUTER TOOL:
-1. TAKE SCREENSHOTS:
+1. FIRST TURN ONLY - TAKE SCREENSHOT:
    Use: computer(action="screenshot")
-   This captures the current game state
+   This captures the initial game state. Only needed for your first turn.
+   After that, the environment will automatically return an image with each successful move.
 
 2. MAKE MOVES - Use arrow keys by calling the computer tool with action="press":
    - Move UP: computer(action="press", keys=["up"])
@@ -66,9 +67,8 @@ BROWSER INTERACTION USING THE COMPUTER TOOL:
    - Move RIGHT: computer(action="press", keys=["right"])
 
 CRITICAL RULES:
-- Take a screenshot first to see the board state at the start of the game
 - Make exactly ONE move per turn using the press action with arrow keys
-- Continue playing until you reach the target or the game ends
+- Continue playing until you reach the target or the game ends, no need to ask the user for confirmation.
 
 Strategy tips:
 - Keep your highest tiles in a corner
@@ -79,9 +79,9 @@ Strategy tips:
     # Define the task with browser game setup and evaluation
     task = Task(
         prompt="""Play the browser-based 2048 game and try to reach the 128 tile.
-        
-        Take screenshots to see the game board, then make strategic moves using the browser interface.
-        You can use arrow keys or mouse gestures to move tiles.""",
+
+        Start by taking a screenshot to see the initial game board, then make strategic moves using arrow keys.
+        After your first screenshot, the game board will be automatically shown after each successful move.""",
         mcp_config=mcp_config,
         setup_tool={"name": "launch_app", "arguments": {"app_name": "2048"}},  # type: ignore
         evaluate_tool={
@@ -93,7 +93,7 @@ Strategy tips:
     # Initialize MCP client
     client = MCPClient(mcp_config=task.mcp_config)
 
-    model_name = "gpt-5-mini"  # "z-ai/glm-4.5v", "Qwen/Qwen2.5-VL-7B-Instruct" etc...
+    model_name = "z-ai/glm-4.5v"  # "z-ai/glm-4.5v", "Qwen/Qwen2.5-VL-7B-Instruct" etc...
 
     # Create OpenAI agent with browser automation tools
     agent = GenericOpenAIChatAgent(
@@ -115,7 +115,7 @@ Strategy tips:
             print(f"🌐 Browser environment running on localhost:8080")
             print("=" * 50)
 
-            result = await agent.run(task, max_steps=10)
+            result = await agent.run(task, max_steps=100)
 
             # Display results
             print("=" * 50)
@@ -123,6 +123,11 @@ Strategy tips:
             print(f"🏆 Final Score/Max Tile: {result.reward}")
             if result.info:
                 print(f"📊 Game Stats: {result.info}")
+
+            print("\n📝 Full interaction trace:")
+            for i, msg in enumerate(agent.conversation_history):
+                print(f"  {i + 1} : {msg}")
+                print("-" * 30)
 
         except Exception as e:
             print(f"❌ Error during game: {e}")
