@@ -75,33 +75,37 @@ class GenericOpenAIChatAgent(MCPAgent):
             if isinstance(block, types.TextContent):
                 content.append({"type": "text", "text": block.text})
             elif isinstance(block, types.ImageContent):
-                content.append({
-                    "type": "image_url",
-                    "image_url": {"url": f"data:{block.mimeType};base64,{block.data}"}
-                })
-        
+                content.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{block.mimeType};base64,{block.data}"},
+                    }
+                )
+
         return [{"role": "user", "content": content}]
 
     def _sanitize_schema_for_openai(self, schema: dict) -> dict:
         """Convert MCP JSON Schema to OpenAI-compatible format.
-        
+
         Handles unsupported features like anyOf and prefixItems.
         """
         if not isinstance(schema, dict):
             return schema
-            
+
         sanitized = {}
-        
+
         for key, value in schema.items():
             if key == "anyOf" and isinstance(value, list):
                 # Handle anyOf patterns (usually for nullable fields)
-                non_null_types = [v for v in value if not (isinstance(v, dict) and v.get("type") == "null")]
+                non_null_types = [
+                    v for v in value if not (isinstance(v, dict) and v.get("type") == "null")
+                ]
                 if non_null_types:
                     # Use the first non-null type
                     sanitized.update(self._sanitize_schema_for_openai(non_null_types[0]))
                 else:
                     sanitized["type"] = "string"  # Fallback
-                    
+
             elif key == "prefixItems":
                 # Convert prefixItems to simple items
                 sanitized["type"] = "array"
@@ -112,23 +116,32 @@ class GenericOpenAIChatAgent(MCPAgent):
                         sanitized["items"] = {"type": first_item.get("type", "string")}
                     else:
                         sanitized["items"] = {"type": "string"}
-                        
+
             elif key == "properties" and isinstance(value, dict):
                 # Recursively sanitize property schemas
                 sanitized[key] = {
                     prop_name: self._sanitize_schema_for_openai(prop_schema)
                     for prop_name, prop_schema in value.items()
                 }
-                
+
             elif key == "items" and isinstance(value, dict):
                 # Recursively sanitize items schema
                 sanitized[key] = self._sanitize_schema_for_openai(value)
-                
-            elif key in ("type", "description", "enum", "required", "default",
-                        "minimum", "maximum", "minItems", "maxItems"):
+
+            elif key in (
+                "type",
+                "description",
+                "enum",
+                "required",
+                "default",
+                "minimum",
+                "maximum",
+                "minItems",
+                "maxItems",
+            ):
                 # These are supported by OpenAI
                 sanitized[key] = value
-                
+
         return sanitized or {"type": "object"}
 
     def get_tool_schemas(self) -> list[dict]:
@@ -136,12 +149,12 @@ class GenericOpenAIChatAgent(MCPAgent):
         openai_tools = []
         for schema in tool_schemas:
             parameters = schema.get("parameters", {})
-            
+
             if parameters:
                 sanitized_params = self._sanitize_schema_for_openai(parameters)
             else:
                 sanitized_params = {"type": "object", "properties": {}}
-                
+
             openai_tool = {
                 "type": "function",
                 "function": {
@@ -209,7 +222,7 @@ class GenericOpenAIChatAgent(MCPAgent):
         tool_results: list[MCPToolResult],
     ) -> list[Any]:
         """Render MCP tool results as OpenAI messages.
-        
+
         Note: OpenAI tool messages only support string content.
         When images are present, we return both a tool message and a user message.
         """
@@ -219,44 +232,54 @@ class GenericOpenAIChatAgent(MCPAgent):
             items = res.content
             if res.structuredContent and isinstance(res.structuredContent, dict):
                 items = res.structuredContent.get("result", res.content)
-            
+
             # Separate text and image content
             text_parts = []
             image_parts = []
-            
+
             for item in items:
                 if isinstance(item, dict):
                     if item.get("type") == "text":
                         text_parts.append(item.get("text", ""))
                     elif item.get("type") == "image":
-                        image_parts.append({
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:{item.get('mimeType', 'image/png')};base64,{item.get('data', '')}"
+                        image_parts.append(
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:{item.get('mimeType', 'image/png')};base64,{item.get('data', '')}"
+                                },
                             }
-                        })
+                        )
                 elif isinstance(item, types.TextContent):
                     text_parts.append(item.text)
                 elif isinstance(item, types.ImageContent):
-                    image_parts.append({
-                        "type": "image_url",
-                        "image_url": {"url": f"data:{item.mimeType};base64,{item.data}"}
-                    })
-            
+                    image_parts.append(
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:{item.mimeType};base64,{item.data}"},
+                        }
+                    )
+
             text_content = "".join(text_parts) if text_parts else "Tool executed successfully"
-            rendered.append({
-                "role": "tool",
-                "tool_call_id": call.id,
-                "content": text_content,
-            })
-            
+            rendered.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": call.id,
+                    "content": text_content,
+                }
+            )
+
             # If there are images, add them as a separate user message
             if image_parts:
                 # Add a user message with the images
-                content_with_images = [{"type": "text", "text": "Tool returned the following:"}] + image_parts
-                rendered.append({
-                    "role": "user",
-                    "content": content_with_images,
-                })
-            
+                content_with_images = [
+                    {"type": "text", "text": "Tool returned the following:"}
+                ] + image_parts
+                rendered.append(
+                    {
+                        "role": "user",
+                        "content": content_with_images,
+                    }
+                )
+
         return rendered

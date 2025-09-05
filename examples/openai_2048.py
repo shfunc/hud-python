@@ -71,7 +71,10 @@ Example tool call: {"name": "move", "arguments": {"direction": "right"}}"""
             "name": "setup",
             "arguments": {"name": "board", "arguments": {"board_size": 4}},
         },  # type: ignore
-        evaluate_tool={"name": "evaluate", "arguments": {"name": "max_number", "arguments": {"target": 128}}},  # type: ignore
+        evaluate_tool={
+            "name": "evaluate",
+            "arguments": {"name": "max_number", "arguments": {"target": 128}},
+        },  # type: ignore
     )
 
     # Initialize MCP client
