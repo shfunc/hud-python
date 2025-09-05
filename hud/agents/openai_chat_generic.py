@@ -242,11 +242,13 @@ class GenericOpenAIChatAgent(MCPAgent):
                     if item.get("type") == "text":
                         text_parts.append(item.get("text", ""))
                     elif item.get("type") == "image":
+                        mime_type = item.get("mimeType", "image/png")
+                        data = item.get("data", "")
                         image_parts.append(
                             {
                                 "type": "image_url",
                                 "image_url": {
-                                    "url": f"data:{item.get('mimeType', 'image/png')};base64,{item.get('data', '')}"
+                                    "url": f"data:{mime_type};base64,{data}"
                                 },
                             }
                         )
@@ -273,8 +275,9 @@ class GenericOpenAIChatAgent(MCPAgent):
             if image_parts:
                 # Add a user message with the images
                 content_with_images = [
-                    {"type": "text", "text": "Tool returned the following:"}
-                ] + image_parts
+                    {"type": "text", "text": "Tool returned the following:"},
+                    *image_parts
+                ]
                 rendered.append(
                     {
                         "role": "user",
