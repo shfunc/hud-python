@@ -139,29 +139,31 @@ OpenAI's Operator agent implementation.
 from hud.agents import GenericOpenAIChatAgent
 ```
 
-Generic OpenAI chat completion agent for any OpenAI-compatible API.
+OpenAI-compatible chat.completions agent that works with any API implementing the OpenAI schema (e.g., OpenAI, vLLM, Ollama, Together, etc.).
 
 **Constructor Parameters:**
 | Parameter | Type | Description | Default |
 |-----------|------|-------------|---------|
-| `model_client` | `AsyncOpenAI` | OpenAI-compatible client | Required |
-| `model` | `str` | Model name | Required |
-| `max_tokens` | `int` | Maximum response tokens | `4096` |
+| `openai_client` | `AsyncOpenAI` | OpenAI-compatible client instance | Required |
+| `model_name` | `str` | Chat model name | `"gpt-4o-mini"` |
+| `parallel_tool_calls` | `bool` | Allow multiple tool calls per turn | `False` |
+| `completion_kwargs` | `dict[str, Any]` | Extra args for `chat.completions.create` (e.g., temperature) | `{}` |
 
-**Example:**
+**Example (local or custom endpoint):**
 ```python
-# Use with local LLM
 from openai import AsyncOpenAI
 
-client = AsyncOpenAI(
-    base_url="http://localhost:11434/v1",  # Ollama
-    api_key="not-needed"
+openai_client = AsyncOpenAI(
+    base_url="http://localhost:11434/v1",  # e.g., Ollama
+    api_key="not-needed",
 )
 
-agent = GenericOpenAIChatAgent(
-    model_client=client,
-    model="llama3.1"
-)
+ agent = GenericOpenAIChatAgent(
+     openai_client=openai_client,
+     model_name="llama3.1",
+     parallel_tool_calls=False,
+     completion_kwargs={"temperature": 0.2},  # forwarded to OpenAI
+ )
 ```
 
 ### LangChainAgent
@@ -385,4 +387,3 @@ class MyCustomAgent(MCPAgent):
 - [Create Agents](/evaluate-agents/create-agents) - Tutorial on building agents
 - [Tasks](/reference/tasks) - Task configuration reference
 - [Architecture](/core-concepts/architecture) - How agents fit in HUD
-

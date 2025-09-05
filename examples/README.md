@@ -20,6 +20,19 @@ python examples/01_hello_2048.py
 
 > | Requires Docker and `ANTHROPIC_API_KEY` environment variable.
 
+### 03_browser_agent_loop.py
+Quick start for the browser environment (Claude). Supports multiple demo apps.
+
+```bash
+# 2048 (default)
+python examples/03_browser_agent_loop.py
+
+# Todo app
+python examples/03_browser_agent_loop.py --app todo
+```
+
+> | Requires Docker (exposes port 8080) and `ANTHROPIC_API_KEY`.
+
 ## Core Patterns
 
 ### 02_agent_lifecycle.py
@@ -50,35 +63,12 @@ Using the legacy `mcp_use` client for multi-server setups.
 ### integration_otel.py
 Custom OpenTelemetry backend integration (e.g., Jaeger).
 
-## Prerequisites
+### openai_compatible_agent.py
+OpenAI-compatible chat.completions agent with both text and browser 2048 environments.
 
-| Requirement | Used For |
-|-------------|----------|
-| Docker | Running environment containers |
-| `HUD_API_KEY` | Cloud deployments and telemetry |
-| `ANTHROPIC_API_KEY` | Claude agent examples |
-
-## Common Pattern
-
-All examples follow this structure:
-
-```python
-import asyncio, hud
-from hud.datasets import Task
-from hud.agents import ClaudeAgent
-
-async def main():
-    with hud.trace("example-name"):
-        task = Task(
-            prompt="Your task here",
-            mcp_config={...}
-        )
-        
-        agent = ClaudeAgent()
-        result = await agent.run(task)
-        print(f"Reward: {result.reward}")
-
-asyncio.run(main())
+```bash
+export OPENAI_API_KEY=your-key           # or dummy value for local servers
+# export OPENAI_BASE_URL=http://localhost:8000/v1  # e.g., vllm
+python examples/openai_compatible_agent.py --mode text     # text environment
+python examples/openai_compatible_agent.py --mode browser  # browser environment
 ```
-
-> | The agent automatically creates an MCP client from `task.mcp_config` if none is provided.
