@@ -247,9 +247,7 @@ class GenericOpenAIChatAgent(MCPAgent):
                         image_parts.append(
                             {
                                 "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:{mime_type};base64,{data}"
-                                },
+                                "image_url": {"url": f"data:{mime_type};base64,{data}"},
                             }
                         )
                 elif isinstance(item, types.TextContent):
@@ -276,7 +274,7 @@ class GenericOpenAIChatAgent(MCPAgent):
                 # Add a user message with the images
                 content_with_images = [
                     {"type": "text", "text": "Tool returned the following:"},
-                    *image_parts
+                    *image_parts,
                 ]
                 rendered.append(
                     {
