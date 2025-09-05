@@ -75,8 +75,8 @@ def _process_worker(
         pass
 
     # Set up signal handler for clean interruption
-    def signal_handler(signum, frame):
-        logger.warning(f"Worker {worker_id}: Received interrupt signal")
+    def signal_handler(signum: int, frame: Any) -> None:
+        logger.warning("Worker %s: Received interrupt signal", worker_id)
         # Raise KeyboardInterrupt to actually interrupt the worker
         raise KeyboardInterrupt(f"Worker {worker_id} interrupted by user")
 
@@ -171,7 +171,7 @@ def _process_worker(
             results = await asyncio.gather(*tasks, return_exceptions=False)
             return results
         except asyncio.CancelledError:
-            logger.info(f"Worker {worker_id}: Tasks cancelled due to interruption")
+            logger.info("Worker %s: Tasks cancelled due to interruption", worker_id)
             # Return error results for all tasks
             return [
                 (
@@ -208,7 +208,7 @@ def _process_worker(
 
         return results
     except KeyboardInterrupt:
-        logger.info(f"Worker {worker_id}: Interrupted by user, stopping gracefully")
+        logger.info("Worker %s: Interrupted by user, stopping gracefully", worker_id)
         # Return partial results for tasks that completed
         partial_results = []
         for idx, _ in task_batch:
@@ -489,7 +489,7 @@ async def run_dataset_parallel_manual(
                             "content": "Task interrupted (Ctrl+C)",
                         }
 
-                logger.info(f"Interrupted after {completed}/{total} tasks")
+                logger.info("Interrupted after %s/%s tasks", completed, total)
                 raise  # Re-raise to propagate the interrupt
 
         finally:
