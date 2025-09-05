@@ -190,7 +190,7 @@ agent = OperatorAgent(
 
 ## GenericOpenAIChatAgent
 
-Generic OpenAI-compatible chat agent for custom models.
+OpenAI-compatible chat.completions agent for custom models and endpoints.
 
 ```python
 from hud.agents import GenericOpenAIChatAgent
@@ -200,27 +200,48 @@ from hud.agents import GenericOpenAIChatAgent
 
 ```python
 GenericOpenAIChatAgent(
-    model: str = "gpt-4o",
-    base_url: str | None = None,
+    *,
+    openai_client: AsyncOpenAI,
+    model_name: str = "gpt-4o-mini",
+    parallel_tool_calls: bool = False,
+    completion_kwargs: dict[str, Any] | None = None,
     **kwargs
 )
 ```
 
-<ParamField body="model" type="str" default="gpt-4o">
-  Model name to use
+<!-- MCP client is optional via kwargs; typically auto-created from Task.mcp_config -->
+
+<ParamField body="openai_client" type="AsyncOpenAI" required>
+  OpenAI-compatible client (can target OpenAI, vLLM, Ollama, etc.)
 </ParamField>
 
-<ParamField body="base_url" type="str" optional>
-  Custom API endpoint for OpenAI-compatible servers
+<ParamField body="model_name" type="str" default="gpt-4o-mini">
+  Name of the chat model to use
+</ParamField>
+
+<ParamField body="parallel_tool_calls" type="bool" default="false">
+  Whether to execute multiple tool calls in a single step
+</ParamField>
+
+<ParamField body="completion_kwargs" type="dict[str, Any]" optional>
+  Extra keyword arguments forwarded to `openai.chat.completions.create` (e.g., `temperature`, `top_p`).
+  Core fields (`model`, `messages`, `tools`, `parallel_tool_calls`) are protected and cannot be overridden. Use this field to set `logprobs` if needed.
 </ParamField>
 
 ### Example
 
 ```python
-# Custom OpenAI-compatible model
+from openai import AsyncOpenAI
+
+openai_client = AsyncOpenAI(
+    base_url="http://localhost:8000/v1",  # Custom server
+    api_key="local-key",
+)
+
 agent = GenericOpenAIChatAgent(
-    model="custom-model",
-    base_url="http://localhost:8000/v1"
+    openai_client=openai_client,
+    model_name="custom-model",
+    completion_kwargs={"temperature": 0.1, "seed": 7},
 )
 ```
 
@@ -344,5 +365,3 @@ except Exception as e:
 <Card title="Environments API" icon="cube" href="/reference/api/environments">
   Environment and server API reference
 </Card>
-
-

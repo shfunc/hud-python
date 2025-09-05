@@ -7,7 +7,7 @@ through the existing :class:`hud.agent.MCPAgent` scaffolding.
 Key points:
 - Stateless, no special server-side conversation state is assumed.
 - Accepts an :class:`openai.AsyncOpenAI` client, caller can supply their own
-  base_url / api_key (e.g. ART, llama.cpp, together.ai, …)
+  base_url / api_key (e.g. llama.cpp, together.ai, …)
 - All HUD features (step_count, OTel spans, tool filtering, screenshots, …)
   come from the ``MCPAgent`` base class, we only implement the three abstract
   methods
@@ -30,8 +30,6 @@ if TYPE_CHECKING:
     from openai import AsyncOpenAI
     from openai.types.chat import ChatCompletionToolParam
 
-    from hud.clients import AgentMCPClient
-
 logger = logging.getLogger(__name__)
 
 
@@ -40,19 +38,19 @@ class GenericOpenAIChatAgent(MCPAgent):
 
     def __init__(
         self,
-        mcp_client: AgentMCPClient,
         *,
         openai_client: AsyncOpenAI,
         model_name: str = "gpt-4o-mini",
         parallel_tool_calls: bool = False,
-        logprobs: bool = False,
+        completion_kwargs: dict[str, Any] | None = None,
         **agent_kwargs: Any,
     ) -> None:
-        super().__init__(mcp_client=mcp_client, **agent_kwargs)
+        # Accept base-agent settings via **agent_kwargs (e.g., mcp_client, system_prompt, etc.)
+        super().__init__(**agent_kwargs)
         self.oai = openai_client
         self.model_name = model_name
         self.parallel_tool_calls = parallel_tool_calls
-        self.logprobs = logprobs
+        self.completion_kwargs: dict[str, Any] = completion_kwargs or {}
         self.conversation_history = []
 
     @staticmethod
@@ -177,12 +175,15 @@ class GenericOpenAIChatAgent(MCPAgent):
         # Convert MCP tool schemas to OpenAI format
         mcp_schemas = self.get_tool_schemas()
 
+        protected_keys = {"model", "messages", "tools", "parallel_tool_calls"}
+        extra = {k: v for k, v in (self.completion_kwargs or {}).items() if k not in protected_keys}
+
         response = await self.oai.chat.completions.create(
             model=self.model_name,
             messages=messages,
             tools=cast("list[ChatCompletionToolParam]", mcp_schemas),
             parallel_tool_calls=self.parallel_tool_calls,
-            logprobs=self.logprobs,
+            **extra,
         )
 
         choice = response.choices[0]

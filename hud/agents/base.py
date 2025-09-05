@@ -30,9 +30,19 @@ class MCPAgent(ABC):
     """
     Base class for MCP-enabled agents.
 
-    This class provides the foundation for agents that interact with MCP servers,
-    handling tool discovery and filtering while leaving provider-specific
-    implementation details to subclasses.
+    Provides common behavior for agents that interact with MCP servers, including:
+    - Client management: accepts an `AgentMCPClient` or auto-creates one at
+      runtime when `run()` is called with a `Task` that includes `mcp_config`.
+    - Tool lifecycle: discovery, filtering (`allowed_tools`, `disallowed_tools`),
+      and automatic marking of lifecycle tools (setup/evaluate) from a `Task`.
+    - Messaging: system prompt handling, optional inclusion of setup output on
+      the first turn, and control over initial screenshots.
+    - Telemetry & UX: standardized logging/printing via `HUDDesign` and optional
+      automatic tracing (`auto_trace`).
+
+    Subclasses implement provider-specific formatting and response fetching
+    by overriding these abstract methods: `get_system_messages`, `get_response`,
+    `format_blocks`, and `format_tool_results`.
     """
 
     metadata: dict[str, Any]
@@ -59,14 +69,23 @@ class MCPAgent(ABC):
         Initialize the base MCP agent.
 
         Args:
-            mcp_client: AgentMCPClient instance for server connections
-            allowed_tools: List of tool names to allow (None = all tools)
-            disallowed_tools: List of tool names to disallow
-            lifecycle_tools: List of tool names to use for lifecycle tools
-            initial_screenshot: Whether to capture screenshot before first prompt
-            system_prompt: System prompt to use
-            append_setup_output: Whether to append setup tool output to initial messages
-            verbose: If True, sets logging level to INFO. If False, only WARNING and above.
+            mcp_client: Client for connecting to MCP servers. If None, a client
+                is auto-created at runtime when `run()` is called with a `Task`
+                that provides `mcp_config`.
+            allowed_tools: Names of tools to allow (None means allow all).
+            disallowed_tools: Names of tools to always exclude.
+            lifecycle_tools: Tools reserved for lifecycle phases (e.g., setup,
+                evaluate). These are hidden from normal tool calling.
+            system_prompt: System prompt to seed the conversation.
+            append_setup_output: Whether to append setup tool output to the
+                first turn's messages.
+            initial_screenshot: Whether to include an initial screenshot before
+                the first prompt (when supported by the environment).
+            model_name: Label used in telemetry/logging to identify the model.
+            response_agent: Optional automation that can respond to the model's
+                outputs to keep the loop going (e.g., auto-continue/stop).
+            auto_trace: If True, automatically creates a trace/span for runs.
+            verbose: If True, increases logging verbosity for developer UX.
         """
 
         self.mcp_client = mcp_client
