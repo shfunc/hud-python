@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Protocol, overload, runtime_checkable
 
 from mcp.types import Implementation
 
+from hud.settings import settings
 from hud.types import MCPToolCall, MCPToolResult
 from hud.utils.mcp import setup_hud_telemetry
 from hud.version import __version__ as hud_version
@@ -130,31 +131,19 @@ class BaseHUDClient(AgentMCPClient):
         logger.debug("Initializing MCP client...")
 
         try:
+            # Check if API key is set for HUD API
+            for server_config in self._mcp_config.values():
+                url = server_config.get("url", "")
+                if "mcp.hud.so" in url and not settings.api_key:
+                    raise RuntimeError(
+                        "Authentication failed for the HUD API. "
+                        "Please ensure your HUD_API_KEY environment variable is set correctly. "
+                        "You can get an API key at https://app.hud.so"
+                    )
             # Subclasses implement connection
             await self._connect(self._mcp_config)
-        except RuntimeError as e:
-            # Re-raise authentication errors with clear message
-            if "Authentication failed" in str(e):
-                raise
-            raise
         except Exception as e:
-            # Check for authentication errors in the exception chain
-            error_msg = str(e)
-            if "401" in error_msg or "Unauthorized" in error_msg:
-                # Check if connecting to HUD API
-                for server_config in self._mcp_config.values():
-                    url = server_config.get("url", "")
-                    if "mcp.hud.so" in url:
-                        raise RuntimeError(
-                            "Authentication failed for HUD API. "
-                            "Please ensure your HUD_API_KEY environment variable is set correctly. "
-                            "You can get an API key at https://app.hud.so"
-                        ) from e
-                raise RuntimeError(
-                    "Authentication failed (401 Unauthorized). "
-                    "Please check your credentials or API key."
-                ) from e
-            raise
+            raise e
 
         # Common hud behavior - fetch telemetry
         await self._fetch_telemetry()

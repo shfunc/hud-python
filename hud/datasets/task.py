@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections import defaultdict
 from string import Template
 from typing import Any
@@ -11,6 +12,8 @@ from pydantic import BaseModel, Field, field_validator
 
 from hud.settings import settings
 from hud.types import MCPToolCall
+
+logger = logging.getLogger(__name__)
 
 
 class Task(BaseModel):
@@ -90,6 +93,8 @@ class Task(BaseModel):
 
         if settings.api_key:
             mapping["HUD_API_KEY"] = settings.api_key
+        else:
+            logger.error("HUD_API_KEY is not set, tracing and remote training will not work")
 
         def substitute_in_value(obj: Any) -> Any:
             """Recursively substitute variables in nested structures."""
