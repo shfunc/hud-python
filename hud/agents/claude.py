@@ -306,35 +306,49 @@ class ClaudeAgent(MCPAgent):
         """Convert MCP tools to Claude tool format."""
         claude_tools = []
         self._claude_to_mcp_tool_map = {}  # Reset mapping
-
+        
+        # Find computer tool by priority
+        computer_tool_priority = ["anthropic_computer", "computer_anthropic", "computer"]
+        selected_computer_tool = None
+        
+        for priority_name in computer_tool_priority:
+            for tool in self._available_tools:
+                if tool.name == priority_name:
+                    selected_computer_tool = tool
+                    break
+            if selected_computer_tool:
+                break
+        
+        # Add the selected computer tool if found
+        if selected_computer_tool:
+            claude_tool = {
+                "type": "computer_20250124",
+                "name": "computer",
+                "display_width_px": self.metadata["display_width"],
+                "display_height_px": self.metadata["display_height"],
+            }
+            # Map Claude's "computer" back to the actual MCP tool name
+            self._claude_to_mcp_tool_map["computer"] = selected_computer_tool.name
+            claude_tools.append(claude_tool)
+            logger.debug(f"Using {selected_computer_tool.name} as computer tool for Claude")
+        
+        # Add other non-computer tools
         for tool in self._available_tools:
-            # Special handling for computer use tools
-            if tool.name in ["computer", "computer_anthropic", "anthropic_computer"]:
-                # Use Claude's native computer use format with configurable dimensions
-                claude_tool = {
-                    "type": "computer_20250124",
-                    "name": "computer",
-                    "display_width_px": self.metadata["display_width"],
-                    "display_height_px": self.metadata["display_height"],
-                }
-                # Map Claude's "computer" back to the actual MCP tool name
-                self._claude_to_mcp_tool_map["computer"] = tool.name
-            elif tool.name not in self.lifecycle_tools:
-                # Convert regular tools
-                claude_tool = {
-                    "name": tool.name,
-                    "description": tool.description or f"Execute {tool.name}",
-                    "input_schema": tool.inputSchema
-                    or {
-                        "type": "object",
-                        "properties": {},
-                    },
-                }
-                # Direct mapping for non-computer tools
-                self._claude_to_mcp_tool_map[tool.name] = tool.name
-            else:
+            # Skip computer tools (already handled) and lifecycle tools
+            if tool.name in computer_tool_priority or tool.name in self.lifecycle_tools:
                 continue
-
+                
+            claude_tool = {
+                "name": tool.name,
+                "description": tool.description or f"Execute {tool.name}",
+                "input_schema": tool.inputSchema
+                or {
+                    "type": "object",
+                    "properties": {},
+                },
+            }
+            # Direct mapping for non-computer tools
+            self._claude_to_mcp_tool_map[tool.name] = tool.name
             claude_tools.append(claude_tool)
 
         self.claude_tools = claude_tools
