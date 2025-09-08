@@ -153,7 +153,7 @@ class PlaywrightTool(BaseTool):
         """Ensure browser is launched and ready."""
         if self._browser is None or not self._browser.is_connected():
             if self._cdp_url:
-                logger.info("Connecting to remote browser via CDP: %s", self._cdp_url)
+                logger.info("Connecting to remote browser via CDP")
             else:
                 logger.info("Launching Playwright browser...")
 
