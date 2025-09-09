@@ -43,6 +43,12 @@ app = typer.Typer(
 
 console = Console()
 
+# Standard support hint appended to error outputs
+SUPPORT_HINT = (
+    "If this looks like an issue with the sdk, please make a github issue at "
+    "https://github.com/hud-evals/hud-python/issues"
+)
+
 
 # Capture IMAGE and any following Docker args as a single variadic argument list.
 @app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
@@ -818,6 +824,11 @@ def eval(
         "--max-concurrent-per-worker",
         help="Maximum concurrent tasks per worker in parallel mode",
     ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        help="Enable verbose output from the agent",
+    ),
 ) -> None:
     """🚀 Run evaluation on datasets or individual tasks with agents."""
     from hud.utils.design import HUDDesign
@@ -912,6 +923,7 @@ def eval(
         parallel=parallel,
         max_workers=max_workers,
         max_concurrent_per_worker=max_concurrent_per_worker,
+        verbose=verbose,
     )
 
 
@@ -950,27 +962,47 @@ def hf(
 
 def main() -> None:
     """Main entry point for the CLI."""
-    # Show header for main help
-    if len(sys.argv) == 1 or (len(sys.argv) == 2 and sys.argv[1] in ["--help", "-h"]):
-        console.print(
-            Panel.fit(
-                "[bold cyan]🚀 HUD CLI[/bold cyan]\nMCP Environment Analysis & Debugging",
-                border_style="cyan",
+    try:
+        # Show header for main help
+        if len(sys.argv) == 1 or (len(sys.argv) == 2 and sys.argv[1] in ["--help", "-h"]):
+            console.print(
+                Panel.fit(
+                    "[bold cyan]🚀 HUD CLI[/bold cyan]\nMCP Environment Analysis & Debugging",
+                    border_style="cyan",
+                )
             )
-        )
-        console.print("\n[yellow]Quick Start:[/yellow]")
-        console.print("  1. Create a new environment: [cyan]hud init my-env && cd my-env[/cyan]")
-        console.print("  2. Develop with hot-reload: [cyan]hud dev --interactive[/cyan]")
-        console.print("  3. Build for production: [cyan]hud build[/cyan]")
-        console.print("  4. Share your environment: [cyan]hud push[/cyan]")
-        console.print("  5. Get shared environments: [cyan]hud pull <org/name:tag>[/cyan]")
-        console.print("  6. Run and test: [cyan]hud run <image>[/cyan]")
-        console.print("\n[yellow]RL Training:[/yellow]")
-        console.print("  1. Generate config: [cyan]hud rl init my-env:latest[/cyan]")
-        console.print("  2. Create dataset: [cyan]hud hf tasks.json --name my-org/my-tasks[/cyan]")
-        console.print("  3. Start training: [cyan]hud rl --model Qwen/Qwen2.5-3B[/cyan]\n")
+            console.print("\n[yellow]Quick Start:[/yellow]")
+            console.print(
+                "  1. Create a new environment: "
+                "[cyan]hud init my-env && cd my-env[/cyan]"
+            )
+            console.print("  2. Develop with hot-reload: [cyan]hud dev --interactive[/cyan]")
+            console.print("  3. Build for production: [cyan]hud build[/cyan]")
+            console.print("  4. Share your environment: [cyan]hud push[/cyan]")
+            console.print("  5. Get shared environments: [cyan]hud pull <org/name:tag>[/cyan]")
+            console.print("  6. Run and test: [cyan]hud run <image>[/cyan]")
+            console.print("\n[yellow]RL Training:[/yellow]")
+            console.print("  1. Generate config: [cyan]hud rl init my-env:latest[/cyan]")
+            console.print(
+                "  2. Create dataset: "
+                "[cyan]hud hf tasks.json --name my-org/my-tasks[/cyan]"
+            )
+            console.print("  3. Start training: [cyan]hud rl --model Qwen/Qwen2.5-3B[/cyan]\n")
 
-    app()
+        app()
+    except typer.Exit as e:
+        # Append SDK support hint for non-zero exits
+        try:
+            exit_code = getattr(e, "exit_code", 0)
+        except Exception:
+            exit_code = 1
+        if exit_code != 0:
+            from hud.utils.design import design
+
+            design.info(SUPPORT_HINT)
+        raise
+    except Exception:
+        raise
 
 
 if __name__ == "__main__":

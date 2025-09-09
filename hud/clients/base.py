@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Protocol, overload, runtime_checkable
 
 from mcp.types import Implementation
 
+from hud.shared.exceptions import HudAuthenticationError, HudException
 from hud.types import MCPToolCall, MCPToolResult
 from hud.utils.mcp import setup_hud_telemetry
 from hud.version import __version__ as hud_version
@@ -120,8 +121,10 @@ class BaseHUDClient(AgentMCPClient):
 
         self._mcp_config = mcp_config or self._mcp_config
         if self._mcp_config is None:
-            raise ValueError(
-                "An MCP server configuration is required"
+            from hud.shared.exceptions import HudConfigError
+            
+            raise HudConfigError(
+                "An MCP server configuration is required. "
                 "Either pass it to the constructor or call initialize with a configuration"
             )
 
@@ -135,14 +138,18 @@ class BaseHUDClient(AgentMCPClient):
                 url = server_config.get("url", "")
                 headers = server_config.get("headers", {})
                 if "mcp.hud.so" in url and len(headers.get("Authorization", "")) < 10:
-                    raise RuntimeError(
-                        "Please ensure your HUD_API_KEY environment variable is set correctly."
-                        "You can get an API key at https://app.hud.so"
+                    raise HudAuthenticationError(
+                        f"Sending authorization \"{headers.get('Authorization', '')}\", which may"
+                        " be incomplete. Ensure HUD_API_KEY environment variable is set or send it"
+                        " as a header. You can get an API key at https://app.hud.so"
                     )
             # Subclasses implement connection
             await self._connect(self._mcp_config)
+        except HudException:
+            raise
         except Exception as e:
-            raise e
+            # Auto-converts to appropriate HUD exception type with hints
+            raise HudException from e
 
         # Common hud behavior - fetch telemetry
         await self._fetch_telemetry()
@@ -168,7 +175,7 @@ class BaseHUDClient(AgentMCPClient):
             self._initialized = False
             logger.info("Client disconnected")
         else:
-            logger.warning("Client is not running, cannot disconnect")
+            logger.debug("Client was not initialized, skipping disconnect")
 
     @overload
     async def call_tool(self, tool_call: MCPToolCall, /) -> MCPToolResult: ...
@@ -236,7 +243,9 @@ class BaseHUDClient(AgentMCPClient):
     def mcp_config(self) -> dict[str, dict[str, Any]]:
         """Get the MCP config."""
         if self._mcp_config is None:
-            raise ValueError("Please initialize the client with a valid MCP config")
+            from hud.shared.exceptions import HudConfigError
+            
+            raise HudConfigError("Please initialize the client with a valid MCP config")
         return self._mcp_config
 
     async def __aenter__(self: Any) -> Any:
@@ -305,7 +314,9 @@ class BaseHUDClient(AgentMCPClient):
             - metadata: Environment metadata
         """
         if not self._initialized:
-            raise ValueError("Client must be initialized before analyzing the environment")
+            from hud.shared.exceptions import HudClientError
+            
+            raise HudClientError("Client must be initialized before analyzing the environment")
 
         analysis: dict[str, Any] = {
             "tools": [],

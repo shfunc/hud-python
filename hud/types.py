@@ -15,19 +15,29 @@ class MCPToolCall(CallToolRequestParams):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))  # Unique identifier for reference
 
     def __str__(self) -> str:
-        """Format tool call with Rich markup for HUD design."""
+        """Format tool call as plain text."""
+        args_str = ""
+        if self.arguments:
+            try:
+                args_str = json.dumps(self.arguments, separators=(",", ":"))
+                if len(args_str) > 60:
+                    args_str = args_str[:57] + "..."
+            except (TypeError, ValueError):
+                args_str = str(self.arguments)[:60]
+        
+        return f"→ {self.name}({args_str})"
+    
+    def __rich__(self) -> str:
+        """Rich representation with color formatting."""
         from hud.utils.design import design
-
         return design.format_tool_call(self.name, self.arguments)
 
 
 class MCPToolResult(CallToolResult):
     """A tool result."""
 
-    def __str__(self) -> str:
-        """Format tool result with Rich markup for HUD design - compact version."""
-        from hud.utils.design import design
-
+    def _get_content_summary(self) -> str:
+        """Extract a summary of the content."""
         # Extract content summary
         content_summary = ""
         if self.content:
@@ -48,7 +58,23 @@ class MCPToolResult(CallToolResult):
                 content_summary = json.dumps(self.structuredContent, separators=(",", ":"))
             except (TypeError, ValueError):
                 content_summary = str(self.structuredContent)
+        
+        return content_summary
 
+    def __str__(self) -> str:
+        """Format tool result as plain text for compatibility."""
+        content_summary = self._get_content_summary()
+        
+        # Plain text format with unicode symbols
+        if self.isError:
+            return f"✗ {content_summary}"
+        else:
+            return f"✓ {content_summary}"
+    
+    def __rich__(self) -> str:
+        """Rich representation with color formatting."""
+        from hud.utils.design import design
+        content_summary = self._get_content_summary()
         return design.format_tool_result(content_summary, self.isError)
 
 
