@@ -111,10 +111,12 @@ class MCPAgent(ABC):
         # Initialize these here so methods can be called before initialize()
         self._available_tools: list[types.Tool] = []
         self._tool_map: dict[str, types.Tool] = {}  # Simplified: just name to tool
-        self.screenshot_history: list[str] = []
+        self.response_tool_name = None
+        self.initialization_complete = False
+
+        # Trace
         self._auto_trace = auto_trace
         self._auto_trace_cm: Any | None = None  # Store auto-created trace context manager
-        self.initialization_complete = False
 
         # Response agent to automatically interact with the model
         self.response_agent = response_agent
@@ -529,6 +531,9 @@ class MCPAgent(ABC):
         # Filter tools
         self._available_tools = []
         self._tool_map = {}
+        
+        # Track response tools by server
+        response_tools_by_server: dict[str, str] = {}  # server_name -> tool_name
 
         for tool in all_tools:
             # Check if tool should be included
@@ -541,10 +546,36 @@ class MCPAgent(ABC):
             # Simplified mapping - just tool name to tool
             self._tool_map[tool.name] = tool
 
-            # Auto-detect response tool as a lifecycle tool
-            if tool.name == "response" and "response" not in self.lifecycle_tools:
-                self.design.debug("Auto-detected 'response' tool as a lifecycle tool")
-                self.lifecycle_tools.append("response")
+            # Track response tools
+            if "response" in tool.name or tool.name == "response":
+                # Extract server name from tool name (e.g., "grader_response" -> "grader")
+                if "_" in tool.name:
+                    server_name = tool.name.split("_", 1)[0]
+                    response_tools_by_server[server_name] = tool.name
+                else:
+                    response_tools_by_server["_default"] = tool.name
+        
+        # Find the response tool to use (prioritize last server in config)
+        if response_tools_by_server and hasattr(self.mcp_client, "mcp_config"):
+            # Get server names in order from mcp_config
+            server_names = list(self.mcp_client.mcp_config.keys())
+            
+            # Try to find response tool from last server first
+            response_tool_name = None
+            for server_name in reversed(server_names):
+                if server_name in response_tools_by_server:
+                    response_tool_name = response_tools_by_server[server_name]
+                    break
+            
+            # Fallback to any response tool
+            if not response_tool_name and response_tools_by_server:
+                response_tool_name = next(iter(response_tools_by_server.values()))
+            
+            # Add to lifecycle tools if found
+            if response_tool_name and response_tool_name not in self.lifecycle_tools:
+                self.design.debug(f"Auto-detected '{response_tool_name}' tool as a lifecycle tool")
+                self.response_tool_name = response_tool_name
+                self.lifecycle_tools.append(response_tool_name)
 
         # Check if all required tools are available
         if self.required_tools:
@@ -565,13 +596,12 @@ class MCPAgent(ABC):
             response: The agent's response
             messages: The current message history (will be modified in-place)
         """
-        # Check if we have a response lifecycle tool
-        if "response" in self.lifecycle_tools and "response" in self._tool_map:
-            self.design.debug("Calling response lifecycle tool")
+        if self.response_tool_name:
+            self.design.debug(f"Calling response lifecycle tool: {self.response_tool_name}")
             try:
                 # Call the response tool with the agent's response
                 response_tool_call = MCPToolCall(
-                    name="response", arguments={"response": response.content, "messages": messages}
+                    name=self.response_tool_name, arguments={"response": response.content}
                 )
                 response_results = await self.call_tools(response_tool_call)
 
