@@ -156,7 +156,7 @@ class MCPServer(FastMCP):
         """Replace the low-level server with init version when needed."""
         if self._replaced_server:
             return
-            
+
         def _run_init(ctx: RequestContext | None = None) -> Any:
             if self._initializer_fn is not None and not self._did_init:
                 self._did_init = True

@@ -52,7 +52,7 @@ class Task(BaseModel):
                 return json.loads(v)
             except json.JSONDecodeError as e:
                 from hud.shared.exceptions import HudConfigError
-                
+
                 raise HudConfigError(f"Invalid JSON string: {e}") from e
         return v
 
@@ -69,7 +69,7 @@ class Task(BaseModel):
                 v = json.loads(v)
             except json.JSONDecodeError as e:
                 from hud.shared.exceptions import HudConfigError
-                
+
                 raise HudConfigError(f"Invalid JSON string: {e}") from e
 
         if isinstance(v, dict):

@@ -205,7 +205,7 @@ async def analyze_mcp_environment(
         }
     except Exception as e:
         from hud.shared.exceptions import HudException
-        
+
         # Convert to HudException for better error messages and hints
         raise HudException from e
     finally:

@@ -531,7 +531,7 @@ class MCPAgent(ABC):
         # Filter tools
         self._available_tools = []
         self._tool_map = {}
-        
+
         # Track response tools by server
         response_tools_by_server: dict[str, str] = {}  # server_name -> tool_name
 
@@ -554,23 +554,23 @@ class MCPAgent(ABC):
                     response_tools_by_server[server_name] = tool.name
                 else:
                     response_tools_by_server["_default"] = tool.name
-        
+
         # Find the response tool to use (prioritize last server in config)
         if response_tools_by_server and hasattr(self.mcp_client, "mcp_config"):
             # Get server names in order from mcp_config
             server_names = list(self.mcp_client.mcp_config.keys())
-            
+
             # Try to find response tool from last server first
             response_tool_name = None
             for server_name in reversed(server_names):
                 if server_name in response_tools_by_server:
                     response_tool_name = response_tools_by_server[server_name]
                     break
-            
+
             # Fallback to any response tool
             if not response_tool_name and response_tools_by_server:
                 response_tool_name = next(iter(response_tools_by_server.values()))
-            
+
             # Add to lifecycle tools if found
             if response_tool_name and response_tool_name not in self.lifecycle_tools:
                 self.design.debug(f"Auto-detected '{response_tool_name}' tool as a lifecycle tool")

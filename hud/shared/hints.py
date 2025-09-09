@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from typing import Any, Iterable, List, Optional
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -20,11 +25,11 @@ class Hint:
 
     title: str
     message: str
-    tips: Optional[List[str]] = None
-    docs_url: Optional[str] = None
-    command_examples: Optional[List[str]] = None
-    code: Optional[str] = None
-    context: Optional[List[str]] = None
+    tips: list[str] | None = None
+    docs_url: str | None = None
+    command_examples: list[str] | None = None
+    code: str | None = None
+    context: list[str] | None = None
 
 
 # Common, reusable hints
@@ -129,7 +134,7 @@ MCP_SERVER_ERROR = Hint(
 )
 
 
-def render_hints(hints: Optional[Iterable[Hint]], *, design: Any | None = None) -> None:
+def render_hints(hints: Iterable[Hint] | None, *, design: Any | None = None) -> None:
     """Render a collection of hints using the HUD design system if available.
 
     If design is not provided, this is a no-op to keep library use headless.
@@ -153,22 +158,20 @@ def render_hints(hints: Optional[Iterable[Hint]], *, design: Any | None = None) 
                 design.warning(f"{hint.title}: {hint.message}")
             else:
                 design.warning(hint.message)
-            
+
             # Tips as bullet points
             if hint.tips:
                 for tip in hint.tips:
                     design.info(f"  • {tip}")
-            
+
             # Only show command examples if provided
             if hint.command_examples:
                 for cmd in hint.command_examples:
                     design.command_example(cmd)
-            
+
             # Only show docs URL if provided
             if hint.docs_url:
                 design.link(hint.docs_url)
         except Exception:
-            # Never let hint rendering crash the error path
+            logger.warning("Failed to render hint: %s", hint)
             continue
-
-

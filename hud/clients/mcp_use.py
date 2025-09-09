@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from mcp import Implementation, types
 from mcp.shared.exceptions import McpError
@@ -43,7 +43,9 @@ class MCPUseHUDClient(BaseHUDClient):
             )
 
         self._sessions: dict[str, Any] = {}  # Will be MCPUseSession when available
-        self._tool_map: dict[str, tuple[str, types.Tool, types.Tool]] = {} # server_name, original_tool, prefixed_tool
+        self._tool_map: dict[
+            str, tuple[str, types.Tool, types.Tool]
+        ] = {}  # server_name, original_tool, prefixed_tool
         self._client: Any | None = None  # Will be MCPUseClient when available
 
     async def _connect(self, mcp_config: dict[str, dict[str, Any]]) -> None:
@@ -95,7 +97,7 @@ class MCPUseHUDClient(BaseHUDClient):
             if self.verbose:
                 logger.info("Check that the MCP server is running and accessible")
             raise
-        
+
         # Populate tool map during initialization
         await self.list_tools()
 
@@ -109,7 +111,7 @@ class MCPUseHUDClient(BaseHUDClient):
 
         all_tools = []
         self._tool_map = {}
-        
+
         # Check if we need to prefix (more than one server)
         use_prefix = len(self._sessions) > 1
 
@@ -142,6 +144,7 @@ class MCPUseHUDClient(BaseHUDClient):
                         prefixed_name = f"{server_name}_{tool.name}"
                         # Create a new tool instance with prefixed name
                         from mcp import types as mcp_types
+
                         prefixed_tool = mcp_types.Tool(
                             name=prefixed_name,
                             description=tool.description,

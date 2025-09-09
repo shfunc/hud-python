@@ -122,7 +122,7 @@ class BaseHUDClient(AgentMCPClient):
         self._mcp_config = mcp_config or self._mcp_config
         if self._mcp_config is None:
             from hud.shared.exceptions import HudConfigError
-            
+
             raise HudConfigError(
                 "An MCP server configuration is required. "
                 "Either pass it to the constructor or call initialize with a configuration"
@@ -139,7 +139,7 @@ class BaseHUDClient(AgentMCPClient):
                 headers = server_config.get("headers", {})
                 if "mcp.hud.so" in url and len(headers.get("Authorization", "")) < 10:
                     raise HudAuthenticationError(
-                        f"Sending authorization \"{headers.get('Authorization', '')}\", which may"
+                        f'Sending authorization "{headers.get("Authorization", "")}", which may'
                         " be incomplete. Ensure HUD_API_KEY environment variable is set or send it"
                         " as a header. You can get an API key at https://app.hud.so"
                     )
@@ -244,7 +244,7 @@ class BaseHUDClient(AgentMCPClient):
         """Get the MCP config."""
         if self._mcp_config is None:
             from hud.shared.exceptions import HudConfigError
-            
+
             raise HudConfigError("Please initialize the client with a valid MCP config")
         return self._mcp_config
 
@@ -315,7 +315,7 @@ class BaseHUDClient(AgentMCPClient):
         """
         if not self._initialized:
             from hud.shared.exceptions import HudClientError
-            
+
             raise HudClientError("Client must be initialized before analyzing the environment")
 
         analysis: dict[str, Any] = {

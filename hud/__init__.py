@@ -25,5 +25,5 @@ try:
     from .utils.pretty_errors import install_pretty_errors
 
     install_pretty_errors()
-except Exception: # noqa: S110
+except Exception:  # noqa: S110
     pass

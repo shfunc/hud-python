@@ -3,11 +3,10 @@
 This module tests the intelligent exception handling with automatic error
 classification and helpful hints for users.
 """
+
 from __future__ import annotations
 
-import asyncio
 import json
-from typing import TYPE_CHECKING, Any
 from unittest.mock import Mock, patch
 
 import httpx
@@ -18,7 +17,6 @@ from hud.shared.exceptions import (
     HudClientError,
     HudConfigError,
     HudException,
-    HudNetworkError,
     HudRateLimitError,
     HudRequestError,
     HudTimeoutError,
@@ -32,9 +30,6 @@ from hud.shared.hints import (
     TOOL_NOT_FOUND,
 )
 
-if TYPE_CHECKING:
-    from mcp.shared.exceptions import McpError
-
 
 class TestHudExceptionAutoConversion:
     """Test automatic exception conversion via 'raise HudException() from e'."""
@@ -45,8 +40,8 @@ class TestHudExceptionAutoConversion:
             raise ValueError("Client not initialized - call initialize() first")
         except Exception as e:
             with pytest.raises(HudClientError) as exc_info:
-                raise HudException() from e
-            
+                raise HudException from e
+
             assert exc_info.value.hints == [CLIENT_NOT_INITIALIZED]
             assert str(exc_info.value) == "Client not initialized - call initialize() first"
 
@@ -56,8 +51,8 @@ class TestHudExceptionAutoConversion:
             raise RuntimeError("Session not connected to server")
         except Exception as e:
             with pytest.raises(HudClientError) as exc_info:
-                raise HudException() from e
-            
+                raise HudException from e
+
             assert exc_info.value.hints == [CLIENT_NOT_INITIALIZED]
 
     def test_config_invalid_json_error(self):
@@ -66,8 +61,8 @@ class TestHudExceptionAutoConversion:
             json.loads("{invalid json}")
         except json.JSONDecodeError as e:
             with pytest.raises(HudConfigError) as exc_info:
-                raise HudException() from e
-            
+                raise HudException from e
+
             assert exc_info.value.hints == [INVALID_CONFIG]
 
     def test_config_error_keyword(self):
@@ -76,8 +71,8 @@ class TestHudExceptionAutoConversion:
             raise ValueError("Invalid config: missing required field 'url'")
         except Exception as e:
             with pytest.raises(HudConfigError) as exc_info:
-                raise HudException() from e
-            
+                raise HudException from e
+
             assert exc_info.value.hints == [INVALID_CONFIG]
 
     def test_tool_not_found_error(self):
@@ -86,8 +81,8 @@ class TestHudExceptionAutoConversion:
             raise KeyError("Tool 'missing_tool' not found in registry")
         except Exception as e:
             with pytest.raises(HudToolNotFoundError) as exc_info:
-                raise HudException() from e
-            
+                raise HudException from e
+
             assert exc_info.value.hints == [TOOL_NOT_FOUND]
 
     def test_tool_not_exist_error(self):
@@ -96,8 +91,8 @@ class TestHudExceptionAutoConversion:
             raise RuntimeError("Tool does not exist: calculator")
         except Exception as e:
             with pytest.raises(HudToolNotFoundError) as exc_info:
-                raise HudException() from e
-            
+                raise HudException from e
+
             assert exc_info.value.hints == [TOOL_NOT_FOUND]
 
     def test_hud_api_key_error(self):
@@ -106,8 +101,8 @@ class TestHudExceptionAutoConversion:
             raise ValueError("API key missing for mcp.hud.so")
         except Exception as e:
             with pytest.raises(HudAuthenticationError) as exc_info:
-                raise HudException() from e
-            
+                raise HudException from e
+
             assert exc_info.value.hints == [HUD_API_KEY_MISSING]
 
     def test_hud_authorization_error(self):
@@ -116,8 +111,8 @@ class TestHudExceptionAutoConversion:
             raise PermissionError("Authorization failed for HUD API")
         except Exception as e:
             with pytest.raises(HudAuthenticationError) as exc_info:
-                raise HudException() from e
-            
+                raise HudException from e
+
             assert exc_info.value.hints == [HUD_API_KEY_MISSING]
 
     def test_rate_limit_error(self):
@@ -126,8 +121,8 @@ class TestHudExceptionAutoConversion:
             raise RuntimeError("Rate limit exceeded")
         except Exception as e:
             with pytest.raises(HudRateLimitError) as exc_info:
-                raise HudException() from e
-            
+                raise HudException from e
+
             assert exc_info.value.hints == [RATE_LIMIT_HIT]
 
     def test_too_many_requests_error(self):
@@ -136,8 +131,8 @@ class TestHudExceptionAutoConversion:
             raise httpx.HTTPStatusError("Too many requests", request=Mock(), response=Mock())
         except Exception as e:
             with pytest.raises(HudRateLimitError) as exc_info:
-                raise HudException() from e
-            
+                raise HudException from e
+
             assert exc_info.value.hints == [RATE_LIMIT_HIT]
 
     def test_timeout_error(self):
@@ -146,18 +141,18 @@ class TestHudExceptionAutoConversion:
             raise TimeoutError("Operation timed out")
         except Exception as e:
             with pytest.raises(HudTimeoutError) as exc_info:
-                raise HudException() from e
-            
+                raise HudException from e
+
             assert exc_info.value.hints == []  # No default hints for timeout
 
     def test_asyncio_timeout_error(self):
         """Test that asyncio.TimeoutError becomes HudTimeoutError."""
         try:
-            raise asyncio.TimeoutError("Async operation timed out")
+            raise TimeoutError("Async operation timed out")
         except Exception as e:
             with pytest.raises(HudTimeoutError) as exc_info:
-                raise HudException() from e
-            
+                raise HudException from e
+
             assert str(exc_info.value) == "Async operation timed out"
 
     def test_generic_error_remains_hudexception(self):
@@ -166,8 +161,8 @@ class TestHudExceptionAutoConversion:
             raise ValueError("Some random error")
         except Exception as e:
             with pytest.raises(HudException) as exc_info:
-                raise HudException() from e
-            
+                raise HudException from e
+
             # Should be base HudException, not a subclass
             assert type(exc_info.value) is HudException
             assert exc_info.value.hints == []
@@ -179,19 +174,19 @@ class TestHudExceptionAutoConversion:
         except Exception as e:
             with pytest.raises(HudException) as exc_info:
                 raise HudException("Custom error message") from e
-            
+
             assert str(exc_info.value) == "Custom error message"
 
     def test_already_hud_exception_passthrough(self):
         """Test that existing HudExceptions are not re-wrapped."""
         original = HudAuthenticationError("Already a HUD exception")
-        
+
         try:
             raise original
         except Exception as e:
             with pytest.raises(HudAuthenticationError) as exc_info:
-                raise HudException() from e
-            
+                raise HudException from e
+
             # Should be the same instance
             assert exc_info.value is original
 
@@ -222,11 +217,8 @@ class TestHudRequestError:
     def test_explicit_hints_override_defaults(self):
         """Test that explicit hints override status-based defaults."""
         from hud.shared.hints import Hint
-        
-        custom_hint = Hint(
-            title="Custom Error",
-            message="This is a custom hint"
-        )
+
+        custom_hint = Hint(title="Custom Error", message="This is a custom hint")
         error = HudRequestError("Unauthorized", status_code=401, hints=[custom_hint])
         assert error.hints == [custom_hint]
         assert HUD_API_KEY_MISSING not in error.hints
@@ -236,9 +228,9 @@ class TestHudRequestError:
         request = httpx.Request("GET", "https://api.test.com")
         response = httpx.Response(404, json={"detail": "Not found"}, request=request)
         httpx_error = httpx.HTTPStatusError("Not found", request=request, response=response)
-        
+
         error = HudRequestError.from_httpx_error(httpx_error, context="Testing")
-        
+
         assert error.status_code == 404
         assert "Testing" in str(error)
         assert "Not found" in str(error)
@@ -252,46 +244,41 @@ class TestMCPErrorHandling:
     async def test_mcp_error_handling(self):
         """Test that McpError is handled appropriately."""
         # Since McpError is imported dynamically, we'll mock it
-        with patch('hud.clients.mcp_use.McpError') as MockMcpError:
+        with patch("hud.clients.mcp_use.McpError") as MockMcpError:
             MockMcpError.side_effect = Exception
-            
+
             # Create a mock MCP error
             mcp_error = Exception("MCP protocol error: Unknown method")
-            mcp_error.__class__.__name__ = 'McpError'
-            
+            mcp_error.__class__.__name__ = "McpError"
+
             try:
                 raise mcp_error
             except Exception as e:
                 # This would typically be caught in the client code
                 # and re-raised as HudException
                 with pytest.raises(HudException) as exc_info:
-                    raise HudException() from e
-                
+                    raise HudException from e
+
                 assert "MCP protocol error" in str(exc_info.value)
 
     def test_mcp_tool_error_result(self):
         """Test handling of MCP tool execution errors (isError: true)."""
         # Simulate an MCP tool result with error
         tool_result = {
-            "content": [
-                {
-                    "type": "text",
-                    "text": "Failed to fetch data: API rate limit exceeded"
-                }
-            ],
-            "isError": True
+            "content": [{"type": "text", "text": "Failed to fetch data: API rate limit exceeded"}],
+            "isError": True,
         }
-        
+
         # In real usage, this would be checked in the client
         if tool_result.get("isError"):
             error_text = tool_result["content"][0]["text"]
-            
+
             try:
                 raise RuntimeError(error_text)
             except Exception as e:
                 with pytest.raises(HudRateLimitError) as exc_info:
-                    raise HudException() from e
-                
+                    raise HudException from e
+
                 assert exc_info.value.hints == [RATE_LIMIT_HIT]
 
 
@@ -301,31 +288,31 @@ class TestExceptionIntegration:
     @pytest.mark.asyncio
     async def test_client_initialization_flow(self):
         """Test exception flow during client initialization."""
-        from hud.clients.base import HudClient
-        
+        from hud.clients.base import BaseHUDClient
+
         # Mock a client that fails initialization
-        client = Mock(spec=HudClient)
-        
+        client = Mock(spec=BaseHUDClient)
+
         # Simulate missing config
         try:
-            if not hasattr(client, '_mcp_config'):
+            if not hasattr(client, "_mcp_config"):
                 raise ValueError("MCP config not set")
         except Exception as e:
             with pytest.raises(HudConfigError) as exc_info:
-                raise HudException() from e
-            
+                raise HudException from e
+
             assert exc_info.value.hints == [INVALID_CONFIG]
 
     def test_json_parsing_flow(self):
         """Test exception flow during JSON parsing."""
         invalid_json = '{"incomplete": '
-        
+
         try:
-            data = json.loads(invalid_json)
+            _ = json.loads(invalid_json)
         except json.JSONDecodeError as e:
             with pytest.raises(HudConfigError) as exc_info:
-                raise HudException() from e
-            
+                raise HudException from e
+
             assert "Expecting value" in str(exc_info.value)
             assert exc_info.value.hints == [INVALID_CONFIG]
 
@@ -338,7 +325,7 @@ class TestExceptionIntegration:
         except Exception as e:
             with pytest.raises(HudException) as exc_info:
                 raise HudException("Failed to connect to server") from e
-            
+
             # Should remain base HudException for generic connection errors
             assert type(exc_info.value) is HudException
             assert str(exc_info.value) == "Failed to connect to server"
@@ -350,9 +337,7 @@ class TestExceptionRendering:
     def test_exception_string_representation(self):
         """Test __str__ method of exceptions."""
         error = HudRequestError(
-            "Request failed",
-            status_code=404,
-            response_json={"error": "Not found"}
+            "Request failed", status_code=404, response_json={"error": "Not found"}
         )
 
         error_str = str(error)
@@ -363,7 +348,7 @@ class TestExceptionRendering:
     def test_exception_with_hints(self):
         """Test that exceptions carry their hints properly."""
         error = HudAuthenticationError("API key missing")
-        
+
         assert len(error.hints) == 1
         assert error.hints[0] == HUD_API_KEY_MISSING
         assert error.hints[0].title == "HUD API key required"
@@ -379,7 +364,7 @@ class TestExceptionRendering:
             ("Rate limit exceeded", HudRateLimitError),
             (TimeoutError("Timeout"), HudTimeoutError),
         ]
-        
+
         for error_msg, expected_type in test_cases:
             try:
                 if isinstance(error_msg, Exception):
@@ -388,7 +373,7 @@ class TestExceptionRendering:
                     raise ValueError(error_msg)
             except Exception as e:
                 with pytest.raises(expected_type):
-                    raise HudException() from e
+                    raise HudException from e
 
 
 class TestEdgeCases:
@@ -416,20 +401,20 @@ class TestEdgeCases:
             raise ValueError("")
         except Exception as e:
             with pytest.raises(HudException) as exc_info:
-                raise HudException() from e
-            
+                raise HudException from e
+
             # Should still have some message
             assert str(exc_info.value) != ""
 
     def test_circular_exception_chain(self):
         """Test that we don't create circular exception chains."""
         original = HudAuthenticationError("Original")
-        
+
         try:
             raise original
         except HudException as e:
             # Raising HudException from HudException should not re-wrap
             with pytest.raises(HudAuthenticationError) as exc_info:
-                raise HudException() from e
-            
+                raise HudException from e
+
             assert exc_info.value is original

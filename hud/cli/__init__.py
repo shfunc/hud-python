@@ -973,8 +973,7 @@ def main() -> None:
             )
             console.print("\n[yellow]Quick Start:[/yellow]")
             console.print(
-                "  1. Create a new environment: "
-                "[cyan]hud init my-env && cd my-env[/cyan]"
+                "  1. Create a new environment: [cyan]hud init my-env && cd my-env[/cyan]"
             )
             console.print("  2. Develop with hot-reload: [cyan]hud dev --interactive[/cyan]")
             console.print("  3. Build for production: [cyan]hud build[/cyan]")
@@ -984,8 +983,7 @@ def main() -> None:
             console.print("\n[yellow]RL Training:[/yellow]")
             console.print("  1. Generate config: [cyan]hud rl init my-env:latest[/cyan]")
             console.print(
-                "  2. Create dataset: "
-                "[cyan]hud hf tasks.json --name my-org/my-tasks[/cyan]"
+                "  2. Create dataset: [cyan]hud hf tasks.json --name my-org/my-tasks[/cyan]"
             )
             console.print("  3. Start training: [cyan]hud rl --model Qwen/Qwen2.5-3B[/cyan]\n")
 

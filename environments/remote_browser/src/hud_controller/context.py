@@ -55,7 +55,7 @@ class RemoteBrowserContext:
 
     def get_cdp_url(self) -> Optional[str]:
         """Get the CDP URL from telemetry."""
-        return self._telemetry.get('cdp_url') if self._telemetry else None
+        return self._telemetry.get("cdp_url") if self._telemetry else None
 
     def get_is_initialized(self) -> bool:
         """Check if environment is initialized."""
@@ -92,7 +92,7 @@ class RemoteBrowserContext:
         """Set the playwright tool instance."""
         self.playwright_tool = tool
         logger.info(f"[RemoteBrowserContext] Set playwright tool")
-    
+
     def set_telemetry(self, telemetry: Dict[str, Any]) -> None:
         """Set the full telemetry data."""
         self._telemetry = telemetry
@@ -103,7 +103,7 @@ class RemoteBrowserContext:
         return {
             "is_initialized": self.is_initialized,
             "startup_complete": self._startup_complete,
-            "provider_name": self._telemetry.get('provider') if self._telemetry else None,
+            "provider_name": self._telemetry.get("provider") if self._telemetry else None,
             "has_cdp_url": self.get_cdp_url() is not None,
             "has_browser_provider": self.browser_provider is not None,
             "has_playwright_tool": self.playwright_tool is not None,
@@ -114,7 +114,7 @@ class RemoteBrowserContext:
         # If we have stored telemetry, return it
         if self._telemetry:
             return self._telemetry
-        
+
         # Otherwise return basic telemetry data
         return {
             "provider": "unknown",
