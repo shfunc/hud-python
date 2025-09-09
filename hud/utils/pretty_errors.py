@@ -31,7 +31,7 @@ def _render_and_fallback(exc_type: type[BaseException], value: BaseException, tb
             design.render_exception(value)
     except Exception:
         # If rendering fails for any reason, silently continue
-        logger.warning("Failed to render exception: %s", exc_type, value, tb)
+        logger.warning("Failed to render exception: %s, %s, %s", exc_type, value, tb)
 
 
 def _async_exception_handler(loop: asyncio.AbstractEventLoop, context: dict[str, Any]) -> None:
@@ -44,7 +44,7 @@ def _async_exception_handler(loop: asyncio.AbstractEventLoop, context: dict[str,
             design.error(msg)
             design.render_support_hint()
     except Exception:
-        logger.warning("Failed to render exception: %s", exc, msg)
+        logger.warning("Failed to render exception: %s, %s, %s", exc, msg, context)
 
     # Delegate to default handler
     loop.default_exception_handler(context)
