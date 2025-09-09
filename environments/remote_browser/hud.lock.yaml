@@ -1,12 +1,12 @@
 version: '1.0'
-image: hudevals/hud-remote-browser@sha256:ca4c496874e13f88b6cda1373e0d71a48b204942726d7edeb8fa1fa2181ca939
+image: hudevals/hud-remote-browser@sha256:5cb5f6b2ef6aca30101581359c80dead290bce671a87529c9cba4587ea99d6e3
 build:
-  generatedAt: '2025-08-27T06:18:13.799046Z'
-  hudVersion: 0.4.12
+  generatedAt: '2025-09-08T02:57:48.304704Z'
+  hudVersion: 0.4.19
   directory: remote_browser
-  version: 0.1.0
+  version: 0.1.1
 environment:
-  initializeMs: 11920
+  initializeMs: 9484
   toolCount: 6
   variables:
     _note: You can edit this section to add or modify environment variables. Provided
@@ -48,6 +48,47 @@ tools:
     \ to convert\n    sheet_name: Name for the new Google Sheet (default: \"Worksheet\"\
     )\n\nReturns:\n    Status dictionary with sheet information)\n  Arguments: file_url\
     \ (string | null) (optional), sheet_name (string) (optional)"
+  inputSchema:
+    type: object
+    properties:
+      name:
+        type: string
+        description: 'Name of the internal tool to call. Must be one of: clear_cookies,
+          click_element, fill_input, load_html_content, navigate_to_url, select_option,
+          set_cookies, sheets_from_bytes, sheets_from_xlsx'
+        enum:
+        - clear_cookies
+        - click_element
+        - fill_input
+        - load_html_content
+        - navigate_to_url
+        - select_option
+        - set_cookies
+        - sheets_from_bytes
+        - sheets_from_xlsx
+      arguments:
+        anyOf:
+        - type: object
+          description: Arguments object to pass to the internal tool
+        - type: string
+          description: JSON string of arguments to pass to the internal tool
+        description: Arguments to pass to the internal tool. Can be an object or JSON
+          string. See description for details on each tool's parameters.
+    required:
+    - name
+    - arguments
+    examples:
+    - name: clear_cookies
+      arguments: {}
+    - name: click_element
+      arguments:
+        selector: <selector>
+        timeout: 0
+    - name: fill_input
+      arguments:
+        selector: <selector>
+        text: <text>
+        timeout: 0
 - name: evaluate
   description: "Call internal 'evaluate' functions. Available tools:\n\n\u2022 Name:\
     \ cookie_exists (Check if a cookie exists in the browser.\n\nArgs:\n    cookie_name:\
@@ -95,15 +136,391 @@ tools:
     \ partial rewards\n\nReturns:\n    Standard evaluation result with reward between\
     \ 0.0 and 1.0)\n  Arguments: expected_text (string), selector (string | null)\
     \ (optional), partial_rewarding (boolean) (optional)"
+  inputSchema:
+    type: object
+    properties:
+      name:
+        type: string
+        description: 'Name of the internal tool to call. Must be one of: cookie_exists,
+          cookie_match, element_exists, history_length, page_contains, raw_last_action_is,
+          selector_history, sheet_contains, sheets_cell_values, url_match, verify_type_action'
+        enum:
+        - cookie_exists
+        - cookie_match
+        - element_exists
+        - history_length
+        - page_contains
+        - raw_last_action_is
+        - selector_history
+        - sheet_contains
+        - sheets_cell_values
+        - url_match
+        - verify_type_action
+      arguments:
+        anyOf:
+        - type: object
+          description: Arguments object to pass to the internal tool
+        - type: string
+          description: JSON string of arguments to pass to the internal tool
+        description: Arguments to pass to the internal tool. Can be an object or JSON
+          string. See description for details on each tool's parameters.
+    required:
+    - name
+    - arguments
+    examples:
+    - name: cookie_exists
+      arguments:
+        cookie_name: <cookie_name>
+    - name: cookie_match
+      arguments:
+        cookie_name: <cookie_name>
+        expected_value: <expected_value>
+    - name: element_exists
+      arguments:
+        selector: <selector>
 - name: playwright
   description: Web automation tool using Playwright
+  inputSchema:
+    properties:
+      action:
+        description: The action to perform (navigate, screenshot, click, type, get_page_info,
+          wait_for_element)
+        title: Action
+        type: string
+      url:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        description: URL to navigate to (for navigate action)
+        title: Url
+      selector:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        description: CSS selector for element (for click, type, wait_for_element actions)
+        title: Selector
+      text:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        description: Text to type (for type action)
+        title: Text
+      wait_for_load_state:
+        anyOf:
+        - enum:
+          - commit
+          - domcontentloaded
+          - load
+          - networkidle
+          type: string
+        - type: 'null'
+        default: null
+        description: 'State to wait for: commit, domcontentloaded, load, networkidle
+          (default: networkidle)'
+        title: Wait For Load State
+    required:
+    - action
+    type: object
 - name: computer
   description: Control computer with mouse, keyboard, and screenshots
+  inputSchema:
+    properties:
+      action:
+        description: The action name (click, type, move, etc.)
+        title: Action
+        type: string
+      x:
+        anyOf:
+        - type: integer
+        - type: 'null'
+        default: null
+        description: X coordinate for click/move/scroll actions
+        title: X
+      y:
+        anyOf:
+        - type: integer
+        - type: 'null'
+        default: null
+        description: Y coordinate for click/move/scroll actions
+        title: Y
+      button:
+        anyOf:
+        - enum:
+          - left
+          - right
+          - middle
+          - back
+          - forward
+          type: string
+        - type: 'null'
+        default: null
+        description: Mouse button for click actions
+        title: Button
+      pattern:
+        anyOf:
+        - items:
+            type: integer
+          type: array
+        - type: 'null'
+        default: null
+        description: Click pattern for multi-clicks (e.g., [100] for double-click)
+        title: Pattern
+      text:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        description: Text for type/response actions
+        title: Text
+      keys:
+        anyOf:
+        - items:
+            type: string
+          type: array
+        - type: 'null'
+        default: null
+        description: Keys for press/keydown/keyup actions
+        title: Keys
+      enter_after:
+        anyOf:
+        - type: boolean
+        - type: 'null'
+        default: null
+        description: Whether to press Enter after typing
+        title: Enter After
+      scroll_x:
+        anyOf:
+        - type: integer
+        - type: 'null'
+        default: null
+        description: Horizontal scroll amount (positive = right)
+        title: Scroll X
+      scroll_y:
+        anyOf:
+        - type: integer
+        - type: 'null'
+        default: null
+        description: Vertical scroll amount (positive = down)
+        title: Scroll Y
+      offset_x:
+        anyOf:
+        - type: integer
+        - type: 'null'
+        default: null
+        description: X offset for relative move
+        title: Offset X
+      offset_y:
+        anyOf:
+        - type: integer
+        - type: 'null'
+        default: null
+        description: Y offset for relative move
+        title: Offset Y
+      path:
+        anyOf:
+        - items:
+            maxItems: 2
+            minItems: 2
+            prefixItems:
+            - type: integer
+            - type: integer
+            type: array
+          type: array
+        - type: 'null'
+        default: null
+        description: Path for drag actions as list of (x, y) coordinates
+        title: Path
+      time:
+        anyOf:
+        - type: integer
+        - type: 'null'
+        default: null
+        description: Time in milliseconds for wait action
+        title: Time
+      hold_keys:
+        anyOf:
+        - items:
+            type: string
+          type: array
+        - type: 'null'
+        default: null
+        description: Keys to hold during action
+        title: Hold Keys
+      duration:
+        anyOf:
+        - type: number
+        - type: 'null'
+        default: null
+        description: Duration in seconds for hold_key action
+        title: Duration
+    required:
+    - action
+    type: object
 - name: anthropic_computer
   description: Control computer with mouse, keyboard, and screenshot
+  inputSchema:
+    properties:
+      action:
+        description: The action to perform on the computer
+        title: Action
+        type: string
+      coordinate:
+        anyOf:
+        - items:
+            type: integer
+          type: array
+        - maxItems: 2
+          minItems: 2
+          prefixItems:
+          - type: integer
+          - type: integer
+          type: array
+        - type: 'null'
+        default: null
+        description: The coordinate to interact with on the computer [x, y]
+        title: Coordinate
+      text:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        description: The text to type on the computer or key to press
+        title: Text
+      start_coordinate:
+        anyOf:
+        - items:
+            type: integer
+          type: array
+        - maxItems: 2
+          minItems: 2
+          prefixItems:
+          - type: integer
+          - type: integer
+          type: array
+        - type: 'null'
+        default: null
+        description: The starting coordinate for drag actions [x, y]
+        title: Start Coordinate
+      scroll_direction:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        description: The direction to scroll (up, down, left, right)
+        title: Scroll Direction
+      scroll_amount:
+        anyOf:
+        - type: integer
+        - type: 'null'
+        default: null
+        description: The amount to scroll
+        title: Scroll Amount
+      duration:
+        anyOf:
+        - type: number
+        - type: 'null'
+        default: null
+        description: The duration of the action in seconds
+        title: Duration
+      take_screenshot_on_click:
+        default: true
+        description: Whether to take a screenshot after clicking
+        title: Take Screenshot On Click
+        type: boolean
+    required:
+    - action
+    type: object
 - name: openai_computer
   description: Control computer with mouse, keyboard, and screenshots
+  inputSchema:
+    properties:
+      type:
+        description: The action type to perform
+        title: Type
+        type: string
+      x:
+        anyOf:
+        - type: integer
+        - type: 'null'
+        default: null
+        description: X coordinate for click/move/scroll actions
+        title: X
+      y:
+        anyOf:
+        - type: integer
+        - type: 'null'
+        default: null
+        description: Y coordinate for click/move/scroll actions
+        title: Y
+      button:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        description: Mouse button for click actions (left, right, middle, wheel)
+        title: Button
+      text:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        description: Text to type or response text
+        title: Text
+      scroll_x:
+        anyOf:
+        - type: integer
+        - type: 'null'
+        default: null
+        description: Horizontal scroll amount
+        title: Scroll X
+      scroll_y:
+        anyOf:
+        - type: integer
+        - type: 'null'
+        default: null
+        description: Vertical scroll amount
+        title: Scroll Y
+      ms:
+        anyOf:
+        - type: integer
+        - type: 'null'
+        default: null
+        description: Time to wait in milliseconds
+        title: Ms
+      keys:
+        anyOf:
+        - items:
+            type: string
+          type: array
+        - type: 'null'
+        default: null
+        description: Keys to press
+        title: Keys
+      path:
+        anyOf:
+        - items:
+            additionalProperties:
+              type: integer
+            type: object
+          type: array
+        - type: 'null'
+        default: null
+        description: Path for drag actions as list of {x, y} dicts
+        title: Path
+      action:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        description: Custom action name
+        title: Action
+    required:
+    - type
+    type: object
 push:
-  source: hud-remote-browser:dev@sha256:ca4c496874e13f88b6cda1373e0d71a48b204942726d7edeb8fa1fa2181ca939
-  pushedAt: '2025-08-27T06:19:10.622818Z'
+  source: hud-remote-browser:dev@sha256:5cb5f6b2ef6aca30101581359c80dead290bce671a87529c9cba4587ea99d6e3
+  pushedAt: '2025-09-08T02:59:29.900437Z'
   registry: hudevals
