@@ -257,6 +257,63 @@ class HUDDesign:
         else:
             console.print(f"  [cyan]{command}[/cyan]")
 
+    # Exception rendering utilities
+    def render_support_hint(self, stderr: bool = True) -> None:
+        """Render a standard support message for users encountering issues."""
+        support = (
+            "If this looks like an issue with the sdk, please make a github issue at "
+            "https://github.com/hud-evals/hud-python/issues"
+        )
+        self.info(support, stderr=stderr)
+
+    def render_exception(self, error: BaseException, *, stderr: bool = True) -> None:
+        """Render exceptions consistently using the HUD design system.
+
+        - Shows exception type and message
+        - Displays structured hints if present on the exception (e.g., HudException.hints)
+        - Prints a link to open an issue for SDK problems
+        """
+        try:
+            from hud.shared.exceptions import HudRequestError  # lazy import
+        except Exception:
+            # Keep type available for isinstance guards below without import-time dependency
+            HudRequestError = tuple()  # type: ignore
+
+        # Header with exception type
+        ex_type = type(error).__name__
+        message = getattr(error, "message", "") or str(error) or ex_type
+        self.error(f"{ex_type}: {message}", stderr=stderr)
+
+        # Specialized details for request errors
+        if isinstance(error, HudRequestError):  # type: ignore[arg-type]
+            details: dict[str, str] = {}
+            status_code = getattr(error, "status_code", None)
+            if status_code is not None:
+                details["Status"] = str(status_code)
+            response_text = getattr(error, "response_text", None)
+            if response_text:
+                # Limit very long responses
+                trimmed = response_text[:500] + ("..." if len(response_text) > 500 else "")
+                details["Response"] = trimmed
+            response_json = getattr(error, "response_json", None)
+            if response_json and not details.get("Response"):
+                details["Response JSON"] = str(response_json)
+            if details:
+                self.key_value_table(details, show_header=False, stderr=stderr)
+
+        # Structured hints, if available
+        hints = getattr(error, "hints", None)
+        if hints:
+            try:
+                from hud.shared.hints import render_hints  # lazy import
+
+                render_hints(hints, design=self)
+            except Exception as render_error:
+                self.debug(f"Failed to render hints: {render_error}")
+
+        # Standard support hint
+        self.render_support_hint(stderr=stderr)
+
     @property
     def console(self) -> Console:
         """Get the stderr console for direct access when needed."""
