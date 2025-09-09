@@ -9,6 +9,7 @@ from .bash import BashTool
 from .edit import EditTool
 from .playwright import PlaywrightTool
 from .response import ResponseTool
+from .submit import SubmitTool
 
 if TYPE_CHECKING:
     from .computer import AnthropicComputerTool, HudComputerTool, OpenAIComputerTool
@@ -23,6 +24,7 @@ __all__ = [
     "OpenAIComputerTool",
     "PlaywrightTool",
     "ResponseTool",
+    "SubmitTool",
 ]
 
 

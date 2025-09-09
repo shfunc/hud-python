@@ -51,7 +51,9 @@ class Task(BaseModel):
             try:
                 return json.loads(v)
             except json.JSONDecodeError as e:
-                raise ValueError(f"Invalid JSON string: {e}") from e
+                from hud.shared.exceptions import HudConfigError
+
+                raise HudConfigError(f"Invalid JSON string: {e}") from e
         return v
 
     @field_validator("setup_tool", "evaluate_tool", mode="before")
@@ -66,7 +68,9 @@ class Task(BaseModel):
             try:
                 v = json.loads(v)
             except json.JSONDecodeError as e:
-                raise ValueError(f"Invalid JSON string: {e}") from e
+                from hud.shared.exceptions import HudConfigError
+
+                raise HudConfigError(f"Invalid JSON string: {e}") from e
 
         if isinstance(v, dict):
             return MCPToolCall(**v)

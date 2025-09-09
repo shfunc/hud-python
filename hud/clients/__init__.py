@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from .base import AgentMCPClient, BaseHUDClient
 from .fastmcp import FastMCPHUDClient
+from .mcp_use import MCPUseHUDClient
 
-# Default to FastMCP for new features
-MCPClient = FastMCPHUDClient
+# Default to MCP-use for new features
+MCPClient = MCPUseHUDClient
 
 __all__ = [
     "AgentMCPClient",

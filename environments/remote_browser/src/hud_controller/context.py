@@ -7,6 +7,7 @@ Run this as a separate process to maintain browser session state during developm
 
 import asyncio
 import logging
+from datetime import datetime
 from typing import Dict, Any, Optional
 from hud.server.context import run_context_server
 
@@ -19,14 +20,12 @@ class RemoteBrowserContext:
     def __init__(self):
         """Initialize the remote browser context."""
         self.browser_provider = None
-        self.cdp_url: Optional[str] = None
         self.is_initialized = False
         self.provider_config: Optional[Dict[str, Any]] = None
         self.launch_options: Optional[Dict[str, Any]] = None
-        self.provider_name: Optional[str] = None
-        self.instance_id: Optional[str] = None
         self._startup_complete = False
         self.playwright_tool = None  # Store the playwright tool
+        self._telemetry: Optional[Dict[str, Any]] = None  # Store full telemetry data
 
         logger.info("[RemoteBrowserContext] Created new remote browser context")
 
@@ -55,13 +54,8 @@ class RemoteBrowserContext:
             logger.info(f"[RemoteBrowserContext] Set browser provider: {self.provider_name}")
 
     def get_cdp_url(self) -> Optional[str]:
-        """Get the CDP URL."""
-        return self.cdp_url
-
-    def set_cdp_url(self, url: str) -> None:
-        """Set the CDP URL."""
-        self.cdp_url = url
-        logger.info(f"[RemoteBrowserContext] Set CDP URL: {url}")
+        """Get the CDP URL from telemetry."""
+        return self._telemetry.get("cdp_url") if self._telemetry else None
 
     def get_is_initialized(self) -> bool:
         """Check if environment is initialized."""
@@ -99,38 +93,36 @@ class RemoteBrowserContext:
         self.playwright_tool = tool
         logger.info(f"[RemoteBrowserContext] Set playwright tool")
 
+    def set_telemetry(self, telemetry: Dict[str, Any]) -> None:
+        """Set the full telemetry data."""
+        self._telemetry = telemetry
+        logger.info(f"[RemoteBrowserContext] Set telemetry: {telemetry}")
+
     def get_state_summary(self) -> Dict[str, Any]:
         """Get a summary of the current state."""
         return {
             "is_initialized": self.is_initialized,
             "startup_complete": self._startup_complete,
-            "provider_name": self.provider_name,
-            "has_cdp_url": self.cdp_url is not None,
+            "provider_name": self._telemetry.get("provider") if self._telemetry else None,
+            "has_cdp_url": self.get_cdp_url() is not None,
             "has_browser_provider": self.browser_provider is not None,
             "has_playwright_tool": self.playwright_tool is not None,
         }
 
     def get_telemetry(self) -> Dict[str, Any]:
         """Get telemetry data from the browser provider."""
-        # Return basic telemetry data without async calls
-        # The browser provider status check is skipped to avoid async issues
+        # If we have stored telemetry, return it
+        if self._telemetry:
+            return self._telemetry
 
-        # Get live view URL if available
-        live_url = None
-        if self.browser_provider and hasattr(self.browser_provider, "get_live_view_url"):
-            try:
-                live_url = self.browser_provider.get_live_view_url()
-            except Exception as e:
-                logger.warning(f"Failed to get live view URL: {e}")
-
+        # Otherwise return basic telemetry data
         return {
-            "provider": self.provider_name or "unknown",
-            "status": "running"
-            if self.browser_provider and self.is_initialized
-            else "not_initialized",
-            "live_url": live_url,
-            "cdp_url": self.cdp_url,
-            "instance_id": self.instance_id,
+            "provider": "unknown",
+            "status": "not_initialized",
+            "live_url": None,
+            "cdp_url": None,
+            "instance_id": None,
+            "timestamp": datetime.now().isoformat(),
         }
 
 

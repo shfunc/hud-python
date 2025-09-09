@@ -204,30 +204,10 @@ async def analyze_mcp_environment(
             "success": True,
         }
     except Exception as e:
-        import traceback
+        from hud.shared.exceptions import HudException
 
-        error_msg = str(e)
-        if verbose:
-            design.error(f"Failed to analyze environment: {error_msg}")
-            design.error(f"Traceback:\n{traceback.format_exc()}")
-
-        # Common issues
-        if "Connection reset" in error_msg or "EOF" in error_msg:
-            design.warning(
-                "The MCP server may have crashed on startup. Check your server.py for errors."
-            )
-        elif "timeout" in error_msg:
-            design.warning(
-                "The MCP server took too long to initialize. It might need more startup time."
-            )
-
-        return {
-            "initializeMs": 0,
-            "toolCount": 0,
-            "tools": [],
-            "success": False,
-            "error": error_msg,
-        }
+        # Convert to HudException for better error messages and hints
+        raise HudException from e
     finally:
         # Only shutdown if we successfully initialized
         if initialized:
@@ -339,27 +319,6 @@ def build_environment(
         analysis = loop.run_until_complete(analyze_mcp_environment(temp_tag, verbose, env_vars))
     finally:
         loop.close()
-
-    if not analysis["success"]:
-        design.error("Failed to analyze MCP environment")
-        if "error" in analysis:
-            design.error(f"Error: {analysis['error']}")
-
-        # Provide helpful debugging tips
-        design.section_title("Debugging Tips")
-        design.info("1. Debug your environment build:")
-        design.command_example("hud debug . --build")
-        design.dim_info("   This will", "test MCP server connection and show detailed logs")
-        design.info("")
-        design.info("2. Check for common issues:")
-        design.info("   - Server crashes on startup")
-        design.info("   - Missing dependencies")
-        design.info("   - Syntax errors in server.py")
-        design.info("")
-        design.info("3. Run with verbose mode:")
-        design.command_example("hud build . --verbose")
-
-        raise typer.Exit(1)
 
     design.success(f"Analyzed environment: {analysis['toolCount']} tools found")
 

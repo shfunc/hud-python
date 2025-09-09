@@ -22,6 +22,7 @@ def build_agent(
     *,
     model: str | None = None,
     allowed_tools: list[str] | None = None,
+    verbose: bool = False,
 ) -> Any:
     """Create and return the requested agent type."""
 
@@ -39,9 +40,10 @@ def build_agent(
         if allowed_tools:
             return OperatorAgent(
                 allowed_tools=allowed_tools,
+                verbose=verbose,
             )
         else:
-            return OperatorAgent()
+            return OperatorAgent(verbose=verbose)
 
     # Fallback Claude agent (Anthropic)
     try:
@@ -59,10 +61,12 @@ def build_agent(
         return ClaudeAgent(
             model=model,
             allowed_tools=allowed_tools,
+            verbose=verbose,
         )
     else:
         return ClaudeAgent(
             model=model,
+            verbose=verbose,
         )
 
 
@@ -73,6 +77,7 @@ async def run_single_task(
     model: str | None = None,
     allowed_tools: list[str] | None = None,
     max_steps: int = 10,
+    verbose: bool = False,
 ) -> None:
     """Load one task and execute it, or detect if JSON contains a list and run as dataset."""
 
@@ -82,7 +87,7 @@ async def run_single_task(
     except ImportError as e:
         design.error(
             "Dataset dependencies are not installed. "
-            "Please install with: pip install 'hud-python[agent]'"
+            "Please install with: pip install 'hud-python\u27E6agent\u27E7'"
         )
         raise typer.Exit(1) from e
 
@@ -106,11 +111,11 @@ async def run_single_task(
                 except ImportError as e:
                     design.error(
                         "OpenAI agent dependencies are not installed. "
-                        "Please install with: pip install 'hud-python[agent]'"
+                        "Please install with: pip install 'hud-python\u27E6agent\u27E7'"
                     )
                     raise typer.Exit(1) from e
 
-                agent_config: dict[str, Any] = {}
+                agent_config: dict[str, Any] = {"verbose": verbose}
                 if allowed_tools:
                     agent_config["allowed_tools"] = allowed_tools
 
@@ -128,6 +133,7 @@ async def run_single_task(
 
                 agent_config = {
                     "model": model or "claude-sonnet-4-20250514",
+                    "verbose": verbose,
                 }
                 if allowed_tools:
                     agent_config["allowed_tools"] = allowed_tools
@@ -182,6 +188,7 @@ async def run_single_task(
             agent_type,
             model=model,
             allowed_tools=allowed_tools,
+            verbose=verbose,
         )
         design.info(task.prompt)
         result = await agent.run(task, max_steps=max_steps)
@@ -199,6 +206,7 @@ async def run_full_dataset(
     parallel: bool = False,
     max_workers: int | None = None,
     max_concurrent_per_worker: int = 25,
+    verbose: bool = False,
 ) -> list[Any]:
     """Run evaluation across the entire dataset.
 
@@ -211,7 +219,7 @@ async def run_full_dataset(
     except ImportError as e:
         design.error(
             "Dataset dependencies are not installed. "
-            "Please install with: pip install 'hud-python[agent]'"
+            "Please install with: pip install 'hud-python[[agent]]'"
         )
         raise typer.Exit(1) from e
 
@@ -245,7 +253,7 @@ async def run_full_dataset(
             )
             raise typer.Exit(1) from e
 
-        agent_config: dict[str, Any] = {}
+        agent_config: dict[str, Any] = {"verbose": verbose}
         if allowed_tools:
             agent_config["allowed_tools"] = allowed_tools
 
@@ -263,6 +271,7 @@ async def run_full_dataset(
 
         agent_config = {
             "model": model or "claude-sonnet-4-20250514",
+            "verbose": verbose,
         }
         if allowed_tools:
             agent_config["allowed_tools"] = allowed_tools
@@ -360,6 +369,11 @@ def eval_command(
         "--max-concurrent-per-worker",
         help="Maximum concurrent tasks per worker in parallel mode",
     ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        help="Enable verbose output from the agent",
+    ),
 ) -> None:
     """🚀 Run evaluation on datasets or individual tasks with agents.
 
@@ -387,6 +401,9 @@ def eval_command(
 
         # Run with OpenAI Operator agent
         hud eval hud-evals/OSWorld-Gold-Beta --agent openai
+
+        # Run with verbose output for debugging
+        hud eval task.json --verbose
     """
     from hud.settings import settings
 
@@ -428,6 +445,7 @@ def eval_command(
                 parallel=parallel,
                 max_workers=max_workers,
                 max_concurrent_per_worker=max_concurrent_per_worker,
+                verbose=verbose,
             )
         )
     else:
@@ -438,5 +456,6 @@ def eval_command(
                 model=model,
                 allowed_tools=allowed_tools_list,
                 max_steps=max_steps,
+                verbose=verbose,
             )
         )

@@ -76,4 +76,10 @@ def setup_hud_telemetry(
             MCPConfigPatch(headers={"Run-Id": run_id}, meta={"run_id": run_id}),
         )
 
+    if settings.api_key:
+        patch_mcp_config(
+            mcp_config,
+            MCPConfigPatch(headers={"Authorization": f"Bearer {settings.api_key}"}),
+        )
+
     return auto_trace_cm

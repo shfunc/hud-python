@@ -1,12 +1,44 @@
+"""HUD SDK Exception System.
+
+This module provides intelligent exception handling with automatic error
+classification and helpful hints for users.
+
+Key Features:
+- Auto-converts generic exceptions to specific HUD exceptions
+- Attaches contextual hints based on error type
+- Clean chaining syntax: raise HudException() from e
+
+Example:
+    try:
+        client.call_tool("missing")
+    except Exception as e:
+        raise HudException() from e  # Becomes HudToolNotFoundError with hints
+"""
+
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
 
 if TYPE_CHECKING:
     from typing import Self
 
     import httpx
+
+from hud.shared.hints import (
+    CLIENT_NOT_INITIALIZED,
+    ENV_VAR_MISSING,
+    HUD_API_KEY_MISSING,
+    INVALID_CONFIG,
+    MCP_SERVER_ERROR,
+    RATE_LIMIT_HIT,
+    TOOL_NOT_FOUND,
+    Hint,
+)
+
+T = TypeVar("T", bound="HudException")
 
 logger = logging.getLogger(__name__)
 
@@ -14,23 +46,134 @@ logger = logging.getLogger(__name__)
 class HudException(Exception):
     """Base exception class for all HUD SDK errors.
 
-    This is the parent class for all exceptions raised by the HUD SDK.
-    Consumers should be able to catch this exception to handle any HUD-related error.
+    Usage:
+        raise HudException() from e  # Auto-converts to appropriate subclass
+        raise HudException("Custom message") from e  # With custom message
     """
 
-    def __init__(self, message: str, response_json: dict[str, Any] | None = None) -> None:
-        super().__init__(message)
-        self.message = message
+    def __new__(cls, message: str = "", *args: Any, **kwargs: Any) -> Any:
+        """Auto-convert generic exceptions to specific HUD exceptions when chained."""
+        import sys
+
+        # Only intercept for base HudException, not subclasses
+        if cls is not HudException:
+            return super().__new__(cls)
+
+        # Check if we're in a 'raise...from' context
+        exc_type, exc_value, _ = sys.exc_info()
+        if exc_type and exc_value:
+            # If it's already a HudException, return it as-is
+            if isinstance(exc_value, HudException):
+                return exc_value
+            # Otherwise analyze if it's a regular Exception
+            elif isinstance(exc_value, Exception):
+                # Try to convert to a specific HudException
+                result = cls._analyze_exception(exc_value, message or str(exc_value))
+                # If we couldn't categorize it (still base HudException),
+                # just re-raise the original exception
+                if type(result) is HudException:
+                    # Re-raise the original exception unchanged
+                    raise exc_value from None
+                return result
+
+        # Normal creation
+        return super().__new__(cls)
+
+    # Subclasses can override this class attribute
+    default_hints: ClassVar[list[Hint]] = []
+
+    def __init__(
+        self,
+        message: str = "",
+        response_json: dict[str, Any] | None = None,
+        *,
+        hints: list[Hint] | None = None,
+    ) -> None:
+        # If we already have args set (from _analyze_exception), don't override them
+        if not self.args:
+            # Pass the message to the base Exception class
+            super().__init__(message)
+        self.message = message or (self.args[0] if self.args else "")
         self.response_json = response_json
+        # If hints not provided, use defaults defined by subclass
+        self.hints: list[Hint] = hints if hints is not None else list(self.default_hints)
 
     def __str__(self) -> str:
-        parts = [self.message]
+        # Get the message from the exception
+        # First check if we have args (standard Exception message storage)
+        msg = str(self.args[0]) if self.args and self.args[0] else ""
+
+        # Add response JSON if available
         if self.response_json:
-            parts.append(f"Response: {self.response_json}")
-        return " | ".join(parts)
+            if msg:
+                return f"{msg} | Response: {self.response_json}"
+            else:
+                return f"Response: {self.response_json}"
+
+        return msg
+
+    @classmethod
+    def _analyze_exception(cls, e: Exception, message: str = "") -> HudException:
+        """Convert generic exceptions to specific HUD exceptions based on content."""
+        error_msg = str(e).lower()
+        final_msg = message or str(e)
+
+        # Map error patterns to exception types
+        patterns = [
+            # (condition_func, exception_class)
+            (
+                lambda: "not initialized" in error_msg or "not connected" in error_msg,
+                HudClientError,
+            ),
+            (
+                lambda: "invalid json" in error_msg or "config" in error_msg or "json" in error_msg,
+                HudConfigError,
+            ),
+            (
+                lambda: "tool" in error_msg
+                and ("not found" in error_msg or "not exist" in error_msg),
+                HudToolNotFoundError,
+            ),
+            (
+                lambda: ("api key" in error_msg or "authorization" in error_msg)
+                and ("hud" in error_msg or "mcp.hud.so" in error_msg),
+                HudAuthenticationError,
+            ),
+            (
+                lambda: "rate limit" in error_msg or "too many request" in error_msg,
+                HudRateLimitError,
+            ),
+            (lambda: isinstance(e, (TimeoutError | asyncio.TimeoutError)), HudTimeoutError),
+            (lambda: isinstance(e, json.JSONDecodeError), HudConfigError),
+            (
+                lambda: "environment variable" in error_msg and "required" in error_msg,
+                HudEnvVarError,
+            ),
+            (lambda: "event loop" in error_msg and "closed" in error_msg, HudClientError),
+            (
+                lambda: type(e).__name__ == "McpError",  # Check by name to avoid import issues
+                HudMCPError,
+            ),
+        ]
+
+        # Find first matching pattern
+        for condition, exception_class in patterns:
+            if condition():
+                # Create instance directly using Exception.__new__ to bypass our custom __new__
+                instance = Exception.__new__(exception_class)
+                # Manually set args before calling __init__ to ensure proper Exception behavior
+                instance.args = (final_msg,)
+                instance.__init__(final_msg)
+                return instance
+
+        # No pattern matched - return base exception instance
+        instance = Exception.__new__(HudException)
+        instance.args = (final_msg,)
+        instance.__init__(final_msg)
+        return instance
 
 
-class HudRequestError(Exception):
+class HudRequestError(HudException):
     """Any request to the HUD API can raise this exception."""
 
     def __init__(
@@ -40,13 +183,24 @@ class HudRequestError(Exception):
         response_text: str | None = None,
         response_json: dict[str, Any] | None = None,
         response_headers: dict[str, str] | None = None,
+        *,
+        hints: list[Hint] | None = None,
     ) -> None:
-        self.message = message
         self.status_code = status_code
         self.response_text = response_text
-        self.response_json = response_json
         self.response_headers = response_headers
-        super().__init__(message)
+        # Compute default hints from status code if none provided
+        if hints is None and status_code in (401, 403, 429):
+            try:
+                from hud.shared.hints import HUD_API_KEY_MISSING, RATE_LIMIT_HIT  # type: ignore
+
+                if status_code in (401, 403):
+                    hints = [HUD_API_KEY_MISSING]
+                elif status_code == 429:
+                    hints = [RATE_LIMIT_HIT]
+            except Exception as import_error:
+                logger.debug("Failed to attach structured hints: %s", import_error)
+        super().__init__(message, response_json, hints=hints)
 
     def __str__(self) -> str:
         parts = [self.message]
@@ -110,13 +264,14 @@ class HudRequestError(Exception):
             response_text[:500],
             "..." if len(response_text) > 500 else "",
         )
-        return cls(
+        inst = cls(
             message=message,
             status_code=status_code,
             response_text=response_text,
             response_json=response_json,
             response_headers=response_headers,
         )
+        return inst
 
 
 class HudResponseError(HudException):
@@ -148,35 +303,53 @@ class HudResponseError(HudException):
 
 
 class HudAuthenticationError(HudException):
-    """Raised when authentication with the HUD API fails.
+    """Missing or invalid HUD API key."""
 
-    This exception is raised when an API key is missing, invalid, or
-    has insufficient permissions for the requested operation.
-    """
+    default_hints: ClassVar[list[Hint]] = [HUD_API_KEY_MISSING]
 
 
 class HudRateLimitError(HudException):
-    """Raised when the rate limit for the HUD API is exceeded.
+    """Too many requests to the API."""
 
-    This exception is raised when too many requests are made in a
-    short period of time.
-    """
+    default_hints: ClassVar[list[Hint]] = [RATE_LIMIT_HIT]
 
 
 class HudTimeoutError(HudException):
-    """Raised when a request to the HUD API times out.
-
-    This exception is raised when a request takes longer than the
-    configured timeout period.
-    """
+    """Request timed out."""
 
 
 class HudNetworkError(HudException):
-    """Raised when there is a network-related error.
+    """Network connection issue."""
 
-    This exception is raised when there are issues with the network
-    connection, DNS resolution, or other network-related problems.
-    """
+
+class HudClientError(HudException):
+    """MCP client not initialized."""
+
+    default_hints: ClassVar[list[Hint]] = [CLIENT_NOT_INITIALIZED]
+
+
+class HudConfigError(HudException):
+    """Invalid or missing configuration."""
+
+    default_hints: ClassVar[list[Hint]] = [INVALID_CONFIG]
+
+
+class HudEnvVarError(HudException):
+    """Missing required environment variables."""
+
+    default_hints: ClassVar[list[Hint]] = [ENV_VAR_MISSING]
+
+
+class HudToolNotFoundError(HudException):
+    """Requested tool not found."""
+
+    default_hints: ClassVar[list[Hint]] = [TOOL_NOT_FOUND]
+
+
+class HudMCPError(HudException):
+    """MCP protocol or server error."""
+
+    default_hints: ClassVar[list[Hint]] = [MCP_SERVER_ERROR]
 
 
 class GymMakeException(HudException):

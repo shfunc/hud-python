@@ -150,9 +150,13 @@ class MCPServer(FastMCP):
         super().__init__(name=name, **fastmcp_kwargs)
         self._initializer_fn: Callable | None = None
         self._did_init = False
+        self._replaced_server = False
 
-        # Replace FastMCP's low-level server with our version that supports
-        # per-server initialization hooks
+    def _replace_with_init_server(self) -> None:
+        """Replace the low-level server with init version when needed."""
+        if self._replaced_server:
+            return
+
         def _run_init(ctx: RequestContext | None = None) -> Any:
             if self._initializer_fn is not None and not self._did_init:
                 self._did_init = True
@@ -177,6 +181,7 @@ class MCPServer(FastMCP):
         # Copy handlers from the old server to the new one
         self._mcp_server.request_handlers = old_request_handlers
         self._mcp_server.notification_handlers = old_notification_handlers
+        self._replaced_server = True
 
     # Initializer decorator: runs on the initialize request
     # The decorated function receives a RequestContext object with access to:
@@ -186,6 +191,8 @@ class MCPServer(FastMCP):
     def initialize(self, fn: Callable | None = None) -> Callable | None:
         def decorator(func: Callable) -> Callable:
             self._initializer_fn = func
+            # Only replace server when there's actually an init handler
+            self._replace_with_init_server()
             return func
 
         return decorator(fn) if fn else decorator

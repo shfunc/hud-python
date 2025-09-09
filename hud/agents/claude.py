@@ -306,19 +306,20 @@ class ClaudeAgent(MCPAgent):
         """Convert MCP tools to Claude tool format."""
         claude_tools = []
         self._claude_to_mcp_tool_map = {}  # Reset mapping
-        
+
         # Find computer tool by priority
         computer_tool_priority = ["anthropic_computer", "computer_anthropic", "computer"]
         selected_computer_tool = None
-        
+
         for priority_name in computer_tool_priority:
             for tool in self._available_tools:
-                if tool.name == priority_name:
+                # Check both exact match and suffix match (for prefixed tools)
+                if tool.name == priority_name or tool.name.endswith(f"_{priority_name}"):
                     selected_computer_tool = tool
                     break
             if selected_computer_tool:
                 break
-        
+
         # Add the selected computer tool if found
         if selected_computer_tool:
             claude_tool = {
@@ -330,14 +331,18 @@ class ClaudeAgent(MCPAgent):
             # Map Claude's "computer" back to the actual MCP tool name
             self._claude_to_mcp_tool_map["computer"] = selected_computer_tool.name
             claude_tools.append(claude_tool)
-            logger.debug(f"Using {selected_computer_tool.name} as computer tool for Claude")
-        
+            logger.debug("Using %s as computer tool for Claude", selected_computer_tool.name)
+
         # Add other non-computer tools
         for tool in self._available_tools:
             # Skip computer tools (already handled) and lifecycle tools
-            if tool.name in computer_tool_priority or tool.name in self.lifecycle_tools:
+            is_computer_tool = any(
+                tool.name == priority_name or tool.name.endswith(f"_{priority_name}")
+                for priority_name in computer_tool_priority
+            )
+            if is_computer_tool or tool.name in self.lifecycle_tools:
                 continue
-                
+
             claude_tool = {
                 "name": tool.name,
                 "description": tool.description or f"Execute {tool.name}",

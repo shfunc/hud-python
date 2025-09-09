@@ -79,7 +79,7 @@ async def get_telemetry_resource() -> Telemetry:
                 status=telemetry["status"],
                 live_url=telemetry["live_url"],
                 timestamp=datetime.now().isoformat(),
-                cdp_url=telemetry["cdp_url"],
+                cdp_url=None,
                 instance_id=telemetry["instance_id"],
             )
         except Exception as e:
@@ -235,8 +235,23 @@ async def initialize_environment(ctx):
 
             # Create browser session
             cdp_url = await browser_provider.launch(**launch_options)
-            persistent_ctx.set_cdp_url(cdp_url)
-            await send_progress(60, f"Browser launched, CDP URL: {cdp_url}")
+
+            # Build and store telemetry data
+            telemetry_data = {
+                "provider": provider_name,
+                "status": "running",
+                "live_url": browser_provider.get_live_view_url()
+                if hasattr(browser_provider, "get_live_view_url")
+                else None,
+                "cdp_url": cdp_url,
+                "instance_id": browser_provider._instance_id
+                if hasattr(browser_provider, "_instance_id")
+                else None,
+                "timestamp": datetime.now().isoformat(),
+            }
+            persistent_ctx.set_telemetry(telemetry_data)
+
+            await send_progress(60, f"Browser launched")
         else:
             # Reuse existing browser session
             await send_progress(20, "Reusing existing browser session...")
@@ -246,7 +261,7 @@ async def initialize_environment(ctx):
             if not cdp_url:
                 raise ValueError("No CDP URL in persistent context")
 
-            await send_progress(60, f"Using existing CDP URL: {cdp_url}")
+            await send_progress(60, f"Using existing CDP URL")
 
         # Initialize PlaywrightToolWithMemory with CDP URL from context
         # This reconnects to the existing browser session on reloads

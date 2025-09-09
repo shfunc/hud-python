@@ -11,7 +11,6 @@ import requests
 import typer
 import yaml
 
-from hud.settings import settings
 from hud.utils.design import HUDDesign
 
 
@@ -126,6 +125,9 @@ def push_environment(
     """Push HUD environment to registry."""
     design = HUDDesign()
     design.header("HUD Environment Push")
+
+    # Import settings lazily after any environment setup
+    from hud.settings import settings
 
     # Find hud.lock.yaml in specified directory
     env_dir = Path(directory)

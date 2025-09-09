@@ -3,28 +3,18 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from mcp import Implementation
+from mcp import Implementation, types
 from mcp.shared.exceptions import McpError
+from mcp_use.client import MCPClient as MCPUseClient
+from mcp_use.session import MCPSession as MCPUseSession
 from pydantic import AnyUrl
 
 from hud.types import MCPToolCall, MCPToolResult
 from hud.version import __version__ as hud_version
 
 from .base import BaseHUDClient
-
-if TYPE_CHECKING:
-    from mcp import types
-    from mcp_use.client import MCPClient as MCPUseClient  # type: ignore[attr-defined]
-    from mcp_use.session import MCPSession as MCPUseSession  # type: ignore[attr-defined]
-
-try:
-    from mcp_use.client import MCPClient as MCPUseClient  # type: ignore[attr-defined]
-    from mcp_use.session import MCPSession as MCPUseSession  # type: ignore[attr-defined]
-except ImportError:
-    MCPUseClient = None  # type: ignore[misc, assignment]
-    MCPUseSession = None  # type: ignore[misc, assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +43,9 @@ class MCPUseHUDClient(BaseHUDClient):
             )
 
         self._sessions: dict[str, Any] = {}  # Will be MCPUseSession when available
-        self._tool_map: dict[str, tuple[str, types.Tool]] = {}
+        self._tool_map: dict[
+            str, tuple[str, types.Tool, types.Tool]
+        ] = {}  # server_name, original_tool, prefixed_tool
         self._client: Any | None = None  # Will be MCPUseClient when available
 
     async def _connect(self, mcp_config: dict[str, dict[str, Any]]) -> None:
@@ -106,13 +98,22 @@ class MCPUseHUDClient(BaseHUDClient):
                 logger.info("Check that the MCP server is running and accessible")
             raise
 
+        # Populate tool map during initialization
+        await self.list_tools()
+
     async def list_tools(self) -> list[types.Tool]:
         """List all available tools from all sessions."""
         if self._client is None or not self._sessions:
             raise ValueError("Client is not connected, call initialize() first")
 
+        if self._tool_map:
+            return [tool[2] for tool in self._tool_map.values()]
+
         all_tools = []
         self._tool_map = {}
+
+        # Check if we need to prefix (more than one server)
+        use_prefix = len(self._sessions) > 1
 
         for server_name, session in self._sessions.items():
             try:
@@ -136,10 +137,26 @@ class MCPUseHUDClient(BaseHUDClient):
                     [tool.name for tool in tools_result.tools],
                 )
 
-                # Add to collections
+                # Add to collections with optional prefix
                 for tool in tools_result.tools:
-                    all_tools.append(tool)
-                    self._tool_map[tool.name] = (server_name, tool)
+                    if use_prefix:
+                        # Create a new tool with prefixed name
+                        prefixed_name = f"{server_name}_{tool.name}"
+                        # Create a new tool instance with prefixed name
+                        from mcp import types as mcp_types
+
+                        prefixed_tool = mcp_types.Tool(
+                            name=prefixed_name,
+                            description=tool.description,
+                            inputSchema=tool.inputSchema,
+                        )
+                        all_tools.append(prefixed_tool)
+                        # Map prefixed name to (server_name, original_tool)
+                        self._tool_map[prefixed_name] = (server_name, tool, prefixed_tool)
+                    else:
+                        # Single server - no prefix needed
+                        all_tools.append(tool)
+                        self._tool_map[tool.name] = (server_name, tool, tool)
 
                 # Log detailed tool info in verbose mode
                 if self.verbose:
@@ -164,15 +181,20 @@ class MCPUseHUDClient(BaseHUDClient):
             raise ValueError("Client is not connected, call initialize() first")
 
         if tool_call.name not in self._tool_map:
-            raise ValueError(f"Tool '{tool_call.name}' not found")
+            return MCPToolResult(
+                content=[types.TextContent(type="text", text=f"Tool '{tool_call.name}' not found")],
+                isError=True,
+                structuredContent=None,
+            )
 
-        server_name, _ = self._tool_map[tool_call.name]
+        server_name, original_tool, _ = self._tool_map[tool_call.name]
         session = self._sessions[server_name]
 
         if self.verbose:
             logger.debug(
-                "Calling tool '%s' on server '%s' with arguments: %s",
+                "Calling tool '%s' (original: '%s') on server '%s' with arguments: %s",
                 tool_call.name,
+                original_tool.name,
                 server_name,
                 tool_call.arguments,
             )
@@ -181,7 +203,7 @@ class MCPUseHUDClient(BaseHUDClient):
             raise ValueError(f"Client session not initialized for {server_name}")
 
         result = await session.connector.client_session.call_tool(
-            name=tool_call.name,
+            name=original_tool.name,  # Use original tool name, not prefixed
             arguments=tool_call.arguments or {},
         )
 
