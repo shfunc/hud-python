@@ -8,34 +8,34 @@ class TestNativeInit:
 
     def test_comparator_server_import(self):
         """Test that comparator server can be imported."""
-        from hud.native import comparator
+        from hud.native.comparator import comparator_server
         from hud.server import MCPServer
 
         # Verify comparator is an MCPServer instance
-        assert isinstance(comparator, MCPServer)
-        assert comparator.name == "comparator"
+        assert isinstance(comparator_server, MCPServer)
+        assert comparator_server.name == "comparator"
 
     def test_all_exports(self):
         """Test that __all__ is properly defined."""
-        import hud.native
+        import hud.native.comparator
 
         expected_exports = ["comparator"]
 
         # Check __all__ exists and contains expected exports
-        assert hasattr(hud.native, "__all__")
-        assert hud.native.__all__ == expected_exports
+        assert hasattr(hud.native.comparator, "__all__")
+        assert hud.native.comparator.__all__ == expected_exports
 
         # Verify all items in __all__ are actually available
-        for item in hud.native.__all__:
-            assert hasattr(hud.native, item)
+        for item in hud.native.comparator.__all__:
+            assert hasattr(hud.native.comparator, item)
 
     def test_comparator_tools_registered(self):
         """Test that comparator server has tools registered."""
-        from hud.native import comparator
+        from hud.native.comparator import comparator_server
 
         # The server should have tools registered
         # We can check that the tool manager has tools
-        tool_names = [t.name for t in comparator._tool_manager._tools.values()]
+        tool_names = [t.name for t in comparator_server._tool_manager._tools.values()]
 
         # Should have the main compare tool
         assert "compare" in tool_names
@@ -64,12 +64,12 @@ class TestNativeInit:
 
     def test_comparator_tool_functionality(self):
         """Test that we can get the CompareTool from the comparator."""
-        from hud.native import comparator
+        from hud.native.comparator import comparator_server
         from hud.tools import BaseTool
 
         # Get the compare tool
         compare_tool = None
-        for tool in comparator._tool_manager._tools.values():
+        for tool in comparator_server._tool_manager._tools.values():
             if tool.name == "compare":
                 compare_tool = tool
                 break

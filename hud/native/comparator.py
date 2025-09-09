@@ -293,7 +293,7 @@ COMPARISON_FUNCTIONS = {
 }
 
 
-def detect_type(value: str) -> DataType:
+def detect_type(value: str | None = None) -> DataType:
     """Detect the data type of a string value."""
     if value is None:
         return DataType.TEXT
@@ -360,8 +360,8 @@ class CompareTool(BaseTool):
 
     async def __call__(
         self,
-        value: str | list[str] | None = None,
-        reference: str | list[str] | None = None,
+        value: Any | list[Any] | None = None,
+        reference: Any | list[Any] | None = None,
         mode: ComparisonMode = ComparisonMode.AUTO,
         threshold: float = 0.8,
         tolerance: float = 1e-6,
@@ -486,8 +486,8 @@ def make_alias_tool(name: str, preset_mode: ComparisonMode, description: str) ->
 
         async def __call__(
             self,
-            value: str | list[str] | None = None,
-            reference: str | list[str] | None = None,
+            value: Any | list[Any] | None = None,
+            reference: Any | list[Any] | None = None,
             threshold: float = 0.8,
             tolerance: float = 1e-6,
         ) -> EvaluationResult:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from fastmcp.tools.tool import FunctionTool
 
 from hud.native.comparator import (
     CompareTool,
@@ -10,7 +11,7 @@ from hud.native.comparator import (
     ComparisonResult,
     DataType,
     auto_select_mode,
-    comparator,
+    comparator_server,
     detect_type,
     extract_boolean,
     extract_json,
@@ -96,18 +97,18 @@ class TestCompareTool:
         tool = CompareTool()
 
         # Exact match
-        result = await tool("hello", "hello", mode="exact")
+        result = await tool("hello", "hello", mode=ComparisonMode.EXACT)
         assert isinstance(result, EvaluationResult)
         assert result.done
         assert result.reward == 1.0
-        assert "Single Exact: 1/1 matches" in result.content
+        assert "Single Exact: 1/1 matches" in result.content if result.content else False
 
         # Fuzzy match
-        result = await tool("hello world", "hello wrld", mode="fuzzy")
+        result = await tool("hello world", "hello wrld", mode=ComparisonMode.FUZZY)
         assert isinstance(result, EvaluationResult)
         assert result.done
         assert 0.8 < result.reward < 1.0
-        assert "Single Fuzzy: 1/1 matches" in result.content
+        assert "Single Fuzzy: 1/1 matches" in result.content if result.content else False
 
     @pytest.mark.asyncio
     async def test_list_comparison(self):
@@ -115,16 +116,16 @@ class TestCompareTool:
         tool = CompareTool()
 
         # Exact lists
-        result = await tool(["a", "b", "c"], ["a", "b", "c"], mode="exact")
+        result = await tool(["a", "b", "c"], ["a", "b", "c"], mode=ComparisonMode.EXACT)
         assert result.done
         assert result.reward == 1.0
-        assert "Batch Exact: 3/3 matches" in result.content
+        assert "Batch Exact: 3/3 matches" in result.content if result.content else False
 
         # Partial match
-        result = await tool(["a", "b", "c"], ["a", "x", "c"], mode="exact")
+        result = await tool(["a", "b", "c"], ["a", "x", "c"], mode=ComparisonMode.EXACT)
         assert not result.done
         assert result.reward < 1.0
-        assert "Batch Exact: 2/3 matches" in result.content
+        assert "Batch Exact: 2/3 matches" in result.content if result.content else False
 
     @pytest.mark.asyncio
     async def test_broadcast_comparison(self):
@@ -132,16 +133,16 @@ class TestCompareTool:
         tool = CompareTool()
 
         # Single value vs list
-        result = await tool("a", ["a", "a", "a"], mode="exact")
+        result = await tool("a", ["a", "a", "a"], mode=ComparisonMode.EXACT)
         assert result.done
         assert result.reward == 1.0
-        assert "Broadcast Exact: 3/3 matches" in result.content
+        assert "Broadcast Exact: 3/3 matches" in result.content if result.content else False
 
         # List vs single value
-        result = await tool(["x", "x", "x"], "x", mode="exact")
+        result = await tool(["x", "x", "x"], "x", mode=ComparisonMode.EXACT)
         assert result.done
         assert result.reward == 1.0
-        assert "Broadcast Exact: 3/3 matches" in result.content
+        assert "Broadcast Exact: 3/3 matches" in result.content if result.content else False
 
     @pytest.mark.asyncio
     async def test_submission_fallback(self):
@@ -152,7 +153,7 @@ class TestCompareTool:
         set_submission("test value")
 
         # Compare without providing value
-        result = await tool(None, "test value", mode="exact")
+        result = await tool(None, "test value", mode=ComparisonMode.EXACT)
         assert result.done
         assert result.reward == 1.0
 
@@ -167,13 +168,13 @@ class TestCompareTool:
         # Missing reference
         result = await tool("value", None)
         assert result.isError
-        assert "Missing value or reference" in result.content
+        assert "Missing value or reference" in result.content if result.content else False
 
         # Mismatched list lengths
         result = await tool([1, 2], [1, 2, 3])
         assert not result.done
         assert result.reward == 0.0
-        assert "Mismatched lengths" in result.content
+        assert "Mismatched lengths" in result.content if result.content else False
 
 
 class TestCompareToolModes:
@@ -185,16 +186,16 @@ class TestCompareToolModes:
         tool = CompareTool()
 
         # Numbers should use numeric
-        result = await tool("42", "42.0", mode="auto")
+        result = await tool("42", "42.0", mode=ComparisonMode.AUTO)
         assert result.done
         assert result.reward == 1.0
-        assert "Numeric" in result.content
+        assert "Numeric" in result.content if result.content else False
 
         # JSON should use semantic
-        result = await tool('{"a": 1}', '{"a": 1}', mode="auto")
+        result = await tool('{"a": 1}', '{"a": 1}', mode=ComparisonMode.AUTO)
         assert result.done
         assert result.reward == 1.0
-        assert "Semantic" in result.content
+        assert "Semantic" in result.content if result.content else False
 
     @pytest.mark.asyncio
     async def test_exact_mode(self):
@@ -202,12 +203,12 @@ class TestCompareToolModes:
         tool = CompareTool()
 
         # Exact match
-        result = await tool("hello", "hello", mode="exact")
+        result = await tool("hello", "hello", mode=ComparisonMode.EXACT)
         assert result.done
         assert result.reward == 1.0
 
         # Different strings
-        result = await tool("42", "42.0", mode="exact")
+        result = await tool("42", "42.0", mode=ComparisonMode.EXACT)
         assert not result.done
         assert result.reward == 0.0
 
@@ -217,12 +218,12 @@ class TestCompareToolModes:
         tool = CompareTool()
 
         # High similarity
-        result = await tool("hello world", "hello wrld", mode="fuzzy", threshold=0.8)
+        result = await tool("hello world", "hello wrld", mode=ComparisonMode.FUZZY, threshold=0.8)
         assert result.done
         assert result.reward > 0.8
 
         # Low similarity
-        result = await tool("hello", "goodbye", mode="fuzzy", threshold=0.9)
+        result = await tool("hello", "goodbye", mode=ComparisonMode.FUZZY, threshold=0.9)
         assert not result.done
         assert result.reward < 0.5
 
@@ -232,12 +233,12 @@ class TestCompareToolModes:
         tool = CompareTool()
 
         # Within tolerance
-        result = await tool("1.0", "1.000001", mode="numeric", tolerance=1e-5)
+        result = await tool("1.0", "1.000001", mode=ComparisonMode.NUMERIC, tolerance=1e-5)
         assert result.done
         assert result.reward > 0.99
 
         # Outside tolerance
-        result = await tool("1.0", "2.0", mode="numeric", tolerance=0.1)
+        result = await tool("1.0", "2.0", mode=ComparisonMode.NUMERIC, tolerance=0.1)
         assert not result.done
         assert result.reward < 0.5
 
@@ -247,27 +248,29 @@ class TestCompareToolModes:
         tool = CompareTool()
 
         # JSON objects (same structure)
-        result = await tool('{"b": 2, "a": 1}', '{"a": 1, "b": 2}', mode="semantic")
+        result = await tool('{"b": 2, "a": 1}', '{"a": 1, "b": 2}', mode=ComparisonMode.SEMANTIC)
         assert result.done
         assert result.reward == 1.0
 
         # JSON arrays
-        result = await tool("[1, 2, 3]", "[1, 2, 3]", mode="semantic")
+        result = await tool("[1, 2, 3]", "[1, 2, 3]", mode=ComparisonMode.SEMANTIC)
         assert result.done
         assert result.reward == 1.0
 
         # Numbers via semantic (uses numeric comparison)
-        result = await tool("42", "42.0", mode="semantic", tolerance=1e-6)
+        result = await tool("42", "42.0", mode=ComparisonMode.SEMANTIC, tolerance=1e-6)
         assert result.done
         assert result.reward == 1.0
 
         # Booleans via semantic
-        result = await tool("true", "true", mode="semantic")
+        result = await tool("true", "true", mode=ComparisonMode.SEMANTIC)
         assert result.done
         assert result.reward == 1.0
 
         # Text fallback when not JSON
-        result = await tool("hello world", "hello wrld", mode="semantic", threshold=0.8)
+        result = await tool(
+            "hello world", "hello wrld", mode=ComparisonMode.SEMANTIC, threshold=0.8
+        )
         assert result.done
         assert result.reward > 0.8
 
@@ -318,10 +321,10 @@ class TestAliasTools:
     @pytest.mark.asyncio
     async def test_aliases_work(self):
         """Test that aliases are properly registered and work."""
-        from hud.native.comparator import comparator
+        from hud.native.comparator import comparator_server
 
         # Check that aliases are registered
-        tool_names = [t.name for t in comparator._tool_manager._tools.values()]
+        tool_names = [t.name for t in comparator_server._tool_manager._tools.values()]
 
         expected_aliases = [
             "compare_exact",
@@ -430,9 +433,10 @@ class TestAliasPreprocessing:
     @pytest.mark.asyncio
     async def test_json_alias_preprocessing(self):
         """Test JSON extraction in compare_json tool."""
-        tools = {t.name: t for t in comparator._tool_manager._tools.values()}
+        tools = {t.name: t for t in comparator_server._tool_manager._tools.values()}
         json_tool = tools["compare_json"]
 
+        assert isinstance(json_tool, FunctionTool)
         result = await json_tool.fn(
             value='The model thinks the answer is {"result": 42, "confidence": 0.9}',
             reference='{"result": 42, "confidence": 0.9}',
@@ -444,10 +448,11 @@ class TestAliasPreprocessing:
     @pytest.mark.asyncio
     async def test_numeric_alias_preprocessing(self):
         """Test number extraction in numeric tools."""
-        tools = {t.name: t for t in comparator._tool_manager._tools.values()}
+        tools = {t.name: t for t in comparator_server._tool_manager._tools.values()}
 
         # Float tool
         float_tool = tools["compare_float"]
+        assert isinstance(float_tool, FunctionTool)
         result = await float_tool.fn(
             value="After careful calculation, the answer is 3.14159", reference="3.14159"
         )
@@ -457,6 +462,7 @@ class TestAliasPreprocessing:
 
         # Integer tool
         int_tool = tools["compare_int"]
+        assert isinstance(int_tool, FunctionTool)
         result = await int_tool.fn(value="The count is exactly 42 items", reference="42")
         assert result.done
         assert result.reward == 1.0
@@ -465,9 +471,10 @@ class TestAliasPreprocessing:
     @pytest.mark.asyncio
     async def test_boolean_alias_preprocessing(self):
         """Test boolean extraction in compare_boolean tool."""
-        tools = {t.name: t for t in comparator._tool_manager._tools.values()}
+        tools = {t.name: t for t in comparator_server._tool_manager._tools.values()}
         bool_tool = tools["compare_boolean"]
 
+        assert isinstance(bool_tool, FunctionTool)
         result = await bool_tool.fn(
             value="Based on the analysis, the statement is TRUE", reference="true"
         )
@@ -478,9 +485,10 @@ class TestAliasPreprocessing:
     @pytest.mark.asyncio
     async def test_list_alias_preprocessing(self):
         """Test list extraction in compare_list tool."""
-        tools = {t.name: t for t in comparator._tool_manager._tools.values()}
+        tools = {t.name: t for t in comparator_server._tool_manager._tools.values()}
         list_tool = tools["compare_list"]
 
+        assert isinstance(list_tool, FunctionTool)
         result = await list_tool.fn(
             value="The sorted results are [1, 2, 3, 4, 5]", reference="[1, 2, 3, 4, 5]"
         )
@@ -491,16 +499,16 @@ class TestAliasPreprocessing:
     @pytest.mark.asyncio
     async def test_complex_llm_output(self):
         """Test extraction from complex LLM outputs with reasoning."""
-        tools = {t.name: t for t in comparator._tool_manager._tools.values()}
+        tools = {t.name: t for t in comparator_server._tool_manager._tools.values()}
         json_tool = tools["compare_json"]
 
         llm_output = """
         Let me analyze this request step by step.
-        
+
         First, I'll process the data:
         - Item 1: processed
         - Item 2: processed with value 42
-        
+
         After careful consideration, the final result is:
         {
             "status": "success",
@@ -521,6 +529,7 @@ class TestAliasPreprocessing:
         "metadata": {"timestamp": "2024-01-01", "version": "1.0"}}}
         """
 
+        assert isinstance(json_tool, FunctionTool)
         result = await json_tool.fn(value=llm_output, reference=reference)
         assert result.done
         assert result.reward == 1.0
