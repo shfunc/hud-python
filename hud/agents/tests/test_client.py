@@ -33,7 +33,6 @@ class TestMCPClient:
         with patch("mcp_use.client.MCPClient.from_dict", return_value=mock_instance):
             yield mock_instance
 
-
     @pytest.mark.asyncio
     async def test_connect_single_server(self, mock_telemetry, mock_mcp_use_client):
         """Test connecting to a single server."""
