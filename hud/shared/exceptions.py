@@ -89,9 +89,11 @@ class HudException(Exception):
         *,
         hints: list[Hint] | None = None,
     ) -> None:
-        # Pass the message to the base Exception class
-        super().__init__(message)
-        self.message = message
+        # If we already have args set (from _analyze_exception), don't override them
+        if not self.args:
+            # Pass the message to the base Exception class
+            super().__init__(message)
+        self.message = message or (self.args[0] if self.args else "")
         self.response_json = response_json
         # If hints not provided, use defaults defined by subclass
         self.hints: list[Hint] = hints if hints is not None else list(self.default_hints)
@@ -159,11 +161,14 @@ class HudException(Exception):
             if condition():
                 # Create instance directly using Exception.__new__ to bypass our custom __new__
                 instance = Exception.__new__(exception_class)
+                # Manually set args before calling __init__ to ensure proper Exception behavior
+                instance.args = (final_msg,)
                 instance.__init__(final_msg)
                 return instance
 
         # No pattern matched - return base exception instance
         instance = Exception.__new__(HudException)
+        instance.args = (final_msg,)
         instance.__init__(final_msg)
         return instance
 

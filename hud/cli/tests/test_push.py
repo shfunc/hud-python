@@ -123,7 +123,7 @@ class TestPushEnvironment:
         mock_design.error.assert_called()
 
     @mock.patch("hud.cli.push.HUDDesign")
-    @mock.patch("hud.cli.push.settings")
+    @mock.patch("hud.settings.settings")
     def test_push_no_api_key(self, mock_settings, mock_design_class, tmp_path):
         """Test pushing without API key."""
         mock_design = mock.Mock()
@@ -143,7 +143,7 @@ class TestPushEnvironment:
     @mock.patch("subprocess.Popen")
     @mock.patch("subprocess.run")
     @mock.patch("hud.cli.push.get_docker_username")
-    @mock.patch("hud.cli.push.settings")
+    @mock.patch("hud.settings.settings")
     @mock.patch("hud.cli.push.HUDDesign")
     def test_push_auto_detect_username(
         self,
@@ -205,7 +205,7 @@ class TestPushEnvironment:
         assert "testuser/image%3A0.1.0" in call_args[0][0]
 
     @mock.patch("subprocess.run")
-    @mock.patch("hud.cli.push.settings")
+    @mock.patch("hud.settings.settings")
     @mock.patch("hud.cli.push.HUDDesign")
     def test_push_explicit_image(self, mock_design_class, mock_settings, mock_run, tmp_path):
         """Test pushing with explicit image name."""
@@ -226,7 +226,7 @@ class TestPushEnvironment:
 
     @mock.patch("subprocess.Popen")
     @mock.patch("subprocess.run")
-    @mock.patch("hud.cli.push.settings")
+    @mock.patch("hud.settings.settings")
     @mock.patch("hud.cli.push.HUDDesign")
     def test_push_with_tag(self, mock_design_class, mock_settings, mock_run, mock_popen, tmp_path):
         """Test pushing with explicit tag."""
@@ -282,7 +282,7 @@ class TestPushEnvironment:
         mock_process.returncode = 1
         mock_popen.return_value = mock_process
 
-        with mock.patch("hud.cli.push.settings") as mock_settings:
+        with mock.patch("hud.settings.settings") as mock_settings:
             mock_settings.api_key = "test-key"
             with (
                 mock.patch("subprocess.run"),
@@ -292,7 +292,7 @@ class TestPushEnvironment:
 
     @mock.patch("hud.cli.push.get_docker_image_labels")
     @mock.patch("subprocess.run")
-    @mock.patch("hud.cli.push.settings")
+    @mock.patch("hud.settings.settings")
     @mock.patch("hud.cli.push.HUDDesign")
     def test_push_with_labels(
         self, mock_design_class, mock_settings, mock_run, mock_get_labels, tmp_path

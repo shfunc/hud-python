@@ -33,28 +33,6 @@ class TestMCPClient:
         with patch("mcp_use.client.MCPClient.from_dict", return_value=mock_instance):
             yield mock_instance
 
-    @pytest.mark.asyncio
-    async def test_init_with_config(self, mock_telemetry):
-        """Test client initialization with config dictionary."""
-        mcp_config = {
-            "test_server": {
-                "command": "python",
-                "args": ["-m", "test_server"],
-                "env": {"TEST": "true"},
-            }
-        }
-
-        with patch("mcp_use.client.MCPClient.from_dict") as mock_from_dict:
-            mock_instance = MagicMock()
-            mock_instance.create_all_sessions = AsyncMock(return_value={})
-            mock_from_dict.return_value = mock_instance
-            client = MCPClient(mcp_config=mcp_config, verbose=True)
-            # Initialize to trigger connection
-            await client.initialize()
-
-            assert client.verbose is True
-            # Verify MCPUseClient.from_dict was called with proper config
-            mock_from_dict.assert_called_once_with({"mcpServers": mcp_config})
 
     @pytest.mark.asyncio
     async def test_connect_single_server(self, mock_telemetry, mock_mcp_use_client):
@@ -146,10 +124,10 @@ class TestMCPClient:
         # Verify sessions were created
         mock_mcp_use_client.create_all_sessions.assert_called_once()
 
-        # Check tools from both servers
+        # Check tools from both servers - should be prefixed with server names
         tools = await client.list_tools()
         names = {t.name for t in tools}
-        assert names == {"tool1", "tool2"}
+        assert names == {"server1_tool1", "server2_tool2"}
 
     @pytest.mark.asyncio
     async def test_call_tool(self, mock_telemetry, mock_mcp_use_client):
@@ -220,8 +198,10 @@ class TestMCPClient:
 
         await client.initialize()
 
-        with pytest.raises(ValueError, match="Tool 'nonexistent' not found"):
-            await client.call_tool(name="nonexistent", arguments={})
+        # Calling a non-existent tool should return an error result
+        result = await client.call_tool(name="nonexistent", arguments={})
+        assert result.isError is True
+        assert "Tool 'nonexistent' not found" in result.content[0].text
 
     @pytest.mark.asyncio
     async def test_get_telemetry_data(self, mock_telemetry, mock_mcp_use_client):

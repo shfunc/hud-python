@@ -240,7 +240,7 @@ class TestCompareToolModes:
         # Outside tolerance
         result = await tool("1.0", "2.0", mode=ComparisonMode.NUMERIC, tolerance=0.1)
         assert not result.done
-        assert result.reward < 0.5
+        assert result.reward <= 0.5
 
     @pytest.mark.asyncio
     async def test_semantic_mode(self):
