@@ -16,6 +16,7 @@ dependencies = [
     # MCP dependencies
     "hud-mcp-python-sdk>=3.13.2",
     "hud-fastmcp-python-sdk>=0.1.2",
+    "hud-mcp-use-python-sdk>=2.3.16",
     "pathspec>=0.12.1",
     "wrapt>=1.14.0",
     # CLI dependencies
@@ -120,8 +121,6 @@ agent = [
     "ipython <9",
     "jupyter_client",
     "jupyter_core",
-    # Other agent utilities
-    "hud-mcp-use-python-sdk>=2.3.13",
     "dotenv>=0.9.9",
 ]
 
