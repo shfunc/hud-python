@@ -24,12 +24,10 @@ from .debug import debug_mcp_stdio
 from .dev import run_mcp_dev_server
 
 # Import new commands
-from .hf import hf_command
 from .init import create_environment
 from .pull import pull_command
 from .push import push_command
 from .remove import remove_command
-from .rl import rl_command
 from .utils.cursor import get_cursor_config_path, list_cursor_servers, parse_cursor_config
 from .utils.logging import CaptureLogger
 
@@ -927,37 +925,86 @@ def eval(
     )
 
 
-# Add the RL command
-app.command(name="rl")(rl_command)
+@app.command()
+def get(
+    dataset_name: str = typer.Argument(
+        ...,
+        help="HuggingFace dataset name (e.g., 'hud-evals/browser-2048-tasks')"
+    ),
+    split: str = typer.Option(
+        "train",
+        "--split",
+        "-s",
+        help="Dataset split to download (train/test/validation)"
+    ),
+    output: Path | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output filename (defaults to dataset_name.jsonl)"
+    ),
+    limit: int | None = typer.Option(
+        None,
+        "--limit",
+        "-l",
+        help="Limit number of examples to download"
+    ),
+) -> None:
+    """📥 Download a HuggingFace dataset and save it as JSONL."""
+    from .get import get_command
+    
+    get_command(
+        dataset_name=dataset_name,
+        split=split,
+        output=output,
+        limit=limit,
+    )
 
 
 @app.command()
-def hf(
-    tasks_file: Path | None = typer.Argument(  # noqa: B008
-        None, help="JSON file containing tasks (auto-detected if not provided)"
+def rl(
+    tasks_file: str | None = typer.Argument(
+        None,
+        help=(
+            "Path to tasks file (JSON/JSONL) or HuggingFace dataset name. "
+            "If not provided, looks for tasks.json or tasks.jsonl in current directory."
+        ),
     ),
-    name: str | None = typer.Option(
-        None, "--name", "-n", help="Dataset name (e.g., 'my-org/my-dataset')"
+    model: str | None = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="Model to train (default: interactive selection)",
     ),
-    push: bool = typer.Option(True, "--push/--no-push", help="Push to HuggingFace Hub"),
-    private: bool = typer.Option(False, "--private", help="Make dataset private on Hub"),
-    update_lock: bool = typer.Option(
-        True, "--update-lock/--no-update-lock", help="Update hud.lock.yaml"
+    config_file: Path | None = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help="Path to existing configuration file",
     ),
-    token: str | None = typer.Option(None, "--token", help="HuggingFace API token"),
+    output_dir: str = typer.Option(
+        "checkpoints",
+        "--output-dir",
+        "-o",
+        help="Output directory for checkpoints",
+    ),
+    restart: bool = typer.Option(
+        False,
+        "--restart",
+        help="Restart the vLLM server before training",
+    ),
 ) -> None:
-    """📊 Convert tasks to HuggingFace dataset format.
-
-    Automatically detects task files if not specified.
-    Suggests dataset name based on environment if not provided.
-
-    Examples:
-        hud hf                      # Auto-detect tasks and suggest name
-        hud hf tasks.json           # Use specific file, suggest name
-        hud hf --name my-org/my-tasks  # Auto-detect tasks, use name
-        hud hf tasks.json --name hud-evals/web-tasks --private
-    """
-    hf_command(tasks_file, name, push, private, update_lock, token)
+    """🎯 Run GRPO reinforcement learning training on tasks."""
+    # Import from the rl module
+    from .rl import rl_command
+    
+    rl_command(
+        tasks_file=tasks_file,
+        model=model,
+        config_file=config_file,
+        output_dir=output_dir,
+        restart=restart,
+    )
 
 
 def main() -> None:
@@ -980,10 +1027,12 @@ def main() -> None:
             console.print("  4. Share your environment: [cyan]hud push[/cyan]")
             console.print("  5. Get shared environments: [cyan]hud pull <org/name:tag>[/cyan]")
             console.print("  6. Run and test: [cyan]hud run <image>[/cyan]")
-            console.print("\n[yellow]RL Training:[/yellow]")
-            console.print("  1. Create dataset: [cyan]hud hf tasks.json --name my-org/my-tasks[/cyan]")
-            console.print("  2. Start training: [cyan]hud rl hud-evals/2048-taskset[/cyan]")
-            console.print("  3. Custom model: [cyan]hud rl dataset.json --model meta-llama/Llama-3.2-3B[/cyan]\n")
+            console.print("\n[yellow]Datasets & RL Training:[/yellow]")
+            console.print("  1. Get dataset: [cyan]hud get hud-evals/browser-2048-tasks[/cyan]")
+            console.print("  2. Create dataset: [cyan]hud hf tasks.json --name my-org/my-tasks[/cyan]")
+            console.print("  3. Start training: [cyan]hud rl browser-2048-tasks.jsonl[/cyan]")
+            console.print("  4. Custom model: [cyan]hud rl tasks.jsonl --model meta-llama/Llama-3.2-3B[/cyan]")
+            console.print("  5. Restart server: [cyan]hud rl tasks.jsonl --restart[/cyan]\n")
 
         app()
     except typer.Exit as e:

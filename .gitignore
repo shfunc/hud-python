@@ -45,3 +45,6 @@ wandb/
 outputs/
 
 test/
+
+/checkpoints/
+/checkpoints_test/

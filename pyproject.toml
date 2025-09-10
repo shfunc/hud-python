@@ -60,6 +60,10 @@ exclude = [
     "docs/",
     "examples/",
     "/rl/",  # Only exclude top-level rl directory, not hud/cli/rl/
+    "**/checkpoints/",
+    "**/*.safetensors",
+    "**/*.ckpt",
+    "**/*.pth",
 ]
 
 [tool.hud.clone]
@@ -82,7 +86,7 @@ allow-direct-references = true
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "hud/**",  # Include all files under hud/, including hud/cli/rl/
+    "hud/**",
     "README.md",
     "LICENSE",
     "pyproject.toml"
@@ -90,6 +94,9 @@ include = [
 exclude = [
     "*/tests/",
     "*/__pycache__/",
+    "**/*.safetensors",
+    "**/*.ckpt",
+    "**/*.pth",
     "*.pyc",
     "*.pyo",
     "*~",
@@ -125,6 +132,15 @@ agent = [
 ]
 
 agents = ["hud-python[agent]"]
+
+rl = [
+    "hud-python[agent]",
+    "peft>=0.17.1",
+    "vllm>=0.10.1.1",
+    "bitsandbytes>=0.41.0",  # For 8-bit optimizers
+    # Note: flash-attn is recommended but optional
+    # Install separately with: uv pip install flash-attn --no-build-isolation
+]
 
 # Development dependencies - includes testing, linting, and automation tools
 dev = [
