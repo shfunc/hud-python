@@ -12,10 +12,11 @@ from __future__ import annotations
 from .instrument import instrument
 from .job import Job, create_job, job
 from .replay import clear_trace, get_trace
-from .trace import trace
+from .trace import Trace, trace
 
 __all__ = [
     "Job",
+    "Trace",
     "clear_trace",
     "create_job",
     "get_trace",

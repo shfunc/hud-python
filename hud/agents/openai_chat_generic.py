@@ -41,7 +41,6 @@ class GenericOpenAIChatAgent(MCPAgent):
         *,
         openai_client: AsyncOpenAI,
         model_name: str = "gpt-4o-mini",
-        parallel_tool_calls: bool = False,
         completion_kwargs: dict[str, Any] | None = None,
         **agent_kwargs: Any,
     ) -> None:
@@ -49,9 +48,9 @@ class GenericOpenAIChatAgent(MCPAgent):
         super().__init__(**agent_kwargs)
         self.oai = openai_client
         self.model_name = model_name
-        self.parallel_tool_calls = parallel_tool_calls
         self.completion_kwargs: dict[str, Any] = completion_kwargs or {}
         self.conversation_history = []
+        self.mcp_schemas = []
 
     @staticmethod
     def _oai_to_mcp(tool_call: Any) -> MCPToolCall:  # type: ignore[valid-type]
@@ -173,29 +172,39 @@ class GenericOpenAIChatAgent(MCPAgent):
         """Send chat request to OpenAI and convert the response."""
 
         # Convert MCP tool schemas to OpenAI format
-        mcp_schemas = self.get_tool_schemas()
+        self.mcp_schemas = self.get_tool_schemas()
+        logger.debug(f"Tool schemas for vLLM: {self.mcp_schemas}")
 
-        protected_keys = {"model", "messages", "tools", "parallel_tool_calls"}
+        protected_keys = {"model", "messages", "tools"}
         extra = {k: v for k, v in (self.completion_kwargs or {}).items() if k not in protected_keys}
 
         response = await self.oai.chat.completions.create(
             model=self.model_name,
             messages=messages,
-            tools=cast("list[ChatCompletionToolParam]", mcp_schemas),
-            parallel_tool_calls=self.parallel_tool_calls,
+            tools=cast("list[ChatCompletionToolParam]", self.mcp_schemas),
             **extra,
         )
 
         choice = response.choices[0]
         msg = choice.message
-
         assistant_msg: dict[str, Any] = {"role": "assistant"}
 
         if msg.content:
             assistant_msg["content"] = msg.content
 
         if msg.tool_calls:
-            assistant_msg["tool_calls"] = msg.tool_calls
+            serialized_tool_calls = []
+            for tc in msg.tool_calls:
+                serialized_tc = {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments
+                    }
+                }
+                serialized_tool_calls.append(serialized_tc)
+            assistant_msg["tool_calls"] = serialized_tool_calls
 
         messages.append(assistant_msg)
 
@@ -207,13 +216,15 @@ class GenericOpenAIChatAgent(MCPAgent):
             for tc in msg.tool_calls:
                 if tc.function.name is not None:  # type: ignore
                     tool_calls.append(self._oai_to_mcp(tc))
-                    if not self.parallel_tool_calls:
-                        break
 
+        # Only stop on length (token limit), never on "stop"
+        done = choice.finish_reason == "length"
+        logger.info(f"Done decision: finish_reason={choice.finish_reason}, done={done}")
+        
         return AgentResponse(
             content=msg.content or "",
             tool_calls=tool_calls,
-            done=choice.finish_reason in ("stop", "length"),
+            done=done,
             raw=response,  # Include raw response for access to Choice objects
         )
 
@@ -228,15 +239,15 @@ class GenericOpenAIChatAgent(MCPAgent):
         When images are present, we return both a tool message and a user message.
         """
         rendered: list[dict[str, Any]] = []
+
+        # Separate text and image content
+        text_parts = []
+        image_parts = []
         for call, res in zip(tool_calls, tool_results, strict=False):
             # Use structuredContent.result if available, otherwise use content
             items = res.content
             if res.structuredContent and isinstance(res.structuredContent, dict):
                 items = res.structuredContent.get("result", res.content)
-
-            # Separate text and image content
-            text_parts = []
-            image_parts = []
 
             for item in items:
                 if isinstance(item, dict):
@@ -270,18 +281,18 @@ class GenericOpenAIChatAgent(MCPAgent):
                 }
             )
 
-            # If there are images, add them as a separate user message
-            if image_parts:
-                # Add a user message with the images
-                content_with_images = [
-                    {"type": "text", "text": "Tool returned the following:"},
-                    *image_parts,
-                ]
-                rendered.append(
-                    {
-                        "role": "user",
-                        "content": content_with_images,
-                    }
-                )
+        # If there are images, add them as a separate user message
+        if image_parts:
+            # Add a user message with the images
+            content_with_images = [
+                {"type": "text", "text": "Tool returned the following:"},
+                image_parts[-1],
+            ]
+            rendered.append(
+                {
+                    "role": "user",
+                    "content": content_with_images,
+                }
+            )
 
         return rendered

@@ -29,7 +29,7 @@ from .init import create_environment
 from .pull import pull_command
 from .push import push_command
 from .remove import remove_command
-from .rl import rl_app
+from .rl import rl_command
 from .utils.cursor import get_cursor_config_path, list_cursor_servers, parse_cursor_config
 from .utils.logging import CaptureLogger
 
@@ -927,8 +927,8 @@ def eval(
     )
 
 
-# Add the RL subcommand group
-app.add_typer(rl_app, name="rl")
+# Add the RL command
+app.command(name="rl")(rl_command)
 
 
 @app.command()
@@ -981,11 +981,9 @@ def main() -> None:
             console.print("  5. Get shared environments: [cyan]hud pull <org/name:tag>[/cyan]")
             console.print("  6. Run and test: [cyan]hud run <image>[/cyan]")
             console.print("\n[yellow]RL Training:[/yellow]")
-            console.print("  1. Generate config: [cyan]hud rl init my-env:latest[/cyan]")
-            console.print(
-                "  2. Create dataset: [cyan]hud hf tasks.json --name my-org/my-tasks[/cyan]"
-            )
-            console.print("  3. Start training: [cyan]hud rl --model Qwen/Qwen2.5-3B[/cyan]\n")
+            console.print("  1. Create dataset: [cyan]hud hf tasks.json --name my-org/my-tasks[/cyan]")
+            console.print("  2. Start training: [cyan]hud rl hud-evals/2048-taskset[/cyan]")
+            console.print("  3. Custom model: [cyan]hud rl dataset.json --model meta-llama/Llama-3.2-3B[/cyan]\n")
 
         app()
     except typer.Exit as e:

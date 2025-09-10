@@ -89,6 +89,46 @@ class Job:
             except Exception as e:
                 logger.warning("Failed to update job status: %s", e)
 
+    async def log(self, metrics: dict[str, Any]) -> None:
+        """Log metrics to the job.
+        
+        Args:
+            metrics: Dictionary of metric name to value pairs
+            
+        Example:
+            await job.log({"loss": 0.5, "accuracy": 0.95, "epoch": 1})
+        """
+        if settings.telemetry_enabled:
+            try:
+                await make_request(
+                    method="POST",
+                    url=f"{settings.hud_telemetry_url}/jobs/{self.id}/log",
+                    json={"metrics": metrics, "timestamp": datetime.now(UTC).isoformat()},
+                    api_key=settings.api_key,
+                )
+            except Exception as e:
+                logger.warning("Failed to log metrics to job: %s", e)
+    
+    def log_sync(self, metrics: dict[str, Any]) -> None:
+        """Synchronously log metrics to the job.
+        
+        Args:
+            metrics: Dictionary of metric name to value pairs
+            
+        Example:
+            job.log_sync({"loss": 0.5, "accuracy": 0.95, "epoch": 1})
+        """
+        if settings.telemetry_enabled:
+            try:
+                make_request_sync(
+                    method="POST",
+                    url=f"{settings.hud_telemetry_url}/jobs/{self.id}/log",
+                    json={"metrics": metrics, "timestamp": datetime.now(UTC).isoformat()},
+                    api_key=settings.api_key,
+                )
+            except Exception as e:
+                logger.warning("Failed to log metrics to job: %s", e)
+
     def __repr__(self) -> str:
         return f"Job(id={self.id!r}, name={self.name!r}, status={self.status!r})"
 

@@ -45,7 +45,7 @@ class MCPAgent(ABC):
     `format_blocks`, and `format_tool_results`.
     """
 
-    metadata: dict[str, Any]
+    metadata: dict[str, Any] | None = None
     required_tools: ClassVar[list[str]] = []  # Tools that must be available
 
     def __init__(
@@ -446,7 +446,7 @@ class MCPAgent(ABC):
         return results
 
     @abstractmethod
-    async def get_system_messages(self) -> list[Any]:
+    async def get_system_messages(self) -> list[types.ContentBlock]:
         """
         Get the system prompt.
         """
@@ -455,7 +455,7 @@ class MCPAgent(ABC):
     @abstractmethod
     async def get_response(
         self, messages: list[Any]
-    ) -> AgentResponse:  # maybe type messages as list[types.ContentBlock]
+    ) -> AgentResponse:
         """
         Get response from the model including any tool calls.
 
