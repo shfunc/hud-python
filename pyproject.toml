@@ -59,7 +59,6 @@ exclude = [
     "environments/",
     "docs/",
     "examples/",
-    "/rl/",  # Only exclude top-level rl directory, not hud/cli/rl/
     "**/checkpoints/",
     "**/*.safetensors",
     "**/*.ckpt",

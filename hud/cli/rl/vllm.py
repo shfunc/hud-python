@@ -98,7 +98,7 @@ def start_vllm_server(model_name: str, gpu_index: int = 1, restart: bool = False
         "--port", "8000",
         "--tensor-parallel-size", "1",
         "--trust-remote-code",
-        "--max-model-len", "32768",
+        "--max-model-len", "16384",
         "--enable-lora",
         "--max-lora-rank", "64",
         "--max-cpu-loras", "4",
