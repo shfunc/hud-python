@@ -1,61 +1,63 @@
 """Shared types for RL training."""
 
-from dataclasses import dataclass, field
+from pydantic.dataclasses import dataclass
+from pydantic import Field, ConfigDict
 from typing import Any
+from hud.types import Trace
+import math
 
 try:
     import torch
 except ImportError:
     raise ImportError("uv tool install hud-python[rl] to use this module")
 
-@dataclass
-class Episode:
-    """A complete episode/trajectory."""
-    task_id: str
-    terminal_reward: float
-    conversation_history: list[dict[str, Any]]  # Full OpenAI format conversation
-    tool_spec: list[dict[str, Any]]            # Tool specification
-    info: dict[str, Any] = field(default_factory=dict)
-    metadata: dict[str, Any] = field(default_factory=dict)
-    
-    @property
-    def num_steps(self) -> int:
-        return len(self.conversation_history)
-    
-    @property
-    def success(self) -> bool:
-        return self.terminal_reward > 0
-
-
-
-@dataclass
-class TrainingSample:
+class TrainingSample(Trace):
     """A single training sample for GRPO."""
-    inputs: dict[str, torch.Tensor]     # Tokenized prompt
-    advantage: float                     # Weighted advantage
-    old_logprobs: torch.Tensor | None          # Log probs under old policy
-    ref_logprobs: torch.Tensor | None          # Log probs under reference policy
-    weight: float = 1.0                  # Turn weight
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    # Tokenized inputs to the model (model.forward(*inputs))
+    # This includes the input tokens, logit mask, etc.
+    inputs: dict[str, torch.Tensor] = Field(default_factory=dict)
+    old_logprobs: torch.Tensor | None = Field(default=None)
+    ref_logprobs: torch.Tensor | None = Field(default=None)
 
-    # def select(self, indices: list[int]) -> "TrainingSample":
-    #     return TrainingSample(
-    #         inputs={k: v[indices] for k, v in self.inputs.items()},
-    #         advantage=self.advantage[indices],
-    #         old_logprobs=self.old_logprobs[indices],
-    #         ref_logprobs=self.ref_logprobs[indices],
-    #         weight=self.weight[indices],
-    #     )
+    # Weighted advantage of group calculation
+    advantage: float = Field(default=0.0)
 
 @dataclass
-class Batch:
-    """A batch of training samples."""
-    samples: list[TrainingSample]
-    episodes: list[Episode]
-    
-    @property
-    def size(self) -> int:
-        return len(self.samples)
-    
-    @property
-    def rewards(self) -> list[float]:
-        return [ep.terminal_reward for ep in self.episodes]
+class Metric:
+    """A tuple for metrics."""
+    name: str = Field(default="")
+    mean: float = Field(default=0.0)
+    std: float = Field(default=0.0)
+    values: list[float] = Field(default_factory=list)
+
+    def update(self, value: float | int | torch.Tensor) -> None:
+        """Update metric."""
+        self.values.append(value.item() if isinstance(value, torch.Tensor) else value)
+        self.mean = sum(self.values) / len(self.values)
+        self.std = math.sqrt(sum((x - self.mean) ** 2 for x in self.values) / len(self.values))
+
+@dataclass
+class TrainingMetrics:
+    """Metrics for GRPO training (per training step)."""
+    grad_norm: Metric = Field(default=Metric())
+    loss: Metric = Field(default=Metric())
+    kl: Metric = Field(default=Metric())
+    reward: Metric = Field(default=Metric())
+    advantage: Metric = Field(default=Metric())
+    policy_ratio: Metric = Field(default=Metric())
+    tokens: Metric = Field(default=Metric())
+
+    def update(self, metrics: dict[str, Any]) -> None:
+        """Update metrics."""
+        for key, value in metrics.items():
+            if key in self.__dataclass_fields__:
+                getattr(self, key).update(value)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert metrics to dictionary."""
+        final_metrics = {}
+        for key in self.__dataclass_fields__:
+            final_metrics[f"{key}_mean"] = getattr(self, key).mean
+            final_metrics[f"{key}_std"] = getattr(self, key).std
+        return final_metrics

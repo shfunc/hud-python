@@ -2,51 +2,60 @@
 
 import os
 # Force training to use GPU 0
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 # Disable tokenizer parallelism warnings
-os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-import asyncio
 import argparse
+import asyncio
 import json
-import hud
-from pathlib import Path
-import uuid
-import time
 import logging
-from typing import List
+import uuid
+from pathlib import Path
 
-from hud.rl.config import Config
-from hud.rl.actor import Actor
-from hud.rl.learner import GRPOLearner
-from hud.rl.buffer import GroupedReplayBuffer
-from hud.rl.vllm_adapter import VLLMAdapter
-from hud.rl.utils import set_seed, ensure_dir, prepare_training_samples, load_tasks
-from hud.rl.types import Batch
+import hud
 from hud.datasets import Task
+from hud.rl.actor import Actor
+from hud.rl.buffer import DatasetBuffer, ReplayBuffer
+from hud.rl.config import Config
+from hud.rl.learner import GRPOLearner
+from hud.rl.utils import ensure_dir, load_tasks, set_seed
+from hud.rl.vllm_adapter import VLLMAdapter
+from hud.utils.design import HUDDesign
 
-logger = logging.getLogger(__name__)
+design = HUDDesign(logging.getLogger(__name__))
 
 
-async def train(config: Config, tasks: List[Task], verbose: bool = False):
+async def train(config: Config, tasks: list[Task]) -> None:
     """Main training loop."""
-    logger.info("=" * 50)
-    logger.info("Starting GRPO Training")
-    logger.info("=" * 50)
-    
-    # Set random seed
+    # Initialize components
     set_seed(config.seed)
     ensure_dir(config.out_dir)
-    
-    # Initialize components
-    logger.info("\n[1/4] Initializing components...")
-    actor = Actor(config, tasks, verbose=verbose)
+    if config.verbose:
+        logging.basicConfig(level=logging.INFO)
+        # Remove httpx logger
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+
+    design.header("Starting GRPO Training")
+    design.section_title("\n[1/3] Initializing components...")
+
+    # Actor is responsible for running tasks and collecting episodes
+    actor = Actor(config)
+
+    # Learner is responsible for updating the policy
     learner = GRPOLearner(config)
-    buffer = GroupedReplayBuffer(
-        max_size=1000,
-        success_buffer_size=64,
-        group_size=config.training.group_size
+
+    # Dataset buffer is responsible for storing tasks
+    dataset_buffer = DatasetBuffer(
+        tasks,
+        config
     )
+    design.key_value_table(dataset_buffer.info)
+
+    # Replay buffer is responsible for storing episodes for training
+    trace_buffer = ReplayBuffer(config)
+
+    # VLLM adapter is responsible for loading and unloading adapters
     vllm = VLLMAdapter(
         config.actor.vllm_base_url,
         config.actor.vllm_api_key
@@ -54,173 +63,53 @@ async def train(config: Config, tasks: List[Task], verbose: bool = False):
     
     # Training state
     step = 0
-    total_episodes = 0
     
-    logger.info("\n[2/4] Starting training loop...")
-    logger.info(f"Config: {config.training.episodes_per_batch} episodes/batch, "
-               f"{config.training.max_training_steps} max steps")
+    design.section_title("\n[2/3] Running training loop...")
     
-    with hud.job(name=f"RL Training - {config.model.base_model.split('/')[-1]}", metadata={"config": config.to_dict()}) as job_obj:
-        while (step < config.training.max_training_steps and 
-            total_episodes < config.training.max_total_episodes):
-            
-            logger.info(f"\n--- Step {step + 1}/{config.training.max_training_steps} ---")
-            
-            # Collect episodes in groups for GRPO
-            n_groups = config.training.episodes_per_batch // config.training.group_size
-            if n_groups == 0:
-                n_groups = 1
-                logger.warning(f"[3/4] Warning: episodes_per_batch ({config.training.episodes_per_batch}) < group_size ({config.training.group_size})")
-                logger.info(f"      Collecting 1 group of {config.training.group_size} episodes")
-            else:
-                logger.info(f"[3/4] Collecting {n_groups} groups × {config.training.group_size} episodes = {n_groups * config.training.group_size} total")
-            
-            episodes = await actor.collect_groups(config.training.group_size, n_groups, job_id=job_obj.id)
-            buffer.add(episodes)
-            total_episodes += len(episodes)
-            
-            # Get buffer statistics
-            stats = buffer.get_stats()
-            logger.debug(f"Buffer stats: {json.dumps(stats, indent=2)}")
-            
-            # Sample training groups
-            groups = buffer.sample_groups()
-            
-            if not groups:
-                logger.info("No complete groups available yet, continuing collection...")
-                continue
-            
-            # Process each group
-            logger.info(f"[4/4] Training on {len(groups)} groups...")
-            
-            # Collect metrics across all groups
-            all_rewards = []
-            all_losses = []
-            all_kls = []
-            all_clipped_fractions = []
-            all_advantage_stds = []
-            all_ratio_means = []
-            all_ratio_stds = []
-            all_grad_norms = []
-            all_completion_lengths = []
-            
-            for group_key, group_episodes in groups.items():
-                logger.debug(f"  Processing group '{group_key}' with {len(group_episodes)} episodes")
-                
-                # Prepare training samples
-                all_samples = []
-                for episode in group_episodes:
-                    samples = prepare_training_samples(
-                        episode,
-                        learner.processor,
-                        learner,
-                        config
-                    )
-                    all_samples.extend(samples)
-                
-                if not all_samples:
-                    continue
-                
-                # Create batch and update
-                batch = Batch(
-                    samples=all_samples,
-                    episodes=group_episodes
-                )
+    with hud.job(name=config.job_name, metadata={"config": config.to_dict()}) as job_obj:
+        while len(dataset_buffer) > 0:
+            design.section_title(f"Step {step + 1}/{dataset_buffer.training_steps}")
+            design.info(f"{len(dataset_buffer)} tasks remaining")
 
-                logger.debug(f"Batch samples: {len(batch.samples)}")
-                
-                learner.update(batch)
-                
-                # Collect metrics for aggregation
-                group_rewards = [ep.terminal_reward for ep in group_episodes]
-                all_rewards.extend(group_rewards)
-                all_losses.append(learner.last_loss)
-                
-                # Collect completion lengths from episodes
-                for ep in group_episodes:
-                    if hasattr(ep, 'conversation_history') and ep.conversation_history:
-                        # Count assistant responses
-                        completion_length = sum(
-                            len(str(msg.get('content', ''))) 
-                            for msg in ep.conversation_history 
-                            if msg.get('role') == 'assistant' and msg.get('content')
-                        )
-                        all_completion_lengths.append(completion_length)
-                
-                if hasattr(learner, 'last_metrics') and learner.last_metrics:
-                    metrics = learner.last_metrics
-                    all_kls.append(metrics.get('kl_loss', 0))
-                    all_clipped_fractions.append(metrics.get('clipped_fraction', 0))
-                    
-                    # Get gradient norm
-                    if 'grad_norm' in metrics:
-                        all_grad_norms.append(metrics['grad_norm'])
-                    
-                    if 'advantages' in metrics:
-                        advantages = metrics['advantages']
-                        all_advantage_stds.append(float(advantages.std()))
-                    
-                    if 'ratios' in metrics:
-                        ratios = metrics['ratios']
-                        all_ratio_means.append(float(ratios.mean()))
-                        all_ratio_stds.append(float(ratios.std()))
+            # Get batch of tasks
+            tasks = dataset_buffer.get_tasks()
+
+            # Run tasks and collect traces
+            traces = await actor.run_tasks(tasks, job_id=job_obj.id)
+            design.info(f"Sampled {len(traces)} traces")
+            trace_buffer.add(traces)
+
+            design.info(f"Buffer has {len(trace_buffer)} traces to train from, selecting with {config.training.select_strategy} strategy")
+
+            # Get batch of traces
+            traces = trace_buffer.sample_traces()
+            design.info(f"Selected {len(traces)} traces")
             
-            # Log aggregated metrics for this training step
-            if all_rewards:
-                reward_mean = sum(all_rewards) / len(all_rewards)
-                reward_std = (sum((r - reward_mean) ** 2 for r in all_rewards) / len(all_rewards)) ** 0.5
-                
-                step_metrics = {
-                    "step": step,
-                    "reward_mean": reward_mean,
-                    "reward_std": reward_std,
-                    "loss": sum(all_losses) / len(all_losses) if all_losses else 0,
-                }
-                
-                if all_kls:
-                    step_metrics["kl"] = sum(all_kls) / len(all_kls)
-                    step_metrics["clipped_fraction"] = sum(all_clipped_fractions) / len(all_clipped_fractions)
-                
-                if all_advantage_stds:
-                    step_metrics["advantage_std"] = sum(all_advantage_stds) / len(all_advantage_stds)
-                
-                if all_ratio_means:
-                    step_metrics["ratio_mean"] = sum(all_ratio_means) / len(all_ratio_means)
-                    step_metrics["ratio_std"] = sum(all_ratio_stds) / len(all_ratio_stds)
-                
-                if all_grad_norms:
-                    step_metrics["grad_norm"] = sum(all_grad_norms) / len(all_grad_norms)
-                
-                if all_completion_lengths:
-                    step_metrics["avg_completion_length"] = sum(all_completion_lengths) / len(all_completion_lengths)
-                
-                job_obj.log_sync(step_metrics)
+            design.section_title(f"Training on {len(traces)} traces")
+            metrics = learner.update(traces)
+            
+            if step % config.stats_interval == 0:
+                design.key_value_table(metrics.to_dict())
             
             # Save checkpoint and update vLLM
             step += 1
             if step % config.training.save_every_batches == 0:
+                design.section_title("Saving checkpoint and updating vLLM")
                 checkpoint_id = uuid.uuid4()
                 checkpoint_path = Path(config.out_dir) / f"{config.adapter_prefix}-{checkpoint_id}"
                 learner.save(str(checkpoint_path))
 
-                # Hot-load to vLLM
                 adapter_name = f"{config.adapter_prefix}-{checkpoint_id}"
                 if vllm.load_adapter(adapter_name, str(checkpoint_path)):
                     actor.update_adapter(adapter_name)
-                    logger.info(f"✓ Checkpoint saved and loaded: {adapter_name}")
+                    design.info(f"✓ Checkpoint saved and loaded: {adapter_name}")
                 else:
-                    logger.warning(f"Failed to hot-load adapter {adapter_name}")
-            
-            # Log progress
-            logger.info(f"\nProgress: Step {step}, Total episodes: {total_episodes}")
+                    design.warning(f"Failed to hot-load adapter {adapter_name}")
     
-    logger.info("\n" + "=" * 50)
-    logger.info("Training completed!")
-    logger.info(f"Final: {step} steps, {total_episodes} episodes")
-    logger.info("=" * 50)
+    design.section_title("\n[3/3] Training completed!")
 
 
-async def main():
+async def main() -> None:
     parser = argparse.ArgumentParser(description="GRPO RL Training")
     parser.add_argument("--config", type=str, help="Path to config JSON file")
     parser.add_argument("--test", action="store_true", help="Run in test mode")
@@ -248,7 +137,7 @@ async def main():
     
     # Apply test mode settings
     if args.test:
-        logger.info("[TEST MODE] Using minimal configuration")
+        design.info("[TEST MODE] Using minimal configuration")
         eps = 6
         config.training.episodes_per_batch = eps
         config.actor.parallel_episodes = eps
@@ -263,9 +152,9 @@ async def main():
     constant = config.training.mini_batch_size * config.training.max_training_steps
     quadratic = (config.model.max_pixels / (28 * 28 * 256)) ** 2
     total_memory = INITIAL_MEMORY + SCALING_FACTOR * constant * quadratic
-    logger.info(f"Total memory usage: {total_memory:.2f} GB")
+    design.info(f"Total memory usage: {total_memory:.2f} GB")
     if total_memory > 75.0:
-        logger.error("Potential memory usage is too high, decrease either training steps or mini batch size")
+        design.error("Potential memory usage is too high, decrease either training steps or mini batch size")
         exit(1)
     
     # Apply command-line overrides
@@ -278,7 +167,7 @@ async def main():
     if args.out_dir:
         config.out_dir = args.out_dir
     if args.debug:
-        config.debug = True
+        config.verbose = True
     
     # Load tasks
     if args.tasks_json:
@@ -294,13 +183,13 @@ async def main():
         # Default to browser_2048_tasks.jsonl if it exists
         default_tasks_path = "browser_2048_tasks.jsonl"
         if Path(default_tasks_path).exists():
-            logger.info(f"No tasks specified, using default: {default_tasks_path}")
+            design.info(f"No tasks specified, using default: {default_tasks_path}")
             tasks = load_tasks(default_tasks_path, config.actor.system_prompt)
         else:
             raise ValueError("No tasks specified. Use --tasks, --tasks-json, or specify tasks_file in config")
     
     # Run training
-    await train(config, tasks, verbose=args.verbose)
+    await train(config, tasks)
 
 
 if __name__ == "__main__":

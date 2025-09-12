@@ -15,17 +15,21 @@ Color Palette:
 from __future__ import annotations
 
 import logging
-from typing import Any
+import time
+import traceback
+from typing import Any, Literal, Self
 
 import questionary
 import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+from rich.status import Status
 
 # HUD Brand Colors
 GOLD = "rgb(192,150,12)"  # #c0960c
 RED = "red"
+YELLOW = "yellow"
 GREEN = "green"
 DIM = "dim"
 
@@ -82,7 +86,11 @@ class HUDDesign:
             stderr: If True, output to stderr (default), otherwise stdout
         """
         console = self._stderr_console if stderr else self._stdout_console
-        console.print(f"[{RED} not bold]❌ {message}[/{RED} not bold]")
+        tb = traceback.format_exc()
+        if "NoneType: None" not in tb:
+            console.print(f"[{RED} not bold]❌ {message}\n{tb}[/{RED} not bold]")
+        else:
+            console.print(f"[{RED} not bold]❌ {message}[/{RED} not bold]")
 
     def warning(self, message: str, stderr: bool = True) -> None:
         """Print a warning message.
@@ -92,7 +100,7 @@ class HUDDesign:
             stderr: If True, output to stderr (default), otherwise stdout
         """
         console = self._stderr_console if stderr else self._stdout_console
-        console.print(f"[yellow]⚠️  {message}[/yellow]")
+        console.print(f"⚠️ [{YELLOW} not bold]{message}[/{YELLOW} not bold]")
 
     def info(self, message: str, stderr: bool = True) -> None:
         """Print an info message.
@@ -123,7 +131,7 @@ class HUDDesign:
             stderr: If True, output to stderr (default), otherwise stdout
         """
         console = self._stderr_console if stderr else self._stdout_console
-        console.print(f"[{DIM}]{label}[/{DIM}] [default]{value}[/default]")
+        console.print(f"[{DIM} not bold][default]{label}[/default][/{DIM} not bold] [default]{value}[/default]")
 
     def link(self, url: str, stderr: bool = True) -> None:
         """Print an underlined link.
@@ -161,7 +169,7 @@ class HUDDesign:
         table.add_column("Value")
 
         for key, value in data.items():
-            table.add_row(key, value)
+            table.add_row(key, str(value))
 
         console = self._stderr_console if stderr else self._stdout_console
         console.print(table)
@@ -309,7 +317,7 @@ class HUDDesign:
 
                 render_hints(hints, design=self)
             except Exception as render_error:
-                self.debug(f"Failed to render hints: {render_error}")
+                self.debug_log(f"Failed to render hints: {render_error}")
 
         # Standard support hint
         self.render_support_hint(stderr=stderr)
@@ -330,9 +338,27 @@ class HUDDesign:
         else:
             self._logger.setLevel(logging.WARNING)
 
-    # Logging-aware methods that check logging levels before printing
+    @property
+    def prefix(self) -> str:
+        """Get the metadata of the current file."""
+        metadata = self._logger.findCaller(stacklevel=3)
+        return f"{metadata[0]}:{metadata[1]} in {metadata[2]} | "
 
-    def debug(self, message: str, stderr: bool = True) -> None:
+    # Logging-aware methods that check logging levels before printing
+    def log(self, message: str, level: Literal["info", "debug", "warning", "error"] = "info", stderr: bool = True) -> None:
+        """Print a message based on the logging level.
+        """
+        prefix = self.prefix
+        if level == "info":
+            self.info_log(f"{prefix}{message}", stderr=stderr)
+        elif level == "debug":
+            self.debug_log(f"{prefix}{message}", stderr=stderr)
+        elif level == "warning":
+            self.warning_log(f"{prefix}{message}", stderr=stderr)
+        elif level == "error":
+            self.error_log(f"{prefix}{message}", stderr=stderr)
+
+    def debug_log(self, message: str, stderr: bool = True) -> None:
         """Print a debug message only if DEBUG logging is enabled.
 
         Args:
@@ -340,7 +366,7 @@ class HUDDesign:
             stderr: If True, output to stderr (default), otherwise stdout
         """
         if self._logger.isEnabledFor(logging.DEBUG):
-            self.dim_info("[DEBUG]", message, stderr=stderr)
+            self.dim_info(message, "", stderr=stderr)
 
     def info_log(self, message: str, stderr: bool = True) -> None:
         """Print an info message only if INFO logging is enabled.
@@ -361,6 +387,26 @@ class HUDDesign:
         """
         if self._logger.isEnabledFor(logging.INFO):
             self.progress_message(message, stderr=stderr)
+    
+    def progress(self, initial: str = "", stderr: bool = True) -> "_ProgressContext":
+        """Create a progress context manager for inline updates.
+        
+        Args:
+            initial: Initial message to display
+            stderr: If True, output to stderr (default), otherwise stdout
+            
+        Returns:
+            A context manager that provides update() method
+            
+        Example:
+            with design.progress("Processing...") as progress:
+                for i in range(10):
+                    progress.update(f"Processing item {i+1}/10")
+        """
+        return _ProgressContext(
+            console=self._stderr_console if stderr else self._stdout_console,
+            initial=initial
+        )
 
     def success_log(self, message: str, stderr: bool = True) -> None:
         """Print a success message only if INFO logging is enabled.
@@ -477,4 +523,38 @@ class HUDDesign:
 
 
 # Global design instance for convenience
+class _ProgressContext:
+    """Context manager for inline progress updates."""
+    
+    def __init__(self, console: Console, initial: str = "") -> None:
+        self.console = console
+        self.initial = initial
+        self.status: Status | None = None
+        self.start_time: float | None = None
+        
+    def __enter__(self) -> Self:
+        self.status = self.console.status(self.initial)
+        self.status.__enter__()
+        self.start_time = time.time()
+        return self
+        
+    def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+        if self.status:
+            self.status.__exit__(exc_type, exc_val, exc_tb)
+    
+    def update(self, message: str, with_elapsed: bool = True) -> None:
+        """Update the progress message.
+        
+        Args:
+            message: New message to display
+            with_elapsed: If True, append elapsed time to message
+        """
+        if self.status:
+            if with_elapsed and self.start_time:
+                elapsed = time.time() - self.start_time
+                self.status.update(f"{message} [{elapsed:.1f}s]")
+            else:
+                self.status.update(message)
+
+
 design = HUDDesign()

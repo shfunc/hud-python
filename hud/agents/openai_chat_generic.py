@@ -25,6 +25,7 @@ from hud import instrument
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult
 
 from .base import MCPAgent
+from hud.utils.design import HUDDesign
 
 if TYPE_CHECKING:
     from openai import AsyncOpenAI
@@ -49,8 +50,8 @@ class GenericOpenAIChatAgent(MCPAgent):
         self.oai = openai_client
         self.model_name = model_name
         self.completion_kwargs: dict[str, Any] = completion_kwargs or {}
-        self.conversation_history = []
         self.mcp_schemas = []
+        self.design = HUDDesign(logger=logger)
 
     @staticmethod
     def _oai_to_mcp(tool_call: Any) -> MCPToolCall:  # type: ignore[valid-type]
@@ -172,18 +173,27 @@ class GenericOpenAIChatAgent(MCPAgent):
         """Send chat request to OpenAI and convert the response."""
 
         # Convert MCP tool schemas to OpenAI format
-        self.mcp_schemas = self.get_tool_schemas()
-        logger.debug(f"Tool schemas for vLLM: {self.mcp_schemas}")
+        mcp_schemas = self.get_tool_schemas()
 
         protected_keys = {"model", "messages", "tools"}
         extra = {k: v for k, v in (self.completion_kwargs or {}).items() if k not in protected_keys}
 
-        response = await self.oai.chat.completions.create(
-            model=self.model_name,
-            messages=messages,
-            tools=cast("list[ChatCompletionToolParam]", self.mcp_schemas),
-            **extra,
-        )
+        try:
+            response = await self.oai.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                tools=cast("list[ChatCompletionToolParam]", mcp_schemas),
+                **extra,
+            )
+        except Exception as e:
+            self.design.error(f"Error getting response: {e}")
+            return AgentResponse(
+                content=f"Error getting response {e}",
+                tool_calls=[],
+                done=True,
+                isError=True,
+                raw=None,
+            )
 
         choice = response.choices[0]
         msg = choice.message
@@ -207,9 +217,6 @@ class GenericOpenAIChatAgent(MCPAgent):
             assistant_msg["tool_calls"] = serialized_tool_calls
 
         messages.append(assistant_msg)
-
-        # Store the complete conversation history
-        self.conversation_history = messages.copy()
 
         tool_calls = []
         if msg.tool_calls:

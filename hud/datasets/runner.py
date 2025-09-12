@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, cast
 from datasets import Dataset, load_dataset
 
 from hud.agents.misc import ResponseAgent
-from hud.datasets.task import Task
+from hud.types import Task
 
 if TYPE_CHECKING:
     from hud.agents import MCPAgent

@@ -5,39 +5,52 @@ import io
 import base64
 import random
 import json
-from typing import Any, List, Union
+from typing import Any
 from pathlib import Path
 from PIL import Image
+import logging
 import torch
 from transformers.utils.chat_template_utils import render_jinja_template
-import bisect
 from hud.datasets import Task
-from .types import Episode, TrainingSample
+from .config import Config
+from .types import TrainingSample
+from hud.types import Trace
+from hud.utils.design import HUDDesign
+
+logger = logging.getLogger(__name__)
+design = HUDDesign(logger)
 
 
-def set_seed(seed: int):
+def set_seed(seed: int) -> None:
     """Set random seeds for reproducibility."""
     random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
-def load_chat_template(path: str):
+def load_chat_template(path: str) -> str:
     """Load chat template from file."""
     with open(path, "r") as f:
         return f.read()
 
-def ensure_dir(path: str):
+def ensure_dir(path: str) -> None:
     """Create directory if it doesn't exist."""
     os.makedirs(path, exist_ok=True)
 
+def get_memory_usage() -> float:
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+        return torch.cuda.memory_allocated() / 1024**3
+    return 0.0
 
-def load_tasks(tasks_input: Union[str, List[dict]], system_prompt: str = None) -> List[Task]:
+
+def load_tasks(tasks_input: str | list[dict], system_prompt: str | None = None) -> list[Task]:
     """Load tasks from various sources.
     
     Args:
         tasks_input: Either:
-            - Path to a JSONL file
+            - Path to a JSON file (array of tasks)
+            - Path to a JSONL file (one task per line)
             - HuggingFace dataset name (format: "username/dataset" or "username/dataset:split")
             - List of task dictionaries
         system_prompt: Default system prompt to use if not specified in task
@@ -49,7 +62,7 @@ def load_tasks(tasks_input: Union[str, List[dict]], system_prompt: str = None) -
     
     if isinstance(tasks_input, list):
         # Direct list of task dicts
-        print(f"Loading {len(tasks_input)} tasks from provided list")
+        design.info(f"Loading {len(tasks_input)} tasks from provided list")
         for item in tasks_input:
             task = Task(
                 id=item.get("id"),
@@ -65,24 +78,48 @@ def load_tasks(tasks_input: Union[str, List[dict]], system_prompt: str = None) -
     elif isinstance(tasks_input, str):
         # Check if it's a file path
         if Path(tasks_input).exists():
-            print(f"Loading tasks from file: {tasks_input}")
-            with open(tasks_input) as f:
-                for line in f:
-                    item = json.loads(line.strip())
-                    task = Task(
-                        id=item.get("id"),
-                        prompt=item["prompt"],
-                        mcp_config=item["mcp_config"],
-                        setup_tool=item.get("setup_tool"),
-                        evaluate_tool=item.get("evaluate_tool"),
-                        system_prompt=item.get("system_prompt", system_prompt),
-                        metadata=item.get("metadata", {})
-                    )
-                    tasks.append(task)
+            file_path = Path(tasks_input)
+            design.info(f"Loading tasks from file: {tasks_input}")
+            
+            with open(file_path) as f:
+                # Handle JSON files (array of tasks)
+                if file_path.suffix.lower() == '.json':
+                    data = json.load(f)
+                    if not isinstance(data, list):
+                        raise ValueError(f"JSON file must contain an array of tasks, got {type(data)}")
+                    
+                    for item in data:
+                        task = Task(
+                            id=item.get("id"),
+                            prompt=item["prompt"],
+                            mcp_config=item["mcp_config"],
+                            setup_tool=item.get("setup_tool"),
+                            evaluate_tool=item.get("evaluate_tool"),
+                            system_prompt=item.get("system_prompt", system_prompt),
+                            metadata=item.get("metadata", {})
+                        )
+                        tasks.append(task)
+                
+                # Handle JSONL files (one task per line)
+                else:
+                    for line in f:
+                        line = line.strip()
+                        if line:  # Skip empty lines
+                            item = json.loads(line)
+                            task = Task(
+                                id=item.get("id"),
+                                prompt=item["prompt"],
+                                mcp_config=item["mcp_config"],
+                                setup_tool=item.get("setup_tool"),
+                                evaluate_tool=item.get("evaluate_tool"),
+                                system_prompt=item.get("system_prompt", system_prompt),
+                                metadata=item.get("metadata", {})
+                            )
+                            tasks.append(task)
         
         # Check if it's a HuggingFace dataset
         elif "/" in tasks_input:
-            print(f"Loading tasks from HuggingFace dataset: {tasks_input}")
+            design.info(f"Loading tasks from HuggingFace dataset: {tasks_input}")
             try:
                 from datasets import load_dataset
                 
@@ -124,7 +161,7 @@ def load_tasks(tasks_input: Union[str, List[dict]], system_prompt: str = None) -
     else:
         raise TypeError(f"tasks_input must be str or list, got {type(tasks_input)}")
     
-    print(f"Loaded {len(tasks)} tasks")
+    design.info(f"Loaded {len(tasks)} tasks")
     return tasks
 
 
@@ -134,9 +171,8 @@ def b64_to_pil(b64_str: str) -> Image.Image:
 
 
 def build_assistant_masks(
-    input_ids: list[list[int]], 
-    tokenizer: Any, 
-    debug: bool = False
+    input_ids: list[list[int]],
+    tokenizer: Any,
 ) -> list[list[int]]:
     """
     Build assistant masks from token IDs by finding assistant turns.
@@ -144,7 +180,7 @@ def build_assistant_masks(
     Args:
         input_ids: List of token sequences
         tokenizer: Tokenizer to decode tokens and get special token IDs
-        debug: Whether to print debug information
+        verbose: Whether to print verbose information
         
     Returns:
         List of binary masks indicating assistant tokens
@@ -155,7 +191,7 @@ def build_assistant_masks(
 
     assistant_masks: list[list[int]] = []
 
-    for seq_idx, seq in enumerate(input_ids):
+    for seq in input_ids:
         mask = [0] * len(seq)
         i_tok = 0
         assistant_turn_count = 0
@@ -168,7 +204,6 @@ def build_assistant_masks(
                 and seq[i_tok + 1] == id_assistant
             ):
                 assistant_turn_count += 1
-                turn_start = i_tok
                 
                 # Skip '<|im_start|>', 'assistant' and possible newline token
                 i_tok += 2
@@ -207,7 +242,9 @@ def build_assistant_masks(
     return assistant_masks
 
 
-def prepare_conversation_history(conversation_history: list[dict[str, Any]]) -> (list[dict[str, Any]], list[Image.Image]):
+def prepare_conversation_history(
+    conversation_history: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], list[Image.Image]]:
     """Sanitize conversation history to avoid vLLM errors."""
     sanitized_messages = []
     images = []
@@ -236,38 +273,36 @@ def prepare_conversation_history(conversation_history: list[dict[str, Any]]) -> 
         sanitized_messages.append(m)
     return sanitized_messages, images
 
-def prepare_training_samples(
-    episode: Episode,
-    processor,
-    learner,
-    config
-) -> list[TrainingSample]:
+def prepare_inputs(
+    trace: Trace,
+    processor: Any,
+    learner: Any,
+    config: Config
+) -> list[dict[str, torch.Tensor]]:
     """
-    Prepare training samples from an episode.
+    Prepare inputs from a trace.
     
     Args:
-        episode: Episode to process
+        trace: Trace to process
         processor: Model processor
         learner: Learner instance (for computing logprobs)
     
     Returns:
-        List of training samples
+        Inputs for the model
     """
-    if len(episode.conversation_history) == 0:
+    if len(trace.messages) == 0:
         return []
-    
-    samples = []
 
     # Get images for current turn
-    conversation, images = prepare_conversation_history(episode.conversation_history)
+    conversation, images = prepare_conversation_history(trace.messages)
 
     # Get absolute path to chat template
     chat_template_path = Path(__file__).parent / "chat_template.jinja"
     
-    text_list, generation_indices = render_jinja_template(
+    text_list, _ = render_jinja_template(
         conversations=[conversation],
         chat_template=load_chat_template(str(chat_template_path)),
-        tools=episode.tool_spec if episode.tool_spec else None, # mcp_tools
+        tools=trace.info["tool_spec"] if trace.info["tool_spec"] else None, # mcp_tools
         return_assistant_tokens_mask=True,
         **processor.tokenizer.special_tokens_map,
     )
@@ -279,7 +314,7 @@ def prepare_training_samples(
 
     # Build assistant masks from token IDs
     input_ids = inputs["input_ids"]  # list of lists (length 1 batch)
-    assistant_masks = build_assistant_masks(input_ids, processor.tokenizer, config.debug)
+    assistant_masks = build_assistant_masks(input_ids, processor.tokenizer)
     inputs["assistant_masks"] = assistant_masks
     inputs.convert_to_tensors(tensor_type="pt")
 
@@ -291,15 +326,8 @@ def prepare_training_samples(
     logits_to_keep = (mask_tensor[0, 1:] == 1).nonzero(as_tuple=True)[0]
     inputs["logits_to_keep"] = logits_to_keep
     inputs = {k: v.to(learner.device) for k, v in inputs.items()}
-        
-    samples.append(TrainingSample(
-        inputs=inputs,
-        advantage=0.0,  # Will be set during training
-        old_logprobs=None, # Will be set during training
-        ref_logprobs=None, # Will be set during training
-    ))
-    
-    return samples
+
+    return [inputs]
 
 
 # def concat_training_samples(
@@ -325,28 +353,3 @@ def prepare_training_samples(
 #     sample.ref_logprobs = torch.stack([s.ref_logprobs for s in samples])
 #     sample.weight = torch.stack([s.weight for s in samples])
 #     return sample
-
-
-def compute_format_penalty(episode: Episode, penalty: float = -1.0) -> float:
-    """
-    Compute format penalty for episodes with errors.
-    
-    Args:
-        episode: Episode to check
-        penalty: Penalty value for errors
-    
-    Returns:
-        Total format penalty
-    """
-    total_penalty = 0.0
-    
-    # Check for errors in episode info
-    if "error" in episode.info:
-        total_penalty += penalty
-    
-    # Check conversation history for tool errors
-    for msg in episode.conversation_history:
-        if msg.get("role") == "tool" and "error" in msg.get("content", "").lower():
-            total_penalty += penalty * 0.5
-    
-    return total_penalty

@@ -9,8 +9,7 @@ import io
 from hud.rl.utils import (
     turn_weights,
     b64_to_pil,
-    blocks_to_images,
-    compute_format_penalty
+    blocks_to_images
 )
 from hud.rl.types import Episode, Turn
 

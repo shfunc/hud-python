@@ -18,16 +18,45 @@ design = HUDDesign()
 
 
 def build_agent(
-    agent_type: Literal["claude", "openai"],
+    agent_type: Literal["claude", "openai", "vllm"],
     *,
     model: str | None = None,
     allowed_tools: list[str] | None = None,
     verbose: bool = False,
+    vllm_base_url: str = "http://localhost:8000/v1",
 ) -> Any:
     """Create and return the requested agent type."""
 
     # Import agents lazily to avoid dependency issues
-    if agent_type == "openai":
+    if agent_type == "vllm":
+        # Create a generic OpenAI agent for vLLM server
+        try:
+            from openai import AsyncOpenAI
+            from hud.agents.openai_chat_generic import GenericOpenAIChatAgent
+        except ImportError as e:
+            design.error(
+                "OpenAI dependencies are not installed. "
+                "Please install with: pip install 'hud-python[agent]'"
+            )
+            raise typer.Exit(1) from e
+        
+        # Create OpenAI client for vLLM
+        openai_client = AsyncOpenAI(
+            base_url=vllm_base_url,
+            api_key="token-abc123",  # vLLM doesn't require a real key
+        )
+        
+        return GenericOpenAIChatAgent(
+            openai_client=openai_client,
+            model_name=model or "served-model",  # Default model name
+            verbose=verbose,
+            completion_kwargs={
+                "temperature": 0.7,
+                "max_tokens": 2048,
+            }
+        )
+    
+    elif agent_type == "openai":
         try:
             from hud.agents import OperatorAgent
         except ImportError as e:
@@ -73,17 +102,19 @@ def build_agent(
 async def run_single_task(
     source: str,
     *,
-    agent_type: Literal["claude", "openai"] = "claude",
+    agent_type: Literal["claude", "openai", "vllm"] = "claude",
     model: str | None = None,
     allowed_tools: list[str] | None = None,
     max_steps: int = 10,
     verbose: bool = False,
+    vllm_base_url: str = "http://localhost:8000/v1",
 ) -> None:
     """Load one task and execute it, or detect if JSON contains a list and run as dataset."""
 
     # Import Task and run_dataset lazily
     try:
         from hud.datasets import Task, run_dataset
+        from hud.rl.utils import load_tasks
     except ImportError as e:
         design.error(
             "Dataset dependencies are not installed. "
@@ -91,19 +122,51 @@ async def run_single_task(
         )
         raise typer.Exit(1) from e
 
-    # Check if it's a JSON file
+    # Check if it's a file
     path = Path(source)
-    if path.exists() and path.suffix == ".json":
+    if path.exists() and (path.suffix in [".json", ".jsonl"]):
         design.info("📊 Loading task file…")
-        with open(path) as f:  # noqa: ASYNC230
-            json_data = json.load(f)
-
-        # Check if JSON contains multiple tasks (list with more than 1 task)
-        if isinstance(json_data, list) and len(json_data) > 1:
-            design.info(f"Found {len(json_data)} tasks in JSON file, running as dataset…")
+        
+        # Use unified loader for both JSON and JSONL
+        tasks = load_tasks(str(path))
+        
+        # Check if we have multiple tasks
+        if len(tasks) > 1:
+            design.info(f"Found {len(tasks)} tasks in file, running as dataset…")
 
             # Build agent class and config for run_dataset
-            if agent_type == "openai":
+            if agent_type == "vllm":
+                try:
+                    from openai import AsyncOpenAI
+                    from hud.agents.openai_chat_generic import GenericOpenAIChatAgent
+
+                    agent_class = GenericOpenAIChatAgent
+                except ImportError as e:
+                    design.error(
+                        "OpenAI dependencies are not installed. "
+                        "Please install with: pip install 'hud-python\u27E6agent\u27E7'"
+                    )
+                    raise typer.Exit(1) from e
+
+                # Create OpenAI client for vLLM
+                openai_client = AsyncOpenAI(
+                    base_url=vllm_base_url,
+                    api_key="token-abc123",
+                )
+                
+                agent_config: dict[str, Any] = {
+                    "openai_client": openai_client,
+                    "model_name": model or "served-model",
+                    "verbose": verbose,
+                    "completion_kwargs": {
+                        "temperature": 0.7,
+                        "max_tokens": 2048,
+                    }
+                }
+                if allowed_tools:
+                    agent_config["allowed_tools"] = allowed_tools
+
+            elif agent_type == "openai":
                 try:
                     from hud.agents import OperatorAgent
 
@@ -115,7 +178,7 @@ async def run_single_task(
                     )
                     raise typer.Exit(1) from e
 
-                agent_config: dict[str, Any] = {"verbose": verbose}
+                agent_config = {"verbose": verbose}
                 if allowed_tools:
                     agent_config["allowed_tools"] = allowed_tools
 
@@ -138,10 +201,13 @@ async def run_single_task(
                 if allowed_tools:
                     agent_config["allowed_tools"] = allowed_tools
 
+            # Convert Task objects to dicts for run_dataset
+            task_dicts = [task.model_dump() for task in tasks]
+            
             # Run as dataset with single-task concurrency to maintain debug behavior
             results = await run_dataset(
-                name=f"JSON Dataset: {path.name}",
-                dataset=json_data,  # Pass the list directly
+                name=f"Dataset: {path.name}",
+                dataset=task_dicts,  # Pass the list of task dicts
                 agent_class=agent_class,
                 agent_config=agent_config,
                 max_concurrent=1,  # Run sequentially for debug mode
@@ -154,32 +220,21 @@ async def run_single_task(
             design.success(f"Completed {len(results)} tasks: {successful} successful")
             return
 
-        # Single task JSON (either direct object or list with 1 task)
-        if isinstance(json_data, list) and len(json_data) == 1:
-            design.info("Found 1 task in JSON file, running as single task…")
-            task = Task(**json_data[0])
-        elif isinstance(json_data, dict):
-            task = Task(**json_data)
-        else:
-            design.error("JSON file must contain a list of tasks when using --full flag")
-            raise typer.Exit(1)
+        # Single task - use the first (and only) task
+        task = tasks[0]
+        design.info("Found 1 task, running as single task…")
     else:
-        # Load from HuggingFace dataset
-        design.info(f"📊 Loading dataset from HuggingFace: {source}…")
-        try:
-            from datasets import load_dataset
-        except ImportError as e:
-            design.error(
-                "Datasets library is not installed. "
-                "Please install with: pip install 'hud-python[agent]'"
-            )
-            raise typer.Exit(1) from e
-
-        dataset = load_dataset(source, split="train")
-
-        # Get first task from dataset
-        sample_task = dataset[0]  # type: ignore[index]
-        task = Task(**sample_task)  # type: ignore[arg-type]
+        # Load from HuggingFace dataset or non-file source
+        design.info(f"📊 Loading tasks from: {source}…")
+        tasks = load_tasks(source)
+        
+        if not tasks:
+            design.error(f"No tasks found in: {source}")
+            raise typer.Exit(1)
+            
+        # Single task - use the first task
+        task = tasks[0]
+        design.info(f"Using first task from dataset...")
 
     task_prompt = task.prompt[:50] + "..." if len(task.prompt) > 50 else task.prompt
 
@@ -189,6 +244,7 @@ async def run_single_task(
             model=model,
             allowed_tools=allowed_tools,
             verbose=verbose,
+            vllm_base_url=vllm_base_url,
         )
         design.info(task.prompt)
         result = await agent.run(task, max_steps=max_steps)
@@ -198,7 +254,7 @@ async def run_single_task(
 async def run_full_dataset(
     source: str,
     *,
-    agent_type: Literal["claude", "openai"] = "claude",
+    agent_type: Literal["claude", "openai", "vllm"] = "claude",
     model: str | None = None,
     allowed_tools: list[str] | None = None,
     max_concurrent: int = 50,
@@ -207,6 +263,7 @@ async def run_full_dataset(
     max_workers: int | None = None,
     max_concurrent_per_worker: int = 25,
     verbose: bool = False,
+    vllm_base_url: str = "http://localhost:8000/v1",
 ) -> list[Any]:
     """Run evaluation across the entire dataset.
 
@@ -216,6 +273,7 @@ async def run_full_dataset(
     # Import run_dataset lazily
     try:
         from hud.datasets import run_dataset, run_dataset_parallel, run_dataset_parallel_manual
+        from hud.rl.utils import load_tasks
     except ImportError as e:
         design.error(
             "Dataset dependencies are not installed. "
@@ -223,25 +281,59 @@ async def run_full_dataset(
         )
         raise typer.Exit(1) from e
 
-    # Check if source is a JSON file with list of tasks
+    # Load tasks using unified loader
+    design.info(f"📊 Loading tasks from: {source}…")
+    tasks = load_tasks(source)
+    
+    if not tasks:
+        design.error(f"No tasks found in: {source}")
+        raise typer.Exit(1)
+    
+    # Convert Task objects to dicts for dataset runners
+    dataset_or_tasks = [task.model_dump() for task in tasks]
+    
+    # Determine dataset name
     path = Path(source)
-    dataset_or_tasks = source
-    dataset_name = source.split("/")[-1]
-
-    if path.exists() and path.suffix == ".json":
-        with open(path) as f:  # noqa: ASYNC230
-            json_data = json.load(f)
-
-        if isinstance(json_data, list):
-            dataset_or_tasks = json_data
-            dataset_name = f"JSON Dataset: {path.name}"
-            design.info(f"Found {len(json_data)} tasks in JSON file")
-        else:
-            design.error("JSON file must contain a list of tasks when using --full flag")
-            raise typer.Exit(1)
+    if path.exists():
+        dataset_name = f"Dataset: {path.name}"
+    else:
+        dataset_name = source.split("/")[-1]
+    
+    design.info(f"Found {len(tasks)} tasks")
 
     # Build agent class + config for run_dataset
-    if agent_type == "openai":
+    if agent_type == "vllm":
+        try:
+            from openai import AsyncOpenAI
+            from hud.agents.openai_chat_generic import GenericOpenAIChatAgent
+
+            agent_class = GenericOpenAIChatAgent
+        except ImportError as e:
+            design.error(
+                "OpenAI dependencies are not installed. "
+                "Please install with: pip install 'hud-python[agent]'"
+            )
+            raise typer.Exit(1) from e
+
+        # Create OpenAI client for vLLM
+        openai_client = AsyncOpenAI(
+            base_url=vllm_base_url,
+            api_key="token-abc123",
+        )
+        
+        agent_config: dict[str, Any] = {
+            "openai_client": openai_client,
+            "model_name": model or "served-model",
+            "verbose": verbose,
+            "completion_kwargs": {
+                "temperature": 0.7,
+                "max_tokens": 2048,
+            }
+        }
+        if allowed_tools:
+            agent_config["allowed_tools"] = allowed_tools
+
+    elif agent_type == "openai":
         try:
             from hud.agents import OperatorAgent
 
@@ -253,7 +345,7 @@ async def run_full_dataset(
             )
             raise typer.Exit(1) from e
 
-        agent_config: dict[str, Any] = {"verbose": verbose}
+        agent_config = {"verbose": verbose}
         if allowed_tools:
             agent_config["allowed_tools"] = allowed_tools
 
@@ -322,17 +414,17 @@ async def run_full_dataset(
 def eval_command(
     source: str = typer.Argument(
         ...,
-        help="HuggingFace dataset identifier (e.g. 'hud-evals/SheetBench-50'), single task JSON file, or JSON file with list of tasks",  # noqa: E501
+        help="HuggingFace dataset identifier (e.g. 'hud-evals/SheetBench-50'), JSON file (array of tasks), or JSONL file (one task per line)",  # noqa: E501
     ),
     full: bool = typer.Option(
         False,
         "--full",
         help="Run the entire dataset (omit for single-task debug mode)",
     ),
-    agent: Literal["claude", "openai"] = typer.Option(
+    agent: Literal["claude", "openai", "vllm"] = typer.Option(
         "claude",
         "--agent",
-        help="Agent backend to use",
+        help="Agent backend to use (claude, openai, or vllm for local server)",
     ),
     model: str | None = typer.Option(
         None,
@@ -374,6 +466,11 @@ def eval_command(
         "--verbose",
         help="Enable verbose output from the agent",
     ),
+    vllm_base_url: str = typer.Option(
+        "http://localhost:8000/v1",
+        "--vllm-base-url",
+        help="Base URL for vLLM server (when using --agent vllm)",
+    ),
 ) -> None:
     """🚀 Run evaluation on datasets or individual tasks with agents.
 
@@ -402,6 +499,12 @@ def eval_command(
         # Run with OpenAI Operator agent
         hud eval hud-evals/OSWorld-Gold-Beta --agent openai
 
+        # Use local vLLM server (default: localhost:8000)
+        hud eval task.json --agent vllm --model Qwen/Qwen2.5-VL-3B-Instruct
+
+        # Use custom vLLM server URL
+        hud eval task.json --agent vllm --vllm-base-url http://192.168.1.100:8000/v1
+
         # Run with verbose output for debugging
         hud eval task.json --verbose
     """
@@ -417,6 +520,10 @@ def eval_command(
         design.error("OPENAI_API_KEY is required for OpenAI agent")
         design.info("Set it in your environment or .env file: OPENAI_API_KEY=your-key-here")
         raise typer.Exit(1)
+    elif agent == "vllm":
+        design.info(f"Using vLLM server at {vllm_base_url}")
+        if model:
+            design.info(f"Model name: {model}")
 
     # Check for HUD_API_KEY if using HUD services
     if not settings.api_key:
@@ -446,6 +553,7 @@ def eval_command(
                 max_workers=max_workers,
                 max_concurrent_per_worker=max_concurrent_per_worker,
                 verbose=verbose,
+                vllm_base_url=vllm_base_url,
             )
         )
     else:
@@ -457,5 +565,6 @@ def eval_command(
                 allowed_tools=allowed_tools_list,
                 max_steps=max_steps,
                 verbose=verbose,
+                vllm_base_url=vllm_base_url,
             )
         )

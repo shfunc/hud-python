@@ -966,7 +966,7 @@ def rl(
     tasks_file: str | None = typer.Argument(
         None,
         help=(
-            "Path to tasks file (JSON/JSONL) or HuggingFace dataset name. "
+            "Path to tasks file (JSON array or JSONL) or HuggingFace dataset name. "
             "If not provided, looks for tasks.json or tasks.jsonl in current directory."
         ),
     ),
@@ -993,6 +993,12 @@ def rl(
         "--restart",
         help="Restart the vLLM server before training",
     ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Enable verbose output",
+    ),
 ) -> None:
     """🎯 Run GRPO reinforcement learning training on tasks."""
     # Import from the rl module
@@ -1004,6 +1010,7 @@ def rl(
         config_file=config_file,
         output_dir=output_dir,
         restart=restart,
+        verbose=verbose,
     )
 
 
