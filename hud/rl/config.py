@@ -31,7 +31,7 @@ class TrainingConfig:
 
     # Batch parameters
     epochs: int = 2
-    batch_size: int = 12
+    batch_size: int = 24
     group_size: int = 6
     mini_batch_size: int = 2
 
@@ -58,7 +58,7 @@ class TrainingConfig:
 class ActorConfig:
     """Actor/episode collection configuration."""
     # Execution parameters
-    max_steps_per_episode: int = 12
+    max_steps_per_episode: int = 6
     max_parallel_episodes: int = 32
     max_new_tokens: int = 2048
     force_tool_choice: bool = False

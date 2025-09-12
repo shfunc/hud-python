@@ -11,6 +11,11 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from peft import LoraConfig, get_peft_model
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
+try:
+    from liger_kernel.transformers import apply_liger_kernel_to_qwen2_5_vl
+    LIGER_AVAILABLE = True
+except ImportError:
+    LIGER_AVAILABLE = False
 
 from hud.utils.design import HUDDesign
 from hud.rl.utils import get_memory_usage, prepare_inputs
@@ -41,6 +46,18 @@ class GRPOLearner:
     def _load_models(self) -> tuple[Any, Any, Any, Any]:
         """Load policy, reference models and optimizer."""
         model_cfg = self.config.model
+        
+        # Apply Liger kernel optimizations if available and enabled
+        if model_cfg.use_liger and LIGER_AVAILABLE:
+            design.info_log("Applying Liger kernel optimizations to Qwen2.5-VL")
+            apply_liger_kernel_to_qwen2_5_vl(
+                rope=True,  # Optimized RoPE
+                rms_norm=True,  # Optimized RMSNorm
+                swiglu=True,  # Optimized SwiGLU
+                fused_linear_cross_entropy=True  # Fused Linear+CrossEntropy for memory efficiency
+            )
+        elif model_cfg.use_liger and not LIGER_AVAILABLE:
+            design.warning_log("Liger kernel requested but not installed. Install with: pip install liger-kernel")
         
         # Load processor
         processor = AutoProcessor.from_pretrained(
@@ -226,7 +243,10 @@ class GRPOLearner:
                 sample.inputs,
             )
             
-            ratio_tok = torch.exp(pol_logp - sample.old_logprobs)
+            # Clip log probability differences to prevent numerical explosion
+            log_ratio = pol_logp - sample.old_logprobs
+            log_ratio = torch.clamp(log_ratio, min=-20.0, max=20.0)
+            ratio_tok = torch.exp(log_ratio)
             ratio = ratio_tok.mean() if training_cfg.token_agg == "mean" else ratio_tok.sum()
 
             unclipped = ratio * sample.advantage
@@ -239,7 +259,10 @@ class GRPOLearner:
             policy_term = torch.minimum(unclipped, clipped)
             policy_terms.append(policy_term)
             
-            rho_tok = torch.exp(pol_logp - sample.ref_logprobs)
+            # Clip log probability differences to prevent numerical explosion in KL
+            log_rho = pol_logp - sample.ref_logprobs
+            log_rho = torch.clamp(log_rho, min=-20.0, max=20.0)
+            rho_tok = torch.exp(log_rho)
             kl_approx = (rho_tok - torch.log(rho_tok) - 1).mean()
             kl_terms.append(kl_approx)
 

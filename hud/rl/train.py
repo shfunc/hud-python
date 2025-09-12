@@ -215,7 +215,7 @@ async def main() -> None:
     # Calculate the memory usage
     INITIAL_MEMORY = 8.0
     SCALING_FACTOR = 5
-    constant = config.training.mini_batch_size * config.training.training_steps
+    constant = config.training.mini_batch_size * config.actor.max_steps_per_episode
     quadratic = (config.model.max_pixels / (28 * 28 * 256)) ** 2
     total_memory = INITIAL_MEMORY + SCALING_FACTOR * constant * quadratic
     design.info(f"Total memory usage: {total_memory:.2f} GB")
