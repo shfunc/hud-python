@@ -19,7 +19,7 @@ CUDA_VISIBLE_DEVICES=1 uv run vllm serve \
     --port 8000 \
     --tensor-parallel-size 1 \
     --trust-remote-code \
-    --max-model-len 32768 \
+    --max-model-len 16384 \
     --enable-lora \
     --max-lora-rank 64 \
     --max-cpu-loras 4 \
