@@ -131,7 +131,7 @@ class MCPAgent(ABC):
 
             self.mcp_client = MCPClient(mcp_config=task.mcp_config)
             self._auto_created_client = True
-            self.design.info_log("Auto-created MCPClient from task.mcp_config")
+            self.design.debug_log("Auto-created MCPClient from task.mcp_config")
 
         # Ensure we have a client
         if self.mcp_client is None:

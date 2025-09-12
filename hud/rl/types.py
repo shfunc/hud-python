@@ -34,8 +34,11 @@ class Metric:
     def update(self, value: float | int | torch.Tensor) -> None:
         """Update metric."""
         self.values.append(value.item() if isinstance(value, torch.Tensor) else value)
-        self.mean = sum(self.values) / len(self.values)
-        self.std = math.sqrt(sum((x - self.mean) ** 2 for x in self.values) / len(self.values))
+        mean_val = sum(self.values) / len(self.values)
+        self.mean = mean_val.item() if isinstance(mean_val, torch.Tensor) else float(mean_val)
+        variance = sum((x - self.mean) ** 2 for x in self.values) / len(self.values)
+        variance_val = variance.item() if isinstance(variance, torch.Tensor) else float(variance)
+        self.std = math.sqrt(variance_val)
 
 @dataclass
 class TrainingMetrics:

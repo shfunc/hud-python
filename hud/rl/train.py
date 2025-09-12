@@ -1,8 +1,6 @@
 """Main training loop for GRPO RL."""
 
 import os
-# Force training to use GPU 0
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 # Disable tokenizer parallelism warnings
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -10,6 +8,7 @@ import argparse
 import asyncio
 import json
 import logging
+from datetime import datetime
 import uuid
 from pathlib import Path
 
@@ -19,7 +18,7 @@ from hud.rl.actor import Actor
 from hud.rl.buffer import DatasetBuffer, ReplayBuffer
 from hud.rl.config import Config
 from hud.rl.learner import GRPOLearner
-from hud.rl.utils import ensure_dir, load_tasks, set_seed
+from hud.rl.utils import ensure_dir, load_tasks, set_seed, preprocess_advantages
 from hud.rl.vllm_adapter import VLLMAdapter
 from hud.rl.distributed import (
     setup_distributed, cleanup_distributed, is_main_process, 
@@ -59,16 +58,17 @@ async def train(config: Config, tasks: list[Task]) -> None:
         tasks,
         config
     )
-    design.key_value_table(dataset_buffer.info)
+    if is_main_process():
+        design.key_value_table(dataset_buffer.info)
 
     # Replay buffer is responsible for storing episodes for training
     trace_buffer = ReplayBuffer(config)
 
-    # VLLM adapter is responsible for loading and unloading adapters
+    # VLLM adapter is responsible for loading and unloading adapters (only on main process)
     vllm = VLLMAdapter(
         config.actor.vllm_base_url,
         config.actor.vllm_api_key
-    )
+    ) if is_main_process() else None
     
     # Training state
     step = 0
@@ -76,9 +76,22 @@ async def train(config: Config, tasks: list[Task]) -> None:
     if is_main_process():
         design.section_title("\n[2/3] Running training loop...")
     
-    job_obj = hud.job(name=config.job_name, metadata={"config": config.to_dict()}) if is_main_process() else None
+    # Create job on main process and distribute ID across GPUs
     if is_main_process():
-        job_obj.__enter__()
+        job_obj = hud.create_job(
+            name=config.job_name,
+            metadata={"config": config.to_dict()}
+        )
+        job_obj.update_status_sync("running")
+        job_id = job_obj.id
+        design.info(f"Created job with ID: {job_id}")
+    else:
+        job_obj = None
+        job_id = None
+    
+    # Broadcast job ID to all ranks
+    job_id = broadcast_object(job_id, src=0)
+    design.info(f"Rank {get_global_rank()} using job ID: {job_id}")
     
     try:
         while len(dataset_buffer) > 0:
@@ -91,22 +104,26 @@ async def train(config: Config, tasks: list[Task]) -> None:
 
             # Only rank 0 runs tasks and collects traces
             if is_main_process():
-                traces = await actor.run_tasks(tasks, job_id=job_obj.id)
+                traces = await actor.run_tasks(tasks, job_id=job_id)
                 design.info(f"Sampled {len(traces)} traces")
                 trace_buffer.add(traces)
                 
                 # Get all traces from buffer for distribution
                 all_traces = trace_buffer.sample_traces()
+
+                # Preprocess traces to training samples
+                preprocessed_traces = preprocess_advantages(all_traces)
                 
                 # Distribute traces in groups across ranks
-                rank_traces = distribute_groups(all_traces, config.training.group_size)
+                num_gpus = get_world_size()
+                total_groups = len(all_traces) // num_gpus
+                rank_traces = distribute_groups(preprocessed_traces, total_groups)
                 
                 # Log distribution info
-                total_groups = len(all_traces) // config.training.group_size
-                design.info(f"Distributing {len(all_traces)} traces as {total_groups} groups across {get_world_size()} GPUs")
-                for rank in range(get_world_size()):
+                design.info(f"Distributing {len(all_traces)} traces as {total_groups} groups across {num_gpus} GPUs")
+                for rank in range(num_gpus):
                     n_traces = len(rank_traces[rank])
-                    n_groups = n_traces // config.training.group_size if n_traces > 0 else 0
+                    n_groups = n_traces // num_gpus if n_traces > 0 else 0
                     design.info(f"  Rank {rank}: {n_traces} traces ({n_groups} groups)")
                 
                 design.section_title(f"Training on {len(all_traces)} traces")
@@ -114,44 +131,49 @@ async def train(config: Config, tasks: list[Task]) -> None:
                 rank_traces = None
             
             # Broadcast each rank's traces
-            my_traces = broadcast_object(
-                rank_traces[get_global_rank()] if rank_traces else [], 
-                src=0
-            )
-            
-            # Only log trace counts if we have traces
-            if len(my_traces) > 0:
-                design.info(f"Rank {get_global_rank()} processing {len(my_traces)} traces ({len(my_traces)//config.training.group_size} groups)")
+            rank_traces = broadcast_object(rank_traces, src=0)
+            my_traces = rank_traces[get_global_rank()] if rank_traces else []
             
             # Process only assigned traces
-            traces = my_traces
-            metrics = learner.update(traces)
+            metrics = learner.update(my_traces)
             
             if step % config.stats_interval == 0:
                 design.key_value_table(metrics.to_dict())
             
-            # Save checkpoint and update vLLM
+            # Increment step counter on all processes
             step += 1
+            
+            # Save checkpoint and update vLLM (only on main process)
             if step % config.training.save_every_batches == 0:
-                design.section_title("Saving checkpoint and updating vLLM")
-                checkpoint_id = uuid.uuid4()
-                checkpoint_path = Path(config.out_dir) / f"{config.adapter_prefix}-{checkpoint_id}"
-                learner.save(str(checkpoint_path))
+                if is_main_process():
+                    design.section_title("Saving checkpoint and updating vLLM")
+                    # get date and time
+                    now = datetime.now()
+                    checkpoint_id = now.strftime("%Y%m%d_%H%M%S") + f"-{get_global_rank()}"
+                    checkpoint_path = Path(config.out_dir) / f"{config.adapter_prefix}-{checkpoint_id}"
+                    learner.save(str(checkpoint_path))
 
-                adapter_name = f"{config.adapter_prefix}-{checkpoint_id}"
-                if vllm.load_adapter(adapter_name, str(checkpoint_path)):
-                    actor.update_adapter(adapter_name)
-                    design.info(f"✓ Checkpoint saved and loaded: {adapter_name}")
-                else:
-                    design.warning(f"Failed to hot-load adapter {adapter_name}")
+                    adapter_name = f"{config.adapter_prefix}-{checkpoint_id}"
+                    if vllm.load_adapter(adapter_name, str(checkpoint_path)):
+                        actor.update_adapter(adapter_name)
+                        design.info(f"✓ Checkpoint saved and loaded: {adapter_name}")
+                    else:
+                        design.warning(f"Failed to hot-load adapter {adapter_name}")
+                
+                # Ensure all processes wait for checkpoint operations to complete
+                synchronize()
         
         if is_main_process():
             design.section_title("\n[3/3] Training completed!")
-    finally:
-        # Clean up job context
+            # Update job status to completed
+            if job_obj:
+                job_obj.update_status_sync("completed")
+    except Exception as e:
+        # Update job status to failed on error
         if is_main_process() and job_obj:
-            job_obj.__exit__(None, None, None)
-        
+            job_obj.update_status_sync("failed")
+        raise
+    finally:
         # Synchronize before cleanup
         synchronize()
         
@@ -169,12 +191,6 @@ async def main() -> None:
     parser.add_argument("--tasks", type=str, help="Path to tasks JSONL file or HuggingFace dataset name")
     parser.add_argument("--tasks-json", type=json.loads, help="Tasks as JSON list string")
     
-    # Override config values
-    parser.add_argument("--episodes-per-batch", type=int)
-    parser.add_argument("--max-steps", type=int)
-    parser.add_argument("--lr", type=float)
-    parser.add_argument("--out-dir", type=str)
-    
     args = parser.parse_args()
     
     # Load config
@@ -190,34 +206,22 @@ async def main() -> None:
         design.info("[TEST MODE] Using minimal configuration")
         eps = 6
         config.training.episodes_per_batch = eps
-        config.actor.parallel_episodes = eps
+        config.actor.max_parallel_episodes = 12
         config.training.group_size = eps
         config.training.mini_batch_size = 3
-        config.training.max_training_steps = 4
+        config.training.training_steps = 4
         config.actor.max_steps_per_episode = 4
 
     # Calculate the memory usage
     INITIAL_MEMORY = 8.0
     SCALING_FACTOR = 5
-    constant = config.training.mini_batch_size * config.training.max_training_steps
+    constant = config.training.mini_batch_size * config.training.training_steps
     quadratic = (config.model.max_pixels / (28 * 28 * 256)) ** 2
     total_memory = INITIAL_MEMORY + SCALING_FACTOR * constant * quadratic
     design.info(f"Total memory usage: {total_memory:.2f} GB")
     if total_memory > 75.0:
         design.error("Potential memory usage is too high, decrease either training steps or mini batch size")
         exit(1)
-    
-    # Apply command-line overrides
-    if args.episodes_per_batch:
-        config.training.episodes_per_batch = args.episodes_per_batch
-    if args.max_steps:
-        config.training.max_training_steps = args.max_steps
-    if args.lr:
-        config.training.lr = args.lr
-    if args.out_dir:
-        config.out_dir = args.out_dir
-    if args.debug:
-        config.verbose = True
     
     # Load tasks
     if args.tasks_json:

@@ -40,8 +40,9 @@ class TrainingConfig:
     select_strategy: Literal["recent", "variance", "random"] = "variance"
 
     # Training hyperparameters
-    lr: float = 2e-5
-    kl_beta: float = 1e-3
+    lr: float = 5e-5
+    kl_beta: float = 0.0
+    grad_clip: float = 1.0
 
     # Adam hyperparameters
     clip_eps: float = 0.2

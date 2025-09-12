@@ -15,7 +15,7 @@ from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
 from hud.utils.design import HUDDesign
 from hud.rl.utils import get_memory_usage, prepare_inputs
 from hud.rl.distributed import (
-    get_local_rank, get_world_size, is_main_process, all_reduce_mean
+    get_local_rank, get_world_size, is_main_process, all_reduce_mean, get_global_rank
 )
 from hud.types import Trace
 
@@ -106,7 +106,7 @@ class GRPOLearner:
         design.info_log(f"Number of trainable parameters: {num_params:,}")
         
         return processor, policy, None, optimizer
-    
+
     def compute_logprobs(self, model: Any, inputs: Any) -> torch.Tensor:
         """Compute per-token log probabilities via the model."""
         out = model(**inputs)
@@ -120,43 +120,14 @@ class GRPOLearner:
         
         return gathered
     
-    def preprocess_group(self, group: list[Trace]) -> list[TrainingSample]:
-        """Preprocess a group of traces."""
-        samples = [TrainingSample(**trace.model_dump()) for trace in group]
-
-        rewards = torch.tensor([trace.reward for trace in group], device=self.device)
-        mean_reward = rewards.mean()
-        std_reward = rewards.std()
-        
-        # Normalize advantages
-        for sample, reward in zip(samples, rewards, strict=True):
-            if sample.isError:
-                continue
-            if std_reward < 1e-6:
-                sample.advantage = 0.0
-                continue
-            sample.advantage = ((reward - mean_reward) / std_reward)
-
-        processed_samples = []
-        for sample in samples:
-            inputs = prepare_inputs(sample, self.processor, self.policy, self.config)
-
-            # A sample could be split into multiple training inputs
-            for inp in inputs:
-                new_sample = TrainingSample(**sample.model_dump())
-                new_sample.inputs = inp
-                processed_samples.append(new_sample)
-
-        return processed_samples
-
-    def update(self, batch: list[Trace]) -> TrainingMetrics:
+    def update(self, samples: list[TrainingSample]) -> TrainingMetrics:
         """Perform a gradient update on a batch."""
         # Always create metrics for synchronization
         self.metrics.append(TrainingMetrics())
         metrics = self.metrics[-1]
         
         # Handle empty batch - still need to call backward for DDP sync
-        if not batch or len(batch) == 0:
+        if not samples or len(samples) == 0:
             if self.world_size > 1:
                 design.warning_log("Empty batch, performing dummy backward for DDP sync")
                 # Perform a dummy forward/backward to maintain DDP synchronization
@@ -165,6 +136,15 @@ class GRPOLearner:
                 self.optimizer.step()
                 self.optimizer.zero_grad()
             return metrics
+        
+        # Prepare inputs with messages
+        batch = []
+        for sample in samples:
+            inputs = prepare_inputs(sample, self.processor, self.policy, self.config)
+            for inp in inputs:
+                new_sample = TrainingSample(**sample.model_dump())
+                new_sample.inputs = inp
+                batch.append(new_sample)
 
         design.info_log(f"[update] Processing batch of {len(batch)} traces")
         group_size = self.config.training.group_size
@@ -175,11 +155,7 @@ class GRPOLearner:
         groups = [batch[i:i+group_size] for i in range(0, len(batch), group_size)]
         
         with design.progress("Gradient update...") as progress:
-            for i, group in enumerate(groups):
-                progress.update(f"Preprocessing {len(group)} traces (Group {i+1}/{len(groups)})")
-                design.debug_log(f"Processing group {i+1}/{len(groups)}: {len(group)} traces")
-                samples = self.preprocess_group(group)
-                
+            for i, samples in enumerate(groups):
                 progress.update(f"Computing logprobs for {len(samples)} samples")
                 design.debug_log(f"Computing old and reference logprobs for {len(samples)} samples")
                 with torch.no_grad():
@@ -188,7 +164,8 @@ class GRPOLearner:
                             self.policy,
                             sample.inputs,
                         )
-                    with self.policy.disable_adapter():
+                    policy_module = self.policy.module if hasattr(self.policy, 'module') else self.policy
+                    with policy_module.disable_adapter():
                         for sample in samples:
                             sample.ref_logprobs = self.compute_logprobs(
                                 self.policy,
@@ -221,11 +198,11 @@ class GRPOLearner:
                         
                         loss.backward()
                     
-                    grad_norm = torch.nn.utils.clip_grad_norm_(self.policy.parameters(), 1.0)
+                    grad_norm = torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.config.training.grad_clip)
                     self.optimizer.step()
 
                     metrics.update({
-                        "grad_norm": grad_norm,
+                        "grad_norm": grad_norm.item() if isinstance(grad_norm, torch.Tensor) else float(grad_norm),
                     })
                     
                     progress.update(f"Step {i}, Epoch {epoch}, Loss: {accumulated_loss:.4f}, GradNorm: {grad_norm:.4f} (grad_accum={grad_accum_steps})")
@@ -251,8 +228,6 @@ class GRPOLearner:
             
             ratio_tok = torch.exp(pol_logp - sample.old_logprobs)
             ratio = ratio_tok.mean() if training_cfg.token_agg == "mean" else ratio_tok.sum()
-            
-            design.info_log(f"Ratio: {ratio}")
 
             unclipped = ratio * sample.advantage
             clipped = torch.clamp(
@@ -268,11 +243,9 @@ class GRPOLearner:
             kl_approx = (rho_tok - torch.log(rho_tok) - 1).mean()
             kl_terms.append(kl_approx)
 
-            design.info_log(f"KL: {kl_approx}")
-
             metrics.update({
-                "policy_ratio": ratio.detach(),
-                "kl": kl_approx,
+                "policy_ratio": ratio.detach().mean().item(),
+                "kl": kl_approx.item(),
                 "tokens": sample.inputs["input_ids"].numel(),
             })
         
@@ -296,10 +269,6 @@ class GRPOLearner:
             model_to_save = self.policy.module if hasattr(self.policy, 'module') else self.policy
             model_to_save.save_pretrained(path)
             logger.info(f"[Learner] Saved checkpoint to {path}")
-        
-        # Synchronize all processes
-        if dist.is_initialized():
-            dist.barrier()
     
     def load(self, path: str) -> None:
         """Load a policy checkpoint."""

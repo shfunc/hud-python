@@ -226,7 +226,7 @@ class GenericOpenAIChatAgent(MCPAgent):
 
         # Only stop on length (token limit), never on "stop"
         done = choice.finish_reason == "length"
-        logger.info(f"Done decision: finish_reason={choice.finish_reason}, done={done}")
+        self.design.info(f"Done decision: finish_reason={choice.finish_reason}, done={done}")
         
         return AgentResponse(
             content=msg.content or "",

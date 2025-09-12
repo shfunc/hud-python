@@ -5,6 +5,7 @@ import io
 import base64
 import random
 import json
+import numpy as np
 from typing import Any
 from pathlib import Path
 from PIL import Image
@@ -329,6 +330,24 @@ def prepare_inputs(
 
     return [inputs]
 
+def preprocess_advantages(group: list[Trace]) -> list[TrainingSample]:
+    """Preprocess a group of traces."""
+    rewards = np.array([trace.reward for trace in group])
+    mean_reward = np.mean(rewards)
+    std_reward = np.std(rewards)
+    
+    # Normalize advantages
+    samples = [TrainingSample(**trace.model_dump()) for trace in group]
+    for sample, reward in zip(samples, rewards, strict=True):
+        if sample.isError:
+            continue
+        if std_reward < 1e-6:
+            sample.advantage = 0.0
+            continue
+        advantage_value = ((reward - mean_reward) / std_reward)
+        sample.advantage = float(advantage_value)
+
+    return samples
 
 # def concat_training_samples(
 #     samples: list[TrainingSample],

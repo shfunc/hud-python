@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Tuple
 
 import typer
-from hud.rl.config import Config, ModelConfig, TrainingConfig, ActorConfig
+from hud.rl.config import Config, ModelConfig, TrainingConfig, ActorConfig, DDPConfig
 from rich.console import Console
 from hud.utils.design import design
 from .presets import estimate_memory_usage
@@ -66,18 +66,19 @@ def generate_config_interactive(
             lr=selected_preset['lr'],
             epochs=selected_preset['epochs'],
             mini_batch_size=selected_preset['mini_batch_size'],
-            episodes_per_batch=selected_preset['episodes_per_batch'],
+            batch_size=selected_preset['batch_size'],
             group_size=selected_preset['group_size'],
             kl_beta=0.001,
             save_every_batches=1,
+            training_steps=100,  # Default, can be overridden
         ),
         actor=ActorConfig(
             vllm_base_url="http://localhost:8000/v1",
             vllm_api_key="token-abc123",
             temperature=temperature,
-            max_tokens=2048,
+            max_new_tokens=2048,
             max_steps_per_episode=max_steps_per_episode,
-            parallel_episodes=selected_preset['episodes_per_batch'],
+            max_parallel_episodes=selected_preset.get('max_parallel_episodes', selected_preset['batch_size']),
             system_prompt="You are an expert agent. Complete the task efficiently.",
         ),
     )
@@ -91,6 +92,7 @@ def save_config(config: Config, path: Path) -> None:
         "seed": config.seed,
         "out_dir": config.out_dir,
         "adapter_prefix": config.adapter_prefix,
+        "verbose": config.verbose,
         "model": {
             "base_model": config.model.base_model,
             "lora_r": config.model.lora_r,
@@ -104,9 +106,9 @@ def save_config(config: Config, path: Path) -> None:
             "lr": config.training.lr,
             "epochs": config.training.epochs,
             "mini_batch_size": config.training.mini_batch_size,
-            "episodes_per_batch": config.training.episodes_per_batch,
+            "batch_size": config.training.batch_size,
             "group_size": config.training.group_size,
-            "max_training_steps": config.training.max_training_steps,
+            "training_steps": config.training.training_steps,
             "kl_beta": config.training.kl_beta,
             "save_every_batches": config.training.save_every_batches,
         },
@@ -114,9 +116,9 @@ def save_config(config: Config, path: Path) -> None:
             "vllm_base_url": config.actor.vllm_base_url,
             "vllm_api_key": config.actor.vllm_api_key,
             "temperature": config.actor.temperature,
-            "max_tokens": config.actor.max_tokens,
+            "max_new_tokens": config.actor.max_new_tokens,
             "max_steps_per_episode": config.actor.max_steps_per_episode,
-            "parallel_episodes": config.actor.parallel_episodes,
+            "max_parallel_episodes": config.actor.max_parallel_episodes,
             "system_prompt": config.actor.system_prompt,
         },
     }
@@ -138,6 +140,7 @@ def load_config(path: Path) -> Config:
         seed=data.get("seed", 42),
         out_dir=data.get("out_dir", "checkpoints"),
         adapter_prefix=data.get("adapter_prefix", "rl-adapter"),
+        verbose=data.get("verbose", True),
         model=ModelConfig(**data["model"]),
         training=TrainingConfig(**data["training"]),
         actor=ActorConfig(**data["actor"]),

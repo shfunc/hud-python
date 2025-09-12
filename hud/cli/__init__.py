@@ -966,7 +966,7 @@ def rl(
     tasks_file: str | None = typer.Argument(
         None,
         help=(
-            "Path to tasks file (JSON array or JSONL) or HuggingFace dataset name. "
+            "Path to tasks file (JSON/JSONL) or HuggingFace dataset name. "
             "If not provided, looks for tasks.json or tasks.jsonl in current directory."
         ),
     ),

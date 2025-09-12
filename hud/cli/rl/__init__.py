@@ -15,6 +15,7 @@ from rich.progress import Progress
 
 # Import local modules first
 from .gpu import detect_cuda_devices, validate_gpu_memory, select_gpu_for_vllm
+from .gpu_utils import calculate_optimal_gpu_allocation, adjust_config_for_ddp, health_check_gpus
 from .presets import get_training_presets, estimate_memory_usage
 from .vllm import check_vllm_server, start_vllm_server, wait_for_vllm_server, kill_vllm_server
 from .display import display_gpu_info, display_config_summary
@@ -24,6 +25,7 @@ from .config import generate_config_interactive, save_config, load_config
 from hud.utils.design import design
 from hud.rl.utils import load_tasks
 from hud.rl.train import train
+from hud.rl.config import Config
 from hud.datasets import Task
 
 console = Console()
@@ -62,6 +64,22 @@ def rl_command(
         "--verbose",
         "-v",
         help="Enable verbose output",
+    ),
+    # DDP options
+    no_ddp: bool = typer.Option(
+        False,
+        "--no-ddp",
+        help="Disable DDP even with multiple GPUs",
+    ),
+    ddp_gpus: Optional[str] = typer.Option(
+        None,
+        "--ddp-gpus",
+        help="Specific GPUs for DDP (e.g., '0,1,2,3')",
+    ),
+    vllm_gpu: Optional[int] = typer.Option(
+        None,
+        "--vllm-gpu",
+        help="Specific GPU for vLLM server",
     ),
 ):
     """Run GRPO reinforcement learning training on tasks."""
@@ -114,6 +132,37 @@ def rl_command(
         raise typer.Exit(1)
     
     display_gpu_info(gpu_info)
+    
+    # Perform GPU health check
+    all_gpu_indices = [device["index"] for device in gpu_info["devices"]]
+    health_results = health_check_gpus(all_gpu_indices)
+    
+    if not health_results["all_healthy"]:
+        console.print("\n[yellow]⚠️  Some GPUs failed health checks![/yellow]")
+        console.print(f"[yellow]Unhealthy GPUs: {list(health_results['unhealthy_gpus'].keys())}[/yellow]")
+        
+        if not health_results["healthy_gpus"]:
+            console.print("[red]❌ No healthy GPUs available for training![/red]")
+            raise typer.Exit(1)
+        
+        console.print(f"\n[cyan]You have {len(health_results['healthy_gpus'])} healthy GPUs available.[/cyan]")
+        
+        continue_training = typer.confirm(
+            "\nContinue with healthy GPUs only?",
+            default=True
+        )
+        
+        if not continue_training:
+            healthy_str = ','.join(map(str, health_results['healthy_gpus']))
+            console.print("\n[yellow]Exiting. Please resolve GPU issues and try again.[/yellow]")
+            console.print(f"\n[cyan]💡 Tip: To use only healthy GPUs, you can run:[/cyan]")
+            console.print(f"[white]hud rl {tasks_file} --ddp-gpus {healthy_str}[/white]\n")
+            raise typer.Exit(0)
+        else:
+            # Continue with healthy GPUs only
+            # Update gpu_info to only include healthy GPUs
+            gpu_info["devices"] = [d for d in gpu_info["devices"] if d["index"] in health_results["healthy_gpus"]]
+            console.print(f"\n[green]✅ Continuing with {len(gpu_info['devices'])} healthy GPUs[/green]")
     
     # Get primary GPU memory for configuration
     primary_gpu = gpu_info["devices"][0]
@@ -190,7 +239,14 @@ def rl_command(
         )
     else:
         console.print("\n[cyan]Generating training configuration...[/cyan]")
-        presets = get_training_presets(gpu_memory_gb)
+        # Get number of GPUs for preset scaling
+        num_training_gpus = 1  # Default, will be adjusted later
+        if len(gpu_info["devices"]) > 2:
+            # If we have many GPUs, presets will show scaled values
+            num_training_gpus = len(gpu_info["devices"]) - 1  # Reserve 1 for vLLM
+            console.print(f"[yellow]Note: Episodes will be scaled for {num_training_gpus} training GPUs[/yellow]\n")
+        
+        presets = get_training_presets(gpu_memory_gb, num_training_gpus)
         config, estimated_memory = generate_config_interactive(
             model_name=model,
             tasks_count=len(tasks),
@@ -271,11 +327,78 @@ def rl_command(
         else:
             console.print("[red]Invalid choice. Type 'start', 'edit', or 'cancel':[/red] ", end="")
     
-    # Step 7: Start vLLM server
-    vllm_gpu_index = select_gpu_for_vllm(gpu_info["devices"])
-    console.print(f"\n[cyan]Setting up vLLM server on GPU {vllm_gpu_index}...[/cyan]")
+    # Step 7: Determine if DDP should be used
+    num_gpus = len(gpu_info["devices"])
+    use_ddp = False
+    training_gpus = [0]  # Default single GPU
+    vllm_gpu_idx = 1 if num_gpus > 1 else 0
     
-    start_vllm_server(config.model.base_model, vllm_gpu_index, restart=restart)
+    if num_gpus > 2 and not no_ddp:
+        console.print(f"\n[cyan]🚀 Detected {num_gpus} GPUs - checking DDP configuration...[/cyan]")
+        
+        # Calculate optimal GPU allocation
+        gpu_allocation = calculate_optimal_gpu_allocation(gpu_info, config)
+        
+        if gpu_allocation["use_ddp"]:
+            use_ddp = True
+            training_gpus = gpu_allocation["training_gpus"]
+            vllm_gpu_idx = gpu_allocation["vllm_gpu"]
+            
+            console.print(f"[green]✅ Will use DDP with {len(training_gpus)} GPUs for training[/green]")
+            console.print(f"[green]✅ GPU {vllm_gpu_idx} reserved for vLLM server[/green]")
+            
+            # Show details
+            console.print(f"\n[cyan]Training Configuration:[/cyan]")
+            console.print(f"  • Groups to process: {gpu_allocation['num_groups']}")
+            console.print(f"  • Training GPUs: {training_gpus}")
+            console.print(f"  • Groups per GPU: {gpu_allocation.get('groups_per_gpu', 'N/A'):.1f}")
+            
+            # Warn about efficiency
+            if gpu_allocation.get('parallel_efficiency', 1.0) < 0.8:
+                console.print(f"\n[yellow]⚠️  GPU efficiency: {gpu_allocation['parallel_efficiency']*100:.0f}%[/yellow]")
+                console.print(f"[yellow]Consider adjusting episodes_per_batch to {len(training_gpus) * config.training.group_size} for optimal performance[/yellow]")
+        else:
+            console.print(f"[cyan]{gpu_allocation.get('reason', 'Using single GPU')}[/cyan]")
+    
+    # Allow manual override
+    if ddp_gpus:
+        requested_gpus = [int(x) for x in ddp_gpus.split(',')]
+        console.print(f"[cyan]Manual GPU selection: {requested_gpus}[/cyan]")
+        # Validate requested GPUs are in the healthy set
+        available_indices = [d["index"] for d in gpu_info["devices"]]
+        invalid_gpus = [g for g in requested_gpus if g not in available_indices]
+        if invalid_gpus:
+            console.print(f"[red]❌ Invalid/unhealthy GPU(s) requested: {invalid_gpus}[/red]")
+            console.print(f"[yellow]Available healthy GPUs: {available_indices}[/yellow]")
+            raise typer.Exit(1)
+        training_gpus = requested_gpus
+        use_ddp = len(training_gpus) > 1
+    
+    if vllm_gpu is not None:
+        vllm_gpu_idx = vllm_gpu
+        console.print(f"[cyan]Manual vLLM GPU: {vllm_gpu_idx}[/cyan]")
+        # Validate vLLM GPU is in the healthy set
+        available_indices = [d["index"] for d in gpu_info["devices"]]
+        if vllm_gpu_idx not in available_indices:
+            console.print(f"[red]❌ vLLM GPU {vllm_gpu_idx} is not available/healthy![/red]")
+            console.print(f"[yellow]Available healthy GPUs: {available_indices}[/yellow]")
+            raise typer.Exit(1)
+    
+    # Ensure we have at least one training GPU
+    if not training_gpus:
+        console.print(f"[red]❌ No available GPUs for training![/red]")
+        raise typer.Exit(1)
+    
+    # Always adjust episodes_per_batch based on number of training GPUs
+    config = adjust_config_for_ddp(config, len(training_gpus))
+    
+    # Save updated config (for both DDP and single GPU)
+    save_config(config, temp_config_path)
+    
+    # Step 8: Start vLLM server
+    console.print(f"\n[cyan]Setting up vLLM server on GPU {vllm_gpu_idx}...[/cyan]")
+    
+    start_vllm_server(config.model.base_model, vllm_gpu_idx, restart=restart)
     
     # Wait for server to be ready
     server_ready = asyncio.run(wait_for_vllm_server())
@@ -283,26 +406,81 @@ def rl_command(
         console.print("[red]❌ Failed to start vLLM server[/red]")
         raise typer.Exit(1)
     
-    # Step 8: Run training
-    console.print("\n[bold green]🎯 Starting RL training...[/bold green]\n")
+    # Step 9: Run training (DDP or single GPU)
+    if use_ddp:
+        console.print(f"\n[bold green]🎯 Starting DDP training on {len(training_gpus)} GPUs...[/bold green]\n")
+        launch_ddp_training(config, training_gpus, vllm_gpu_idx, tasks_file, temp_config_path, verbose)
+        console.print("\n[green]✅ Training completed successfully![/green]")
+    else:
+        console.print("\n[bold green]🎯 Starting single-GPU training...[/bold green]\n")
+        try:
+            # Set verbose in config instead of passing as parameter
+            if verbose:
+                config.verbose = True
+            
+            # Run the async training function
+            asyncio.run(train(config, tasks))
+            console.print("\n[green]✅ Training completed successfully![/green]")
+        
+            # Clean up temp config file
+            try:
+                temp_config_path.unlink()
+            except:
+                pass
+                
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Training interrupted by user[/yellow]")
+            raise typer.Exit(1)
+        except Exception as e:
+            console.print(f"\n[red]❌ Training failed: {e}[/red]")
+            raise typer.Exit(1)
+
+
+def launch_ddp_training(
+    config: Config,
+    training_gpus: List[int],
+    vllm_gpu: int,
+    tasks_file: str,
+    config_path: Path,
+    verbose: bool
+):
+    """Launch DDP training with torchrun."""
+    import subprocess
+    import sys
+    
+    # Prepare environment
+    env = os.environ.copy()
+    env['CUDA_VISIBLE_DEVICES'] = ','.join(map(str, training_gpus))
+    
+    if not verbose:
+        env['HUD_LOG_LEVEL'] = 'WARNING'
+    
+    # Build command
+    cmd = [
+        sys.executable, "-m", "torch.distributed.run",
+        f"--nproc_per_node={len(training_gpus)}",
+        "--master_port=29500",
+        "-m", "hud.rl.train",
+        "--config", str(config_path),
+        "--tasks", tasks_file
+    ]
+    
+    # Add verbose flag if enabled
+    if verbose:
+        cmd.append("--verbose")
     
     try:
-        # Run the async training function
-        asyncio.run(train(config, tasks, verbose=verbose))
-        console.print("\n[green]✅ Training completed successfully![/green]")
-        
-        # Clean up temp config file
+        # Run DDP training
+        result = subprocess.run(cmd, env=env, check=True)
+    except subprocess.CalledProcessError as e:
+        console.print(f"\n[red]❌ DDP training failed with exit code {e.returncode}[/red]")
+        raise typer.Exit(1)
+    finally:
+        # Cleanup temp config
         try:
-            temp_config_path.unlink()
+            config_path.unlink()
         except:
             pass
-                
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Training interrupted by user[/yellow]")
-        raise typer.Exit(1)
-    except Exception as e:
-        console.print(f"\n[red]❌ Training failed: {e}[/red]")
-        raise typer.Exit(1)
 
 
 # Export the command function
