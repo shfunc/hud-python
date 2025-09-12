@@ -246,7 +246,7 @@ def rl_command(
             num_training_gpus = len(gpu_info["devices"]) - 1  # Reserve 1 for vLLM
             console.print(f"[yellow]Note: Episodes will be scaled for {num_training_gpus} training GPUs[/yellow]\n")
         
-        presets = get_training_presets(gpu_memory_gb, num_training_gpus)
+        presets = get_training_presets(gpu_memory_gb)
         config, estimated_memory = generate_config_interactive(
             model_name=model,
             tasks_count=len(tasks),

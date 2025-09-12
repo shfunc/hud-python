@@ -31,9 +31,12 @@ class Metric:
     std: float = Field(default=0.0)
     values: list[float] = Field(default_factory=list)
 
-    def update(self, value: float | int | torch.Tensor) -> None:
+    def update(self, value: float | int | torch.Tensor | list[float] | list[int] | list[torch.Tensor]) -> None:
         """Update metric."""
-        self.values.append(value.item() if isinstance(value, torch.Tensor) else value)
+        if isinstance(value, list):
+            self.values.extend(value)
+        else:
+            self.values.append(value.item() if isinstance(value, torch.Tensor) else value)
         mean_val = sum(self.values) / len(self.values)
         self.mean = mean_val.item() if isinstance(mean_val, torch.Tensor) else float(mean_val)
         variance = sum((x - self.mean) ** 2 for x in self.values) / len(self.values)
@@ -43,6 +46,7 @@ class Metric:
 @dataclass
 class TrainingMetrics:
     """Metrics for GRPO training (per training step)."""
+    # Learner metrics
     grad_norm: Metric = Field(default=Metric())
     loss: Metric = Field(default=Metric())
     kl: Metric = Field(default=Metric())
@@ -50,6 +54,10 @@ class TrainingMetrics:
     advantage: Metric = Field(default=Metric())
     policy_ratio: Metric = Field(default=Metric())
     tokens: Metric = Field(default=Metric())
+
+    # Computation metrics
+    gpu_memory: Metric = Field(default=Metric())
+    cpu_memory: Metric = Field(default=Metric())
 
     def update(self, metrics: dict[str, Any]) -> None:
         """Update metrics."""

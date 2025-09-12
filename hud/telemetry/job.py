@@ -265,7 +265,7 @@ def job(
 
 
 def create_job(
-    name: str, metadata: dict[str, Any] | None = None, dataset_link: str | None = None
+    name: str, metadata: dict[str, Any] | None = None, dataset_link: str | None = None, job_id: str | None = None
 ) -> Job:
     """Create a job without using context manager.
 
@@ -275,7 +275,7 @@ def create_job(
         name: Human-readable job name
         metadata: Optional metadata dictionary
         dataset_link: Optional HuggingFace dataset identifier (e.g. "hud-evals/SheetBench-50")
-
+        job_id: Optional job ID (auto-generated if not provided)
     Returns:
         Job: The created job object
 
@@ -288,7 +288,7 @@ def create_job(
         finally:
             await job.update_status("completed")
     """
-    job_id = str(uuid.uuid4())
+    job_id = job_id or str(uuid.uuid4())
     return Job(job_id, name, metadata, dataset_link)
 
 

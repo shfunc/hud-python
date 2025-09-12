@@ -26,6 +26,7 @@ from hud.rl.distributed import (
     distribute_groups
 )
 from hud.utils.design import HUDDesign
+from hud.rl.types import TrainingMetrics
 
 design = HUDDesign(logging.getLogger(__name__))
 
@@ -92,13 +93,18 @@ async def train(config: Config, tasks: list[Task]) -> None:
     # Broadcast job ID to all ranks
     job_id = broadcast_object(job_id, src=0)
     design.info(f"Rank {get_global_rank()} using job ID: {job_id}")
+
+    job_obj = hud.create_job(
+        job_id=job_id,
+        name=config.job_name,
+        metadata={"config": config.to_dict()}
+    )
     
     try:
         while len(dataset_buffer) > 0:
             if is_main_process():
                 design.section_title(f"Step {step + 1}/{dataset_buffer.training_steps}")
                 design.info(f"{len(dataset_buffer)} tasks remaining")
-
             # Get batch of tasks (all ranks need same tasks)
             tasks = dataset_buffer.get_tasks()
 
@@ -136,6 +142,11 @@ async def train(config: Config, tasks: list[Task]) -> None:
             
             # Process only assigned traces
             metrics = learner.update(my_traces)
+            metrics.update({
+                "advantage": [sample.advantage for sample in my_traces],
+                "reward": [sample.reward for sample in my_traces],
+            })
+            job_obj.log_sync(metrics.to_dict())
             
             if step % config.stats_interval == 0:
                 design.key_value_table(metrics.to_dict())
@@ -214,7 +225,7 @@ async def main() -> None:
 
     # Calculate the memory usage
     INITIAL_MEMORY = 8.0
-    SCALING_FACTOR = 5
+    SCALING_FACTOR = 3.5
     constant = config.training.mini_batch_size * config.actor.max_steps_per_episode
     quadratic = (config.model.max_pixels / (28 * 28 * 256)) ** 2
     total_memory = INITIAL_MEMORY + SCALING_FACTOR * constant * quadratic

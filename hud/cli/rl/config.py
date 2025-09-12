@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Tuple
 
 import typer
-from hud.rl.config import Config, ModelConfig, TrainingConfig, ActorConfig, DDPConfig
+from hud.rl.config import Config, ModelConfig, TrainingConfig, ActorConfig
 from rich.console import Console
 from hud.utils.design import design
 from .presets import estimate_memory_usage

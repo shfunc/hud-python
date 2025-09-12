@@ -211,7 +211,11 @@ class GRPOLearner:
                         loss = self.compute_loss(step_samples) / grad_accum_steps
                         accumulated_loss += loss.item() * grad_accum_steps
 
-                        progress.update(f"GPU Memory after compute: {get_memory_usage():.2f} GB")
+                        mem_after = get_memory_usage()
+                        progress.update(f"GPU Memory after compute: {mem_after:.2f} GB")
+                        metrics.update({
+                            "gpu_memory": mem_after,
+                        })
                         
                         loss.backward()
                     

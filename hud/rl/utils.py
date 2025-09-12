@@ -330,6 +330,7 @@ def prepare_inputs(
 
     return [inputs]
 
+
 def preprocess_advantages(group: list[Trace]) -> list[TrainingSample]:
     """Preprocess a group of traces."""
     rewards = np.array([trace.reward for trace in group])

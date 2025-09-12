@@ -31,17 +31,17 @@ class TrainingConfig:
 
     # Batch parameters
     epochs: int = 2
-    batch_size: int = 24
+    batch_size: int = 18
     group_size: int = 6
-    mini_batch_size: int = 2
+    mini_batch_size: int = 3
 
     # Replay buffer parameters
     buffer_steps: int = 6
     select_strategy: Literal["recent", "variance", "random"] = "variance"
 
     # Training hyperparameters
-    lr: float = 5e-5
-    kl_beta: float = 0.0
+    lr: float = 1e-5
+    kl_beta: float = 0.001
     grad_clip: float = 1.0
 
     # Adam hyperparameters
@@ -59,7 +59,7 @@ class ActorConfig:
     """Actor/episode collection configuration."""
     # Execution parameters
     max_steps_per_episode: int = 6
-    max_parallel_episodes: int = 32
+    max_parallel_episodes: int = 36
     max_new_tokens: int = 2048
     force_tool_choice: bool = False
 
