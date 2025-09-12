@@ -21,6 +21,11 @@ from hud.rl.config import Config
 from hud.rl.learner import GRPOLearner
 from hud.rl.utils import ensure_dir, load_tasks, set_seed
 from hud.rl.vllm_adapter import VLLMAdapter
+from hud.rl.distributed import (
+    setup_distributed, cleanup_distributed, is_main_process, 
+    broadcast_object, synchronize, get_global_rank, get_world_size,
+    distribute_groups
+)
 from hud.utils.design import HUDDesign
 
 design = HUDDesign(logging.getLogger(__name__))
@@ -28,19 +33,23 @@ design = HUDDesign(logging.getLogger(__name__))
 
 async def train(config: Config, tasks: list[Task]) -> None:
     """Main training loop."""
+    # Setup distributed environment
+    setup_distributed()
+    
     # Initialize components
-    set_seed(config.seed)
+    set_seed(config.seed + get_global_rank())  # Different seed per rank
     ensure_dir(config.out_dir)
-    if config.verbose:
+    if config.verbose and is_main_process():
         logging.basicConfig(level=logging.INFO)
         # Remove httpx logger
         logging.getLogger("httpx").setLevel(logging.WARNING)
 
-    design.header("Starting GRPO Training")
-    design.section_title("\n[1/3] Initializing components...")
+    if is_main_process():
+        design.header("Starting GRPO Training")
+        design.section_title(f"\n[1/3] Initializing components (world_size={get_world_size()})...")
 
     # Actor is responsible for running tasks and collecting episodes
-    actor = Actor(config)
+    actor = Actor(config) if is_main_process() else None
 
     # Learner is responsible for updating the policy
     learner = GRPOLearner(config)
@@ -64,28 +73,58 @@ async def train(config: Config, tasks: list[Task]) -> None:
     # Training state
     step = 0
     
-    design.section_title("\n[2/3] Running training loop...")
+    if is_main_process():
+        design.section_title("\n[2/3] Running training loop...")
     
-    with hud.job(name=config.job_name, metadata={"config": config.to_dict()}) as job_obj:
+    job_obj = hud.job(name=config.job_name, metadata={"config": config.to_dict()}) if is_main_process() else None
+    if is_main_process():
+        job_obj.__enter__()
+    
+    try:
         while len(dataset_buffer) > 0:
-            design.section_title(f"Step {step + 1}/{dataset_buffer.training_steps}")
-            design.info(f"{len(dataset_buffer)} tasks remaining")
+            if is_main_process():
+                design.section_title(f"Step {step + 1}/{dataset_buffer.training_steps}")
+                design.info(f"{len(dataset_buffer)} tasks remaining")
 
-            # Get batch of tasks
+            # Get batch of tasks (all ranks need same tasks)
             tasks = dataset_buffer.get_tasks()
 
-            # Run tasks and collect traces
-            traces = await actor.run_tasks(tasks, job_id=job_obj.id)
-            design.info(f"Sampled {len(traces)} traces")
-            trace_buffer.add(traces)
-
-            design.info(f"Buffer has {len(trace_buffer)} traces to train from, selecting with {config.training.select_strategy} strategy")
-
-            # Get batch of traces
-            traces = trace_buffer.sample_traces()
-            design.info(f"Selected {len(traces)} traces")
+            # Only rank 0 runs tasks and collects traces
+            if is_main_process():
+                traces = await actor.run_tasks(tasks, job_id=job_obj.id)
+                design.info(f"Sampled {len(traces)} traces")
+                trace_buffer.add(traces)
+                
+                # Get all traces from buffer for distribution
+                all_traces = trace_buffer.sample_traces()
+                
+                # Distribute traces in groups across ranks
+                rank_traces = distribute_groups(all_traces, config.training.group_size)
+                
+                # Log distribution info
+                total_groups = len(all_traces) // config.training.group_size
+                design.info(f"Distributing {len(all_traces)} traces as {total_groups} groups across {get_world_size()} GPUs")
+                for rank in range(get_world_size()):
+                    n_traces = len(rank_traces[rank])
+                    n_groups = n_traces // config.training.group_size if n_traces > 0 else 0
+                    design.info(f"  Rank {rank}: {n_traces} traces ({n_groups} groups)")
+                
+                design.section_title(f"Training on {len(all_traces)} traces")
+            else:
+                rank_traces = None
             
-            design.section_title(f"Training on {len(traces)} traces")
+            # Broadcast each rank's traces
+            my_traces = broadcast_object(
+                rank_traces[get_global_rank()] if rank_traces else [], 
+                src=0
+            )
+            
+            # Only log trace counts if we have traces
+            if len(my_traces) > 0:
+                design.info(f"Rank {get_global_rank()} processing {len(my_traces)} traces ({len(my_traces)//config.training.group_size} groups)")
+            
+            # Process only assigned traces
+            traces = my_traces
             metrics = learner.update(traces)
             
             if step % config.stats_interval == 0:
@@ -105,8 +144,19 @@ async def train(config: Config, tasks: list[Task]) -> None:
                     design.info(f"✓ Checkpoint saved and loaded: {adapter_name}")
                 else:
                     design.warning(f"Failed to hot-load adapter {adapter_name}")
-    
-    design.section_title("\n[3/3] Training completed!")
+        
+        if is_main_process():
+            design.section_title("\n[3/3] Training completed!")
+    finally:
+        # Clean up job context
+        if is_main_process() and job_obj:
+            job_obj.__exit__(None, None, None)
+        
+        # Synchronize before cleanup
+        synchronize()
+        
+        # Clean up distributed environment
+        cleanup_distributed()
 
 
 async def main() -> None:

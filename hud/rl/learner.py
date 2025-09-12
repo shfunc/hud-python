@@ -14,7 +14,9 @@ from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
 
 from hud.utils.design import HUDDesign
 from hud.rl.utils import get_memory_usage, prepare_inputs
-from hud.rl.distributed import setup_distributed, is_main_process, all_reduce_mean
+from hud.rl.distributed import (
+    get_local_rank, get_world_size, is_main_process, all_reduce_mean
+)
 from hud.types import Trace
 
 from .config import Config
@@ -26,11 +28,11 @@ design = HUDDesign(logger)
 class GRPOLearner:
     """GRPO learning algorithm for VLMs."""
     
-    def __init__(self, config: Config, local_rank: int = 0, world_size: int = 1) -> None:
+    def __init__(self, config: Config) -> None:
         self.config = config
-        self.local_rank = local_rank
-        self.world_size = world_size
-        self.device = torch.device(f"cuda:{local_rank}" if torch.cuda.is_available() else "cpu")
+        self.local_rank = get_local_rank()
+        self.world_size = get_world_size()
+        self.device = torch.device(f"cuda:{self.local_rank}" if torch.cuda.is_available() else "cpu")
         
         # Load models and processor
         self.processor, self.policy, self.ref, self.optimizer = self._load_models()
@@ -149,17 +151,26 @@ class GRPOLearner:
 
     def update(self, batch: list[Trace]) -> TrainingMetrics:
         """Perform a gradient update on a batch."""
+        # Always create metrics for synchronization
+        self.metrics.append(TrainingMetrics())
+        metrics = self.metrics[-1]
+        
+        # Handle empty batch - still need to call backward for DDP sync
         if not batch or len(batch) == 0:
-            design.warning_log("Empty batch, returning")
-            return
+            if self.world_size > 1:
+                design.warning_log("Empty batch, performing dummy backward for DDP sync")
+                # Perform a dummy forward/backward to maintain DDP synchronization
+                dummy_loss = torch.tensor(0.0, device=self.device, requires_grad=True)
+                dummy_loss.backward()
+                self.optimizer.step()
+                self.optimizer.zero_grad()
+            return metrics
 
+        design.info_log(f"[update] Processing batch of {len(batch)} traces")
         group_size = self.config.training.group_size
         if len(batch) % group_size != 0:
             design.warning_log(f"Group size {group_size} does not divide batch size {len(batch)}")
-            return
-
-        self.metrics.append(TrainingMetrics())
-        metrics = self.metrics[-1]
+            # Continue anyway with partial group
         
         groups = [batch[i:i+group_size] for i in range(0, len(batch), group_size)]
         
@@ -278,10 +289,17 @@ class GRPOLearner:
         return total_loss
     
     def save(self, path: str) -> None:
-        """Save the current policy checkpoint."""
-        os.makedirs(path, exist_ok=True)
-        self.policy.save_pretrained(path)
-        logger.info(f"[Learner] Saved checkpoint to {path}")
+        """Save the current policy checkpoint (only on rank 0)."""
+        if is_main_process():
+            os.makedirs(path, exist_ok=True)
+            # Unwrap DDP model if needed
+            model_to_save = self.policy.module if hasattr(self.policy, 'module') else self.policy
+            model_to_save.save_pretrained(path)
+            logger.info(f"[Learner] Saved checkpoint to {path}")
+        
+        # Synchronize all processes
+        if dist.is_initialized():
+            dist.barrier()
     
     def load(self, path: str) -> None:
         """Load a policy checkpoint."""

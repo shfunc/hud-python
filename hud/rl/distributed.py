@@ -6,33 +6,30 @@ import torch.distributed as dist
 from typing import Any, Optional
 
 
-def setup_distributed() -> tuple[int, int, int]:
-    """Initialize distributed training environment.
-    
-    Returns:
-        local_rank: GPU index for this process
-        global_rank: Global process index
-        world_size: Total number of processes
-    """
-    if "RANK" in os.environ:
-        # Launched with torchrun
+def setup_distributed() -> None:
+    """Initialize distributed training environment."""
+    if "RANK" in os.environ and int(os.environ["WORLD_SIZE"]) > 1:
+        # Set device for this process
         local_rank = int(os.environ["LOCAL_RANK"])
-        global_rank = int(os.environ["RANK"])
-        world_size = int(os.environ["WORLD_SIZE"])
-    else:
-        # Single GPU mode
-        local_rank = 0
-        global_rank = 0
-        world_size = 1
+        torch.cuda.set_device(local_rank)
         
-    # Set device
-    torch.cuda.set_device(local_rank)
-    
-    # Initialize process group if multi-GPU
-    if world_size > 1:
+        # Initialize process group
         dist.init_process_group("nccl")
-        
-    return local_rank, global_rank, world_size
+
+
+def get_local_rank() -> int:
+    """Get local rank from environment."""
+    return int(os.environ.get("LOCAL_RANK", 0))
+
+
+def get_global_rank() -> int:
+    """Get global rank from environment."""
+    return int(os.environ.get("RANK", 0))
+
+
+def get_world_size() -> int:
+    """Get world size from environment."""
+    return int(os.environ.get("WORLD_SIZE", 1))
 
 
 def cleanup_distributed() -> None:
@@ -93,3 +90,28 @@ def gather_tensors(tensor: torch.Tensor) -> Optional[list[torch.Tensor]]:
     else:
         dist.gather(tensor, None, dst=0)
         return None
+
+
+def distribute_groups(items: list[Any], group_size: int) -> list[list[Any]]:
+    """Distribute items in groups across ranks, preserving group integrity.
+    
+    Args:
+        items: List of items to distribute
+        group_size: Size of each group (groups must stay together)
+        
+    Returns:
+        List of items assigned to each rank
+    """
+    if not items:
+        return [[] for _ in range(get_world_size())]
+    
+    # Form groups
+    groups = [items[i:i+group_size] for i in range(0, len(items), group_size)]
+    
+    # Distribute groups round-robin
+    rank_items = [[] for _ in range(get_world_size())]
+    for i, group in enumerate(groups):
+        rank_idx = i % get_world_size()
+        rank_items[rank_idx].extend(group)
+    
+    return rank_items
