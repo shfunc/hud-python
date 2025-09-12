@@ -13,10 +13,10 @@ from rich.table import Table
 from rich.tree import Tree
 
 from hud.clients import MCPClient
-from hud.utils.design import HUDDesign
+from hud.utils.hud_console import HUDConsole
 
 console = Console()
-design = HUDDesign()
+hud_console = HUDConsole()
 
 
 def parse_docker_command(docker_cmd: list[str]) -> dict:
@@ -28,14 +28,14 @@ def parse_docker_command(docker_cmd: list[str]) -> dict:
 
 async def analyze_environment(docker_cmd: list[str], output_format: str, verbose: bool) -> None:
     """Analyze MCP environment and display results."""
-    design.header("MCP Environment Analysis", icon="🔍")
+    hud_console.header("MCP Environment Analysis", icon="🔍")
 
     # Convert Docker command to MCP config
     mcp_config = parse_docker_command(docker_cmd)
 
     # Display command being analyzed
-    design.dim_info("Command:", " ".join(docker_cmd))
-    design.info("")  # Empty line
+    hud_console.dim_info("Command:", " ".join(docker_cmd))
+    hud_console.info("")  # Empty line
 
     # Create client
     with Progress(
@@ -85,9 +85,9 @@ async def analyze_environment(docker_cmd: list[str], output_format: str, verbose
 def display_interactive(analysis: dict) -> None:
     """Display analysis results in interactive format."""
     # Server metadata
-    design.section_title("📊 Environment Overview")
+    hud_console.section_title("📊 Environment Overview")
     meta_table = Table(show_header=False, box=None)
-    meta_table.add_column("Property", style="dim")
+    meta_table.add_column("Property", style="bright_black")
     meta_table.add_column("Value")
 
     # Check if this is a live analysis (has metadata) or metadata-only analysis
@@ -126,19 +126,19 @@ def display_interactive(analysis: dict) -> None:
     console.print(meta_table)
 
     # Tools
-    design.section_title("🔧 Available Tools")
-    tools_tree = Tree("Tools")
+    hud_console.section_title("🔧 Available Tools")
+    tools_tree = Tree("[bold bright_white]Tools[/bold bright_white]")
 
     # Check if we have hub_tools info (live analysis) or not (metadata-only)
     if "hub_tools" in analysis:
         # Live analysis format - separate regular and hub tools
         # Regular tools
-        regular_tools = tools_tree.add("Regular Tools")
+        regular_tools = tools_tree.add("[bright_white]Regular Tools[/bright_white]")
         for tool in analysis["tools"]:
             if tool["name"] not in analysis["hub_tools"]:
-                tool_node = regular_tools.add(f"[default]{tool['name']}[/default]")
+                tool_node = regular_tools.add(f"[bright_white]{tool['name']}[/bright_white]")
                 if tool["description"]:
-                    tool_node.add(f"[dim]{tool['description']}[/dim]")
+                    tool_node.add(f"[bright_black]{tool['description']}[/bright_black]")
 
                 # Show input schema if verbose
                 if analysis.get("verbose") and tool.get("input_schema"):
@@ -148,17 +148,17 @@ def display_interactive(analysis: dict) -> None:
 
         # Hub tools
         if analysis["hub_tools"]:
-            hub_tools = tools_tree.add("Hub Tools")
+            hub_tools = tools_tree.add("[bright_white]Hub Tools[/bright_white]")
             for hub_name, functions in analysis["hub_tools"].items():
-                hub_node = hub_tools.add(f"[yellow]{hub_name}[/yellow]")
+                hub_node = hub_tools.add(f"[rgb(181,137,0)]{hub_name}[/rgb(181,137,0)]")
                 for func in functions:
-                    hub_node.add(f"[default]{func}[/default]")
+                    hub_node.add(f"[bright_white]{func}[/bright_white]")
     else:
         # Metadata-only format - just list all tools
         for tool in analysis["tools"]:
-            tool_node = tools_tree.add(f"[default]{tool['name']}[/default]")
+            tool_node = tools_tree.add(f"[bright_white]{tool['name']}[/bright_white]")
             if tool.get("description"):
-                tool_node.add(f"[dim]{tool['description']}[/dim]")
+                tool_node.add(f"[bright_black]{tool['description']}[/bright_black]")
 
             # Show input schema if verbose
             if tool.get("inputSchema"):
@@ -170,11 +170,11 @@ def display_interactive(analysis: dict) -> None:
 
     # Resources
     if analysis["resources"]:
-        design.section_title("📚 Available Resources")
+        hud_console.section_title("📚 Available Resources")
         resources_table = Table()
-        resources_table.add_column("URI", style="default")
-        resources_table.add_column("Name", style="white")
-        resources_table.add_column("Type", style="dim")
+        resources_table.add_column("URI", style="bright_white")
+        resources_table.add_column("Name", style="bright_white")
+        resources_table.add_column("Type", style="bright_black")
 
         for resource in analysis["resources"][:10]:
             resources_table.add_row(
@@ -184,11 +184,12 @@ def display_interactive(analysis: dict) -> None:
         console.print(resources_table)
 
         if len(analysis["resources"]) > 10:
-            console.print(f"[dim]... and {len(analysis['resources']) - 10} more resources[/dim]")
+            remaining = len(analysis["resources"]) - 10
+            console.print(f"[bright_black]... and {remaining} more resources[/bright_black]")
 
     # Telemetry (only for live analysis)
     if analysis.get("telemetry"):
-        design.section_title("📡 Telemetry Data")
+        hud_console.section_title("📡 Telemetry Data")
         telemetry_table = Table(show_header=False, box=None)
         telemetry_table.add_column("Key", style="dim")
         telemetry_table.add_column("Value")
@@ -206,7 +207,7 @@ def display_interactive(analysis: dict) -> None:
 
     # Environment variables (for metadata-only analysis)
     if analysis.get("env_vars"):
-        design.section_title("🔑 Environment Variables")
+        hud_console.section_title("🔑 Environment Variables")
         env_table = Table(show_header=False, box=None)
         env_table.add_column("Type", style="dim")
         env_table.add_column("Variables")
@@ -309,7 +310,7 @@ async def analyze_environment_from_config(
     config_path: Path, output_format: str, verbose: bool
 ) -> None:
     """Analyze MCP environment from a JSON config file."""
-    design.header("MCP Environment Analysis", icon="🔍")
+    hud_console.header("MCP Environment Analysis", icon="🔍")
 
     # Load config from file
     try:
@@ -327,7 +328,7 @@ async def analyze_environment_from_mcp_config(
     mcp_config: dict[str, Any], output_format: str, verbose: bool
 ) -> None:
     """Analyze MCP environment from MCP config dict."""
-    design.header("MCP Environment Analysis", icon="🔍")
+    hud_console.header("MCP Environment Analysis", icon="🔍")
     await _analyze_with_config(mcp_config, output_format, verbose)
 
 
