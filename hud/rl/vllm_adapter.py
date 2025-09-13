@@ -1,9 +1,10 @@
 """vLLM adapter management for LoRA hot-swapping."""
+from __future__ import annotations
 
 import json
 import logging
+
 import requests
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ class VLLMAdapter:
             logger.error(f"[VLLMAdapter] Failed to unload adapter {adapter_name}: {e}")
             return False
     
-    def list_adapters(self) -> Optional[list]:
+    def list_adapters(self) -> list | None:
         """
         List all loaded LoRA adapters in vLLM.
         
@@ -110,7 +111,7 @@ class VLLMAdapter:
             logger.error(f"[VLLMAdapter] Failed to list adapters: {e}")
             return None
     
-    def get_current(self) -> Optional[str]:
+    def get_current(self) -> str | None:
         """Get the name of the currently loaded adapter."""
         return self.current_adapter
 

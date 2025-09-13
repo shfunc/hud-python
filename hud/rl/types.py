@@ -1,10 +1,13 @@
 """Shared types for RL training."""
+from __future__ import annotations
 
-from pydantic.dataclasses import dataclass
-from pydantic import Field, ConfigDict
-from typing import Any
-from hud.types import Trace
 import math
+from typing import Any
+
+from pydantic import ConfigDict, Field
+from pydantic.dataclasses import dataclass
+
+from hud.types import Trace
 
 try:
     import torch
@@ -31,7 +34,7 @@ class Metric:
     std: float = Field(default=0.0)
     values: list[float] = Field(default_factory=list)
 
-    def update(self, value: float | int | torch.Tensor | list[float] | list[int] | list[torch.Tensor]) -> None:
+    def update(self, value: float | torch.Tensor | list[float] | list[int] | list[torch.Tensor]) -> None:
         """Update metric."""
         if isinstance(value, list):
             self.values.extend(value)

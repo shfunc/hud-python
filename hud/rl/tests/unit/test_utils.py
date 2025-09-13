@@ -1,17 +1,14 @@
 """Tests for utility functions."""
+from __future__ import annotations
 
-import pytest
-import torch
-from PIL import Image
 import base64
 import io
 
-from hud.rl.utils import (
-    turn_weights,
-    b64_to_pil,
-    blocks_to_images
-)
-from hud.rl.types import Episode, Turn
+import pytest
+from PIL import Image
+
+from hud.rl.types import Episode
+from hud.rl.utils import b64_to_pil, blocks_to_images, turn_weights
 
 
 def test_turn_weights_last():
@@ -56,10 +53,10 @@ def test_turn_weights_single():
 def test_b64_to_pil():
     """Test base64 to PIL conversion."""
     # Create a small test image
-    img = Image.new('RGB', (10, 10), color='red')
+    img = Image.new("RGB", (10, 10), color="red")
     buffer = io.BytesIO()
-    img.save(buffer, format='PNG')
-    b64_str = base64.b64encode(buffer.getvalue()).decode('utf-8')
+    img.save(buffer, format="PNG")
+    b64_str = base64.b64encode(buffer.getvalue()).decode("utf-8")
     
     # Convert back
     result = b64_to_pil(b64_str)
@@ -70,10 +67,10 @@ def test_b64_to_pil():
 def test_blocks_to_images():
     """Test converting content blocks to images."""
     # Create test image data
-    img = Image.new('RGB', (5, 5), color='blue')
+    img = Image.new("RGB", (5, 5), color="blue")
     buffer = io.BytesIO()
-    img.save(buffer, format='PNG')
-    b64_str = base64.b64encode(buffer.getvalue()).decode('utf-8')
+    img.save(buffer, format="PNG")
+    b64_str = base64.b64encode(buffer.getvalue()).decode("utf-8")
     
     blocks = [
         {"type": "text", "text": "Some text"},  # Should be ignored

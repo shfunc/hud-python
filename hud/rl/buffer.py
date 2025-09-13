@@ -1,12 +1,15 @@
 """Replay buffer for storing and sampling episodes."""
+from __future__ import annotations
 
 import logging
 import random
-from typing import Callable, TypeVar, Generic, Any
 from collections import deque
-from hud.utils.design import HUDDesign
-from hud.types import Task, Trace
+from collections.abc import Callable
+from typing import Generic, TypeVar
+
 from hud.rl.config import Config
+from hud.types import Task, Trace
+from hud.utils.design import HUDDesign
 
 logger = logging.getLogger(__name__)
 design = HUDDesign(logger=logger)
@@ -263,7 +266,7 @@ class ReplayBuffer(Buffer[Trace]):
         # Global validation
         for i in range(0, len(final_traces), self.group_size):
             block = final_traces[i : i + self.group_size]
-            tids = {getattr(t.task, 'id', 'NA') for t in block}
+            tids = {getattr(t.task, "id", "NA") for t in block}
             if len(tids) != 1:
                 raise RuntimeError("Homogeneity validation failed for block starting at index {i}")
 

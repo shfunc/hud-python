@@ -1,4 +1,5 @@
 """GRPO learner for vision-language models."""
+from __future__ import annotations
 
 import logging
 import os
@@ -7,22 +8,23 @@ from typing import Any
 import bitsandbytes as bnb
 import torch
 import torch.nn.functional as F
-import torch.distributed as dist
-from torch.nn.parallel import DistributedDataParallel as DDP
 from peft import LoraConfig, get_peft_model
+from torch.nn.parallel import DistributedDataParallel as DDP
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
+
 try:
     from liger_kernel.transformers import apply_liger_kernel_to_qwen2_5_vl
     LIGER_AVAILABLE = True
 except ImportError:
     LIGER_AVAILABLE = False
 
-from hud.utils.design import HUDDesign
-from hud.rl.utils import get_memory_usage, get_gpu_utilization, prepare_inputs
 from hud.rl.distributed import (
-    get_local_rank, get_world_size, is_main_process, all_reduce_mean, get_global_rank
+    get_local_rank,
+    get_world_size,
+    is_main_process,
 )
-from hud.types import Trace
+from hud.rl.utils import get_gpu_utilization, get_memory_usage, prepare_inputs
+from hud.utils.design import HUDDesign
 
 from .config import Config
 from .types import TrainingMetrics, TrainingSample
@@ -96,7 +98,7 @@ class GRPOLearner:
             design.info_log("Gradient checkpointing enabled for memory efficiency")
         
         # Apply vision-specific optimizations
-        if hasattr(policy, 'model') and hasattr(policy.model, 'vision_tower'):
+        if hasattr(policy, "model") and hasattr(policy.model, "vision_tower"):
             vision_tower = policy.model.vision_tower
             
             # Freeze vision tower if configured
@@ -106,7 +108,7 @@ class GRPOLearner:
                 design.info_log("Vision tower frozen to save memory")
             
             # Enable gradient checkpointing for vision tower
-            if model_cfg.vision_gradient_checkpointing and hasattr(vision_tower, 'gradient_checkpointing_enable'):
+            if model_cfg.vision_gradient_checkpointing and hasattr(vision_tower, "gradient_checkpointing_enable"):
                 vision_tower.gradient_checkpointing_enable()
                 design.info_log("Vision tower gradient checkpointing enabled")
             
@@ -138,7 +140,7 @@ class GRPOLearner:
             design.info_log(f"[DDP] Wrapped model on rank {self.local_rank}")
         
         # Create optimizer - need to access underlying model if DDP
-        base_model = policy.module if hasattr(policy, 'module') else policy
+        base_model = policy.module if hasattr(policy, "module") else policy
         trainable_params = [p for _, p in base_model.named_parameters() if p.requires_grad]
         
         # Use 8-bit optimizer if configured
@@ -229,7 +231,7 @@ class GRPOLearner:
                             self.policy,
                             sample.inputs,
                         ).cpu()  # Move to CPU immediately
-                    policy_module = self.policy.module if hasattr(self.policy, 'module') else self.policy
+                    policy_module = self.policy.module if hasattr(self.policy, "module") else self.policy
                     with policy_module.disable_adapter():
                         for sample in samples:
                             sample.ref_logprobs = self.compute_logprobs(
@@ -354,7 +356,7 @@ class GRPOLearner:
         if is_main_process():
             os.makedirs(path, exist_ok=True)
             # Unwrap DDP model if needed
-            model_to_save = self.policy.module if hasattr(self.policy, 'module') else self.policy
+            model_to_save = self.policy.module if hasattr(self.policy, "module") else self.policy
             model_to_save.save_pretrained(path)
             logger.info(f"[Learner] Saved checkpoint to {path}")
     

@@ -23,9 +23,9 @@ import mcp.types as types
 
 from hud import instrument
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult
+from hud.utils.design import HUDDesign
 
 from .base import MCPAgent
-from hud.utils.design import HUDDesign
 
 if TYPE_CHECKING:
     from openai import AsyncOpenAI

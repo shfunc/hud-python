@@ -7,6 +7,8 @@ Provides data models, utilities, and execution functions for working with HUD da
 # Execution functions
 from __future__ import annotations
 
+from hud.types import Task
+
 from .parallel import (
     calculate_optimal_workers,
     run_dataset_parallel,
@@ -16,8 +18,6 @@ from .runner import run_dataset
 
 # Utilities
 from .utils import fetch_system_prompt_from_dataset, save_tasks
-
-from hud.types import Task
 
 __all__ = [
     # Core data model

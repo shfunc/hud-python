@@ -1,20 +1,19 @@
 """vLLM server management utilities."""
+from __future__ import annotations
 
-import os
-import time
 import asyncio
+import os
 import subprocess
-from typing import Optional
+import time
 from pathlib import Path
-import httpx
 
+import httpx
 from rich.console import Console
-from typing import List
 
 console = Console()
 
 
-def get_vllm_args(model_name: str, chat_template_path: Optional[Path] = None) -> List[str]:
+def get_vllm_args(model_name: str, chat_template_path: Path | None = None) -> list[str]:
     """Get common vLLM server arguments for both local and Modal deployments."""
     args = [
         "serve", model_name,
@@ -79,7 +78,7 @@ def kill_vllm_server():
         )
         
         if result.stdout.strip():
-            for pid in result.stdout.strip().split('\n'):
+            for pid in result.stdout.strip().split("\n"):
                 try:
                     subprocess.run(["kill", "-9", pid], check=False)
                 except:
@@ -133,7 +132,7 @@ def start_vllm_server(model_name: str, gpu_index: int = 1, restart: bool = False
     
     console.print("[yellow]vLLM server starting in background...[/yellow]")
     console.print(f"[yellow]Process ID: {process.pid}[/yellow]")
-    console.print(f"[yellow]Check logs at: /tmp/vllm_server.log[/yellow]")
+    console.print("[yellow]Check logs at: /tmp/vllm_server.log[/yellow]")
     
     # Save PID for later management
     pid_file = Path("/tmp/vllm_server.pid")

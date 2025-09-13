@@ -1,4 +1,5 @@
 """Get command for downloading HuggingFace datasets."""
+from __future__ import annotations
 
 import json
 from pathlib import Path
@@ -6,8 +7,6 @@ from pathlib import Path
 import typer
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
-
-from hud.utils.design import design
 
 console = Console()
 
@@ -77,7 +76,7 @@ def get_command(
             raise typer.Exit(1)
         except Exception as e:
             if "authentication" in str(e).lower() or "401" in str(e):
-                console.print(f"[red]Error: Dataset requires authentication[/red]")
+                console.print("[red]Error: Dataset requires authentication[/red]")
                 console.print("[yellow]Login with: huggingface-cli login[/yellow]")
             else:
                 console.print(f"[red]Error loading dataset: {e}[/red]")
@@ -99,14 +98,14 @@ def get_command(
     ) as progress:
         task = progress.add_task("Saving...", total=len(dataset))
         
-        with open(output, 'w') as f:
+        with open(output, "w") as f:
             for i, example in enumerate(dataset):
                 # Convert to dict if needed
-                if hasattr(example, 'to_dict'):
+                if hasattr(example, "to_dict"):
                     example = example.to_dict()
                 
                 # Write as JSON line
-                f.write(json.dumps(example) + '\n')
+                f.write(json.dumps(example) + "\n")
                 progress.update(task, advance=1)
     
     # Show summary
@@ -115,7 +114,7 @@ def get_command(
     # Show sample of fields
     if len(dataset) > 0:
         first_example = dataset[0]
-        if hasattr(first_example, 'to_dict'):
+        if hasattr(first_example, "to_dict"):
             first_example = first_example.to_dict()
         
         console.print("\n[yellow]Dataset fields:[/yellow]")

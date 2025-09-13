@@ -1,4 +1,5 @@
 """Configuration for RL training."""
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Literal
@@ -94,7 +95,7 @@ class Config:
     seed: int = 1234
     
     @classmethod
-    def from_dict(cls, d: dict) -> "Config":
+    def from_dict(cls, d: dict) -> Config:
         """Create config from dictionary."""
         model = ModelConfig(**d.get("model", {}))
         training = TrainingConfig(**d.get("training", {}))

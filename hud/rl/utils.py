@@ -1,25 +1,29 @@
 """Utility functions for RL training."""
+from __future__ import annotations
 
-import os
-import io
 import base64
-import random
+import io
 import json
-import numpy as np
-from typing import Any
-from pathlib import Path
-from PIL import Image
 import logging
+import os
+import random
+from pathlib import Path
+from typing import Any
+
+import numpy as np
 import torch
+from PIL import Image
 from transformers.utils.chat_template_utils import render_jinja_template
+
 from hud.datasets import Task
+from hud.types import Trace
+from hud.utils.hud_console import HUDConsole
+
 from .config import Config
 from .types import TrainingSample
-from hud.types import Trace
-from hud.utils.design import HUDDesign
 
 logger = logging.getLogger(__name__)
-design = HUDDesign(logger)
+hud_console = HUDConsole(logger)
 
 
 def set_seed(seed: int) -> None:
@@ -31,7 +35,7 @@ def set_seed(seed: int) -> None:
 
 def load_chat_template(path: str) -> str:
     """Load chat template from file."""
-    with open(path, "r") as f:
+    with open(path) as f:
         return f.read()
 
 def ensure_dir(path: str) -> None:
@@ -75,7 +79,7 @@ def aggregate_metrics_across_ranks(metrics: Any, metrics_to_aggregate: list[str]
     2. Computes proper mean/std across all GPUs
     3. Updates the metrics object in-place (only on rank 0)
     """
-    from hud.rl.distributed import get_world_size, get_local_rank, is_main_process
+    from hud.rl.distributed import get_local_rank, get_world_size, is_main_process
     
     if get_world_size() <= 1:
         return  # Nothing to aggregate in single GPU mode
@@ -94,7 +98,7 @@ def aggregate_metrics_across_ranks(metrics: Any, metrics_to_aggregate: list[str]
     
     # Convert to tensor for distributed gathering
     values_tensor = torch.tensor(
-        list(local_values.values()), 
+        list(local_values.values()),
         device=f"cuda:{get_local_rank()}",
         dtype=torch.float32
     )
@@ -141,7 +145,7 @@ def load_tasks(tasks_input: str | list[dict], system_prompt: str | None = None) 
     
     if isinstance(tasks_input, list):
         # Direct list of task dicts
-        design.info(f"Loading {len(tasks_input)} tasks from provided list")
+        hud_console.info(f"Loading {len(tasks_input)} tasks from provided list")
         for item in tasks_input:
             task = Task(
                 id=item.get("id"),
@@ -158,11 +162,11 @@ def load_tasks(tasks_input: str | list[dict], system_prompt: str | None = None) 
         # Check if it's a file path
         if Path(tasks_input).exists():
             file_path = Path(tasks_input)
-            design.info(f"Loading tasks from file: {tasks_input}")
+            hud_console.info(f"Loading tasks from file: {tasks_input}")
             
             with open(file_path) as f:
                 # Handle JSON files (array of tasks)
-                if file_path.suffix.lower() == '.json':
+                if file_path.suffix.lower() == ".json":
                     data = json.load(f)
                     if not isinstance(data, list):
                         raise ValueError(f"JSON file must contain an array of tasks, got {type(data)}")
@@ -198,7 +202,7 @@ def load_tasks(tasks_input: str | list[dict], system_prompt: str | None = None) 
         
         # Check if it's a HuggingFace dataset
         elif "/" in tasks_input:
-            design.info(f"Loading tasks from HuggingFace dataset: {tasks_input}")
+            hud_console.info(f"Loading tasks from HuggingFace dataset: {tasks_input}")
             try:
                 from datasets import load_dataset
                 
@@ -240,7 +244,7 @@ def load_tasks(tasks_input: str | list[dict], system_prompt: str | None = None) 
     else:
         raise TypeError(f"tasks_input must be str or list, got {type(tasks_input)}")
     
-    design.info(f"Loaded {len(tasks)} tasks")
+    hud_console.info(f"Loaded {len(tasks)} tasks")
     return tasks
 
 
@@ -287,11 +291,11 @@ def build_assistant_masks(
                 # Skip '<|im_start|>', 'assistant' and possible newline token
                 i_tok += 2
                 # Check for newline after 'assistant'
-                if i_tok < len(seq) and tokenizer.decode([seq[i_tok]]) == '\n':
+                if i_tok < len(seq) and tokenizer.decode([seq[i_tok]]) == "\n":
                     i_tok += 1
                 
                 # Skip leading spaces after assistant\n
-                while i_tok < len(seq) and tokenizer.decode([seq[i_tok]]).strip() == '':
+                while i_tok < len(seq) and tokenizer.decode([seq[i_tok]]).strip() == "":
                     i_tok += 1
                 
                 assistant_content_start = i_tok
@@ -305,7 +309,7 @@ def build_assistant_masks(
                 
                 # Remove trailing spaces from the mask
                 while content_end > assistant_content_start:
-                    if mask[content_end - 1] == 1 and tokenizer.decode([seq[content_end - 1]]).strip() == '':
+                    if mask[content_end - 1] == 1 and tokenizer.decode([seq[content_end - 1]]).strip() == "":
                         mask[content_end - 1] = 0
                         content_end -= 1
                     else:

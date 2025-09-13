@@ -1,16 +1,16 @@
 """Integration tests for the training pipeline."""
+from __future__ import annotations
+
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-import asyncio
-from unittest.mock import Mock, AsyncMock, patch
-from pathlib import Path
-
-from hud.rl.config import Config
-from hud.rl.actor import Actor
-from hud.rl.learner import GRPOLearner
-from hud.rl.buffer import GroupedReplayBuffer
-from hud.rl.types import Episode, Turn, Batch, TrainingSample
 import torch
+
+from hud.rl.actor import Actor
+from hud.rl.buffer import GroupedReplayBuffer
+from hud.rl.config import Config
+from hud.rl.learner import GRPOLearner
+from hud.rl.types import Batch, Episode, TrainingSample
 
 
 @pytest.mark.asyncio
@@ -18,8 +18,8 @@ async def test_actor_collect_episodes(test_config, fixtures_dir, mock_openai_cli
     """Test actor can collect episodes."""
     test_config.actor.tasks_file = str(fixtures_dir / "mock_tasks.jsonl")
     
-    with patch('src.actor.AsyncOpenAI', return_value=mock_openai_client):
-        with patch('src.actor.GenericOpenAIChatAgent') as MockAgent:
+    with patch("src.actor.AsyncOpenAI", return_value=mock_openai_client):
+        with patch("src.actor.GenericOpenAIChatAgent") as MockAgent:
             # Mock the agent
             mock_agent = AsyncMock()
             mock_result = Mock()
@@ -78,10 +78,10 @@ def test_config_serialization():
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
 def test_learner_initialization(test_config):
     """Test learner can be initialized (requires GPU)."""
-    with patch('src.learner.AutoProcessor.from_pretrained') as mock_proc:
-        with patch('src.learner.Qwen2_5_VLForConditionalGeneration.from_pretrained') as mock_model:
-            with patch('src.learner.get_peft_model') as mock_peft:
-                with patch('src.learner.torch.optim.AdamW') as mock_optimizer:
+    with patch("src.learner.AutoProcessor.from_pretrained") as mock_proc:
+        with patch("src.learner.Qwen2_5_VLForConditionalGeneration.from_pretrained") as mock_model:
+            with patch("src.learner.get_peft_model") as mock_peft:
+                with patch("src.learner.torch.optim.AdamW") as mock_optimizer:
                     # Mock the model loading
                     mock_model_instance = Mock()
                     mock_model_instance.modules.return_value = []

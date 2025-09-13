@@ -1,11 +1,11 @@
 """GPU detection and validation utilities for RL training."""
+from __future__ import annotations
 
-import os
 import subprocess
-from typing import Dict, Any, List
+from typing import Any
 
 
-def detect_cuda_devices() -> Dict[str, Any]:
+def detect_cuda_devices() -> dict[str, Any]:
     """Detect available CUDA devices and their properties."""
     try:
         # Check if CUDA is available
@@ -37,7 +37,7 @@ def detect_cuda_devices() -> Dict[str, Any]:
         return {"available": False, "error": str(e)}
 
 
-def select_gpu_for_vllm(devices: List[Dict[str, Any]]) -> int:
+def select_gpu_for_vllm(devices: list[dict[str, Any]]) -> int:
     """Select the best GPU for vLLM server (typically GPU 1 if available)."""
     if len(devices) > 1:
         # Prefer GPU 1 for vLLM to leave GPU 0 for other processes

@@ -1,9 +1,10 @@
 """Training configuration presets for different GPU configurations."""
+from __future__ import annotations
 
-from typing import List, Dict, Any
+from typing import Any
 
 
-def get_training_presets(gpu_memory_gb: float) -> List[Dict[str, Any]]:
+def get_training_presets(gpu_memory_gb: float) -> list[dict[str, Any]]:
     """Get training configuration presets based on GPU memory."""
     # Time estimates based on provided benchmarks
     SEC_INIT = 20

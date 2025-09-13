@@ -1,17 +1,17 @@
 """Display utilities for RL training configuration."""
+from __future__ import annotations
 
-from typing import Dict, Any, List
-from rich.table import Table
-from rich.panel import Panel
-from rich.text import Text
+from typing import Any
 
 from rich.console import Console
+from rich.table import Table
+
 from hud.rl.config import Config
 
 console = Console()
 
 
-def display_gpu_info(gpu_info: Dict[str, Any]) -> None:
+def display_gpu_info(gpu_info: dict[str, Any]) -> None:
     """Display GPU information in a table."""
     if not gpu_info["available"]:
         console.print(f"[red]❌ CUDA not available: {gpu_info.get('error', 'Unknown error')}[/red]")
@@ -32,7 +32,7 @@ def display_gpu_info(gpu_info: Dict[str, Any]) -> None:
     console.print(gpu_table)
 
 
-def display_preset_table(presets: List[Dict[str, Any]], gpu_memory_gb: float) -> None:
+def display_preset_table(presets: list[dict[str, Any]], gpu_memory_gb: float) -> None:
     """Display training configuration presets in a table."""
     preset_table = Table(title="📊 Training Configuration Presets", title_style="bold cyan")
     preset_table.add_column("Option", style="yellow")
@@ -49,15 +49,15 @@ def display_preset_table(presets: List[Dict[str, Any]], gpu_memory_gb: float) ->
     for i, preset in enumerate(presets):
         row = [
             f"{i+1}. {preset['name']}",
-            str(preset['max_steps_per_episode']),
-            str(preset['mini_batch_size']),
-            str(preset['group_size']),
-            str(preset['batch_size']),
+            str(preset["max_steps_per_episode"]),
+            str(preset["mini_batch_size"]),
+            str(preset["group_size"]),
+            str(preset["batch_size"]),
         ]
-        if 'tasks_per_hour' in preset:
+        if "tasks_per_hour" in preset:
             row.extend([
-                str(preset['tasks_per_hour']),
-                str(preset['steps_per_hour']),
+                str(preset["tasks_per_hour"]),
+                str(preset["steps_per_hour"]),
             ])
         preset_table.add_row(*row)
     
@@ -66,7 +66,7 @@ def display_preset_table(presets: List[Dict[str, Any]], gpu_memory_gb: float) ->
     console.print("\n")
 
 
-def display_config_summary(config: Config, tasks_count: int, gpu_info: Dict[str, Any], estimated_memory: float) -> None:
+def display_config_summary(config: Config, tasks_count: int, gpu_info: dict[str, Any], estimated_memory: float) -> None:
     """Display comprehensive configuration summary for review."""
     console.print("\n[bold cyan]📋 RL Training Configuration Summary[/bold cyan]\n")
     

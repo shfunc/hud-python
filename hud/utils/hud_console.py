@@ -24,8 +24,8 @@ import questionary
 import typer
 from rich.console import Console
 from rich.panel import Panel
-from rich.table import Table
 from rich.status import Status
+from rich.table import Table
 
 # HUD Brand Colors - Optimized for both light and dark modes
 GOLD = "rgb(192,150,12)"  # #c0960c - Primary brand color
@@ -363,6 +363,10 @@ class HUDConsole:
             self.warning_log(f"{prefix}{message}", stderr=stderr)
         elif level == "error":
             self.error_log(f"{prefix}{message}", stderr=stderr)
+        
+    def debug(self, message: str, stderr: bool = True) -> None:
+        """Print a debug message."""
+        self.debug_log(message, stderr=stderr)
 
     def debug_log(self, message: str, stderr: bool = True) -> None:
         """Print a debug message only if DEBUG logging is enabled.
@@ -394,7 +398,7 @@ class HUDConsole:
         if self._logger.isEnabledFor(logging.INFO):
             self.progress_message(message, stderr=stderr)
     
-    def progress(self, initial: str = "", stderr: bool = True) -> "_ProgressContext":
+    def progress(self, initial: str = "", stderr: bool = True) -> _ProgressContext:
         """Create a progress context manager for inline updates.
         
         Args:

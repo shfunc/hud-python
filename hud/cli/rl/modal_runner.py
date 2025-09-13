@@ -4,11 +4,11 @@ Modal runner for HUD RL training.
 This module provides functionality to run HUD RL training on Modal's cloud infrastructure
 with GPU support (H100/A100).
 """
+from __future__ import annotations
+
+from pathlib import Path
 
 import modal
-import os
-from pathlib import Path
-from typing import Optional
 import typer
 from rich.console import Console
 from rich.prompt import Prompt
@@ -33,7 +33,7 @@ hud_image = (
     .pip_install("torch", "numpy")
     .pip_install("git+https://github.com/lorenss-m/hud-python.git#egg=hud-python[rl]")
     .add_local_dir(
-        local_hud_path, 
+        local_hud_path,
         remote_path="/root/hud-python",
         copy=True,
         ignore=[
@@ -72,10 +72,10 @@ hud_image = (
     secrets=[modal.Secret.from_name("hud-api-key")],
 )
 def run_rl_training_h100(
-    tasks_file: Optional[str],
-    tasks_content: Optional[str],
+    tasks_file: str | None,
+    tasks_content: str | None,
     config_json: str,
-    model: Optional[str] = None,
+    model: str | None = None,
     output_dir: str = "/checkpoints",
     vllm_url: str = "http://localhost:8000/v1",
 ):
@@ -96,10 +96,10 @@ def run_rl_training_h100(
     secrets=[modal.Secret.from_name("hud-api-key")],
 )
 def run_rl_training_a100(
-    tasks_file: Optional[str],
-    tasks_content: Optional[str],
+    tasks_file: str | None,
+    tasks_content: str | None,
     config_json: str,
-    model: Optional[str] = None,
+    model: str | None = None,
     output_dir: str = "/checkpoints",
     vllm_url: str = "http://localhost:8000/v1",
 ):
@@ -110,16 +110,17 @@ def run_rl_training_a100(
 
 
 def _run_training(
-    tasks_file: Optional[str],
-    tasks_content: Optional[str],
+    tasks_file: str | None,
+    tasks_content: str | None,
     config_json: str,
-    model: Optional[str] = None,
+    model: str | None = None,
     output_dir: str = "/checkpoints",
     vllm_url: str = "http://localhost:8000/v1",
 ):
     """Common training logic for all GPU types."""
     import json
     from pathlib import Path
+
     from hud.cli.rl import rl_command
     
     # Write config file
@@ -182,7 +183,7 @@ def _run_training(
     return 0
 
 
-def get_vllm_server_url() -> Optional[str]:
+def get_vllm_server_url() -> str | None:
     """Get the URL of the deployed vLLM server."""
     try:
         from modal import Function
@@ -204,7 +205,7 @@ def deploy_vllm_server(gpu_type: str, model: str) -> str:
     import sys
     
     console.print(f"[cyan]Deploying vLLM server on {gpu_type}...[/cyan]")
-    console.print(f"[yellow]Note: vLLM server always uses Qwen/Qwen2.5-3B-Instruct[/yellow]")
+    console.print("[yellow]Note: vLLM server always uses Qwen/Qwen2.5-3B-Instruct[/yellow]")
     
     # Import the vLLM server module
     vllm_server_path = Path(__file__).parent / "modal_vllm_server.py"
@@ -236,14 +237,14 @@ def deploy_vllm_server(gpu_type: str, model: str) -> str:
 def launch_on_modal(
     tasks_file: str,
     config_json: str,
-    model: Optional[str] = None,
+    model: str | None = None,
     output_dir: str = "checkpoints",
     modal_gpu: str = "",
     **kwargs  # Accept additional args that we don't use
 ):
     """Launch RL training on Modal with optional vLLM server."""
-    from pathlib import Path
     import json
+    from pathlib import Path
     
     # Extract model from config if not provided
     if not model:
@@ -291,26 +292,25 @@ def launch_on_modal(
     console.print(f"[cyan]Starting RL training on Modal with {gpu_choice}...[/cyan]")
     console.print(f"[cyan]vLLM server URL: {vllm_url}[/cyan]")
     
-    with app.run():
-        with modal.enable_output():
-            if gpu_choice == "H100":
-                result = run_rl_training_h100.remote(
-                    tasks_file=None,
-                    tasks_content=tasks_content,
-                    config_json=config_json,
-                    model=model,
-                    output_dir=output_dir,
-                    vllm_url=f"{vllm_url}/v1",
-                )
-            else:
-                result = run_rl_training_a100.remote(
-                    tasks_file=None,
-                    tasks_content=tasks_content,
-                    config_json=config_json,
-                    model=model,
-                    output_dir=output_dir,
-                    vllm_url=f"{vllm_url}/v1",
-                )
+    with app.run(), modal.enable_output():
+        if gpu_choice == "H100":
+            result = run_rl_training_h100.remote(
+                tasks_file=None,
+                tasks_content=tasks_content,
+                config_json=config_json,
+                model=model,
+                output_dir=output_dir,
+                vllm_url=f"{vllm_url}/v1",
+            )
+        else:
+            result = run_rl_training_a100.remote(
+                tasks_file=None,
+                tasks_content=tasks_content,
+                config_json=config_json,
+                model=model,
+                output_dir=output_dir,
+                vllm_url=f"{vllm_url}/v1",
+            )
     
     console.print(f"[green]Training completed with result: {result}[/green]")
     return result

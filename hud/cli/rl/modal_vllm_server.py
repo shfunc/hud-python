@@ -4,11 +4,12 @@ Modal vLLM server deployment for HUD RL training.
 This is deployed separately and persists to serve multiple training runs.
 Deploy with: modal deploy modal_vllm_server.py
 """
+from __future__ import annotations
 
-import modal
 import subprocess
 from pathlib import Path
-import sys
+
+import modal
 
 # Create the app first
 app = modal.App("hud-vllm-server")
@@ -62,7 +63,6 @@ checkpoint_volume = modal.Volume.from_name("hud-rl-checkpoints", create_if_missi
 @modal.web_server(port=8000, startup_timeout=10 * 60)
 def serve_vllm():
     """Serve vLLM."""
-    import subprocess
     import os
     from pathlib import Path
     
@@ -99,10 +99,9 @@ def serve_vllm():
     
     print(f"Starting vLLM server with model: {model}")
     print(f"Command: {' '.join(cmd)}")
-    print(f"Checkpoint directory mounted at: /checkpoints")
+    print("Checkpoint directory mounted at: /checkpoints")
     
     # List existing checkpoints for debugging
-    import os
     if os.path.exists("/checkpoints"):
         checkpoints = os.listdir("/checkpoints")
         print(f"Existing checkpoints: {checkpoints}")

@@ -125,7 +125,6 @@ def _patch_get_error_type() -> None:
                 except ValueError:
                     # Not a valid HTTP status code
                     logger.debug("Ignoring invalid HTTP status code: %s", num)
-                    pass
             return None
         
         # Apply the patch

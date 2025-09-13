@@ -1,12 +1,14 @@
 """GPU utilities for DDP training."""
+from __future__ import annotations
 
-from typing import Dict, Any, List
-import torch
-import time
 import subprocess
+import time
+from typing import Any
+
+import torch
 
 
-def get_gpu_memory_info() -> Dict[int, Dict[str, Any]]:
+def get_gpu_memory_info() -> dict[int, dict[str, Any]]:
     """Get memory usage information for all GPUs."""
     
     gpu_memory = {}
@@ -15,20 +17,20 @@ def get_gpu_memory_info() -> Dict[int, Dict[str, Any]]:
         cmd = ["nvidia-smi", "--query-gpu=index,memory.used,memory.total,memory.free", "--format=csv,noheader,nounits"]
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         
-        for line in result.stdout.strip().split('\n'):
+        for line in result.stdout.strip().split("\n"):
             if not line:
                 continue
-            parts = line.split(', ')
+            parts = line.split(", ")
             if len(parts) >= 4:
                 gpu_idx = int(parts[0])
                 memory_used = float(parts[1])
                 memory_total = float(parts[2])
                 memory_free = float(parts[3])
                 gpu_memory[gpu_idx] = {
-                    'used_mb': memory_used,
-                    'total_mb': memory_total,
-                    'free_mb': memory_free,
-                    'used_pct': (memory_used / memory_total) * 100
+                    "used_mb": memory_used,
+                    "total_mb": memory_total,
+                    "free_mb": memory_free,
+                    "used_pct": (memory_used / memory_total) * 100
                 }
                 
         # Get process information per GPU
@@ -37,25 +39,25 @@ def get_gpu_memory_info() -> Dict[int, Dict[str, Any]]:
             try:
                 result = subprocess.run(cmd, capture_output=True, text=True, check=True)
                 processes = []
-                for line in result.stdout.strip().split('\n'):
+                for line in result.stdout.strip().split("\n"):
                     if not line:
                         continue
-                    parts = line.split(', ')
+                    parts = line.split(", ")
                     if len(parts) >= 2:
                         pid = int(parts[0])
                         memory_mb = float(parts[1])
-                        processes.append({'pid': pid, 'memory_mb': memory_mb})
-                gpu_memory[gpu_idx]['processes'] = processes
+                        processes.append({"pid": pid, "memory_mb": memory_mb})
+                gpu_memory[gpu_idx]["processes"] = processes
             except:
-                gpu_memory[gpu_idx]['processes'] = []
+                gpu_memory[gpu_idx]["processes"] = []
                 
-    except Exception as e:
+    except Exception:
         pass
     
     return gpu_memory
 
 
-def health_check_gpus(gpu_indices: List[int]) -> Dict[str, Any]:
+def health_check_gpus(gpu_indices: list[int]) -> dict[str, Any]:
     """Perform health check on specified GPUs including memory status.
     
     Returns:
@@ -81,7 +83,7 @@ def health_check_gpus(gpu_indices: List[int]) -> Dict[str, Any]:
     # Create a table for results
     table = Table(title="GPU Health Status")
     table.add_column("GPU", style="cyan")
-    table.add_column("Memory Usage", style="yellow") 
+    table.add_column("Memory Usage", style="yellow")
     table.add_column("Status", style="green")
     table.add_column("Details", style="yellow")
     
@@ -91,15 +93,15 @@ def health_check_gpus(gpu_indices: List[int]) -> Dict[str, Any]:
         has_memory_issue = False
         if gpu_idx in memory_info:
             mem = memory_info[gpu_idx]
-            used_gb = mem['used_mb'] / 1024
-            total_gb = mem['total_mb'] / 1024
+            used_gb = mem["used_mb"] / 1024
+            total_gb = mem["total_mb"] / 1024
             mem_str = f"{used_gb:.1f}/{total_gb:.1f} GB ({mem['used_pct']:.0f}%)"
             
             # Check for high memory usage
-            if mem['used_pct'] > 70:
+            if mem["used_pct"] > 70:
                 has_memory_issue = True
                 memory_issues.append(gpu_idx)
-                if mem['processes']:
+                if mem["processes"]:
                     proc_info = f" ({len(mem['processes'])} processes)"
                 else:
                     proc_info = ""
@@ -111,7 +113,7 @@ def health_check_gpus(gpu_indices: List[int]) -> Dict[str, Any]:
         try:
             # Try to allocate a small tensor on the GPU
             torch.cuda.set_device(gpu_idx)
-            device = torch.device(f'cuda:{gpu_idx}')
+            device = torch.device(f"cuda:{gpu_idx}")
             
             # Test basic allocation
             test_tensor = torch.zeros(100, 100, device=device)
@@ -154,7 +156,7 @@ def health_check_gpus(gpu_indices: List[int]) -> Dict[str, Any]:
     }
 
 
-def calculate_optimal_gpu_allocation(gpu_info: Dict[str, Any], config) -> Dict[str, Any]:
+def calculate_optimal_gpu_allocation(gpu_info: dict[str, Any], config) -> dict[str, Any]:
     """Calculate optimal GPU allocation for DDP GRPO training.
     
     Key insight: In GRPO, we want to process groups in parallel.
@@ -253,9 +255,9 @@ def kill_high_memory_processes(memory_threshold: float = 70.0) -> int:
     killed_count = 0
     
     for gpu_idx, info in memory_info.items():
-        if info['used_pct'] > memory_threshold:
-            for proc in info.get('processes', []):
-                pid = proc['pid']
+        if info["used_pct"] > memory_threshold:
+            for proc in info.get("processes", []):
+                pid = proc["pid"]
                 try:
                     # Try graceful termination first
                     subprocess.run(["kill", "-TERM", str(pid)], check=False, capture_output=True)
@@ -270,8 +272,8 @@ def kill_high_memory_processes(memory_threshold: float = 70.0) -> int:
         
         # Force kill any remaining
         for gpu_idx, info in memory_info.items():
-            for proc in info.get('processes', []):
-                pid = proc['pid']
+            for proc in info.get("processes", []):
+                pid = proc["pid"]
                 try:
                     # Check if still running
                     result = subprocess.run(["kill", "-0", str(pid)], check=True, capture_output=True)

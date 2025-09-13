@@ -1015,12 +1015,12 @@ def rl(
         "--no-ddp",
         help="Disable DDP even with multiple GPUs",
     ),
-    ddp_gpus: Optional[str] = typer.Option(
+    ddp_gpus: str | None = typer.Option(
         None,
         "--ddp-gpus",
         help="Specific GPUs for DDP (e.g., '0,1,2,3')",
     ),
-    vllm_gpu: Optional[int] = typer.Option(
+    vllm_gpu: int | None = typer.Option(
         None,
         "--vllm-gpu",
         help="Specific GPU for vLLM server",

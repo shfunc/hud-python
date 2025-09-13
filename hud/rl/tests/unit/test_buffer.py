@@ -1,7 +1,9 @@
 """Tests for replay buffer."""
+from __future__ import annotations
 
 import pytest
-from hud.rl.buffer import ReplayBuffer, GroupedReplayBuffer
+
+from hud.rl.buffer import GroupedReplayBuffer, ReplayBuffer
 from hud.rl.types import Episode, Turn
 
 

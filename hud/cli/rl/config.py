@@ -1,15 +1,17 @@
 """Configuration generation and management for RL training."""
+from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict, Any, List, Tuple
+from typing import Any
 
-import typer
-from hud.rl.config import Config, ModelConfig, TrainingConfig, ActorConfig
 from rich.console import Console
-from hud.utils.design import design
-from .presets import estimate_memory_usage
+
+from hud.rl.config import ActorConfig, Config, ModelConfig, TrainingConfig
+from hud.utils.console import hud_console
+
 from .display import display_preset_table
+from .presets import estimate_memory_usage
 
 console = Console()
 
@@ -17,15 +19,15 @@ console = Console()
 def generate_config_interactive(
     model_name: str,
     tasks_count: int,
-    presets: List[Dict[str, Any]],
+    presets: list[dict[str, Any]],
     output_dir: str = "checkpoints",
-) -> Tuple[Config, float]:
+) -> tuple[Config, float]:
     """Generate RL training configuration interactively."""
     # Display preset options
     display_preset_table(presets, 80.0)  # Assuming A100 80GB
     
     # Let user select preset
-    preset_choice = design.select(
+    preset_choice = hud_console.select(
         "Select a training configuration preset:",
         choices=[{"name": p["name"], "value": i} for i, p in enumerate(presets)],
         default=1 if len(presets) > 1 else 0,  # Default to "Balanced" if available
@@ -34,13 +36,13 @@ def generate_config_interactive(
     selected_preset = presets[preset_choice]
     
     # Use preset values directly
-    max_steps_per_episode = selected_preset['max_steps_per_episode']
+    max_steps_per_episode = selected_preset["max_steps_per_episode"]
     temperature = 0.7
     
     # Calculate memory estimate
     max_pixels = 256 * 28 * 28
     estimated_memory = estimate_memory_usage(
-        selected_preset['mini_batch_size'],
+        selected_preset["mini_batch_size"],
         max_steps_per_episode,
         max_pixels
     )
@@ -56,18 +58,18 @@ def generate_config_interactive(
             lora_alpha=64,
             lora_dropout=0.05,
             target_modules=(
-                "q_proj", "k_proj", "v_proj", "o_proj", 
+                "q_proj", "k_proj", "v_proj", "o_proj",
                 "gate_proj", "up_proj", "down_proj", "vision_language_merger.*"
             ),
             min_pixels=max_pixels,
             max_pixels=max_pixels,
         ),
         training=TrainingConfig(
-            lr=selected_preset['lr'],
-            epochs=selected_preset['epochs'],
-            mini_batch_size=selected_preset['mini_batch_size'],
-            batch_size=selected_preset['batch_size'],
-            group_size=selected_preset['group_size'],
+            lr=selected_preset["lr"],
+            epochs=selected_preset["epochs"],
+            mini_batch_size=selected_preset["mini_batch_size"],
+            batch_size=selected_preset["batch_size"],
+            group_size=selected_preset["group_size"],
             kl_beta=0.001,
             save_every_batches=1,
             training_steps=100,  # Default, can be overridden
@@ -78,7 +80,7 @@ def generate_config_interactive(
             temperature=temperature,
             max_new_tokens=2048,
             max_steps_per_episode=max_steps_per_episode,
-            max_parallel_episodes=selected_preset.get('max_parallel_episodes', selected_preset['batch_size']),
+            max_parallel_episodes=selected_preset.get("max_parallel_episodes", selected_preset["batch_size"]),
             system_prompt="You are an expert agent. Complete the task efficiently.",
         ),
     )
@@ -123,17 +125,17 @@ def save_config(config: Config, path: Path) -> None:
         },
     }
     
-    with open(path, 'w') as f:
+    with open(path, "w") as f:
         json.dump(config_dict, f, indent=2)
-        f.write('\n')  # Add newline at end of file
+        f.write("\n")  # Add newline at end of file
     
-    if not path.name.startswith('.'):  # Don't show message for temp files
+    if not path.name.startswith("."):  # Don't show message for temp files
         console.print(f"[green]✅ Configuration saved to {path}[/green]")
 
 
 def load_config(path: Path) -> Config:
     """Load configuration from a JSON file."""
-    with open(path, 'r') as f:
+    with open(path) as f:
         data = json.load(f)
     
     return Config(

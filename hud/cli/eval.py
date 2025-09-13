@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from pathlib import Path
 from typing import Any, Literal
@@ -32,6 +31,7 @@ def build_agent(
         # Create a generic OpenAI agent for vLLM server
         try:
             from openai import AsyncOpenAI
+
             from hud.agents.openai_chat_generic import GenericOpenAIChatAgent
         except ImportError as e:
             hud_console.error(
@@ -138,6 +138,7 @@ async def run_single_task(
             if agent_type == "vllm":
                 try:
                     from openai import AsyncOpenAI
+
                     from hud.agents.openai_chat_generic import GenericOpenAIChatAgent
 
                     agent_class = GenericOpenAIChatAgent
@@ -234,7 +235,7 @@ async def run_single_task(
             
         # Single task - use the first task
         task = tasks[0]
-        hud_console.info(f"Using first task from dataset...")
+        hud_console.info("Using first task from dataset...")
 
     task_prompt = task.prompt[:50] + "..." if len(task.prompt) > 50 else task.prompt
 
@@ -305,6 +306,7 @@ async def run_full_dataset(
     if agent_type == "vllm":
         try:
             from openai import AsyncOpenAI
+
             from hud.agents.openai_chat_generic import GenericOpenAIChatAgent
 
             agent_class = GenericOpenAIChatAgent

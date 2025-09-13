@@ -1,9 +1,11 @@
 """Distributed training utilities for GRPO."""
+from __future__ import annotations
 
 import os
+from typing import Any
+
 import torch
 import torch.distributed as dist
-from typing import Any, Optional
 
 
 def setup_distributed() -> None:
@@ -72,7 +74,7 @@ def broadcast_object(obj: Any, src: int = 0) -> Any:
     return obj_list[0]
 
 
-def gather_tensors(tensor: torch.Tensor) -> Optional[list[torch.Tensor]]:
+def gather_tensors(tensor: torch.Tensor) -> list[torch.Tensor] | None:
     """Gather tensors from all ranks to rank 0.
     
     Returns:

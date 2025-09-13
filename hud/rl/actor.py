@@ -1,4 +1,5 @@
 """Actor for episode collection using vLLM and HUD."""
+from __future__ import annotations
 
 import asyncio
 import logging
@@ -10,12 +11,12 @@ import hud
 from hud.agents.openai_chat_generic import GenericOpenAIChatAgent
 from hud.datasets import Task
 from hud.types import Trace
-from hud.utils.design import HUDDesign
+from hud.utils.hud_console import HUDConsole
 
 from .config import Config
 
 logger = logging.getLogger(__name__)
-design = HUDDesign(logger)
+hud_console = HUDConsole(logger)
 
 class Actor:
     """Collects episodes using vLLM-served models via HUD agents."""
@@ -71,7 +72,7 @@ class Actor:
     def update_adapter(self, adapter_name: str) -> None:
         """Update the current adapter being used."""
         self.current_adapter = adapter_name
-        design.info(f"[Actor] Using adapter: {adapter_name}")
+        hud_console.info(f"[Actor] Using adapter: {adapter_name}")
     
     async def run_tasks(self, tasks: list[Task], job_id: str) -> list[Trace]:
         """Run tasks and collect traces."""
@@ -100,7 +101,7 @@ class Actor:
                 )
 
         except Exception:
-            print(f"GOT EXCEPTION")
+            print("GOT EXCEPTION")
             return Trace(isError=True)
 
         result.info["tool_spec"] = agent.get_tool_schemas()

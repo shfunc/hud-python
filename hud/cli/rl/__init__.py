@@ -1,4 +1,5 @@
 """RL training command for HUD CLI."""
+from __future__ import annotations
 
 import asyncio
 import json
@@ -7,42 +8,44 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional, List, Union
+from typing import List, Optional, Union
 
 import typer
 from rich.console import Console
 from rich.progress import Progress
 
-# Import local modules first
-from .gpu import detect_cuda_devices, validate_gpu_memory, select_gpu_for_vllm
-from .gpu_utils import calculate_optimal_gpu_allocation, adjust_config_for_ddp, health_check_gpus
-from .presets import get_training_presets, estimate_memory_usage
-from .vllm import check_vllm_server, start_vllm_server, wait_for_vllm_server, kill_vllm_server
-from .display import display_gpu_info, display_config_summary
-from .config import generate_config_interactive, save_config, load_config
+from hud.datasets import Task
+from hud.rl.config import Config
+from hud.rl.train import train
+from hud.rl.utils import load_tasks
 
 # Then import HUD modules
 from hud.utils.design import design
-from hud.rl.utils import load_tasks
-from hud.rl.train import train
-from hud.rl.config import Config
-from hud.datasets import Task
+
+from .config import generate_config_interactive, load_config, save_config
+from .display import display_config_summary, display_gpu_info
+
+# Import local modules first
+from .gpu import detect_cuda_devices, select_gpu_for_vllm, validate_gpu_memory
+from .gpu_utils import adjust_config_for_ddp, calculate_optimal_gpu_allocation, health_check_gpus
+from .presets import estimate_memory_usage, get_training_presets
+from .vllm import check_vllm_server, kill_vllm_server, start_vllm_server, wait_for_vllm_server
 
 console = Console()
 
 
 def rl_command(
-    tasks_file: Optional[str] = typer.Argument(
+    tasks_file: str | None = typer.Argument(
         None,
         help="Path to tasks file (JSON/JSONL) or HuggingFace dataset name",
     ),
-    model: Optional[str] = typer.Option(
+    model: str | None = typer.Option(
         None,
         "--model",
         "-m",
         help="Model to train (default: interactive selection)",
     ),
-    config_file: Optional[Path] = typer.Option(
+    config_file: Path | None = typer.Option(
         None,
         "--config",
         "-c",
@@ -71,12 +74,12 @@ def rl_command(
         "--no-ddp",
         help="Disable DDP even with multiple GPUs",
     ),
-    ddp_gpus: Optional[str] = typer.Option(
+    ddp_gpus: str | None = typer.Option(
         None,
         "--ddp-gpus",
         help="Specific GPUs for DDP (e.g., '0,1,2,3')",
     ),
-    vllm_gpu: Optional[int] = typer.Option(
+    vllm_gpu: int | None = typer.Option(
         None,
         "--vllm-gpu",
         help="Specific GPU for vLLM server",
@@ -143,9 +146,9 @@ def rl_command(
         # Validate tasks
         invalid_tasks = []
         for i, task in enumerate(tasks):
-            if not hasattr(task, 'prompt') or not task.prompt:
+            if not hasattr(task, "prompt") or not task.prompt:
                 invalid_tasks.append((i, "missing 'prompt' field"))
-            if not hasattr(task, 'mcp_config') or not task.mcp_config:
+            if not hasattr(task, "mcp_config") or not task.mcp_config:
                 invalid_tasks.append((i, "missing 'mcp_config' field"))
         
         if invalid_tasks:
@@ -239,9 +242,9 @@ def rl_command(
         )
         
         if not continue_training:
-            healthy_str = ','.join(map(str, health_results['healthy_gpus']))
+            healthy_str = ",".join(map(str, health_results["healthy_gpus"]))
             console.print("\n[yellow]Exiting. Please resolve GPU issues and try again.[/yellow]")
-            console.print(f"\n[cyan]💡 Tip: To use only healthy GPUs, you can run:[/cyan]")
+            console.print("\n[cyan]💡 Tip: To use only healthy GPUs, you can run:[/cyan]")
             console.print(f"[white]hud rl {tasks_file} --ddp-gpus {healthy_str}[/white]\n")
             raise typer.Exit(0)
         else:
@@ -284,9 +287,9 @@ def rl_command(
     # Validate tasks
     invalid_tasks = []
     for i, task in enumerate(tasks):
-        if not hasattr(task, 'prompt') or not task.prompt:
+        if not hasattr(task, "prompt") or not task.prompt:
             invalid_tasks.append(f"Task {i}: missing 'prompt' field")
-        if not hasattr(task, 'mcp_config') or not task.mcp_config:
+        if not hasattr(task, "mcp_config") or not task.mcp_config:
             invalid_tasks.append(f"Task {i}: missing 'mcp_config' field")
     
     if invalid_tasks:
@@ -366,10 +369,10 @@ def rl_command(
                 break
             elif choice == "edit":
                 # Default to nano if EDITOR is not set
-                editor = os.environ.get('EDITOR', 'nano')
+                editor = os.environ.get("EDITOR", "nano")
                 
                 # Show nano instructions if using nano
-                if editor == 'nano':
+                if editor == "nano":
                     console.print("\n[cyan]Opening config in nano editor...[/cyan]")
                     console.print("[yellow]Tips:[/yellow]")
                     console.print("  • Edit the configuration values as needed")
@@ -390,7 +393,7 @@ def rl_command(
                     display_config_summary(config, len(tasks), gpu_info, estimated_memory)
                     console.print("\n[bold]Type 'start' to begin or 'cancel' to abort:[/bold] ", end="")
                 except subprocess.CalledProcessError:
-                    console.print(f"\n[yellow]Editor closed without saving or was cancelled.[/yellow]")
+                    console.print("\n[yellow]Editor closed without saving or was cancelled.[/yellow]")
                     console.print("[bold]Your choice:[/bold] ", end="")
                 except Exception as e:
                     console.print(f"\n[red]Failed to open editor: {e}[/red]")
@@ -439,13 +442,13 @@ def rl_command(
             console.print(f"[green]✅ GPU {vllm_gpu_idx} reserved for vLLM server[/green]")
             
             # Show details
-            console.print(f"\n[cyan]Training Configuration:[/cyan]")
+            console.print("\n[cyan]Training Configuration:[/cyan]")
             console.print(f"  • Groups to process: {gpu_allocation['num_groups']}")
             console.print(f"  • Training GPUs: {training_gpus}")
             console.print(f"  • Groups per GPU: {gpu_allocation.get('groups_per_gpu', 'N/A'):.1f}")
             
             # Warn about efficiency
-            if gpu_allocation.get('parallel_efficiency', 1.0) < 0.8:
+            if gpu_allocation.get("parallel_efficiency", 1.0) < 0.8:
                 console.print(f"\n[yellow]⚠️  GPU efficiency: {gpu_allocation['parallel_efficiency']*100:.0f}%[/yellow]")
                 console.print(f"[yellow]Consider adjusting batch_size to {len(training_gpus) * config.training.group_size} for optimal performance[/yellow]")
         else:
@@ -453,7 +456,7 @@ def rl_command(
     
     # Allow manual override
     if ddp_gpus is not None:
-        requested_gpus = [int(x) for x in ddp_gpus.split(',')]
+        requested_gpus = [int(x) for x in ddp_gpus.split(",")]
         console.print(f"[cyan]Manual GPU selection: {requested_gpus}[/cyan]")
         # Validate requested GPUs are in the healthy set
         available_indices = [d["index"] for d in gpu_info["devices"]]
@@ -477,7 +480,7 @@ def rl_command(
     
     # Ensure we have at least one training GPU
     if not training_gpus:
-        console.print(f"[red]❌ No available GPUs for training![/red]")
+        console.print("[red]❌ No available GPUs for training![/red]")
         raise typer.Exit(1)
     
     # Always adjust batch_size based on number of training GPUs
@@ -532,7 +535,7 @@ def rl_command(
 
 def launch_ddp_training(
     config: Config,
-    training_gpus: List[int],
+    training_gpus: list[int],
     vllm_gpu: int,
     tasks_file: str,
     config_path: Path,
@@ -544,10 +547,10 @@ def launch_ddp_training(
     
     # Prepare environment
     env = os.environ.copy()
-    env['CUDA_VISIBLE_DEVICES'] = ','.join(map(str, training_gpus))
+    env["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, training_gpus))
     
     if not verbose:
-        env['HUD_LOG_LEVEL'] = 'WARNING'
+        env["HUD_LOG_LEVEL"] = "WARNING"
     
     # Build command
     cmd = [

@@ -1,6 +1,8 @@
 """Main training loop for GRPO RL."""
+from __future__ import annotations
 
 import os
+
 # Disable tokenizer parallelism warnings
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -9,7 +11,6 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-import uuid
 from pathlib import Path
 
 import hud
@@ -17,16 +18,26 @@ from hud.datasets import Task
 from hud.rl.actor import Actor
 from hud.rl.buffer import DatasetBuffer, ReplayBuffer
 from hud.rl.config import Config
-from hud.rl.learner import GRPOLearner
-from hud.rl.utils import ensure_dir, load_tasks, set_seed, preprocess_advantages, aggregate_metrics_across_ranks
-from hud.rl.vllm_adapter import VLLMAdapter
 from hud.rl.distributed import (
-    setup_distributed, cleanup_distributed, is_main_process, 
-    broadcast_object, synchronize, get_global_rank, get_world_size,
-    distribute_groups
+    broadcast_object,
+    cleanup_distributed,
+    distribute_groups,
+    get_global_rank,
+    get_world_size,
+    is_main_process,
+    setup_distributed,
+    synchronize,
 )
+from hud.rl.learner import GRPOLearner
+from hud.rl.utils import (
+    aggregate_metrics_across_ranks,
+    ensure_dir,
+    load_tasks,
+    preprocess_advantages,
+    set_seed,
+)
+from hud.rl.vllm_adapter import VLLMAdapter
 from hud.utils.design import HUDDesign
-from hud.rl.types import TrainingMetrics
 
 design = HUDDesign(logging.getLogger(__name__))
 
@@ -286,7 +297,7 @@ async def main() -> None:
     elif args.tasks:
         # Tasks provided as file path or HuggingFace dataset
         tasks = load_tasks(args.tasks, config.actor.system_prompt)
-    elif hasattr(config.actor, 'tasks_file') and config.actor.tasks_file:
+    elif hasattr(config.actor, "tasks_file") and config.actor.tasks_file:
         # Fallback to config file path for backwards compatibility
         tasks = load_tasks(config.actor.tasks_file, config.actor.system_prompt)
     else:

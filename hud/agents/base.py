@@ -423,9 +423,7 @@ class MCPAgent(ABC):
 
         # Build result
         # Ensure isError is always a boolean
-        if error is not None:
-            is_error = True
-        elif final_response and hasattr(final_response, 'isError') and final_response.isError:
+        if error is not None or (final_response and hasattr(final_response, "isError") and final_response.isError):
             is_error = True
         else:
             is_error = False
