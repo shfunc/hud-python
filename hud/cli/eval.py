@@ -11,10 +11,10 @@ from typing import Any, Literal
 import typer
 
 import hud
-from hud.utils.design import HUDDesign
+from hud.utils.hud_console import HUDConsole
 
 logger = logging.getLogger(__name__)
-design = HUDDesign()
+hud_console = HUDConsole()
 
 
 def build_agent(
@@ -34,7 +34,7 @@ def build_agent(
             from openai import AsyncOpenAI
             from hud.agents.openai_chat_generic import GenericOpenAIChatAgent
         except ImportError as e:
-            design.error(
+            hud_console.error(
                 "OpenAI dependencies are not installed. "
                 "Please install with: pip install 'hud-python[agent]'"
             )
@@ -60,7 +60,7 @@ def build_agent(
         try:
             from hud.agents import OperatorAgent
         except ImportError as e:
-            design.error(
+            hud_console.error(
                 "OpenAI agent dependencies are not installed. "
                 "Please install with: pip install 'hud-python[agent]'"
             )
@@ -78,7 +78,7 @@ def build_agent(
     try:
         from hud.agents import ClaudeAgent
     except ImportError as e:
-        design.error(
+        hud_console.error(
             "Claude agent dependencies are not installed. "
             "Please install with: pip install 'hud-python[agent]'"
         )
@@ -116,23 +116,23 @@ async def run_single_task(
         from hud.datasets import Task, run_dataset
         from hud.rl.utils import load_tasks
     except ImportError as e:
-        design.error(
+        hud_console.error(
             "Dataset dependencies are not installed. "
-            "Please install with: pip install 'hud-python\u27E6agent\u27E7'"
+            "Please install with: pip install 'hud-python\u27e6agent\u27e7'"
         )
         raise typer.Exit(1) from e
 
     # Check if it's a file
     path = Path(source)
     if path.exists() and (path.suffix in [".json", ".jsonl"]):
-        design.info("📊 Loading task file…")
+        hud_console.info("📊 Loading task file…")
         
         # Use unified loader for both JSON and JSONL
         tasks = load_tasks(str(path))
         
         # Check if we have multiple tasks
         if len(tasks) > 1:
-            design.info(f"Found {len(tasks)} tasks in file, running as dataset…")
+            hud_console.info(f"Found {len(tasks)} tasks in file, running as dataset…")
 
             # Build agent class and config for run_dataset
             if agent_type == "vllm":
@@ -142,7 +142,7 @@ async def run_single_task(
 
                     agent_class = GenericOpenAIChatAgent
                 except ImportError as e:
-                    design.error(
+                    hud_console.error(
                         "OpenAI dependencies are not installed. "
                         "Please install with: pip install 'hud-python\u27E6agent\u27E7'"
                     )
@@ -172,9 +172,9 @@ async def run_single_task(
 
                     agent_class = OperatorAgent
                 except ImportError as e:
-                    design.error(
+                    hud_console.error(
                         "OpenAI agent dependencies are not installed. "
-                        "Please install with: pip install 'hud-python\u27E6agent\u27E7'"
+                        "Please install with: pip install 'hud-python\u27e6agent\u27e7'"
                     )
                     raise typer.Exit(1) from e
 
@@ -188,7 +188,7 @@ async def run_single_task(
 
                     agent_class = ClaudeAgent
                 except ImportError as e:
-                    design.error(
+                    hud_console.error(
                         "Claude agent dependencies are not installed. "
                         "Please install with: pip install 'hud-python[agent]'"
                     )
@@ -217,24 +217,24 @@ async def run_single_task(
 
             # Display summary
             successful = sum(1 for r in results if getattr(r, "reward", 0) > 0)
-            design.success(f"Completed {len(results)} tasks: {successful} successful")
+            hud_console.success(f"Completed {len(results)} tasks: {successful} successful")
             return
 
         # Single task - use the first (and only) task
         task = tasks[0]
-        design.info("Found 1 task, running as single task…")
+        hud_console.info("Found 1 task, running as single task…")
     else:
         # Load from HuggingFace dataset or non-file source
-        design.info(f"📊 Loading tasks from: {source}…")
+        hud_console.info(f"📊 Loading tasks from: {source}…")
         tasks = load_tasks(source)
         
         if not tasks:
-            design.error(f"No tasks found in: {source}")
+            hud_console.error(f"No tasks found in: {source}")
             raise typer.Exit(1)
             
         # Single task - use the first task
         task = tasks[0]
-        design.info(f"Using first task from dataset...")
+        hud_console.info(f"Using first task from dataset...")
 
     task_prompt = task.prompt[:50] + "..." if len(task.prompt) > 50 else task.prompt
 
@@ -246,9 +246,9 @@ async def run_single_task(
             verbose=verbose,
             vllm_base_url=vllm_base_url,
         )
-        design.info(task.prompt)
+        hud_console.info(task.prompt)
         result = await agent.run(task, max_steps=max_steps)
-        design.success(f"Reward: {result.reward}")
+        hud_console.success(f"Reward: {result.reward}")
 
 
 async def run_full_dataset(
@@ -275,18 +275,18 @@ async def run_full_dataset(
         from hud.datasets import run_dataset, run_dataset_parallel, run_dataset_parallel_manual
         from hud.rl.utils import load_tasks
     except ImportError as e:
-        design.error(
+        hud_console.error(
             "Dataset dependencies are not installed. "
             "Please install with: pip install 'hud-python[[agent]]'"
         )
         raise typer.Exit(1) from e
 
     # Load tasks using unified loader
-    design.info(f"📊 Loading tasks from: {source}…")
+    hud_console.info(f"📊 Loading tasks from: {source}…")
     tasks = load_tasks(source)
     
     if not tasks:
-        design.error(f"No tasks found in: {source}")
+        hud_console.error(f"No tasks found in: {source}")
         raise typer.Exit(1)
     
     # Convert Task objects to dicts for dataset runners
@@ -299,7 +299,7 @@ async def run_full_dataset(
     else:
         dataset_name = source.split("/")[-1]
     
-    design.info(f"Found {len(tasks)} tasks")
+    hud_console.info(f"Found {len(tasks)} tasks")
 
     # Build agent class + config for run_dataset
     if agent_type == "vllm":
@@ -309,7 +309,7 @@ async def run_full_dataset(
 
             agent_class = GenericOpenAIChatAgent
         except ImportError as e:
-            design.error(
+            hud_console.error(
                 "OpenAI dependencies are not installed. "
                 "Please install with: pip install 'hud-python[agent]'"
             )
@@ -339,7 +339,7 @@ async def run_full_dataset(
 
             agent_class = OperatorAgent
         except ImportError as e:
-            design.error(
+            hud_console.error(
                 "OpenAI agent dependencies are not installed. "
                 "Please install with: pip install 'hud-python[agent]'"
             )
@@ -355,7 +355,7 @@ async def run_full_dataset(
 
             agent_class = ClaudeAgent
         except ImportError as e:
-            design.error(
+            hud_console.error(
                 "Claude agent dependencies are not installed. "
                 "Please install with: pip install 'hud-python[agent]'"
             )
@@ -369,7 +369,7 @@ async def run_full_dataset(
             agent_config["allowed_tools"] = allowed_tools
 
     if parallel:
-        design.info(
+        hud_console.info(
             f"🚀 Running PARALLEL evaluation (workers: {max_workers or 'auto'}, max_concurrent: {max_concurrent})…"  # noqa: E501
         )
         if max_workers is None:
@@ -399,7 +399,7 @@ async def run_full_dataset(
                 auto_respond=True,
             )
     else:
-        design.info(f"🚀 Running evaluation (max_concurrent: {max_concurrent})…")
+        hud_console.info(f"🚀 Running evaluation (max_concurrent: {max_concurrent})…")
         return await run_dataset(
             name=f"Evaluation {dataset_name}",
             dataset=dataset_or_tasks,
@@ -513,22 +513,24 @@ def eval_command(
     # Check for required API keys
     if agent == "claude":
         if not settings.anthropic_api_key:
-            design.error("ANTHROPIC_API_KEY is required for Claude agent")
-            design.info("Set it in your environment or .env file: ANTHROPIC_API_KEY=your-key-here")
+            hud_console.error("ANTHROPIC_API_KEY is required for Claude agent")
+            hud_console.info(
+                "Set it in your environment or .env file: ANTHROPIC_API_KEY=your-key-here"
+            )
             raise typer.Exit(1)
     elif agent == "openai" and not settings.openai_api_key:
-        design.error("OPENAI_API_KEY is required for OpenAI agent")
-        design.info("Set it in your environment or .env file: OPENAI_API_KEY=your-key-here")
+        hud_console.error("OPENAI_API_KEY is required for OpenAI agent")
+        hud_console.info("Set it in your environment or .env file: OPENAI_API_KEY=your-key-here")
         raise typer.Exit(1)
     elif agent == "vllm":
-        design.info(f"Using vLLM server at {vllm_base_url}")
+        hud_console.info(f"Using vLLM server at {vllm_base_url}")
         if model:
-            design.info(f"Model name: {model}")
+            hud_console.info(f"Model name: {model}")
 
     # Check for HUD_API_KEY if using HUD services
     if not settings.api_key:
-        design.warning("HUD_API_KEY not set. Some features may be limited.")
-        design.info("Get your API key at: https://app.hud.so")
+        hud_console.warning("HUD_API_KEY not set. Some features may be limited.")
+        hud_console.info("Get your API key at: https://app.hud.so")
 
     # Parse allowed tools
     allowed_tools_list = (

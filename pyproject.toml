@@ -1,6 +1,6 @@
 [project]
 name = "hud-python"
-version = "0.4.21"
+version = "0.4.24"
 description = "SDK for the HUD platform."
 readme = "README.md"
 requires-python = ">=3.11, <3.14"
@@ -122,6 +122,7 @@ agent = [
     # Data and evaluation
     "datasets>=2.14.0",
     "numpy>=1.24.0",
+    "pillow>=11.1.0",
     # Jupyter support
     "ipykernel",
     "ipython <9",

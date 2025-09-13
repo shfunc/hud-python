@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from .design import HUDDesign, design
+from .hud_console import HUDConsole, hud_console
 from .telemetry import stream
 
 __all__ = [
-    "HUDDesign",
-    "design",
+    "HUDConsole",
+    "hud_console",
     "stream",
 ]
