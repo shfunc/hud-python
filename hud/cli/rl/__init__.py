@@ -88,9 +88,15 @@ def rl_command(
         help="Run training on Modal cloud infrastructure",
     ),
     modal_gpu: str = typer.Option(
-        "H100",
+        "",
         "--modal-gpu",
         help="GPU type for Modal (e.g., H100, A100, L40S)",
+    ),
+    # Internal flag
+    skip_vllm_startup: bool = typer.Option(
+        False,
+        hidden=True,
+        help="Skip local vLLM server startup (for internal use)",
     ),
 ):
     """Run GRPO reinforcement learning training on tasks."""
@@ -118,19 +124,66 @@ def rl_command(
     
     console.print("\n[bold cyan]🚀 HUD RL Training[/bold cyan]\n")
     
-    # Check if we should run on Modal
-    if modal:
+    # Store whether we're using Modal for later
+    use_modal = modal
+    
+    # If using Modal, skip local setup and jump straight to config
+    if use_modal:
         try:
             from .modal_runner import launch_on_modal
         except ImportError:
             console.print("[red]❌ Modal not installed. Install with: pip install modal[/red]")
             raise typer.Exit(1)
         
+        # Load tasks first
+        console.print(f"[yellow]Loading tasks from: {tasks_file}[/yellow]")
+        tasks = load_tasks(tasks_file)
+        console.print(f"[green]✅ Loaded {len(tasks)} tasks[/green]")
+        
+        # Validate tasks
+        invalid_tasks = []
+        for i, task in enumerate(tasks):
+            if not hasattr(task, 'prompt') or not task.prompt:
+                invalid_tasks.append((i, "missing 'prompt' field"))
+            if not hasattr(task, 'mcp_config') or not task.mcp_config:
+                invalid_tasks.append((i, "missing 'mcp_config' field"))
+        
+        if invalid_tasks:
+            console.print(f"\n[red]❌ Found {len(invalid_tasks)} invalid tasks:[/red]")
+            for i, reason in invalid_tasks[:5]:  # Show first 5
+                console.print(f"  Task {i}: {reason}")
+            if len(invalid_tasks) > 5:
+                console.print(f"  ... and {len(invalid_tasks) - 5} more")
+            raise typer.Exit(1)
+        
+        # If config file provided, load it
+        if config_file:
+            config = load_config(config_file)
+            # Convert to JSON string using dataclasses
+            from dataclasses import asdict
+            config_dict = asdict(config)
+            config_json = json.dumps(config_dict, indent=2, default=str)
+        else:
+            # Generate config interactively
+            # For Modal, we'll use default GPU memory assumptions
+            gpu_memory_gb = 80.0  # Assume H100/A100 80GB
+            presets = get_training_presets(gpu_memory_gb)
+            config, estimated_memory = generate_config_interactive(
+                model_name=model,
+                tasks_count=len(tasks),
+                presets=presets,
+                output_dir=output_dir,
+            )
+            # Convert to JSON string using dataclasses
+            from dataclasses import asdict
+            config_dict = asdict(config)
+            config_json = json.dumps(config_dict, indent=2, default=str)
+        
         # Launch on Modal and exit
         launch_on_modal(
             tasks_file=tasks_file,
+            config_json=config_json,
             model=model,
-            config_file=config_file,
             output_dir=output_dir,
             verbose=verbose,
             modal_gpu=modal_gpu,
@@ -433,16 +486,19 @@ def rl_command(
     # Save updated config (for both DDP and single GPU)
     save_config(config, temp_config_path)
     
-    # Step 8: Start vLLM server
-    console.print(f"\n[cyan]Setting up vLLM server on GPU {vllm_gpu_idx}...[/cyan]")
-    
-    start_vllm_server(config.model.base_model, vllm_gpu_idx, restart=restart)
-    
-    # Wait for server to be ready
-    server_ready = asyncio.run(wait_for_vllm_server())
-    if not server_ready:
-        console.print("[red]❌ Failed to start vLLM server[/red]")
-        raise typer.Exit(1)
+    # Step 8: Start vLLM server (unless we're using a remote one)
+    if not skip_vllm_startup:
+        console.print(f"\n[cyan]Setting up vLLM server on GPU {vllm_gpu_idx}...[/cyan]")
+        
+        start_vllm_server(config.model.base_model, vllm_gpu_idx, restart=restart)
+        
+        # Wait for server to be ready
+        server_ready = asyncio.run(wait_for_vllm_server())
+        if not server_ready:
+            console.print("[red]❌ Failed to start vLLM server[/red]")
+            raise typer.Exit(1)
+    else:
+        console.print("\n[cyan]Using remote vLLM server (skipping local startup)[/cyan]")
     
     # Step 9: Run training (DDP or single GPU)
     if use_ddp:

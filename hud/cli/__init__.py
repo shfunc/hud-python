@@ -6,6 +6,7 @@ import asyncio
 import json
 import sys
 from pathlib import Path
+from typing import Optional
 
 import typer
 from rich.console import Console
@@ -1009,6 +1010,21 @@ def rl(
         "--gpu",
         help="GPU type to use for training",
     ),
+    no_ddp: bool = typer.Option(
+        False,
+        "--no-ddp",
+        help="Disable DDP even with multiple GPUs",
+    ),
+    ddp_gpus: Optional[str] = typer.Option(
+        None,
+        "--ddp-gpus",
+        help="Specific GPUs for DDP (e.g., '0,1,2,3')",
+    ),
+    vllm_gpu: Optional[int] = typer.Option(
+        None,
+        "--vllm-gpu",
+        help="Specific GPU for vLLM server",
+    ),
 ) -> None:
     """🎯 Run GRPO reinforcement learning training on tasks."""
     # Import from the rl module
@@ -1023,6 +1039,9 @@ def rl(
         verbose=verbose,
         modal=modal,
         modal_gpu=gpu,
+        no_ddp=no_ddp,
+        ddp_gpus=ddp_gpus,
+        vllm_gpu=vllm_gpu,
     )
 
 
