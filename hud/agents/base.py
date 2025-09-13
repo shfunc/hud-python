@@ -385,10 +385,10 @@ class MCPAgent(ABC):
                     # 2. Execute tools
                     tool_calls = response.tool_calls
                     for tool_call in tool_calls:
-                        self.design.info_log(f"{tool_call}")
+                        self.console.info_log(f"{tool_call}")
                     tool_results = await self.call_tools(tool_calls)
                     for tool_result in tool_results:
-                        self.design.info_log(f"{tool_result}")
+                        self.console.info_log(f"{tool_result}")
 
                     # 3. Format tool results and add to messages
                     tool_messages = await self.format_tool_results(tool_calls, tool_results)

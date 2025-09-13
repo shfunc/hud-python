@@ -409,7 +409,7 @@ class HUDConsole:
             A context manager that provides update() method
             
         Example:
-            with design.progress("Processing...") as progress:
+            with console.progress("Processing...") as progress:
                 for i in range(10):
                     progress.update(f"Processing item {i+1}/10")
         """

@@ -8,7 +8,7 @@ from typing import Any
 from rich.console import Console
 
 from hud.rl.config import ActorConfig, Config, ModelConfig, TrainingConfig
-from hud.utils.console import hud_console
+from hud.utils.hud_console import hud_console
 
 from .display import display_preset_table
 from .presets import estimate_memory_usage

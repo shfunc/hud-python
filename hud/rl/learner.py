@@ -24,13 +24,13 @@ from hud.rl.distributed import (
     is_main_process,
 )
 from hud.rl.utils import get_gpu_utilization, get_memory_usage, prepare_inputs
-from hud.utils.design import HUDDesign
+from hud.utils.hud_console import HUDConsole
 
 from .config import Config
 from .types import TrainingMetrics, TrainingSample
 
 logger = logging.getLogger(__name__)
-design = HUDDesign(logger)
+hud_console = HUDConsole(logger)
 
 class GRPOLearner:
     """GRPO learning algorithm for VLMs."""
@@ -51,7 +51,7 @@ class GRPOLearner:
         
         # Apply Liger kernel optimizations if available and enabled
         if model_cfg.use_liger and LIGER_AVAILABLE:
-            design.info_log("Applying Liger kernel optimizations to Qwen2.5-VL")
+            hud_console.info_log("Applying Liger kernel optimizations to Qwen2.5-VL")
             apply_liger_kernel_to_qwen2_5_vl(
                 rope=True,  # Optimized RoPE
                 rms_norm=True,  # Optimized RMSNorm
@@ -59,7 +59,7 @@ class GRPOLearner:
                 fused_linear_cross_entropy=True  # Fused Linear+CrossEntropy for memory efficiency
             )
         elif model_cfg.use_liger and not LIGER_AVAILABLE:
-            design.warning_log("Liger kernel requested but not installed. Install with: pip install liger-kernel")
+            hud_console.warning_log("Liger kernel requested but not installed. Install with: pip install liger-kernel")
         
         # Load processor
         processor = AutoProcessor.from_pretrained(
@@ -77,11 +77,11 @@ class GRPOLearner:
                 torch_dtype=torch.bfloat16,
                 attn_implementation=attn_implementation,
             )
-            design.info_log(f"Using {attn_implementation} for attention")
+            hud_console.info_log(f"Using {attn_implementation} for attention")
         except (ImportError, ValueError) as e:
             # Only fallback if explicitly using flash_attention_2 and it's not available
             if attn_implementation == "flash_attention_2":
-                design.info_log(f"Flash Attention 2 not available ({e}), using eager attention")
+                hud_console.info_log(f"Flash Attention 2 not available ({e}), using eager attention")
                 policy = Qwen2_5_VLForConditionalGeneration.from_pretrained(
                     model_cfg.base_model,
                     torch_dtype=torch.bfloat16,
@@ -95,7 +95,7 @@ class GRPOLearner:
         # Enable gradient checkpointing for memory efficiency
         if model_cfg.gradient_checkpointing:
             policy.gradient_checkpointing_enable()
-            design.info_log("Gradient checkpointing enabled for memory efficiency")
+            hud_console.info_log("Gradient checkpointing enabled for memory efficiency")
         
         # Apply vision-specific optimizations
         if hasattr(policy, "model") and hasattr(policy.model, "vision_tower"):
@@ -105,12 +105,12 @@ class GRPOLearner:
             if model_cfg.freeze_vision_tower:
                 for param in vision_tower.parameters():
                     param.requires_grad = False
-                design.info_log("Vision tower frozen to save memory")
+                hud_console.info_log("Vision tower frozen to save memory")
             
             # Enable gradient checkpointing for vision tower
             if model_cfg.vision_gradient_checkpointing and hasattr(vision_tower, "gradient_checkpointing_enable"):
                 vision_tower.gradient_checkpointing_enable()
-                design.info_log("Vision tower gradient checkpointing enabled")
+                hud_console.info_log("Vision tower gradient checkpointing enabled")
             
             # Set vision compute dtype
             if model_cfg.vision_compute_dtype == "float16":
@@ -121,7 +121,7 @@ class GRPOLearner:
             # Apply vision feature selection strategy
             if model_cfg.vision_feature_select_strategy == "cls_only":
                 # This would need model-specific implementation
-                design.info_log("Vision feature selection: CLS token only (saves memory)")
+                hud_console.info_log("Vision feature selection: CLS token only (saves memory)")
         
         # Add LoRA adapters
         lora_config = LoraConfig(
@@ -137,7 +137,7 @@ class GRPOLearner:
         # Wrap with DDP if in distributed mode
         if self.world_size > 1:
             policy = DDP(policy, device_ids=[self.local_rank], output_device=self.local_rank)
-            design.info_log(f"[DDP] Wrapped model on rank {self.local_rank}")
+            hud_console.info_log(f"[DDP] Wrapped model on rank {self.local_rank}")
         
         # Create optimizer - need to access underlying model if DDP
         base_model = policy.module if hasattr(policy, "module") else policy
@@ -145,7 +145,7 @@ class GRPOLearner:
         
         # Use 8-bit optimizer if configured
         if self.config.training.use_8bit_optimizer:
-            design.info("Using 8-bit AdamW optimizer from bitsandbytes")
+            hud_console.info("Using 8-bit AdamW optimizer from bitsandbytes")
             optimizer = bnb.optim.AdamW8bit(
                 trainable_params,
                 lr=self.config.training.lr,
@@ -153,7 +153,7 @@ class GRPOLearner:
                 eps=self.config.training.adam_eps
             )
         else:
-            design.info("Using standard FP32 AdamW optimizer")
+            hud_console.info("Using standard FP32 AdamW optimizer")
             optimizer = torch.optim.AdamW(
                 trainable_params,
                 lr=self.config.training.lr,
@@ -162,9 +162,9 @@ class GRPOLearner:
             )
         
         # Log optimizer info
-        design.info_log(f"Optimizer: {type(optimizer).__name__}")
+        hud_console.info_log(f"Optimizer: {type(optimizer).__name__}")
         num_params = sum(p.numel() for p in trainable_params)
-        design.info_log(f"Number of trainable parameters: {num_params:,}")
+        hud_console.info_log(f"Number of trainable parameters: {num_params:,}")
         
         return processor, policy, None, optimizer
 
@@ -193,7 +193,7 @@ class GRPOLearner:
         # Handle empty batch - still need to call backward for DDP sync
         if not samples or len(samples) == 0:
             if self.world_size > 1:
-                design.warning_log("Empty batch, performing dummy backward for DDP sync")
+                hud_console.warning_log("Empty batch, performing dummy backward for DDP sync")
                 # Perform a dummy forward/backward with the model to maintain DDP synchronization
                 dummy_input_ids = torch.zeros((1, 1), dtype=torch.long, device=self.device)
                 dummy_inputs = {"input_ids": dummy_input_ids}
@@ -213,18 +213,18 @@ class GRPOLearner:
                 new_sample.inputs = inp
                 batch.append(new_sample)
 
-        design.info_log(f"[update] Processing batch of {len(batch)} traces")
+        hud_console.info_log(f"[update] Processing batch of {len(batch)} traces")
         group_size = self.config.training.group_size
         if len(batch) % group_size != 0:
-            design.warning_log(f"Group size {group_size} does not divide batch size {len(batch)}")
+            hud_console.warning_log(f"Group size {group_size} does not divide batch size {len(batch)}")
             # Continue anyway with partial group
         
         groups = [batch[i:i+group_size] for i in range(0, len(batch), group_size)]
         
-        with design.progress("Gradient update...") as progress:
+        with hud_console.progress("Gradient update...") as progress:
             for i, samples in enumerate(groups):
                 progress.update(f"Computing logprobs for {len(samples)} samples")
-                design.debug_log(f"Computing old and reference logprobs for {len(samples)} samples")
+                hud_console.debug_log(f"Computing old and reference logprobs for {len(samples)} samples")
                 with torch.no_grad():
                     for sample in samples:
                         sample.old_logprobs = self.compute_logprobs(
@@ -282,7 +282,7 @@ class GRPOLearner:
                     progress.update(f"Step {i}, Epoch {epoch}, Loss: {accumulated_loss:.4f}, GradNorm: {grad_norm:.4f} (grad_accum={grad_accum_steps})")
         
         # Log summary after progress completes
-        design.info_log(f"Gradient update completed: {len(groups)} groups, final loss: {accumulated_loss:.4f}")
+        hud_console.info_log(f"Gradient update completed: {len(groups)} groups, final loss: {accumulated_loss:.4f}")
         
         # Calculate training time and throughput
         training_time = time.time() - training_start_time
@@ -358,7 +358,7 @@ class GRPOLearner:
             # Unwrap DDP model if needed
             model_to_save = self.policy.module if hasattr(self.policy, "module") else self.policy
             model_to_save.save_pretrained(path)
-            logger.info(f"[Learner] Saved checkpoint to {path}")
+            hud_console.info(f"[Learner] Saved checkpoint to {path}")
     
     def load(self, path: str) -> None:
         """Load a policy checkpoint."""

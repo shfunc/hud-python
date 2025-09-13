@@ -37,9 +37,9 @@ from hud.rl.utils import (
     set_seed,
 )
 from hud.rl.vllm_adapter import VLLMAdapter
-from hud.utils.design import HUDDesign
+from hud.utils.hud_console import HUDConsole
 
-design = HUDDesign(logging.getLogger(__name__))
+hud_console = HUDConsole(logging.getLogger(__name__))
 
 
 async def train(config: Config, tasks: list[Task]) -> None:
@@ -56,8 +56,8 @@ async def train(config: Config, tasks: list[Task]) -> None:
         logging.getLogger("httpx").setLevel(logging.WARNING)
 
     if is_main_process():
-        design.header("Starting GRPO Training")
-        design.section_title(f"\n[1/3] Initializing components (world_size={get_world_size()})...")
+        hud_console.header("Starting GRPO Training")
+        hud_console.section_title(f"\n[1/3] Initializing components (world_size={get_world_size()})...")
 
     # Actor is responsible for running tasks and collecting episodes
     actor = Actor(config) if is_main_process() else None
@@ -71,7 +71,7 @@ async def train(config: Config, tasks: list[Task]) -> None:
         config
     )
     if is_main_process():
-        design.key_value_table(dataset_buffer.info)
+        hud_console.key_value_table(dataset_buffer.info)
 
     # Replay buffer is responsible for storing episodes for training
     trace_buffer = ReplayBuffer(config)
@@ -87,7 +87,7 @@ async def train(config: Config, tasks: list[Task]) -> None:
     last_metrics = None  # Store last successful metrics for error recovery
     
     if is_main_process():
-        design.section_title("\n[2/3] Running training loop...")
+        hud_console.section_title("\n[2/3] Running training loop...")
     
     # Create job on main process and distribute ID across GPUs
     if is_main_process():
@@ -107,8 +107,8 @@ async def train(config: Config, tasks: list[Task]) -> None:
     try:
         while len(dataset_buffer) > 0:
             if is_main_process():
-                design.section_title(f"Step {step + 1}/{dataset_buffer.training_steps}")
-                design.info(f"{len(dataset_buffer)} tasks remaining")
+                hud_console.section_title(f"Step {step + 1}/{dataset_buffer.training_steps}")
+                hud_console.info(f"{len(dataset_buffer)} tasks remaining")
             # Get batch of tasks (all ranks need same tasks)
             tasks = dataset_buffer.get_tasks()
 
@@ -122,7 +122,7 @@ async def train(config: Config, tasks: list[Task]) -> None:
                 episode_start_time = time.time()
                 traces = await actor.run_tasks(tasks, job_id=job_id)
                 episode_time = time.time() - episode_start_time
-                design.info(f"Sampled {len(traces)} traces in {episode_time:.1f}s")
+                hud_console.info(f"Sampled {len(traces)} traces in {episode_time:.1f}s")
                 trace_buffer.add(traces)
                 
                 # Get all traces from buffer for distribution
@@ -141,13 +141,13 @@ async def train(config: Config, tasks: list[Task]) -> None:
                 rank_traces = distribute_groups(preprocessed_traces, total_groups)
                 
                 # Log distribution info
-                design.info(f"Distributing {len(all_traces)} traces as {total_groups} groups across {num_gpus} GPUs")
+                hud_console.info(f"Distributing {len(all_traces)} traces as {total_groups} groups across {num_gpus} GPUs")
                 for rank in range(num_gpus):
                     n_traces = len(rank_traces[rank])
                     n_groups = n_traces // num_gpus if n_traces > 0 else 0
-                    design.info(f"  Rank {rank}: {n_traces} traces ({n_groups} groups)")
+                    hud_console.info(f"  Rank {rank}: {n_traces} traces ({n_groups} groups)")
                 
-                design.section_title(f"Training on {len(all_traces)} traces")
+                hud_console.section_title(f"Training on {len(all_traces)} traces")
                 episode_time_value = episode_time
             else:
                 rank_traces = None
@@ -179,7 +179,7 @@ async def train(config: Config, tasks: list[Task]) -> None:
                     })
                 else:
                     # Fallback: use only this rank's data
-                    design.warning("Global statistics not available, using partial data")
+                    hud_console.warning("Global statistics not available, using partial data")
                     last_metrics.update({
                         "advantage": [sample.advantage for sample in my_traces] if my_traces else [],
                         "reward": [sample.reward for sample in my_traces] if my_traces else [],
@@ -188,7 +188,7 @@ async def train(config: Config, tasks: list[Task]) -> None:
                 job_obj.log_sync(last_metrics.to_dict())
                 
                 if step % config.stats_interval == 0:
-                    design.key_value_table(last_metrics.to_dict())
+                    hud_console.key_value_table(last_metrics.to_dict())
             
             # Increment step counter on all processes
             step += 1
@@ -196,7 +196,7 @@ async def train(config: Config, tasks: list[Task]) -> None:
             # Save checkpoint and update vLLM (only on main process)
             if step % config.training.save_every_batches == 0:
                 if is_main_process():
-                    design.section_title("Saving checkpoint and updating vLLM")
+                    hud_console.section_title("Saving checkpoint and updating vLLM")
                     # get date and time
                     now = datetime.now()
                     checkpoint_id = now.strftime("%Y%m%d_%H%M%S") + f"-{get_global_rank()}"
@@ -206,21 +206,21 @@ async def train(config: Config, tasks: list[Task]) -> None:
                     adapter_name = f"{config.adapter_prefix}-{checkpoint_id}"
                     if vllm.load_adapter(adapter_name, str(checkpoint_path)):
                         actor.update_adapter(adapter_name)
-                        design.info(f"✓ Checkpoint saved and loaded: {adapter_name}")
+                        hud_console.info(f"✓ Checkpoint saved and loaded: {adapter_name}")
                     else:
-                        design.warning(f"Failed to hot-load adapter {adapter_name}")
+                        hud_console.warning(f"Failed to hot-load adapter {adapter_name}")
                 
                 # Ensure all processes wait for checkpoint operations to complete
                 synchronize()
         
         if is_main_process():
-            design.section_title("\n[3/3] Training completed!")
+            hud_console.section_title("\n[3/3] Training completed!")
             # Update job status to completed
             if job_obj:
                 job_obj.update_status_sync("completed")
     except Exception as e:
         # Log error and any available metrics before failing
-        design.error(f"Training failed on rank {get_global_rank()}: {e}")
+        hud_console.error(f"Training failed on rank {get_global_rank()}: {e}")
         
         if is_main_process():
             # Log final metrics if we have any
@@ -242,7 +242,7 @@ async def train(config: Config, tasks: list[Task]) -> None:
         try:
             synchronize()
         except:
-            design.warning("Failed to synchronize during cleanup")
+            hud_console.warning("Failed to synchronize during cleanup")
         
         # Clean up distributed environment
         cleanup_distributed()
@@ -270,7 +270,7 @@ async def main() -> None:
     
     # Apply test mode settings
     if args.test:
-        design.info("[TEST MODE] Using minimal configuration")
+        hud_console.info("[TEST MODE] Using minimal configuration")
         eps = 6
         config.training.batch_size = eps
         config.actor.max_parallel_episodes = 12
@@ -285,9 +285,9 @@ async def main() -> None:
     constant = config.training.mini_batch_size * config.actor.max_steps_per_episode
     quadratic = (config.model.max_pixels / (28 * 28 * 256)) ** (1.4)
     total_memory = INITIAL_MEMORY + SCALING_FACTOR * constant * quadratic
-    design.info(f"Total memory usage: {total_memory:.2f} GB")
+    hud_console.info(f"Total memory usage: {total_memory:.2f} GB")
     if total_memory > 75.0:
-        design.warning("Potential memory usage is too high, decrease either training steps or mini batch size")
+        hud_console.warning("Potential memory usage is too high, decrease either training steps or mini batch size")
         exit(1)
     
     # Load tasks
@@ -304,7 +304,7 @@ async def main() -> None:
         # Default to browser_2048_tasks.jsonl if it exists
         default_tasks_path = "browser_2048_tasks.jsonl"
         if Path(default_tasks_path).exists():
-            design.info(f"No tasks specified, using default: {default_tasks_path}")
+            hud_console.info(f"No tasks specified, using default: {default_tasks_path}")
             tasks = load_tasks(default_tasks_path, config.actor.system_prompt)
         else:
             raise ValueError("No tasks specified. Use --tasks, --tasks-json, or specify tasks_file in config")

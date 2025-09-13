@@ -20,7 +20,7 @@ from hud.rl.train import train
 from hud.rl.utils import load_tasks
 
 # Then import HUD modules
-from hud.utils.design import design
+from hud.utils.hud_console import hud_console
 
 from .config import generate_config_interactive, load_config, save_config
 from .display import display_config_summary, display_gpu_info
@@ -302,7 +302,7 @@ def rl_command(
     
     # Step 3: Model selection (if not provided)
     if model is None and not config_file:
-        model = design.select(
+        model = hud_console.select(
             "Select a model for RL training:",
             choices=[
                 {"name": "Qwen 2.5 VL 3B (Recommended - Vision-Language)", "value": "Qwen/Qwen2.5-VL-3B-Instruct"},

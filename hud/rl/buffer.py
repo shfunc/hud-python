@@ -9,10 +9,10 @@ from typing import Generic, TypeVar
 
 from hud.rl.config import Config
 from hud.types import Task, Trace
-from hud.utils.design import HUDDesign
+from hud.utils.hud_console import HUDConsole
 
 logger = logging.getLogger(__name__)
-design = HUDDesign(logger=logger)
+hud_console = HUDConsole(logger=logger)
 
 T = TypeVar("T")
 
@@ -70,7 +70,7 @@ class Buffer(Generic[T]):
         items = self.get_filtered(n, filter_fn, consume)
         
         if len(items) < batch_size:
-            design.warning(f"Buffer has {len(items)} items, requested {batch_size}")
+            hud_console.warning(f"Buffer has {len(items)} items, requested {batch_size}")
             return items
         
         return random.sample(items, batch_size)
@@ -120,15 +120,15 @@ class DatasetBuffer(Buffer[Task]):
             random.shuffle(tasks)
         if len(tasks) > self.number_of_tasks:
             leftovers = len(tasks) - self.number_of_tasks
-            design.warning(f"Training steps ({self.training_steps}) will lead to {leftovers} tasks not being trained") # noqa: E501
+            hud_console.warning(f"Training steps ({self.training_steps}) will lead to {leftovers} tasks not being trained") # noqa: E501
             tasks = tasks[:self.number_of_tasks]
         
         # Check if the dataset is imbalanced
         self.dataset_size = len(tasks)
         if self.training_steps % self.dataset_size != 0:
             leftovers = self.number_of_tasks % self.dataset_size
-            design.warning(f"Dataset imbalanced ({leftovers} tasks will be trained 1 more time)")
-            design.warning(f"This is because the number of training steps ({self.training_steps}) is not a multiple of the dataset size ({self.dataset_size})")
+            hud_console.warning(f"Dataset imbalanced ({leftovers} tasks will be trained 1 more time)")
+            hud_console.warning(f"This is because the number of training steps ({self.training_steps}) is not a multiple of the dataset size ({self.dataset_size})")
         
         self.add_fill(tasks, self.number_of_tasks, config.training.shuffle_dataset)
 
@@ -200,7 +200,7 @@ class ReplayBuffer(Buffer[Trace]):
         
         # Handle case where buffer has fewer traces than batch_size
         if len(self.buffer) < self.batch_size:
-            design.warning(f"[group-sampler] Buffer has only {len(self.buffer)} traces, need {self.batch_size}")
+            hud_console.warning(f"[group-sampler] Buffer has only {len(self.buffer)} traces, need {self.batch_size}")
             # Pad with duplicates to reach batch_size
             available = list(self.buffer)
             while len(available) < self.batch_size:
@@ -208,12 +208,12 @@ class ReplayBuffer(Buffer[Trace]):
             recent_traces = available[:self.batch_size]
         else:
             recent_traces = self.get(self.batch_size)
-        design.info(
+        hud_console.info(
             f"[group-sampler] recent-window histogram: {Counter(getattr(t.task, 'id', 'NA') for t in recent_traces)}"
         )
 
         # Build a fast lookup of earlier traces by task-id (excluding the recent window)
-        design.info(f"[group-sampler] Building earlier traces lookup, buffer size: {len(self.buffer)}")
+        hud_console.info(f"[group-sampler] Building earlier traces lookup, buffer size: {len(self.buffer)}")
         earlier_traces_by_task: dict[str, deque[Trace]] = defaultdict(deque)
         
         # More efficient: iterate through deque without converting to list
@@ -225,12 +225,12 @@ class ReplayBuffer(Buffer[Trace]):
             earlier_traces_by_task[tid].append(tr)
             count += 1
             
-        design.info(f"[group-sampler] Earlier traces built: {count} traces from {len(earlier_traces_by_task)} tasks")
+        hud_console.info(f"[group-sampler] Earlier traces built: {count} traces from {len(earlier_traces_by_task)} tasks")
 
         final_traces: list[Trace] = []
         groups_per_batch = self.batch_size // self.group_size
 
-        design.info(f"[group-sampler] Processing {groups_per_batch} groups")
+        hud_console.info(f"[group-sampler] Processing {groups_per_batch} groups")
         for g_idx in range(groups_per_batch):
             group_start = g_idx * self.group_size
             group = recent_traces[group_start : group_start + self.group_size]
@@ -238,11 +238,11 @@ class ReplayBuffer(Buffer[Trace]):
             # Determine dominant task-id
             counts = Counter(getattr(t.task, "id", "NA") for t in group)
             dominant_tid, _ = counts.most_common(1)[0]
-            design.info(f"[group-sampler] group {g_idx} dominant task: {dominant_tid} ({counts[dominant_tid]}/{self.group_size})")
+            hud_console.info(f"[group-sampler] group {g_idx} dominant task: {dominant_tid} ({counts[dominant_tid]}/{self.group_size})")
 
             homogeneous: list[Trace] = [t for t in group if getattr(t.task, "id", "NA") == dominant_tid]
             needed = self.group_size - len(homogeneous)
-            design.info(f"[group-sampler] Group {g_idx}: homogeneous={len(homogeneous)}, needed={needed}")
+            hud_console.info(f"[group-sampler] Group {g_idx}: homogeneous={len(homogeneous)}, needed={needed}")
 
             # Pull additional traces with same task-id from earlier buffer or duplicate
             while needed > 0:
@@ -251,7 +251,7 @@ class ReplayBuffer(Buffer[Trace]):
                 else:
                     # Duplicate a random existing homogeneous trace (safe for training-time)
                     if not homogeneous:
-                        design.error(f"[group-sampler] Cannot duplicate from empty homogeneous list! dominant_tid={dominant_tid}")
+                        hud_console.error(f"[group-sampler] Cannot duplicate from empty homogeneous list! dominant_tid={dominant_tid}")
                         raise RuntimeError(f"Group {g_idx} has no traces with dominant task {dominant_tid}")
                     homogeneous.append(random.choice(homogeneous))
                 needed -= 1
@@ -270,7 +270,7 @@ class ReplayBuffer(Buffer[Trace]):
             if len(tids) != 1:
                 raise RuntimeError("Homogeneity validation failed for block starting at index {i}")
 
-        design.info(
+        hud_console.info(
             f"[group-sampler] final histogram: {Counter(getattr(t.task,'id','NA') for t in final_traces)}"
         )
         return final_traces

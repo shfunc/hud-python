@@ -23,7 +23,7 @@ import mcp.types as types
 
 from hud import instrument
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult
-from hud.utils.design import HUDDesign
+from hud.utils.hud_console import HUDConsole
 
 from .base import MCPAgent
 
@@ -53,7 +53,7 @@ class GenericOpenAIChatAgent(MCPAgent):
         self.model_name = model_name
         self.completion_kwargs: dict[str, Any] = completion_kwargs or {}
         self.mcp_schemas = []
-        self.design = HUDDesign(logger=logger)
+        self.hud_console = HUDConsole(logger=logger)
 
     @staticmethod
     def _oai_to_mcp(tool_call: Any) -> MCPToolCall:  # type: ignore[valid-type]
@@ -188,7 +188,7 @@ class GenericOpenAIChatAgent(MCPAgent):
                 **extra,
             )
         except Exception as e:
-            self.design.error(f"Error getting response: {e}")
+            self.hud_console.error(f"Error getting response: {e}")
             return AgentResponse(
                 content=f"Error getting response {e}",
                 tool_calls=[],
@@ -228,7 +228,7 @@ class GenericOpenAIChatAgent(MCPAgent):
 
         # Only stop on length (token limit), never on "stop"
         done = choice.finish_reason == "length"
-        self.design.info(f"Done decision: finish_reason={choice.finish_reason}, done={done}")
+        self.hud_console.info(f"Done decision: finish_reason={choice.finish_reason}, done={done}")
         
         return AgentResponse(
             content=msg.content or "",
