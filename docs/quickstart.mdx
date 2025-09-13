@@ -130,16 +130,13 @@ The trace context ensures that the entire task run - from setup through evaluati
 
 ```bash
 # Analyze any MCP environment
-hud analyze hudpython/hud-text-2048:v1.2
+hud analyze hudevals/hud-text-2048:0.1.3
 
 # Debug environment initialization
-hud debug hudpython/hud-text-2048:v1.2
+hud debug hudpython/hud-text-2048:0.1.3
 
 # Start hot-reload development server
 hud dev . --build
-
-# Run HUD tools as MCP server (for Cursor/Claude)
-hud mcp
 ```
 
 <Note>
