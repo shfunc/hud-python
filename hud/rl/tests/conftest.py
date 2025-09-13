@@ -12,9 +12,9 @@ from hud.rl.types import Episode
 def test_config():
     """Create a test configuration."""
     config = Config()
-    config.training.episodes_per_batch = 2
-    config.training.max_training_steps = 1
-    config.actor.parallel_episodes = 1
+    config.training.batch_size = 2
+    config.training.training_steps = 1
+    config.actor.max_parallel_episodes = 1
     config.actor.max_steps_per_episode = 10
     return config
 

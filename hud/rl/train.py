@@ -18,7 +18,7 @@ from hud.rl.actor import Actor
 from hud.rl.buffer import DatasetBuffer, ReplayBuffer
 from hud.rl.config import Config
 from hud.rl.learner import GRPOLearner
-from hud.rl.utils import ensure_dir, load_tasks, set_seed, preprocess_advantages
+from hud.rl.utils import ensure_dir, load_tasks, set_seed, preprocess_advantages, aggregate_metrics_across_ranks
 from hud.rl.vllm_adapter import VLLMAdapter
 from hud.rl.distributed import (
     setup_distributed, cleanup_distributed, is_main_process, 
@@ -73,6 +73,7 @@ async def train(config: Config, tasks: list[Task]) -> None:
     
     # Training state
     step = 0
+    last_metrics = None  # Store last successful metrics for error recovery
     
     if is_main_process():
         design.section_title("\n[2/3] Running training loop...")
@@ -85,20 +86,12 @@ async def train(config: Config, tasks: list[Task]) -> None:
         )
         job_obj.update_status_sync("running")
         job_id = job_obj.id
-        design.info(f"Created job with ID: {job_id}")
     else:
         job_obj = None
         job_id = None
     
     # Broadcast job ID to all ranks
     job_id = broadcast_object(job_id, src=0)
-    design.info(f"Rank {get_global_rank()} using job ID: {job_id}")
-
-    job_obj = hud.create_job(
-        job_id=job_id,
-        name=config.job_name,
-        metadata={"config": config.to_dict()}
-    )
     
     try:
         while len(dataset_buffer) > 0:
@@ -108,17 +101,28 @@ async def train(config: Config, tasks: list[Task]) -> None:
             # Get batch of tasks (all ranks need same tasks)
             tasks = dataset_buffer.get_tasks()
 
+            # Initialize variables on all ranks
+            global_reward_stats = None
+            global_advantage_stats = None
+            
             # Only rank 0 runs tasks and collects traces
             if is_main_process():
+                import time
+                episode_start_time = time.time()
                 traces = await actor.run_tasks(tasks, job_id=job_id)
-                design.info(f"Sampled {len(traces)} traces")
+                episode_time = time.time() - episode_start_time
+                design.info(f"Sampled {len(traces)} traces in {episode_time:.1f}s")
                 trace_buffer.add(traces)
                 
                 # Get all traces from buffer for distribution
                 all_traces = trace_buffer.sample_traces()
 
                 # Preprocess traces to training samples
-                preprocessed_traces = preprocess_advantages(all_traces)
+                preprocessed_traces = preprocess_advantages(all_traces, config.training.group_size)
+                
+                # Store these for later use in metrics
+                global_reward_stats = [trace.reward for trace in all_traces]
+                global_advantage_stats = [sample.advantage for sample in preprocessed_traces]
                 
                 # Distribute traces in groups across ranks
                 num_gpus = get_world_size()
@@ -133,23 +137,47 @@ async def train(config: Config, tasks: list[Task]) -> None:
                     design.info(f"  Rank {rank}: {n_traces} traces ({n_groups} groups)")
                 
                 design.section_title(f"Training on {len(all_traces)} traces")
+                episode_time_value = episode_time
             else:
                 rank_traces = None
+                episode_time_value = None
             
-            # Broadcast each rank's traces
+            # Broadcast each rank's traces and episode time
             rank_traces = broadcast_object(rank_traces, src=0)
+            episode_time_value = broadcast_object(episode_time_value, src=0)
             my_traces = rank_traces[get_global_rank()] if rank_traces else []
             
             # Process only assigned traces
-            metrics = learner.update(my_traces)
-            metrics.update({
-                "advantage": [sample.advantage for sample in my_traces],
-                "reward": [sample.reward for sample in my_traces],
-            })
-            job_obj.log_sync(metrics.to_dict())
+            last_metrics = learner.update(my_traces)
             
-            if step % config.stats_interval == 0:
-                design.key_value_table(metrics.to_dict())
+            # Add episode time (same for all ranks since episodes run on rank 0)
+            if episode_time_value is not None:
+                last_metrics.update({
+                    "episode_time": episode_time_value,
+                })
+            
+            # Aggregate metrics across all GPUs for proper statistics
+            aggregate_metrics_across_ranks(last_metrics)
+            
+            if is_main_process():
+                # Use the global statistics we collected before distribution
+                if global_reward_stats is not None and global_advantage_stats is not None:
+                    last_metrics.update({
+                        "advantage": global_advantage_stats,
+                        "reward": global_reward_stats,
+                    })
+                else:
+                    # Fallback: use only this rank's data
+                    design.warning("Global statistics not available, using partial data")
+                    last_metrics.update({
+                        "advantage": [sample.advantage for sample in my_traces] if my_traces else [],
+                        "reward": [sample.reward for sample in my_traces] if my_traces else [],
+                    })
+                
+                job_obj.log_sync(last_metrics.to_dict())
+                
+                if step % config.stats_interval == 0:
+                    design.key_value_table(last_metrics.to_dict())
             
             # Increment step counter on all processes
             step += 1
@@ -180,13 +208,30 @@ async def train(config: Config, tasks: list[Task]) -> None:
             if job_obj:
                 job_obj.update_status_sync("completed")
     except Exception as e:
-        # Update job status to failed on error
-        if is_main_process() and job_obj:
-            job_obj.update_status_sync("failed")
+        # Log error and any available metrics before failing
+        design.error(f"Training failed on rank {get_global_rank()}: {e}")
+        
+        if is_main_process():
+            # Log final metrics if we have any
+            if last_metrics and job_obj:
+                try:
+                    job_obj.log_sync(last_metrics.to_dict())
+                except:
+                    pass  # Best effort logging
+            
+            # Update job status to failed
+            if job_obj:
+                job_obj.update_status_sync("failed")
+        
+        # Don't re-raise immediately to allow cleanup
         raise
+        
     finally:
-        # Synchronize before cleanup
-        synchronize()
+        # Try to sync one last time, but don't fail if it doesn't work
+        try:
+            synchronize()
+        except:
+            design.warning("Failed to synchronize during cleanup")
         
         # Clean up distributed environment
         cleanup_distributed()
@@ -216,7 +261,7 @@ async def main() -> None:
     if args.test:
         design.info("[TEST MODE] Using minimal configuration")
         eps = 6
-        config.training.episodes_per_batch = eps
+        config.training.batch_size = eps
         config.actor.max_parallel_episodes = 12
         config.training.group_size = eps
         config.training.mini_batch_size = 3
@@ -225,13 +270,13 @@ async def main() -> None:
 
     # Calculate the memory usage
     INITIAL_MEMORY = 8.0
-    SCALING_FACTOR = 3.5
+    SCALING_FACTOR = 2
     constant = config.training.mini_batch_size * config.actor.max_steps_per_episode
-    quadratic = (config.model.max_pixels / (28 * 28 * 256)) ** 2
+    quadratic = (config.model.max_pixels / (28 * 28 * 256)) ** (1.4)
     total_memory = INITIAL_MEMORY + SCALING_FACTOR * constant * quadratic
     design.info(f"Total memory usage: {total_memory:.2f} GB")
     if total_memory > 75.0:
-        design.error("Potential memory usage is too high, decrease either training steps or mini batch size")
+        design.warning("Potential memory usage is too high, decrease either training steps or mini batch size")
         exit(1)
     
     # Load tasks

@@ -12,13 +12,14 @@ class ModelConfig:
     lora_alpha: int = 64
     lora_dropout: float = 0.05
     target_modules: tuple[str, ...] = (
-        "q_proj", "k_proj", "v_proj", "o_proj",
-        "gate_proj", "up_proj", "down_proj" #, "vision_language_merger.*"
+        "q_proj", "v_proj", "o_proj",
+        "visual.merger.mlp.*",
     )
     min_pixels: int = 256 * 28 * 28
-    max_pixels: int = 256 * 28 * 28
+    max_pixels: int = 512 * 28 * 28
     attn_implementation: str = "flash_attention_2"
     use_liger: bool = True
+    gradient_checkpointing: bool = True
 
 
 @dataclass
@@ -31,21 +32,22 @@ class TrainingConfig:
 
     # Batch parameters
     epochs: int = 2
-    batch_size: int = 18
+    batch_size: int = 36
     group_size: int = 6
-    mini_batch_size: int = 3
+    mini_batch_size: int = 2
 
     # Replay buffer parameters
     buffer_steps: int = 6
     select_strategy: Literal["recent", "variance", "random"] = "variance"
 
     # Training hyperparameters
-    lr: float = 1e-5
+    lr: float = 5e-5
     kl_beta: float = 0.001
     grad_clip: float = 1.0
+    top_eps: float = 0.2
+    bottom_eps: float = 0.1
 
     # Adam hyperparameters
-    clip_eps: float = 0.2
     use_8bit_optimizer: bool = True
     adam_betas: tuple[float, float] = (0.9, 0.999)
     adam_eps: float = 1e-8
@@ -59,7 +61,7 @@ class ActorConfig:
     """Actor/episode collection configuration."""
     # Execution parameters
     max_steps_per_episode: int = 6
-    max_parallel_episodes: int = 36
+    max_parallel_episodes: int = 48
     max_new_tokens: int = 2048
     force_tool_choice: bool = False
 

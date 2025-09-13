@@ -18,7 +18,7 @@ except ImportError:
     LIGER_AVAILABLE = False
 
 from hud.utils.design import HUDDesign
-from hud.rl.utils import get_memory_usage, prepare_inputs
+from hud.rl.utils import get_memory_usage, get_gpu_utilization, prepare_inputs
 from hud.rl.distributed import (
     get_local_rank, get_world_size, is_main_process, all_reduce_mean, get_global_rank
 )
@@ -67,8 +67,8 @@ class GRPOLearner:
         )
         
         # Load policy model with LoRA
-        # Try to use Flash Attention 2 if available
-        attn_implementation = "flash_attention_2"
+        # Use attention implementation from config
+        attn_implementation = model_cfg.attn_implementation
         try:
             policy = Qwen2_5_VLForConditionalGeneration.from_pretrained(
                 model_cfg.base_model,
@@ -77,17 +77,49 @@ class GRPOLearner:
             )
             design.info_log(f"Using {attn_implementation} for attention")
         except (ImportError, ValueError) as e:
-            # Fallback to default attention if Flash Attention is not available
-            design.info_log(f"Flash Attention 2 not available ({e}), using default attention")
-            policy = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-                model_cfg.base_model,
-                torch_dtype=torch.bfloat16,
-            )
+            # Only fallback if explicitly using flash_attention_2 and it's not available
+            if attn_implementation == "flash_attention_2":
+                design.info_log(f"Flash Attention 2 not available ({e}), using eager attention")
+                policy = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                    model_cfg.base_model,
+                    torch_dtype=torch.bfloat16,
+                    attn_implementation="eager",
+                )
+            else:
+                raise  # Re-raise if it's a different error
         
         # Move model to device
         policy = policy.to(self.device)
         # Enable gradient checkpointing for memory efficiency
-        policy.gradient_checkpointing_enable()
+        if model_cfg.gradient_checkpointing:
+            policy.gradient_checkpointing_enable()
+            design.info_log("Gradient checkpointing enabled for memory efficiency")
+        
+        # Apply vision-specific optimizations
+        if hasattr(policy, 'model') and hasattr(policy.model, 'vision_tower'):
+            vision_tower = policy.model.vision_tower
+            
+            # Freeze vision tower if configured
+            if model_cfg.freeze_vision_tower:
+                for param in vision_tower.parameters():
+                    param.requires_grad = False
+                design.info_log("Vision tower frozen to save memory")
+            
+            # Enable gradient checkpointing for vision tower
+            if model_cfg.vision_gradient_checkpointing and hasattr(vision_tower, 'gradient_checkpointing_enable'):
+                vision_tower.gradient_checkpointing_enable()
+                design.info_log("Vision tower gradient checkpointing enabled")
+            
+            # Set vision compute dtype
+            if model_cfg.vision_compute_dtype == "float16":
+                vision_tower = vision_tower.half()
+            elif model_cfg.vision_compute_dtype == "bfloat16":
+                vision_tower = vision_tower.to(torch.bfloat16)
+            
+            # Apply vision feature selection strategy
+            if model_cfg.vision_feature_select_strategy == "cls_only":
+                # This would need model-specific implementation
+                design.info_log("Vision feature selection: CLS token only (saves memory)")
         
         # Add LoRA adapters
         lora_config = LoraConfig(
@@ -109,13 +141,23 @@ class GRPOLearner:
         base_model = policy.module if hasattr(policy, 'module') else policy
         trainable_params = [p for _, p in base_model.named_parameters() if p.requires_grad]
         
-        design.info("Using 8-bit AdamW optimizer from bitsandbytes")
-        optimizer = bnb.optim.AdamW8bit(
-            trainable_params,
-            lr=self.config.training.lr,
-            betas=self.config.training.adam_betas,
-            eps=self.config.training.adam_eps
-        )
+        # Use 8-bit optimizer if configured
+        if self.config.training.use_8bit_optimizer:
+            design.info("Using 8-bit AdamW optimizer from bitsandbytes")
+            optimizer = bnb.optim.AdamW8bit(
+                trainable_params,
+                lr=self.config.training.lr,
+                betas=self.config.training.adam_betas,
+                eps=self.config.training.adam_eps
+            )
+        else:
+            design.info("Using standard FP32 AdamW optimizer")
+            optimizer = torch.optim.AdamW(
+                trainable_params,
+                lr=self.config.training.lr,
+                betas=self.config.training.adam_betas,
+                eps=self.config.training.adam_eps
+            )
         
         # Log optimizer info
         design.info_log(f"Optimizer: {type(optimizer).__name__}")
@@ -139,6 +181,9 @@ class GRPOLearner:
     
     def update(self, samples: list[TrainingSample]) -> TrainingMetrics:
         """Perform a gradient update on a batch."""
+        import time
+        training_start_time = time.time()
+        
         # Always create metrics for synchronization
         self.metrics.append(TrainingMetrics())
         metrics = self.metrics[-1]
@@ -147,8 +192,11 @@ class GRPOLearner:
         if not samples or len(samples) == 0:
             if self.world_size > 1:
                 design.warning_log("Empty batch, performing dummy backward for DDP sync")
-                # Perform a dummy forward/backward to maintain DDP synchronization
-                dummy_loss = torch.tensor(0.0, device=self.device, requires_grad=True)
+                # Perform a dummy forward/backward with the model to maintain DDP synchronization
+                dummy_input_ids = torch.zeros((1, 1), dtype=torch.long, device=self.device)
+                dummy_inputs = {"input_ids": dummy_input_ids}
+                dummy_output = self.policy(**dummy_inputs)
+                dummy_loss = dummy_output.logits.sum() * 0  # Zero loss but uses model
                 dummy_loss.backward()
                 self.optimizer.step()
                 self.optimizer.zero_grad()
@@ -180,19 +228,19 @@ class GRPOLearner:
                         sample.old_logprobs = self.compute_logprobs(
                             self.policy,
                             sample.inputs,
-                        )
+                        ).cpu()  # Move to CPU immediately
                     policy_module = self.policy.module if hasattr(self.policy, 'module') else self.policy
                     with policy_module.disable_adapter():
                         for sample in samples:
                             sample.ref_logprobs = self.compute_logprobs(
                                 self.policy,
                                 sample.inputs,
-                            )
+                            ).cpu()  # Move to CPU immediately
 
                 progress.update(f"Training group {i+1}/{len(groups)} for {self.config.training.epochs} epochs")
                 for epoch in range(self.config.training.epochs):
-                    mini_batch_size = self.config.training.mini_batch_size
-                    grad_accum_steps = len(samples) // mini_batch_size
+                    mini_batch_size = min(self.config.training.mini_batch_size, len(samples))
+                    grad_accum_steps = max(1, len(samples) // mini_batch_size)
                     
                     self.optimizer.zero_grad()
                     accumulated_loss = 0.0
@@ -206,15 +254,18 @@ class GRPOLearner:
                             
                         step_samples = samples[start_idx:end_idx]
                         
-                        progress.update(f"GPU Memory before compute: {get_memory_usage():.2f} GB")
-                            
+                        # Track GPU utilization during compute
+                        gpu_util_before = get_gpu_utilization()
+                        
                         loss = self.compute_loss(step_samples) / grad_accum_steps
                         accumulated_loss += loss.item() * grad_accum_steps
 
-                        mem_after = get_memory_usage()
-                        progress.update(f"GPU Memory after compute: {mem_after:.2f} GB")
+                        gpu_util_after = get_gpu_utilization()
+                        gpu_mem = get_memory_usage()
+                        progress.update(f"GPU Util: {gpu_util_after:.1f}% | Memory: {gpu_mem:.2f} GB")
                         metrics.update({
-                            "gpu_memory": mem_after,
+                            "gpu_util": gpu_util_after,  # Track peak utilization
+                            "gpu_memory": gpu_mem,  # Track memory usage
                         })
                         
                         loss.backward()
@@ -230,6 +281,16 @@ class GRPOLearner:
         
         # Log summary after progress completes
         design.info_log(f"Gradient update completed: {len(groups)} groups, final loss: {accumulated_loss:.4f}")
+        
+        # Calculate training time and throughput
+        training_time = time.time() - training_start_time
+        total_samples = len(samples)
+        samples_per_second = total_samples / training_time if training_time > 0 else 0.0
+        
+        metrics.update({
+            "training_time": training_time,
+            "samples_per_second": samples_per_second,
+        })
         
         return metrics
     
@@ -248,7 +309,7 @@ class GRPOLearner:
             )
             
             # Clip log probability differences to prevent numerical explosion
-            log_ratio = pol_logp - sample.old_logprobs
+            log_ratio = pol_logp - sample.old_logprobs.to(self.device)
             log_ratio = torch.clamp(log_ratio, min=-20.0, max=20.0)
             ratio_tok = torch.exp(log_ratio)
             ratio = ratio_tok.mean() if training_cfg.token_agg == "mean" else ratio_tok.sum()
@@ -256,15 +317,15 @@ class GRPOLearner:
             unclipped = ratio * sample.advantage
             clipped = torch.clamp(
                 ratio,
-                1 - training_cfg.clip_eps,
-                1 + training_cfg.clip_eps
+                1 - training_cfg.top_eps,
+                1 + training_cfg.bottom_eps
             ) * sample.advantage
             
             policy_term = torch.minimum(unclipped, clipped)
             policy_terms.append(policy_term)
             
             # Clip log probability differences to prevent numerical explosion in KL
-            log_rho = pol_logp - sample.ref_logprobs
+            log_rho = pol_logp - sample.ref_logprobs.to(self.device)
             log_rho = torch.clamp(log_rho, min=-20.0, max=20.0)
             rho_tok = torch.exp(log_rho)
             kl_approx = (rho_tok - torch.log(rho_tok) - 1).mean()
@@ -280,7 +341,7 @@ class GRPOLearner:
         policy_loss = torch.stack(policy_terms).mean()
         kl_loss = torch.stack(kl_terms).mean()
         
-        total_loss = policy_loss - training_cfg.kl_beta * kl_loss
+        total_loss = -policy_loss + training_cfg.kl_beta * kl_loss
         
         metrics.update({
             "loss": total_loss.item(),

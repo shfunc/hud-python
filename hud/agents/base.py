@@ -372,16 +372,28 @@ class MCPAgent(ABC):
             error = str(e)
 
         # Build result
-        # Check both local error and response error flag
-        has_error = error is not None or (final_response and final_response.isError is True)
-        trace_result = Trace(
-            reward=0.0,  # Default - will be set by task evaluation if applicable
-            done=True,
-            messages=messages,
-            content=final_response.content if final_response else error,
-            isError=has_error,
-            info={"error": error} if error else {},
-        )
+        # Ensure isError is always a boolean
+        if error is not None:
+            is_error = True
+        elif final_response and hasattr(final_response, 'isError') and final_response.isError:
+            is_error = True
+        else:
+            is_error = False
+        
+        # Ensure all parameters are the correct type
+        trace_params = {
+            "reward": 0.0,
+            "done": True,
+            "messages": messages,
+            "content": final_response.content if final_response else error,
+            "isError": is_error,
+            "info": {"error": error} if error else {},
+        }
+        
+        # Validate types before creating Trace
+        assert isinstance(trace_params["isError"], bool), f"isError must be bool, got {type(trace_params['isError'])}: {trace_params['isError']}"
+        
+        trace_result = Trace(**trace_params)
 
         # Populate trace steps from current context
         trace_result.populate_from_context()

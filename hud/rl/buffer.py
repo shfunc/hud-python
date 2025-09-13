@@ -42,7 +42,7 @@ class Buffer(Generic[T]):
             return list(self.buffer)
         if n > len(self.buffer):
             raise ValueError("Not enough items in buffer")
-        return list(self.buffer)[:n]
+        return list(self.buffer)[-n:]
 
     def consume(self, n: int = 0) -> list[T]:
         """Consume items from the buffer."""
@@ -159,7 +159,11 @@ class DatasetBuffer(Buffer[Task]):
     def get_tasks(self, consume: bool = True) -> list[Task]:
         """Get tasks for a batch."""
         tasks = self.consume(self.groups_per_batch) if consume else self.get(self.groups_per_batch)
-        return tasks * self.group_size
+        # Create groups where each group contains group_size copies of the same task
+        result = []
+        for task in tasks:
+            result.extend([task] * self.group_size)
+        return result
 
 
 class ReplayBuffer(Buffer[Trace]):
@@ -189,59 +193,83 @@ class ReplayBuffer(Buffer[Trace]):
             raise ValueError(f"Invalid select strategy: {self.select_strategy}")
     
     def _sample_high_variance_traces(self) -> list[Trace]:
-        """Sample traces from tasks with high reward variance."""
-        from collections import defaultdict
+        from collections import Counter, defaultdict, deque
         
-        # Step 1: Get recent traces (buffer_steps determines how many recent batches to consider)
-        recent_traces = self.get(self.batch_size)
-        
-        # Step 2: Get unique task IDs from recent traces
-        recent_task_ids = set()
-        for trace in recent_traces:
-            if hasattr(trace, "task") and hasattr(trace.task, "id"):
-                recent_task_ids.add(trace.task.id)
-        
-        if not recent_task_ids:
-            return self.get(self.batch_size)
-        
-        # Step 3: Group ALL traces by task ID (only for tasks seen recently)
-        task_groups: dict[str, list[Trace]] = defaultdict(list)
-        for trace in self.buffer:
-            if hasattr(trace, "task") and hasattr(trace.task, "id") and trace.task.id in recent_task_ids:
-                task_groups[trace.task.id].append(trace)
-        
-        # Step 4: For each task, find the subset with highest variance
-        all_selected_traces: list[Trace] = []
-        
-        for traces in task_groups.values():
-            if len(traces) < 2:
-                all_selected_traces.extend(traces)
-                continue
-            
-            best_subset = self._find_max_variance_subset(traces, self.group_size)
-            all_selected_traces.extend(best_subset)
-        
-        if len(all_selected_traces) < self.batch_size:
-            design.warning(f"Not enough traces to sample ({len(all_selected_traces)}/{self.batch_size})")
-            return self.get(self.batch_size)
-        
-        return all_selected_traces
-    
-    def _find_max_variance_subset(self, traces: list[Trace], target_size: int) -> list[Trace]:
-        """Find subset of traces with maximum variance in rewards."""
-        if len(traces) <= target_size:
-            return traces
+        # Handle case where buffer has fewer traces than batch_size
+        if len(self.buffer) < self.batch_size:
+            design.warning(f"[group-sampler] Buffer has only {len(self.buffer)} traces, need {self.batch_size}")
+            # Pad with duplicates to reach batch_size
+            available = list(self.buffer)
+            while len(available) < self.batch_size:
+                available.extend(available[:min(len(available), self.batch_size - len(available))])
+            recent_traces = available[:self.batch_size]
+        else:
+            recent_traces = self.get(self.batch_size)
+        design.info(
+            f"[group-sampler] recent-window histogram: {Counter(getattr(t.task, 'id', 'NA') for t in recent_traces)}"
+        )
 
-        sorted_traces = sorted(traces, key=lambda t: t.reward)
+        # Build a fast lookup of earlier traces by task-id (excluding the recent window)
+        design.info(f"[group-sampler] Building earlier traces lookup, buffer size: {len(self.buffer)}")
+        earlier_traces_by_task: dict[str, deque[Trace]] = defaultdict(deque)
         
-        # Pick traces at regular intervals to maximize spread
-        indices = []
-        step = len(sorted_traces) / target_size
-        for i in range(target_size):
-            idx = int(i * step)
-            indices.append(min(idx, len(sorted_traces) - 1))
-        
-        # Remove duplicates while preserving order
-        indices = list(dict.fromkeys(indices))
-        
-        return [sorted_traces[i] for i in indices]
+        # More efficient: iterate through deque without converting to list
+        count = 0
+        for i, tr in enumerate(self.buffer):
+            if i < self.batch_size:
+                continue  # skip recent window
+            tid = getattr(tr.task, "id", "NA")
+            earlier_traces_by_task[tid].append(tr)
+            count += 1
+            
+        design.info(f"[group-sampler] Earlier traces built: {count} traces from {len(earlier_traces_by_task)} tasks")
+
+        final_traces: list[Trace] = []
+        groups_per_batch = self.batch_size // self.group_size
+
+        design.info(f"[group-sampler] Processing {groups_per_batch} groups")
+        for g_idx in range(groups_per_batch):
+            group_start = g_idx * self.group_size
+            group = recent_traces[group_start : group_start + self.group_size]
+
+            # Determine dominant task-id
+            counts = Counter(getattr(t.task, "id", "NA") for t in group)
+            dominant_tid, _ = counts.most_common(1)[0]
+            design.info(f"[group-sampler] group {g_idx} dominant task: {dominant_tid} ({counts[dominant_tid]}/{self.group_size})")
+
+            homogeneous: list[Trace] = [t for t in group if getattr(t.task, "id", "NA") == dominant_tid]
+            needed = self.group_size - len(homogeneous)
+            design.info(f"[group-sampler] Group {g_idx}: homogeneous={len(homogeneous)}, needed={needed}")
+
+            # Pull additional traces with same task-id from earlier buffer or duplicate
+            while needed > 0:
+                if earlier_traces_by_task[dominant_tid]:
+                    homogeneous.append(earlier_traces_by_task[dominant_tid].popleft())
+                else:
+                    # Duplicate a random existing homogeneous trace (safe for training-time)
+                    if not homogeneous:
+                        design.error(f"[group-sampler] Cannot duplicate from empty homogeneous list! dominant_tid={dominant_tid}")
+                        raise RuntimeError(f"Group {g_idx} has no traces with dominant task {dominant_tid}")
+                    homogeneous.append(random.choice(homogeneous))
+                needed -= 1
+
+            assert len(homogeneous) == self.group_size
+            # Final validation for this group
+            if any(getattr(t.task, "id", "NA") != dominant_tid for t in homogeneous):
+                raise RuntimeError(f"Group {g_idx} is not homogeneous after sampling")
+
+            final_traces.extend(homogeneous)
+
+        # Global validation
+        for i in range(0, len(final_traces), self.group_size):
+            block = final_traces[i : i + self.group_size]
+            tids = {getattr(t.task, 'id', 'NA') for t in block}
+            if len(tids) != 1:
+                raise RuntimeError("Homogeneity validation failed for block starting at index {i}")
+
+        design.info(
+            f"[group-sampler] final histogram: {Counter(getattr(t.task,'id','NA') for t in final_traces)}"
+        )
+        return final_traces
+
+        # --------------------------------------------------------------------

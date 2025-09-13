@@ -45,6 +45,84 @@ def get_memory_usage() -> float:
     return 0.0
 
 
+def get_gpu_utilization() -> float:
+    """Get current GPU utilization percentage (0-100)."""
+    if not torch.cuda.is_available():
+        return 0.0
+    
+    try:
+        import nvidia_ml_py as nvml
+        nvml.nvmlInit()
+        device_id = torch.cuda.current_device()
+        handle = nvml.nvmlDeviceGetHandleByIndex(device_id)
+        util = nvml.nvmlDeviceGetUtilizationRates(handle)
+        return float(util.gpu)
+    except Exception:
+        # Fallback: estimate based on memory usage
+        # This is less accurate but works without nvidia-ml-py
+        return min(100.0, (torch.cuda.memory_allocated() / torch.cuda.max_memory_allocated()) * 100)
+
+
+def aggregate_metrics_across_ranks(metrics: Any, metrics_to_aggregate: list[str] | None = None) -> None:
+    """Aggregate metrics across all ranks for proper distributed statistics.
+    
+    Args:
+        metrics: TrainingMetrics object to update in-place
+        metrics_to_aggregate: List of metric names to aggregate. If None, aggregates all numeric metrics.
+    
+    This function:
+    1. Gathers metric values from all ranks
+    2. Computes proper mean/std across all GPUs
+    3. Updates the metrics object in-place (only on rank 0)
+    """
+    from hud.rl.distributed import get_world_size, get_local_rank, is_main_process
+    
+    if get_world_size() <= 1:
+        return  # Nothing to aggregate in single GPU mode
+    
+    # Default metrics that typically vary across GPUs
+    if metrics_to_aggregate is None:
+        metrics_to_aggregate = ["training_time", "samples_per_second", "gpu_util", "gpu_memory", "grad_norm"]
+    
+    # Collect current values from this rank
+    local_values = {}
+    for metric_name in metrics_to_aggregate:
+        if hasattr(metrics, metric_name):
+            metric_obj = getattr(metrics, metric_name)
+            # Get the last value if available, otherwise 0
+            local_values[metric_name] = metric_obj.values[-1] if metric_obj.values else 0.0
+    
+    # Convert to tensor for distributed gathering
+    values_tensor = torch.tensor(
+        list(local_values.values()), 
+        device=f"cuda:{get_local_rank()}",
+        dtype=torch.float32
+    )
+    
+    # Gather from all ranks
+    if is_main_process():
+        gathered_tensors = [torch.zeros_like(values_tensor) for _ in range(get_world_size())]
+    else:
+        gathered_tensors = None
+    
+    torch.distributed.gather(values_tensor, gathered_tensors, dst=0)
+    
+    # Update metrics on main process only
+    if is_main_process() and gathered_tensors:
+        # Reshape: [num_gpus, num_metrics]
+        all_values = torch.stack(gathered_tensors).cpu().numpy()
+        
+        # Update each metric with aggregated values
+        for i, metric_name in enumerate(local_values.keys()):
+            metric_obj = getattr(metrics, metric_name)
+            gpu_values = all_values[:, i].tolist()
+            
+            # Replace single value with all GPU values
+            metric_obj.values = gpu_values
+            metric_obj.mean = float(np.mean(gpu_values))
+            metric_obj.std = float(np.std(gpu_values))
+
+
 def load_tasks(tasks_input: str | list[dict], system_prompt: str | None = None) -> list[Task]:
     """Load tasks from various sources.
     
@@ -331,24 +409,29 @@ def prepare_inputs(
     return [inputs]
 
 
-def preprocess_advantages(group: list[Trace]) -> list[TrainingSample]:
+def preprocess_advantages(group: list[Trace], group_size: int) -> list[TrainingSample]:
     """Preprocess a group of traces."""
-    rewards = np.array([trace.reward for trace in group])
-    mean_reward = np.mean(rewards)
-    std_reward = np.std(rewards)
-    
-    # Normalize advantages
-    samples = [TrainingSample(**trace.model_dump()) for trace in group]
-    for sample, reward in zip(samples, rewards, strict=True):
-        if sample.isError:
-            continue
-        if std_reward < 1e-6:
-            sample.advantage = 0.0
-            continue
-        advantage_value = ((reward - mean_reward) / std_reward)
-        sample.advantage = float(advantage_value)
+    groups = [group[i:i+group_size] for i in range(0, len(group), group_size)]
+    all_samples = []
+    for group in groups:
+        rewards = np.array([trace.reward for trace in group])
+        mean_reward = np.mean(rewards)
+        std_reward = np.std(rewards)
+        
+        # Normalize advantages
+        samples = [TrainingSample(**trace.model_dump()) for trace in group]
+        for sample, reward in zip(samples, rewards, strict=True):
+            if sample.isError:
+                sample.advantage = 0.0
+                continue
+            if std_reward < 1e-6:
+                sample.advantage = 0.0
+                continue
+            advantage_value = ((reward - mean_reward) / std_reward)
+            sample.advantage = float(advantage_value)
+        all_samples.extend(samples)
 
-    return samples
+    return all_samples
 
 # def concat_training_samples(
 #     samples: list[TrainingSample],

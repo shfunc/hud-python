@@ -56,8 +56,11 @@ class TrainingMetrics:
     tokens: Metric = Field(default=Metric())
 
     # Computation metrics
-    gpu_memory: Metric = Field(default=Metric())
-    cpu_memory: Metric = Field(default=Metric())
+    gpu_util: Metric = Field(default=Metric())  # GPU utilization percentage
+    gpu_memory: Metric = Field(default=Metric())  # GPU memory usage in GB
+    episode_time: Metric = Field(default=Metric())  # Time to run episodes (actor)
+    training_time: Metric = Field(default=Metric())  # Time for gradient updates (learner)
+    samples_per_second: Metric = Field(default=Metric())  # Training throughput
 
     def update(self, metrics: dict[str, Any]) -> None:
         """Update metrics."""
