@@ -234,7 +234,7 @@ def rl_command(
         from .presets import estimate_memory_usage
         estimated_memory = estimate_memory_usage(
             config.training.mini_batch_size,
-            config.training.max_training_steps,
+            config.actor.max_steps_per_episode,
             config.model.max_pixels
         )
     else:
@@ -297,7 +297,7 @@ def rl_command(
                 config = load_config(temp_config_path)
                 estimated_memory = estimate_memory_usage(
                     config.training.mini_batch_size,
-                    config.training.max_training_steps,
+                    config.actor.max_steps_per_episode,
                     config.model.max_pixels
                 )
                 display_config_summary(config, len(tasks), gpu_info, estimated_memory)
@@ -356,7 +356,7 @@ def rl_command(
             # Warn about efficiency
             if gpu_allocation.get('parallel_efficiency', 1.0) < 0.8:
                 console.print(f"\n[yellow]⚠️  GPU efficiency: {gpu_allocation['parallel_efficiency']*100:.0f}%[/yellow]")
-                console.print(f"[yellow]Consider adjusting episodes_per_batch to {len(training_gpus) * config.training.group_size} for optimal performance[/yellow]")
+                console.print(f"[yellow]Consider adjusting batch_size to {len(training_gpus) * config.training.group_size} for optimal performance[/yellow]")
         else:
             console.print(f"[cyan]{gpu_allocation.get('reason', 'Using single GPU')}[/cyan]")
     
@@ -389,7 +389,7 @@ def rl_command(
         console.print(f"[red]❌ No available GPUs for training![/red]")
         raise typer.Exit(1)
     
-    # Always adjust episodes_per_batch based on number of training GPUs
+    # Always adjust batch_size based on number of training GPUs
     config = adjust_config_for_ddp(config, len(training_gpus))
     
     # Save updated config (for both DDP and single GPU)

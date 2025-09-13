@@ -52,7 +52,7 @@ def display_preset_table(presets: List[Dict[str, Any]], gpu_memory_gb: float) ->
             str(preset['max_steps_per_episode']),
             str(preset['mini_batch_size']),
             str(preset['group_size']),
-            str(preset['episodes_per_batch']),
+            str(preset['batch_size']),
         ]
         if 'tasks_per_hour' in preset:
             row.extend([
@@ -104,10 +104,10 @@ def display_config_summary(config: Config, tasks_count: int, gpu_info: Dict[str,
     training_table.add_row("Learning Rate", f"{config.training.lr:.1e}")
     training_table.add_row("Epochs", str(config.training.epochs))
     training_table.add_row("Mini Batch Size", str(config.training.mini_batch_size))
-    training_table.add_row("Episodes per Batch", str(config.training.episodes_per_batch))
+    training_table.add_row("Batch Size", str(config.training.batch_size))
     training_table.add_row("Group Size", str(config.training.group_size))
-    training_table.add_row("Max Training Steps", str(config.training.max_training_steps))
-    training_table.add_row("Parallel Episodes", str(config.actor.parallel_episodes))
+    training_table.add_row("Training Steps", str(config.training.training_steps))
+    training_table.add_row("Max Parallel Episodes", str(config.actor.max_parallel_episodes))
     
     console.print(training_table)
     

@@ -372,12 +372,14 @@ class MCPAgent(ABC):
             error = str(e)
 
         # Build result
+        # Check both local error and response error flag
+        has_error = error is not None or (final_response and final_response.isError is True)
         trace_result = Trace(
             reward=0.0,  # Default - will be set by task evaluation if applicable
             done=True,
             messages=messages,
-            content=final_response.content if final_response else None,
-            isError=error is not None,
+            content=final_response.content if final_response else error,
+            isError=has_error,
             info={"error": error} if error else {},
         )
 
