@@ -999,6 +999,16 @@ def rl(
         "-v",
         help="Enable verbose output",
     ),
+    modal: bool = typer.Option(
+        False,
+        "--modal",
+        help="Run training on Modal",
+    ),
+    gpu: str = typer.Option(
+        "H100:2",
+        "--gpu",
+        help="GPU type to use for training",
+    ),
 ) -> None:
     """🎯 Run GRPO reinforcement learning training on tasks."""
     # Import from the rl module
@@ -1011,6 +1021,8 @@ def rl(
         output_dir=output_dir,
         restart=restart,
         verbose=verbose,
+        modal=modal,
+        modal_gpu=gpu,
     )
 
 

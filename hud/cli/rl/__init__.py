@@ -81,6 +81,17 @@ def rl_command(
         "--vllm-gpu",
         help="Specific GPU for vLLM server",
     ),
+    # Modal options
+    modal: bool = typer.Option(
+        False,
+        "--modal",
+        help="Run training on Modal cloud infrastructure",
+    ),
+    modal_gpu: str = typer.Option(
+        "H100",
+        "--modal-gpu",
+        help="GPU type for Modal (e.g., H100, A100, L40S)",
+    ),
 ):
     """Run GRPO reinforcement learning training on tasks."""
     # Configure logging based on verbose flag BEFORE any output
@@ -106,6 +117,28 @@ def rl_command(
         logging.basicConfig(level=logging.INFO)
     
     console.print("\n[bold cyan]🚀 HUD RL Training[/bold cyan]\n")
+    
+    # Check if we should run on Modal
+    if modal:
+        try:
+            from .modal_runner import launch_on_modal
+        except ImportError:
+            console.print("[red]❌ Modal not installed. Install with: pip install modal[/red]")
+            raise typer.Exit(1)
+        
+        # Launch on Modal and exit
+        launch_on_modal(
+            tasks_file=tasks_file,
+            model=model,
+            config_file=config_file,
+            output_dir=output_dir,
+            verbose=verbose,
+            modal_gpu=modal_gpu,
+            no_ddp=no_ddp,
+            ddp_gpus=ddp_gpus,
+            vllm_gpu=vllm_gpu,
+        )
+        return
     
     # Check Python version compatibility
     python_version = sys.version_info
@@ -263,69 +296,74 @@ def rl_command(
     # Display configuration summary
     display_config_summary(config, len(tasks), gpu_info, estimated_memory)
     
-    # Step 6: Ask for confirmation
-    console.print("\n[bold yellow]Options:[/bold yellow]")
-    console.print("  • Type [green]'start'[/green] to begin training")
-    console.print("  • Type [cyan]'edit'[/cyan] to open config in your editor")
-    console.print("  • Type [red]'cancel'[/red] to abort")
-    console.print("\n[bold]Your choice:[/bold] ", end="")
-    
-    while True:
-        choice = input().strip().lower()
+    # Step 6: Ask for confirmation (skip if config was provided)
+    if not config_file:
+        console.print("\n[bold yellow]Options:[/bold yellow]")
+        console.print("  • Type [green]'start'[/green] to begin training")
+        console.print("  • Type [cyan]'edit'[/cyan] to open config in your editor")
+        console.print("  • Type [red]'cancel'[/red] to abort")
+        console.print("\n[bold]Your choice:[/bold] ", end="")
         
-        if choice == "start":
-            # Reload config in case it was edited
-            config = load_config(temp_config_path)
-            break
-        elif choice == "edit":
-            # Default to nano if EDITOR is not set
-            editor = os.environ.get('EDITOR', 'nano')
+        while True:
+            choice = input().strip().lower()
             
-            # Show nano instructions if using nano
-            if editor == 'nano':
-                console.print("\n[cyan]Opening config in nano editor...[/cyan]")
-                console.print("[yellow]Tips:[/yellow]")
-                console.print("  • Edit the configuration values as needed")
-                console.print("  • Press [bold]Ctrl+O[/bold] then [bold]Enter[/bold] to save")
-                console.print("  • Press [bold]Ctrl+X[/bold] to exit")
-                console.print("  • Press [bold]Ctrl+C[/bold] to cancel without saving\n")
-                input("Press Enter to continue...")
-            
-            try:
-                subprocess.run([editor, str(temp_config_path)], check=True)
-                # Reload and display updated config
+            if choice == "start":
+                # Reload config in case it was edited
                 config = load_config(temp_config_path)
-                estimated_memory = estimate_memory_usage(
-                    config.training.mini_batch_size,
-                    config.actor.max_steps_per_episode,
-                    config.model.max_pixels
-                )
-                display_config_summary(config, len(tasks), gpu_info, estimated_memory)
-                console.print("\n[bold]Type 'start' to begin or 'cancel' to abort:[/bold] ", end="")
-            except subprocess.CalledProcessError:
-                console.print(f"\n[yellow]Editor closed without saving or was cancelled.[/yellow]")
-                console.print("[bold]Your choice:[/bold] ", end="")
-            except Exception as e:
-                console.print(f"\n[red]Failed to open editor: {e}[/red]")
-                console.print(f"[yellow]Please edit {temp_config_path} manually and type 'start' when ready.[/yellow]")
-                console.print("[bold]Your choice:[/bold] ", end="")
-        elif choice == "cancel":
-            console.print("[red]Training cancelled[/red]")
-            
-            # Ask if they want to save the config
-            if typer.confirm("Save this configuration for later?", default=True):
-                config_path = Path("rl_config.json")
-                save_config(config, config_path)
-            
-            # Clean up temp file
-            try:
-                temp_config_path.unlink()
-            except:
-                pass
+                break
+            elif choice == "edit":
+                # Default to nano if EDITOR is not set
+                editor = os.environ.get('EDITOR', 'nano')
                 
-            raise typer.Exit(0)
-        else:
-            console.print("[red]Invalid choice. Type 'start', 'edit', or 'cancel':[/red] ", end="")
+                # Show nano instructions if using nano
+                if editor == 'nano':
+                    console.print("\n[cyan]Opening config in nano editor...[/cyan]")
+                    console.print("[yellow]Tips:[/yellow]")
+                    console.print("  • Edit the configuration values as needed")
+                    console.print("  • Press [bold]Ctrl+O[/bold] then [bold]Enter[/bold] to save")
+                    console.print("  • Press [bold]Ctrl+X[/bold] to exit")
+                    console.print("  • Press [bold]Ctrl+C[/bold] to cancel without saving\n")
+                    input("Press Enter to continue...")
+                
+                try:
+                    subprocess.run([editor, str(temp_config_path)], check=True)
+                    # Reload and display updated config
+                    config = load_config(temp_config_path)
+                    estimated_memory = estimate_memory_usage(
+                        config.training.mini_batch_size,
+                        config.actor.max_steps_per_episode,
+                        config.model.max_pixels
+                    )
+                    display_config_summary(config, len(tasks), gpu_info, estimated_memory)
+                    console.print("\n[bold]Type 'start' to begin or 'cancel' to abort:[/bold] ", end="")
+                except subprocess.CalledProcessError:
+                    console.print(f"\n[yellow]Editor closed without saving or was cancelled.[/yellow]")
+                    console.print("[bold]Your choice:[/bold] ", end="")
+                except Exception as e:
+                    console.print(f"\n[red]Failed to open editor: {e}[/red]")
+                    console.print(f"[yellow]Please edit {temp_config_path} manually and type 'start' when ready.[/yellow]")
+                    console.print("[bold]Your choice:[/bold] ", end="")
+            elif choice == "cancel":
+                console.print("[red]Training cancelled[/red]")
+                
+                # Ask if they want to save the config
+                if typer.confirm("Save this configuration for later?", default=True):
+                    config_path = Path("rl_config.json")
+                    save_config(config, config_path)
+                
+                # Clean up temp file
+                try:
+                    temp_config_path.unlink()
+                except:
+                    pass
+                    
+                raise typer.Exit(0)
+            else:
+                console.print("[red]Invalid choice. Type 'start', 'edit', or 'cancel':[/red] ", end="")
+    else:
+        # Config was provided, proceed directly
+        console.print("\n[dim]Using provided configuration file...[/dim]")
+        config = load_config(temp_config_path)
     
     # Step 7: Determine if DDP should be used
     num_gpus = len(gpu_info["devices"])
