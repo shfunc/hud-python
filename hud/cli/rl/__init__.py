@@ -399,7 +399,7 @@ def rl_command(
             console.print(f"[cyan]{gpu_allocation.get('reason', 'Using single GPU')}[/cyan]")
     
     # Allow manual override
-    if ddp_gpus:
+    if ddp_gpus is not None:
         requested_gpus = [int(x) for x in ddp_gpus.split(',')]
         console.print(f"[cyan]Manual GPU selection: {requested_gpus}[/cyan]")
         # Validate requested GPUs are in the healthy set
