@@ -9,8 +9,35 @@ from pathlib import Path
 import httpx
 
 from rich.console import Console
+from typing import List
 
 console = Console()
+
+
+def get_vllm_args(model_name: str, chat_template_path: Optional[Path] = None) -> List[str]:
+    """Get common vLLM server arguments for both local and Modal deployments."""
+    args = [
+        "serve", model_name,
+        "--api-key", "token-abc123",
+        "--host", "0.0.0.0",
+        "--port", "8000",
+        "--tensor-parallel-size", "1",
+        "--trust-remote-code",
+        "--max-model-len", "16384",
+        "--enable-lora",
+        "--max-lora-rank", "64",
+        "--max-cpu-loras", "4",
+        "--enable-auto-tool-choice",
+        "--tool-call-parser", "hermes",
+        "--disable-log-requests",
+        "--dtype", "auto",
+    ]
+    
+    # Add chat template if provided
+    if chat_template_path and chat_template_path.exists():
+        args.extend(["--chat-template", str(chat_template_path.absolute())])
+    
+    return args
 
 
 def check_vllm_server() -> bool:
@@ -90,24 +117,8 @@ def start_vllm_server(model_name: str, gpu_index: int = 1, restart: bool = False
     chat_template_path = Path(__file__).parent.parent.parent / "rl" / "chat_template.jinja"
     
     # Build the vLLM command
-    cmd = [
-        "uv", "run", "vllm", "serve",
-        model_name,
-        "--api-key", "token-abc123",
-        "--host", "0.0.0.0",
-        "--port", "8000",
-        "--tensor-parallel-size", "1",
-        "--trust-remote-code",
-        "--max-model-len", "16384",
-        "--enable-lora",
-        "--max-lora-rank", "64",
-        "--max-cpu-loras", "4",
-        "--enable-auto-tool-choice",
-        "--tool-call-parser", "hermes",
-        "--chat-template", str(chat_template_path.absolute()),
-        "--disable-log-requests",
-        "--dtype", "auto",
-    ]
+    vllm_args = get_vllm_args(model_name, chat_template_path)
+    cmd = ["uv", "run", "vllm"] + vllm_args
     
     # Start the server in the background
     log_file = open("/tmp/vllm_server.log", "w")
