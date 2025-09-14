@@ -281,9 +281,9 @@ def run_remote_training(
         save_config(config, temp_config_path)
         
         # Ask to edit config
-        hud_console.info(f"Training configuration saved to [link file://{temp_config_path.absolute()}][underline cyan]{temp_config_path}[/underline cyan][/link]")
+        hud_console.info(f"Training configuration saved to [underline cyan]{temp_config_path.absolute()}[/underline cyan]")
         edit_choice = hud_console.select(
-            f"Would you like to start training?",
+            "Would you like to start training?",
             choices=[
                 {"name": "🚀 Start training!", "value": "start"},
                 {"name": "✏️  Review configuration", "value": "edit"},
@@ -316,18 +316,7 @@ def run_remote_training(
         config = load_config(config_file)
         config_dict = config.to_dict()
         gpu_choice = "A100"  # Default
-        num_gpus = 1
-    
-    # Launch training
-    hud_console.info(f"Launching training on remote server...")
-    hud_console.info(f"  Model: {model_name}")
-    hud_console.info(f"  Tasks: {len(tasks)}")
-    hud_console.info(f"  GPU: {gpu_choice} x{num_gpus}")
-    hud_console.info(f"  Estimated cost: ${GPU_PRICING[gpu_choice]['price'] * num_gpus:.2f}/hr")
-    
-    if not hud_console.confirm("Start training?", default=True):
-        hud_console.error("Training cancelled")
-        return
+        num_gpus = 1  # Default for non-interactive mode
     
     # Launch training
     try:
@@ -335,7 +324,8 @@ def run_remote_training(
             model_name=model_name,
             config=config_dict,
             tasks=[task.model_dump() for task in tasks],
-            gpu_type=gpu_choice
+            gpu_type=gpu_choice,
+            gpu_count=num_gpus
         )
         
         hud_console.success("Training Started Successfully!")

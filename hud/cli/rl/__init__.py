@@ -150,7 +150,7 @@ def rl_command(
             )
             return
         except Exception as e:
-            console.print(f"[red]❌ Remote training failed: {e}[/red]")
+            console.print(f"[red]❌ Remote training failed: {str(e)}[/red]")
             raise typer.Exit(1)
     
     # If using Modal, skip local setup and jump straight to config
