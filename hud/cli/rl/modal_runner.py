@@ -29,29 +29,29 @@ local_hud_path = current_file.parent.parent.parent.parent  # Go up to hud-python
 # Image for RL training
 hud_image = (
     modal.Image.debian_slim(python_version="3.12")
-    .apt_install("git", "build-essential", "curl", "ca-certificates")
     .pip_install("torch", "numpy")
+    .apt_install("git", "build-essential", "curl", "ca-certificates")
     .pip_install("git+https://github.com/lorenss-m/hud-python.git#egg=hud-python[rl]")
-    .add_local_dir(
-        local_hud_path,
-        remote_path="/root/hud-python",
-        copy=True,
-        ignore=[
-            ".git",
-            "__pycache__",
-            "*.pyc",
-            ".pytest_cache",
-            ".venv",
-            "*.egg-info",
-            ".DS_Store"
-        ]
-    )
-    .run_commands(
-        "pip uninstall -y hud-python",
-        "rm -rf /root/.cache/pip",
-        "find /usr/local/lib/python*/site-packages -name 'hud*' -type d -exec rm -rf {} + || true",
-        "cd /root/hud-python && pip install -e . --force-reinstall"
-    )
+    # .add_local_dir(
+    #     local_hud_path,
+    #     remote_path="/root/hud-python",
+    #     copy=True,
+    #     ignore=[
+    #         ".git",
+    #         "__pycache__",
+    #         "*.pyc",
+    #         ".pytest_cache",
+    #         ".venv",
+    #         "*.egg-info",
+    #         ".DS_Store"
+    #     ]
+    # )
+    # .run_commands(
+    #     "pip uninstall -y hud-python",
+    #     "rm -rf /root/.cache/pip",
+    #     "find /usr/local/lib/python*/site-packages -name 'hud*' -type d -exec rm -rf {} + || true",
+    #     "cd /root/hud-python && pip install -e . --force-reinstall"
+    # )
     .env({
         "HF_HUB_DISABLE_SYMLINKS_WARNING": "1",
         "TOKENIZERS_PARALLELISM": "false",
@@ -123,13 +123,21 @@ def _run_training(
 
     from hud.cli.rl import rl_command
     
-    # Write config file
-    config_path = Path("/tmp/rl_config.json")
+    # Write config file with unique name to avoid conflicts
+    import uuid
+    config_id = str(uuid.uuid4())[:8]
+    config_path = Path(f"/tmp/rl_config_{config_id}.json")
     config_path.write_text(config_json)
     
     # Update config to use provided vLLM URL
     config_data = json.loads(config_json)
-    config_data["actor"]["vllm_base_url"] = vllm_url
+    
+    # Ensure actor section exists before setting vllm_base_url
+    if "actor" not in config_data:
+        config_data["actor"] = {}
+    
+    if vllm_url:
+        config_data["actor"]["vllm_base_url"] = vllm_url
     
     # Ensure model is set in config
     if "model" not in config_data:
@@ -147,9 +155,9 @@ def _run_training(
     
     config_path.write_text(json.dumps(config_data, indent=2))
     
-    # Write tasks file if content provided
+    # Write tasks file with unique name if content provided
     if tasks_content:
-        tasks_path = Path("/tmp/tasks.jsonl")
+        tasks_path = Path(f"/tmp/tasks_{config_id}.jsonl")
         tasks_path.write_text(tasks_content)
         tasks_file_to_use = str(tasks_path)
     else:
