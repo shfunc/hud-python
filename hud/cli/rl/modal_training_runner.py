@@ -76,25 +76,30 @@ def run_training_job():
 
 
 if __name__ == "__main__":
-    # If run directly, deploy the app and spawn the training job
+    # Deploy the app and spawn the training job
     print(f"Deploying training app: {APP_NAME}")
     print(f"  Model ID: {MODEL_ID}")
     print(f"  Base Model: {BASE_MODEL}")
     print(f"  GPU Type: {GPU_TYPE}")
     
-    # Deploy the app
-    with modal.enable_output():
-        app.deploy()
-    
-    # Get the function from the deployed app and spawn it
-    training_fn = modal.Function.lookup(APP_NAME, "run_training_job")
-    
-    # Use spawn() which returns a FunctionCall handle immediately
-    # The function will continue running even after this script exits
-    call = training_fn.spawn()
-    
-    print(f"Training job spawned on app: {APP_NAME}")
-    print(f"Call ID: {call.object_id}")
-    
-    # Output the call ID in a parseable format
-    print(f"CALL_ID:{call.object_id}")
+    try:
+        # Deploy the app first
+        with modal.enable_output():
+            app.deploy()
+        
+        # Get the function from the deployed app and spawn it
+        training_fn = modal.Function.lookup(APP_NAME, "run_training_job")
+        
+        # Use spawn() which returns immediately without waiting
+        # The function will continue running in Modal even after this script exits
+        call = training_fn.spawn()
+        
+        print(f"Training job spawned on app: {APP_NAME}")
+        print(f"Call ID: {call.object_id}")
+        
+        # Exit immediately - the training will continue in Modal
+        sys.exit(0)
+        
+    except Exception as e:
+        print(f"Error deploying/spawning training: {e}")
+        sys.exit(1)
