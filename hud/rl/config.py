@@ -40,8 +40,8 @@ class ModelConfig:
     lora_alpha: int = 64
     lora_dropout: float = 0.05
     target_modules: tuple[str, ...] = (
-        "q_proj", "v_proj", "o_proj",
-        "visual.merger.mlp.*",
+        "q_proj", "k_proj", "v_proj", "o_proj",
+        "gate_proj", "up_proj", "down_proj"
     )
     min_pixels: int = 256 * 28 * 28
     max_pixels: int = 512 * 28 * 28

@@ -149,11 +149,11 @@ def run_remote_training(
                 
                 # Wait for deployment
                 hud_console.info("Waiting for vLLM server to be ready...")
-                max_wait = 300  # 5 minutes
+                max_wait = 600  # 10 minutes
                 start_time = time.time()
                 
                 with hud_console.progress() as progress:
-                    progress.update("Checking deployment status...")
+                    progress.update("Checking deployment status (see live status on https://app.hud.so/models)")
                     
                     while True:
                         if time.time() - start_time > max_wait:
@@ -198,11 +198,11 @@ def run_remote_training(
                 
                 # Wait for deployment
                 hud_console.info("Waiting for vLLM server to be ready...")
-                max_wait = 300  # 5 minutes
+                max_wait = 600  # 10 minutes
                 start_time = time.time()
                 
                 with hud_console.progress() as progress:
-                    progress.update("Checking deployment status...")
+                    progress.update("Checking deployment status (see live status on https://app.hud.so/models)")
                     
                     while True:
                         if time.time() - start_time > max_wait:

@@ -84,13 +84,14 @@ def build_agent(
             raise typer.Exit(1) from e
         
         # Determine the base URL to use
-        if vllm_base_url:
-            # Use the provided vLLM URL
-            base_url = vllm_base_url
-            api_key = settings.api_key if vllm_base_url.startswith("http://rl.hud.so") else "token-abc123"
+        if vllm_base_url is not None:
+            # Use the provided vLLM URL (for custom/local servers)
+            base_url = str(vllm_base_url)
+            hud_console.info(f"Using vLLM server at {base_url}")
+            api_key = settings.api_key if base_url.startswith(settings.hud_rl_url) else "token-abc123"
         elif model:
-            # If model is provided but no URL, construct HUD URL
-            base_url = f"http://rl.hud.so/v1/models/{model}/vllm"
+            # Always use standard HUD vLLM endpoint for HUD models
+            base_url = f"{settings.hud_rl_url}/models/{model}/vllm"
             api_key = settings.api_key
             hud_console.info(f"Using HUD vLLM endpoint: {base_url}")
         else:
@@ -165,7 +166,7 @@ async def run_single_task(
     allowed_tools: list[str] | None = None,
     max_steps: int = 10,
     verbose: bool = False,
-    vllm_base_url: str = "http://localhost:8000/v1",
+    vllm_base_url: str | None = None,
 ) -> None:
     """Load one task and execute it, or detect if JSON contains a list and run as dataset."""
 
@@ -195,10 +196,7 @@ async def run_single_task(
             # Build agent class and config for run_dataset
             if agent_type == "vllm":
                 try:
-                    from openai import AsyncOpenAI
-
                     from hud.agents.openai_chat_generic import GenericOpenAIChatAgent
-
                     agent_class = GenericOpenAIChatAgent
                 except ImportError as e:
                     hud_console.error(
@@ -207,20 +205,21 @@ async def run_single_task(
                     )
                     raise typer.Exit(1) from e
 
-                # Create OpenAI client for vLLM
-                openai_client = AsyncOpenAI(
-                    base_url=vllm_base_url,
-                    api_key="token-abc123",
+                # Use build_agent to create a sample agent to get the config
+                sample_agent = build_agent(
+                    agent_type,
+                    model=model,
+                    allowed_tools=allowed_tools,
+                    verbose=verbose,
+                    vllm_base_url=vllm_base_url,
                 )
                 
+                # Extract the config from the sample agent
                 agent_config: dict[str, Any] = {
-                    "openai_client": openai_client,
-                    "model_name": model or "served-model",
+                    "openai_client": sample_agent.openai_client,
+                    "model_name": sample_agent.model_name,
                     "verbose": verbose,
-                    "completion_kwargs": {
-                        "temperature": 0.7,
-                        "max_tokens": 2048,
-                    }
+                    "completion_kwargs": sample_agent.completion_kwargs,
                 }
                 if allowed_tools:
                     agent_config["allowed_tools"] = allowed_tools
@@ -293,7 +292,7 @@ async def run_single_task(
             
         # Single task - use the first task
         task = tasks[0]
-        hud_console.info("Using first task from dataset...")
+        hud_console.info("Using first task from dataset (run with --full to run the entire dataset)...")
 
     task_prompt = task.prompt[:50] + "..." if len(task.prompt) > 50 else task.prompt
 
@@ -322,7 +321,7 @@ async def run_full_dataset(
     max_workers: int | None = None,
     max_concurrent_per_worker: int = 25,
     verbose: bool = False,
-    vllm_base_url: str = "http://localhost:8000/v1",
+    vllm_base_url: str | None = None,
 ) -> list[Any]:
     """Run evaluation across the entire dataset.
 
@@ -363,10 +362,7 @@ async def run_full_dataset(
     # Build agent class + config for run_dataset
     if agent_type == "vllm":
         try:
-            from openai import AsyncOpenAI
-
             from hud.agents.openai_chat_generic import GenericOpenAIChatAgent
-
             agent_class = GenericOpenAIChatAgent
         except ImportError as e:
             hud_console.error(
@@ -375,20 +371,21 @@ async def run_full_dataset(
             )
             raise typer.Exit(1) from e
 
-        # Create OpenAI client for vLLM
-        openai_client = AsyncOpenAI(
-            base_url=vllm_base_url,
-            api_key="token-abc123",
+        # Use build_agent to create a sample agent to get the config
+        sample_agent = build_agent(
+            agent_type,
+            model=model,
+            allowed_tools=allowed_tools,
+            verbose=verbose,
+            vllm_base_url=vllm_base_url,
         )
         
+        # Extract the config from the sample agent
         agent_config: dict[str, Any] = {
-            "openai_client": openai_client,
-            "model_name": model or "served-model",
+            "openai_client": sample_agent.openai_client,
+            "model_name": sample_agent.model_name,
             "verbose": verbose,
-            "completion_kwargs": {
-                "temperature": 0.7,
-                "max_tokens": 2048,
-            }
+            "completion_kwargs": sample_agent.completion_kwargs,
         }
         if allowed_tools:
             agent_config["allowed_tools"] = allowed_tools
@@ -526,8 +523,8 @@ def eval_command(
         "--verbose",
         help="Enable verbose output from the agent",
     ),
-    vllm_base_url: str = typer.Option(
-        "http://localhost:8000/v1",
+    vllm_base_url: str | None = typer.Option(
+        None,
         "--vllm-base-url",
         help="Base URL for vLLM server (when using --agent vllm)",
     ),
@@ -583,13 +580,12 @@ def eval_command(
         hud_console.info("Set it in your environment or .env file: OPENAI_API_KEY=your-key-here")
         raise typer.Exit(1)
     elif agent == "vllm":
-        hud_console.info(f"Using vLLM server at {vllm_base_url}")
         if model:
-            hud_console.info(f"Model name: {model}")
+            hud_console.info(f"Using vLLM with model: {model}")
         else:
             # Default to served-model if no model specified
             model = "served-model"
-            hud_console.info("Using default model: served-model")
+            hud_console.info("Using vLLM with default model: served-model")
 
     # Check for HUD_API_KEY if using HUD services
     if not settings.api_key:

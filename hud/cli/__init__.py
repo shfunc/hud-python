@@ -893,10 +893,6 @@ def eval(
         )
         raise typer.Exit(1) from e
 
-    # Track model info for vLLM URL
-    model_info_map = {}
-    vllm_url = None
-    
     # If no agent specified, fetch available models and prompt for selection
     if agent is None:
         # Get available HUD models first
@@ -908,7 +904,6 @@ def eval(
         # Add HUD models as agent choices
         for hud_model in hud_models:
             model_name = hud_model["name"]
-            model_info_map[model_name] = hud_model
             vllm_status = " ⚡" if hud_model.get("vllm_url") else ""
             choices.append({"name": f"🚀 {model_name}{vllm_status}", "value": f"hud:{model_name}"})
         
@@ -924,29 +919,12 @@ def eval(
             choices=choices,
             default=choices[0]["value"] if hud_models else "Claude 4 Sonnet",
         )
-    else:
-        # If agent is specified, still fetch models to get vLLM URLs
-        if agent == "vllm" and model:
-            hud_models = get_available_models()
-            for hud_model in hud_models:
-                model_info_map[hud_model["name"]] = hud_model
 
     # Handle HUD model selection
     if agent and agent.startswith("hud:"):
         model = agent.split(":", 1)[1]
         agent = "vllm"  # Use vLLM backend for HUD models
-        # Get vLLM URL if available
-        if model in model_info_map:
-            vllm_url = model_info_map[model].get("vllm_url")
-            if vllm_url:
-                hud_console.info(f"Using HUD model: {model} with deployed vLLM")
-            else:
-                hud_console.info(f"Using HUD model: {model} (will use default HUD endpoint)")
-        else:
-            hud_console.info(f"Using HUD model: {model}")
-    elif agent == "vllm" and model and model in model_info_map:
-        # Direct vLLM agent with HUD model
-        vllm_url = model_info_map[model].get("vllm_url")
+        hud_console.info(f"Using HUD model: {model}")
     
     # Validate agent choice
     valid_agents = ["claude", "openai", "vllm"]
@@ -967,7 +945,7 @@ def eval(
         max_workers=max_workers,
         max_concurrent_per_worker=max_concurrent_per_worker,
         verbose=verbose,
-        vllm_base_url=vllm_url,  # Pass the vLLM URL if available
+        vllm_base_url=None,  # Pass None to use HUD defaults
     )
 
 
