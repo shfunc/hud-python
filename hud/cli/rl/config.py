@@ -138,12 +138,5 @@ def load_config(path: Path) -> Config:
     with open(path) as f:
         data = json.load(f)
     
-    return Config(
-        seed=data.get("seed", 42),
-        out_dir=data.get("out_dir", "checkpoints"),
-        adapter_prefix=data.get("adapter_prefix", "rl-adapter"),
-        verbose=data.get("verbose", True),
-        model=ModelConfig(**data["model"]),
-        training=TrainingConfig(**data["training"]),
-        actor=ActorConfig(**data["actor"]),
-    )
+    # Use Config.from_dict which handles missing fields gracefully
+    return Config.from_dict(data)
