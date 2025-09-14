@@ -51,7 +51,19 @@ def run_remote_training(
     hud_console.section_title("Example Task from Dataset")
     
     if tasks:
-        hud_console.key_value_table(tasks[0].model_dump())
+        # Display task with truncated values
+        task_data = tasks[0].model_dump()
+        truncated_data = {}
+        max_value_length = 120  # Maximum characters to show per line
+        
+        for key, value in task_data.items():
+            value_str = str(value)
+            if len(value_str) > max_value_length:
+                truncated_data[key] = value_str[:max_value_length] + "..."
+            else:
+                truncated_data[key] = value_str
+        
+        hud_console.key_value_table(truncated_data)
         
         if not hud_console.confirm("Proceed with training on this dataset?", default=True):
             hud_console.error("Training cancelled")
@@ -269,8 +281,9 @@ def run_remote_training(
         save_config(config, temp_config_path)
         
         # Ask to edit config
+        hud_console.info(f"Training configuration saved to [link file://{temp_config_path.absolute()}][underline cyan]{temp_config_path}[/underline cyan][/link]")
         edit_choice = hud_console.select(
-            f"Training configuration saved to [cyan]{temp_config_path}[/cyan]. Would you like to start training?",
+            f"Would you like to start training?",
             choices=[
                 {"name": "🚀 Start training!", "value": "start"},
                 {"name": "✏️  Review configuration", "value": "edit"},
@@ -312,25 +325,24 @@ def run_remote_training(
     hud_console.info(f"  GPU: {gpu_choice} x{num_gpus}")
     hud_console.info(f"  Estimated cost: ${GPU_PRICING[gpu_choice]['price'] * num_gpus:.2f}/hr")
     
-    if not hud_console.confirm("\nStart training?", default=True):
+    if not hud_console.confirm("Start training?", default=True):
         hud_console.error("Training cancelled")
         return
     
     # Launch training
     try:
-        result = rl_api.launch_training(
+        rl_api.launch_training(
             model_name=model_name,
             config=config_dict,
             tasks=[task.model_dump() for task in tasks],
-        gpu_type=gpu_choice
+            gpu_type=gpu_choice
         )
         
         hud_console.success("Training Started Successfully!")
         
-        hud_console.info(f"Training ID: {result.get('training_id', 'N/A')}")
-        hud_console.info("See your model training on app.hud.so/models")
-        hud_console.hint("Launch another training run via: hud rl")
-        hud_console.hint("Or evaluate the model via: hud eval {model_name}")
+        hud_console.info("See your model training on https://app.hud.so/models")
+        hud_console.hint("Launch another training run via: hud rl <tasks_file>")
+        hud_console.hint("Or evaluate the model via: hud eval <tasks_file>")
         
     except Exception as e:
         hud_console.error(f"Failed to launch training: {e}")

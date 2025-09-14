@@ -883,32 +883,52 @@ def eval(
             source = file_choice
             hud_console.success(f"Selected: {source}")
 
-    # If no agent specified, prompt for selection
-    if agent is None:
-        agent = hud_console.select(
-            "Select an agent to use:",
-            choices=[
-                {"name": "Claude 4 Sonnet", "value": "claude"},
-                {"name": "OpenAI Computer Use", "value": "openai"},
-            ],
-            default="Claude 4 Sonnet",
-        )
-
-    # Validate agent choice
-    valid_agents = ["claude", "openai"]
-    if agent not in valid_agents:
-        hud_console.error(f"Invalid agent: {agent}. Must be one of: {', '.join(valid_agents)}")
-        raise typer.Exit(1)
-
     # Import eval_command lazily to avoid importing agent dependencies
     try:
-        from .eval import eval_command
+        from .eval import eval_command, get_available_models
     except ImportError as e:
         hud_console.error(
             "Evaluation dependencies are not installed. "
             "Please install with: pip install 'hud-python[agent]'"
         )
         raise typer.Exit(1) from e
+
+    # If no agent specified, fetch available models and prompt for selection
+    if agent is None:
+        # Get available HUD models first
+        hud_models = get_available_models()
+        
+        # Build choices starting with HUD models
+        choices = []
+        
+        # Add HUD models as agent choices
+        for hud_model in hud_models:
+            choices.append({"name": f"🚀 {hud_model}", "value": f"hud:{hud_model}"})
+        
+        # Add standard agent choices
+        choices.extend([
+            {"name": "Claude 4 Sonnet", "value": "claude"},
+            {"name": "OpenAI Computer Use", "value": "openai"},
+            {"name": "vLLM (Local Server)", "value": "vllm"},
+        ])
+        
+        agent = hud_console.select(
+            "Select an agent to use:",
+            choices=choices,
+            default=choices[0]["value"] if hud_models else "Claude 4 Sonnet",
+        )
+
+    # Handle HUD model selection
+    if agent and agent.startswith("hud:"):
+        model = agent.split(":", 1)[1]
+        agent = "vllm"  # Use vLLM backend for HUD models
+        hud_console.info(f"Using HUD model: {model}")
+    
+    # Validate agent choice
+    valid_agents = ["claude", "openai", "vllm"]
+    if agent not in valid_agents:
+        hud_console.error(f"Invalid agent: {agent}. Must be one of: {', '.join(valid_agents)}")
+        raise typer.Exit(1)
 
     # Run the command
     eval_command(

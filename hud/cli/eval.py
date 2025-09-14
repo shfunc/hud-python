@@ -16,6 +16,43 @@ logger = logging.getLogger(__name__)
 hud_console = HUDConsole()
 
 
+def get_available_models() -> list[str]:
+    """Fetch available models from the HUD API (only ready models)."""
+    try:
+        from hud.cli.rl import rl_api
+        
+        hud_console.info("Fetching your models from https://app.hud.so/models")
+        models = rl_api.list_models()
+        
+        # Filter for ready models only and sort by recency
+        ready_models = [m for m in models if m.status == "ready"]
+        ready_models.sort(key=lambda m: m.created_at or "", reverse=True)
+        
+        # Count other statuses for informational purposes
+        training_count = sum(1 for m in models if m.status == "training")
+        other_count = len(models) - len(ready_models) - training_count
+        
+        if ready_models:
+            hud_console.success(f"Found {len(ready_models)} ready models:")
+            for model in ready_models:
+                hud_console.info(f"  ✅ {model.name}")
+            
+            if training_count > 0:
+                hud_console.info(f"\n({training_count} models currently training)")
+            
+            return [model.name for model in ready_models]
+        else:
+            if training_count > 0:
+                hud_console.warning(f"No ready models found. You have {training_count} models currently training.")
+            else:
+                hud_console.warning("No models found in your account.")
+            return []
+    except Exception as e:
+        logger.debug(f"Error fetching models: {e}")
+        # Don't show the error to the user, just proceed without HUD models
+        return []
+
+
 def build_agent(
     agent_type: Literal["claude", "openai", "vllm"],
     *,
@@ -528,6 +565,10 @@ def eval_command(
         hud_console.info(f"Using vLLM server at {vllm_base_url}")
         if model:
             hud_console.info(f"Model name: {model}")
+        else:
+            # Default to served-model if no model specified
+            model = "served-model"
+            hud_console.info("Using default model: served-model")
 
     # Check for HUD_API_KEY if using HUD services
     if not settings.api_key:

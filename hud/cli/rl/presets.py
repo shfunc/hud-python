@@ -91,7 +91,7 @@ def get_training_presets(gpu_memory_gb: float) -> list[dict[str, Any]]:
 def estimate_memory_usage(mini_batch_size: int, max_steps: int, max_pixels: int) -> float:
     """Calculate estimated GPU memory usage using the formula from train.py."""
     INITIAL_MEMORY = 8.0
-    SCALING_FACTOR = 5.5
+    SCALING_FACTOR = 4.5
     constant = mini_batch_size * max_steps
-    quadratic = (max_pixels / (28 * 28 * 256)) ** 2
+    quadratic = (max_pixels / (28 * 28 * 256))
     return INITIAL_MEMORY + SCALING_FACTOR * constant * quadratic
