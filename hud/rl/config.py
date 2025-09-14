@@ -4,6 +4,33 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
+# List of supported VL (Vision-Language) models
+SUPPORTED_VL_MODELS = [
+    "Qwen/Qwen2.5-VL-3B-Instruct",
+    "Qwen/Qwen2.5-VL-7B-Instruct",
+    "Qwen/Qwen2.5-VL-14B-Instruct",
+    "Qwen/Qwen2.5-VL-32B-Instruct",
+    "Qwen/Qwen2.5-VL-72B-Instruct",
+]
+
+
+def validate_vl_model(model_name: str) -> None:
+    """Validate that the model is a supported VL model.
+    
+    Args:
+        model_name: The model name to validate
+        
+    Raises:
+        ValueError: If the model is not a supported VL model
+    """
+    if not any(model_name.startswith(supported) for supported in SUPPORTED_VL_MODELS):
+        raise ValueError(
+            f"Model '{model_name}' is not a supported VL model. "
+            f"Only VL (Vision-Language) models are supported for RL training.\n"
+            f"Supported models: {', '.join(SUPPORTED_VL_MODELS)}\n"
+            f"Note: '{model_name}' appears to be a text-only model."
+        )
+
 
 @dataclass
 class ModelConfig:
@@ -106,10 +133,13 @@ class Config:
             model=model,
             training=training,
             actor=actor,
-            out_dir=d.get("out_dir", cls.out_dir),
-            adapter_prefix=d.get("adapter_prefix", cls.adapter_prefix),
-            seed=d.get("seed", cls.seed),
-            verbose=d.get("verbose", cls.verbose),
+            job_name=d.get("job_name", "RL Training"),
+            job_id=d.get("job_id"),
+            stats_interval=d.get("stats_interval", 1),
+            verbose=d.get("verbose", True),
+            out_dir=d.get("out_dir", "./checkpoints"),
+            adapter_prefix=d.get("adapter_prefix", "cua-grpo-step"),
+            seed=d.get("seed", 1234),
         )
     
     def to_dict(self) -> dict:
@@ -118,8 +148,11 @@ class Config:
             "model": self.model.__dict__,
             "training": self.training.__dict__,
             "actor": self.actor.__dict__,
+            "job_name": self.job_name,
+            "job_id": self.job_id,
+            "stats_interval": self.stats_interval,
+            "verbose": self.verbose,
             "out_dir": self.out_dir,
             "adapter_prefix": self.adapter_prefix,
             "seed": self.seed,
-            "verbose": self.verbose,
         }

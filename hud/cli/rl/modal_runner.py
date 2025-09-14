@@ -31,7 +31,7 @@ hud_image = (
     modal.Image.debian_slim(python_version="3.12")
     .pip_install("torch", "numpy")
     .apt_install("git", "build-essential", "curl", "ca-certificates")
-    .pip_install("git+https://github.com/lorenss-m/hud-python.git#egg=hud-python[rl]")
+    .pip_install("git+https://github.com/lorenss-m/hud-python.git#egg=hud-python[rl]", force_build=True)
     # .add_local_dir(
     #     local_hud_path,
     #     remote_path="/root/hud-python",

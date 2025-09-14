@@ -15,7 +15,7 @@ from rich.console import Console
 from rich.progress import Progress
 
 from hud.datasets import Task
-from hud.rl.config import Config
+from hud.rl.config import Config, validate_vl_model
 from hud.rl.train import train
 from hud.rl.utils import load_tasks
 
@@ -84,7 +84,12 @@ def rl_command(
         "--vllm-gpu",
         help="Specific GPU for vLLM server",
     ),
-    # Modal options
+    # Execution mode options
+    local: bool = typer.Option(
+        False,
+        "--local",
+        help="Run training locally instead of using remote API server",
+    ),
     modal: bool = typer.Option(
         False,
         "--modal",
@@ -127,8 +132,37 @@ def rl_command(
     
     console.print("\n[bold cyan]🚀 HUD RL Training[/bold cyan]\n")
     
-    # Store whether we're using Modal for later
+    # Import settings and API client
+    from hud.settings import settings
+    from hud.cli.api_client import get_rl_api_client, is_remote_mode
+    
+    # Check execution mode
+    if local and modal:
+        console.print("[red]❌ Cannot use both --local and --modal flags[/red]")
+        raise typer.Exit(1)
+    
+    # Determine execution mode
+    use_remote = is_remote_mode() and not local and not modal
     use_modal = modal
+    use_local = local or (not is_remote_mode() and not modal)
+    
+    # Handle remote execution (default when HUD_RL_URL is set)
+    if use_remote:
+        console.print(f"[cyan]Using remote API server: {settings.hud_rl_url}[/cyan]\n")
+        try:
+            from .remote_runner import run_remote_training
+            run_remote_training(
+                tasks_file=tasks_file,
+                model=model,
+                config_file=config_file,
+                output_dir=output_dir,
+                gpu_type="A100",  # Default GPU for remote
+                verbose=verbose,
+            )
+            return
+        except Exception as e:
+            console.print(f"[red]❌ Remote training failed: {e}[/red]")
+            raise typer.Exit(1)
     
     # If using Modal, skip local setup and jump straight to config
     if use_modal:
@@ -245,7 +279,7 @@ def rl_command(
             healthy_str = ",".join(map(str, health_results["healthy_gpus"]))
             console.print("\n[yellow]Exiting. Please resolve GPU issues and try again.[/yellow]")
             console.print("\n[cyan]💡 Tip: To use only healthy GPUs, you can run:[/cyan]")
-            console.print(f"[white]hud rl {tasks_file} --ddp-gpus {healthy_str}[/white]\n")
+            console.print(f"[white]hud rl {tasks_file} --ddp-gpus {healthy_str} --local[/white]\n")
             raise typer.Exit(0)
         else:
             # Continue with healthy GPUs only
@@ -315,10 +349,27 @@ def rl_command(
             console.print("Enter the model name (HuggingFace ID):")
             model = input().strip()
     
+    # Validate model is a VL model (whether provided via CLI or selected)
+    if model:
+        try:
+            validate_vl_model(model)
+        except ValueError as e:
+            console.print(f"\n[red]❌ {e}[/red]")
+            raise typer.Exit(1)
+    
     # Step 4: Generate or load configuration
     if config_file:
         console.print(f"\n[cyan]Loading configuration from: {config_file}[/cyan]")
         config = load_config(config_file)
+        
+        # Validate model from config
+        if hasattr(config, 'model') and hasattr(config.model, 'base_model'):
+            try:
+                validate_vl_model(config.model.base_model)
+            except ValueError as e:
+                console.print(f"\n[red]❌ {e}[/red]")
+                raise typer.Exit(1)
+        
         # Estimate memory for display
         from .presets import estimate_memory_usage
         estimated_memory = estimate_memory_usage(

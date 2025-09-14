@@ -1000,6 +1000,11 @@ def rl(
         "-v",
         help="Enable verbose output",
     ),
+    local: bool = typer.Option(
+        False,
+        "--local",
+        help="Run training locally instead of using remote API server",
+    ),
     modal: bool = typer.Option(
         False,
         "--modal",
@@ -1037,6 +1042,7 @@ def rl(
         output_dir=output_dir,
         restart=restart,
         verbose=verbose,
+        local=local,
         modal=modal,
         modal_gpu=gpu,
         no_ddp=no_ddp,
@@ -1047,6 +1053,10 @@ def rl(
 
 def main() -> None:
     """Main entry point for the CLI."""
+    # Add RL management commands (rl-status, rl-logs, rl-stop, rl-list)
+    from .rl_management import add_rl_management_commands
+    add_rl_management_commands(app)
+    
     # Handle --version flag before Typer parses args
     if "--version" in sys.argv:
         try:
@@ -1078,9 +1088,9 @@ def main() -> None:
             console.print("\n[yellow]Datasets & RL Training:[/yellow]")
             console.print("  1. Get dataset: [cyan]hud get hud-evals/browser-2048-tasks[/cyan]")
             console.print("  2. Create dataset: [cyan]hud hf tasks.json --name my-org/my-tasks[/cyan]")
-            console.print("  3. Start training: [cyan]hud rl browser-2048-tasks.jsonl[/cyan]")
-            console.print("  4. Custom model: [cyan]hud rl tasks.jsonl --model meta-llama/Llama-3.2-3B[/cyan]")
-            console.print("  5. Restart server: [cyan]hud rl tasks.jsonl --restart[/cyan]\n")
+            console.print("  3. Start training: [cyan]hud rl browser-2048-tasks.jsonl --local[/cyan]")
+            console.print("  4. Custom model: [cyan]hud rl tasks.jsonl --model meta-llama/Llama-3.2-3B --local[/cyan]")
+            console.print("  5. Restart server: [cyan]hud rl tasks.jsonl --restart --local[/cyan]\n")
 
         app()
     except typer.Exit as e:
