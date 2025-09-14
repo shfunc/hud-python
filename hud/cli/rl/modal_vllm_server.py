@@ -6,13 +6,19 @@ Deploy with: modal deploy modal_vllm_server.py
 """
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
 import modal
 
-# Create the app first
-app = modal.App("hud-vllm-server")
+# Configuration from environment variables
+APP_NAME = os.environ.get("MODAL_APP_NAME", "hud-vllm-server")
+MODEL_NAME = os.environ.get("VLLM_MODEL_NAME", "Qwen/Qwen2.5-VL-3B-Instruct")
+GPU_TYPE = os.environ.get("VLLM_GPU_TYPE", "A100")
+
+# Create the app with configurable name
+app = modal.App(APP_NAME)
 
 # Build the image - always install vLLM first
 vllm_image = (
@@ -50,7 +56,7 @@ checkpoint_volume = modal.Volume.from_name("hud-rl-checkpoints", create_if_missi
 # vLLM Server Function
 @app.function(
     image=vllm_image,
-    gpu="A100-80GB",  # Default to A100
+    gpu=GPU_TYPE + ("-80GB" if GPU_TYPE == "A100" else ""),  # Use configured GPU
     min_containers=1,  # Keep one instance always running
     scaledown_window=30 * 60,  # Stay up for 3 hours without requests
     timeout=24 * 60 * 60,  # 24 hour timeout (max for training)
@@ -66,8 +72,8 @@ def serve_vllm():
     import os
     from pathlib import Path
     
-    # Hardcoded model - using VL (Vision-Language) version for HUD tasks
-    model = "Qwen/Qwen2.5-VL-3B-Instruct"
+    # Use the configured model (from environment or default)
+    model = MODEL_NAME
     
     # Build vLLM args inline (same as get_vllm_args)
     vllm_args = [
@@ -116,6 +122,11 @@ def serve_vllm():
 # For programmatic deployment
 if __name__ == "__main__":
     # If run directly, deploy the app
+    print(f"Deploying vLLM server with:")
+    print(f"  App Name: {APP_NAME}")
+    print(f"  Model: {MODEL_NAME}")
+    print(f"  GPU Type: {GPU_TYPE}")
+    
     with modal.enable_output():
         app.deploy()
-        print(f"vLLM server deployed at: {serve_vllm.get_web_url()}")
+        print(f"\nvLLM server deployed at: {serve_vllm.get_web_url()}")

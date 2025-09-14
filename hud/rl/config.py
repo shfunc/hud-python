@@ -84,6 +84,7 @@ class Config:
 
     # Telemetry configuration
     job_name: str = "RL Training"
+    job_id: str | None = None  # Use existing job ID if provided
     stats_interval: int = 1
     verbose: bool = True
     
