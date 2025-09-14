@@ -189,16 +189,36 @@ def load_tasks(tasks_input: str | list[dict], system_prompt: str | None = None) 
                         line = line.strip()
                         if line:  # Skip empty lines
                             item = json.loads(line)
-                            task = Task(
-                                id=item.get("id"),
-                                prompt=item["prompt"],
-                                mcp_config=item["mcp_config"],
-                                setup_tool=item.get("setup_tool"),
-                                evaluate_tool=item.get("evaluate_tool"),
-                                system_prompt=item.get("system_prompt", system_prompt),
-                                metadata=item.get("metadata", {})
-                            )
-                            tasks.append(task)
+                            
+                            # Handle case where line contains an array of tasks
+                            if isinstance(item, list):
+                                for task_item in item:
+                                    task = Task(
+                                        id=task_item.get("id"),
+                                        prompt=task_item["prompt"],
+                                        mcp_config=task_item["mcp_config"],
+                                        setup_tool=task_item.get("setup_tool"),
+                                        evaluate_tool=task_item.get("evaluate_tool"),
+                                        system_prompt=task_item.get("system_prompt", system_prompt),
+                                        metadata=task_item.get("metadata", {})
+                                    )
+                                    tasks.append(task)
+                            # Handle normal case where line contains a single task object
+                            elif isinstance(item, dict):
+                                task = Task(
+                                    id=item.get("id"),
+                                    prompt=item["prompt"],
+                                    mcp_config=item["mcp_config"],
+                                    setup_tool=item.get("setup_tool"),
+                                    evaluate_tool=item.get("evaluate_tool"),
+                                    system_prompt=item.get("system_prompt", system_prompt),
+                                    metadata=item.get("metadata", {})
+                                )
+                                tasks.append(task)
+                            else:
+                                raise ValueError(
+                                    f"Invalid JSONL format: expected dict or list of dicts, got {type(item)}"
+                                )
         
         # Check if it's a HuggingFace dataset
         elif "/" in tasks_input:
