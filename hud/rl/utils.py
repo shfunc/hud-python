@@ -252,7 +252,8 @@ def prepare_inputs(
     Returns:
         Inputs for the model
     """
-    if len(trace.messages) == 0:
+    # Skip error traces or traces with no messages
+    if trace.isError or len(trace.messages) == 0:
         return []
 
     # Get images for current turn

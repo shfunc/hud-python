@@ -21,6 +21,7 @@ def generate_config_interactive(
     tasks_count: int,
     presets: list[dict[str, Any]],
     output_dir: str = "checkpoints",
+    vllm_url: str | None = None,
 ) -> tuple[Config, float]:
     """Generate RL training configuration interactively."""
     # Validate model is a VL model
@@ -61,8 +62,7 @@ def generate_config_interactive(
             lora_alpha=64,
             lora_dropout=0.05,
             target_modules=(
-                "q_proj", "k_proj", "v_proj", "o_proj",
-                "gate_proj", "up_proj", "down_proj", "vision_language_merger.*"
+                "q_proj", "k_proj", "v_proj", "o_proj", "vision_language_merger.*"
             ),
             min_pixels=max_pixels,
             max_pixels=max_pixels,
@@ -78,7 +78,7 @@ def generate_config_interactive(
             training_steps=100,  # Default, can be overridden
         ),
         actor=ActorConfig(
-            vllm_base_url="http://localhost:8000/v1",
+            vllm_base_url=vllm_url or "http://localhost:8000/v1",
             vllm_api_key="token-abc123",
             temperature=temperature,
             max_new_tokens=2048,

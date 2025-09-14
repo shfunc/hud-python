@@ -112,6 +112,10 @@ def serve_vllm():
         checkpoints = os.listdir("/checkpoints")
         print(f"Existing checkpoints: {checkpoints}")
     
+    # Set environment variable to allow runtime LoRA updates
+    os.environ["VLLM_ALLOW_RUNTIME_LORA_UPDATING"] = "True"
+    print("Runtime LoRA updates enabled (VLLM_ALLOW_RUNTIME_LORA_UPDATING=True)")
+    
     # Run vLLM server in the background
     subprocess.Popen(cmd)
 

@@ -221,6 +221,9 @@ class GRPOLearner:
         
         groups = [batch[i:i+group_size] for i in range(0, len(batch), group_size)]
         
+        # Initialize accumulated_loss to handle empty groups
+        accumulated_loss = 0.0
+        
         with hud_console.progress("Gradient update...") as progress:
             for i, samples in enumerate(groups):
                 progress.update(f"Computing logprobs for {len(samples)} samples")

@@ -10,14 +10,19 @@ from typing import Any, Literal
 import typer
 
 import hud
+from hud.settings import settings
 from hud.utils.hud_console import HUDConsole
 
 logger = logging.getLogger(__name__)
 hud_console = HUDConsole()
 
 
-def get_available_models() -> list[str]:
-    """Fetch available models from the HUD API (only ready models)."""
+def get_available_models() -> list[dict[str, str | None]]:
+    """Fetch available models from the HUD API (only ready models).
+    
+    Returns:
+        List of dicts with 'name' and 'vllm_url' keys
+    """
     try:
         from hud.cli.rl import rl_api
         
@@ -35,12 +40,13 @@ def get_available_models() -> list[str]:
         if ready_models:
             hud_console.success(f"Found {len(ready_models)} ready models:")
             for model in ready_models:
-                hud_console.info(f"  ✅ {model.name}")
+                vllm_status = " (vLLM deployed)" if model.vllm_url else ""
+                hud_console.info(f"  ✅ {model.name}{vllm_status}")
             
             if training_count > 0:
                 hud_console.info(f"\n({training_count} models currently training)")
             
-            return [model.name for model in ready_models]
+            return [{"name": model.name, "vllm_url": model.vllm_url} for model in ready_models]
         else:
             if training_count > 0:
                 hud_console.warning(f"No ready models found. You have {training_count} models currently training.")
@@ -59,7 +65,7 @@ def build_agent(
     model: str | None = None,
     allowed_tools: list[str] | None = None,
     verbose: bool = False,
-    vllm_base_url: str = "http://localhost:8000/v1",
+    vllm_base_url: str | None = None,
 ) -> Any:
     """Create and return the requested agent type."""
 
@@ -77,10 +83,25 @@ def build_agent(
             )
             raise typer.Exit(1) from e
         
+        # Determine the base URL to use
+        if vllm_base_url:
+            # Use the provided vLLM URL
+            base_url = vllm_base_url
+            api_key = settings.api_key if vllm_base_url.startswith("http://rl.hud.so") else "token-abc123"
+        elif model:
+            # If model is provided but no URL, construct HUD URL
+            base_url = f"http://rl.hud.so/v1/models/{model}/vllm"
+            api_key = settings.api_key
+            hud_console.info(f"Using HUD vLLM endpoint: {base_url}")
+        else:
+            # Default to localhost
+            base_url = "http://localhost:8000/v1"
+            api_key = "token-abc123"
+        
         # Create OpenAI client for vLLM
         openai_client = AsyncOpenAI(
-            base_url=vllm_base_url,
-            api_key="token-abc123",  # vLLM doesn't require a real key
+            base_url=base_url,
+            api_key=api_key,
         )
         
         return GenericOpenAIChatAgent(

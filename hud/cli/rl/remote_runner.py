@@ -25,8 +25,8 @@ console = Console()
 
 # GPU pricing information
 GPU_PRICING = {
-    "A100": {"price": 2.49, "memory": "80GB"},
-    "H100": {"price": 4.89, "memory": "80GB"},
+    "A100": {"price": "1", "memory": "80GB"},
+    "H100": {"price": "2", "memory": "80GB"},
 }
 
 
@@ -232,23 +232,23 @@ def run_remote_training(
     
     if not config_file:
         # Ask about number of GPUs with pricing
-        hud_console.info("GPU Selection (Pricing per GPU):")
+        # hud_console.info("GPU Selection (Pricing per GPU):")
         
-        gpu_table = Table(show_header=True, header_style="bold magenta")
-        gpu_table.add_column("GPU Type", style="cyan")
-        gpu_table.add_column("Memory", style="green")
-        gpu_table.add_column("Price/hr", style="yellow")
+        # gpu_table = Table(show_header=True, header_style="bold magenta")
+        # gpu_table.add_column("GPU Type", style="cyan")
+        # gpu_table.add_column("Memory", style="green")
+        # gpu_table.add_column("Price/hr", style="yellow")
         
-        for gpu, info in GPU_PRICING.items():
-            gpu_table.add_row(gpu, info["memory"], f"${info['price']}")
+        # for gpu, info in GPU_PRICING.items():
+        #     gpu_table.add_row(gpu, info["memory"], "see pricing on hud.so")
         
-        hud_console.info(gpu_table)
+        # console.print(gpu_table)
         
         gpu_choice = hud_console.select(
             "Select GPU type:",
             choices=[
-                {"name": f"A100 80GB (${GPU_PRICING['A100']['price']}/hr)", "value": "A100"},
-                {"name": f"H100 80GB (${GPU_PRICING['H100']['price']}/hr)", "value": "H100"},
+                {"name": "A100 80GB", "value": "A100"},
+                {"name": "H100 80GB", "value": "H100"},
             ],
             default="A100"
         )
@@ -256,10 +256,10 @@ def run_remote_training(
         num_gpus = hud_console.select(
             "Number of GPUs:",
             choices=[
-                {"name": f"1 GPU (${GPU_PRICING[gpu_choice]['price']:.2f}/hr)", "value": 1},
-                {"name": f"2 GPUs (${GPU_PRICING[gpu_choice]['price'] * 2:.2f}/hr)", "value": 2},
-                {"name": f"4 GPUs (${GPU_PRICING[gpu_choice]['price'] * 4:.2f}/hr)", "value": 4},
-                {"name": f"8 GPUs (${GPU_PRICING[gpu_choice]['price'] * 8:.2f}/hr)", "value": 8},
+                {"name": "1 GPU", "value": 1},
+                {"name": "2 GPUs", "value": 2},
+                {"name": "4 GPUs", "value": 4},
+                {"name": "8 GPUs", "value": 8},
             ],
             default=1
         )
@@ -274,7 +274,10 @@ def run_remote_training(
             tasks_count=len(tasks),
             presets=presets,
             output_dir=output_dir,
+            vllm_url=model_info.vllm_url,
         )
+
+        config.job_name = f"RL {model_name} on {tasks_file}"
         
         # Save config for editing
         temp_config_path = Path(f".rl_config_temp_{model_name}.json")

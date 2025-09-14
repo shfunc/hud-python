@@ -32,26 +32,6 @@ hud_image = (
     .pip_install("torch", "numpy")
     .apt_install("git", "build-essential", "curl", "ca-certificates")
     .pip_install("git+https://github.com/lorenss-m/hud-python.git#egg=hud-python[rl]", force_build=True)
-    # .add_local_dir(
-    #     local_hud_path,
-    #     remote_path="/root/hud-python",
-    #     copy=True,
-    #     ignore=[
-    #         ".git",
-    #         "__pycache__",
-    #         "*.pyc",
-    #         ".pytest_cache",
-    #         ".venv",
-    #         "*.egg-info",
-    #         ".DS_Store"
-    #     ]
-    # )
-    # .run_commands(
-    #     "pip uninstall -y hud-python",
-    #     "rm -rf /root/.cache/pip",
-    #     "find /usr/local/lib/python*/site-packages -name 'hud*' -type d -exec rm -rf {} + || true",
-    #     "cd /root/hud-python && pip install -e . --force-reinstall"
-    # )
     .env({
         "HF_HUB_DISABLE_SYMLINKS_WARNING": "1",
         "TOKENIZERS_PARALLELISM": "false",

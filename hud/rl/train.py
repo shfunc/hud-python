@@ -91,11 +91,13 @@ async def train(config: Config, tasks: list[Task]) -> None:
     
     # Create job on main process and distribute ID across GPUs
     if is_main_process():
+        hud_console.debug_log(f"Creating job with config.job_id: {config.job_id}")
         job_obj = hud.create_job(
             job_id=config.job_id,
             name=config.job_name,
             metadata={"config": config.to_dict()}
         )
+        hud_console.debug_log(f"Created job with job_obj.id: {job_obj.id}")
         job_obj.update_status_sync("running")
         job_id = job_obj.id
     else:
@@ -284,7 +286,7 @@ async def main() -> None:
     INITIAL_MEMORY = 8.0
     SCALING_FACTOR = 2
     constant = config.training.mini_batch_size * config.actor.max_steps_per_episode
-    quadratic = (config.model.max_pixels / (28 * 28 * 256)) ** (1.4)
+    quadratic = (config.model.max_pixels / (28 * 28 * 256))
     total_memory = INITIAL_MEMORY + SCALING_FACTOR * constant * quadratic
     hud_console.info(f"Total memory usage: {total_memory:.2f} GB")
     if total_memory > 75.0:
