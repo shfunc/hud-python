@@ -8,28 +8,25 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Optional, Union
 
 import typer
 from rich.console import Console
-from rich.progress import Progress
 
-from hud.datasets import Task
 from hud.rl.config import Config, validate_vl_model
 from hud.rl.train import train
-from hud.rl.utils import load_tasks
 
 # Then import HUD modules
 from hud.utils.hud_console import hud_console
+from hud.utils.tasks import load_tasks
 
 from .config import generate_config_interactive, load_config, save_config
 from .display import display_config_summary, display_gpu_info
 
 # Import local modules first
-from .gpu import detect_cuda_devices, select_gpu_for_vllm, validate_gpu_memory
+from .gpu import detect_cuda_devices, validate_gpu_memory
 from .gpu_utils import adjust_config_for_ddp, calculate_optimal_gpu_allocation, health_check_gpus
-from .presets import estimate_memory_usage, get_training_presets
-from .vllm import check_vllm_server, kill_vllm_server, start_vllm_server, wait_for_vllm_server
+from .presets import get_training_presets
+from .vllm import start_vllm_server, wait_for_vllm_server
 
 console = Console()
 
@@ -130,11 +127,7 @@ def rl_command(
         # In verbose mode, show everything
         logging.basicConfig(level=logging.INFO)
     
-    console.print("\n[bold cyan]🚀 HUD RL Training[/bold cyan]\n")
-    
-    # Import settings and API client
-    from hud.settings import settings
-    from hud.cli.api_client import get_rl_api_client, is_remote_mode
+    hud_console.header("HUD RL Training")
     
     # Check execution mode
     if local and modal:
@@ -142,22 +135,18 @@ def rl_command(
         raise typer.Exit(1)
     
     # Determine execution mode
-    use_remote = is_remote_mode() and not local and not modal
+    use_remote = not local and not modal
     use_modal = modal
-    use_local = local or (not is_remote_mode() and not modal)
     
-    # Handle remote execution (default when HUD_RL_URL is set)
+    # Handle remote execution
     if use_remote:
-        console.print(f"[cyan]Using remote API server: {settings.hud_rl_url}[/cyan]\n")
         try:
             from .remote_runner import run_remote_training
             run_remote_training(
                 tasks_file=tasks_file,
                 model=model,
                 config_file=config_file,
-                output_dir=output_dir,
-                gpu_type="A100",  # Default GPU for remote
-                verbose=verbose,
+                output_dir=output_dir
             )
             return
         except Exception as e:

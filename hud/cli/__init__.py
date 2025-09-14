@@ -1052,11 +1052,7 @@ def rl(
 
 
 def main() -> None:
-    """Main entry point for the CLI."""
-    # Add RL management commands (rl-status, rl-logs, rl-stop, rl-list)
-    from .rl_management import add_rl_management_commands
-    add_rl_management_commands(app)
-    
+    """Main entry point for the CLI."""    
     # Handle --version flag before Typer parses args
     if "--version" in sys.argv:
         try:

@@ -7,7 +7,7 @@ from typing import Any
 
 from rich.console import Console
 
-from hud.rl.config import ActorConfig, Config, ModelConfig, TrainingConfig
+from hud.rl.config import ActorConfig, Config, ModelConfig, TrainingConfig, validate_vl_model
 from hud.utils.hud_console import hud_console
 
 from .display import display_preset_table
@@ -23,6 +23,9 @@ def generate_config_interactive(
     output_dir: str = "checkpoints",
 ) -> tuple[Config, float]:
     """Generate RL training configuration interactively."""
+    # Validate model is a VL model
+    validate_vl_model(model_name)
+    
     # Display preset options
     display_preset_table(presets, 80.0)  # Assuming A100 80GB
     

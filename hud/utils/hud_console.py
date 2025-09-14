@@ -531,6 +531,15 @@ class HUDConsole:
         else:
             return f"  [{GREEN}]✓[/{GREEN}] [{TEXT}]{content}[/{TEXT}]"
 
+    def confirm(self, message: str, default: bool = True) -> bool:
+        """Print a confirmation message.
+        
+        Args:
+            message: The confirmation message
+            default: If True, the default choice is True
+        """
+        return questionary.confirm(message, default=default).ask()
+
 
 # Global design instance for convenience
 class _ProgressContext:

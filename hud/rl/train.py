@@ -32,10 +32,10 @@ from hud.rl.learner import GRPOLearner
 from hud.rl.utils import (
     aggregate_metrics_across_ranks,
     ensure_dir,
-    load_tasks,
     preprocess_advantages,
     set_seed,
 )
+from hud.utils.tasks import load_tasks
 from hud.rl.vllm_adapter import VLLMAdapter
 from hud.utils.hud_console import HUDConsole
 

@@ -80,6 +80,12 @@ class Settings(BaseSettings):
         validation_alias="HUD_LOG_STREAM",
     )
 
+    hud_rl_url: str | None = Field(
+        default="http://localhost:8002",
+        description="Base URL for the HUD RL API server (e.g., http://localhost:8002)",
+        validation_alias="HUD_RL_URL",
+    )
+
 
 # Create a singleton instance
 settings = Settings()

@@ -113,8 +113,8 @@ async def run_single_task(
 
     # Import Task and run_dataset lazily
     try:
-        from hud.datasets import Task, run_dataset
-        from hud.rl.utils import load_tasks
+        from hud.datasets import run_dataset
+        from hud.utils.tasks import load_tasks
     except ImportError as e:
         hud_console.error(
             "Dataset dependencies are not installed. "
