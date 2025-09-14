@@ -100,6 +100,9 @@ class ActorConfig:
     system_prompt: str = "You are an expert agent. Complete the task efficiently."
     vllm_base_url: str = "http://localhost:8000/v1"
     vllm_api_key: str = "token-abc123"
+    
+    # Episode execution timeout (seconds)
+    episode_timeout_sec: int = 600
 
 
 @dataclass

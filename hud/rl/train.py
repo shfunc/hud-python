@@ -91,13 +91,13 @@ async def train(config: Config, tasks: list[Task]) -> None:
     
     # Create job on main process and distribute ID across GPUs
     if is_main_process():
-        hud_console.debug_log(f"Creating job with config.job_id: {config.job_id}")
+        hud_console.info(f"Creating job with config.job_id: {config.job_id}")
         job_obj = hud.create_job(
             job_id=config.job_id,
             name=config.job_name,
             metadata={"config": config.to_dict()}
         )
-        hud_console.debug_log(f"Created job with job_obj.id: {job_obj.id}")
+        hud_console.info(f"Created job with job_obj.id: {job_obj.id}")
         job_obj.update_status_sync("running")
         job_id = job_obj.id
     else:

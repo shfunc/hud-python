@@ -83,8 +83,29 @@ class Actor:
             batch_end = min(batch_start + self.actor_config.max_parallel_episodes, len(tasks))
             batch = tasks[batch_start:batch_end]
 
-            # Run batch in parallel
-            traces.extend(await asyncio.gather(*[self._run_task(task, job_id) for task in batch]))
+            # Run batch in parallel with per-episode timeout protection
+            async def run_with_timeout(t: Task) -> Trace:
+                try:
+                    return await asyncio.wait_for(
+                        self._run_task(t, job_id),
+                        timeout=self.actor_config.episode_timeout_sec,
+                    )
+                except TimeoutError:
+                    hud_console.warning_log(f"Episode timed out for task {t.id}")
+                    return Trace(isError=True, content="Episode timeout")
+
+            results = await asyncio.gather(
+                *[run_with_timeout(t) for t in batch],
+                return_exceptions=True,
+            )
+
+            # Normalize exceptions to error traces
+            for res in results:
+                if isinstance(res, Exception):
+                    hud_console.warning_log(f"Episode error: {res}")
+                    traces.append(Trace(isError=True, content=str(res)))
+                else:
+                    traces.append(res)
         
         return traces
     
