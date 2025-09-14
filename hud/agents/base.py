@@ -556,7 +556,6 @@ class MCPAgent(ABC):
 
         all_tools = await self.mcp_client.list_tools()
 
-
         response_tools_by_server: dict[str, str] = {}  # server_name -> tool_name
         for tool in all_tools:
             if "response" in tool.name or tool.name == "response":
@@ -579,7 +578,9 @@ class MCPAgent(ABC):
             for server_name in reversed(server_names):
                 if server_name in response_tools_by_server:
                     response_tool_name = response_tools_by_server[server_name]
-                    self.console.debug(f"Found response tool '{response_tool_name}' from server '{server_name}'")
+                    self.console.debug(
+                        f"Found response tool '{response_tool_name}' from server '{server_name}'"
+                    )
                     break
 
             # Fallback to any response tool
@@ -593,10 +594,12 @@ class MCPAgent(ABC):
                 self.response_tool_name = response_tool_name
                 self.lifecycle_tools.append(response_tool_name)
             elif response_tool_name:
-                self.console.debug(f"Response tool '{response_tool_name}' already in lifecycle_tools")
+                self.console.debug(
+                    f"Response tool '{response_tool_name}' already in lifecycle_tools"
+                )
                 self.response_tool_name = response_tool_name
         else:
-            self.console.debug(f"No response tools found or no mcp_config")
+            self.console.debug("No response tools found or no mcp_config")
 
         # Filter tools
         self._available_tools = []
@@ -610,7 +613,7 @@ class MCPAgent(ABC):
         for tool in all_tools:
             # Lifecycle tools (setup, evaluate, response) should always be included
             is_lifecycle = tool.name in self.lifecycle_tools
-            
+
             # Check if tool should be included
             if not is_lifecycle:
                 if self.allowed_tools and tool.name not in self.allowed_tools:
@@ -620,7 +623,9 @@ class MCPAgent(ABC):
                     self.console.debug(f"Skipping tool '{tool.name}' - in disallowed_tools")
                     continue
 
-            self.console.debug(f"Adding tool '{tool.name}' to available tools (lifecycle={is_lifecycle})")
+            self.console.debug(
+                f"Adding tool '{tool.name}' to available tools (lifecycle={is_lifecycle})"
+            )
             self._available_tools.append(tool)
             self._tool_map[tool.name] = tool
 

@@ -121,7 +121,7 @@ async def run_single_task(
             model=model,
             allowed_tools=allowed_tools,
         )
-        print( "Task prompt: ", task.prompt)
+        print("Task prompt: ", task.prompt)
         result = await agent.run(task, max_steps=max_steps)
         print("✅ Reward:", result.reward)
 
@@ -269,7 +269,10 @@ Examples:
         "--verbose", "-v", action="store_true", help="Show detailed agent step logs"
     )
     parser.add_argument(
-        "--very-verbose", "-vv", action="store_true", help="Show debug-level logs for maximum visibility"
+        "--very-verbose",
+        "-vv",
+        action="store_true",
+        help="Show debug-level logs for maximum visibility",
     )
 
     return parser.parse_args()
