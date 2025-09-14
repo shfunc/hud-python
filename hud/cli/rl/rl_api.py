@@ -89,7 +89,8 @@ def launch_training(
     model_name: str,
     config: dict[str, Any],
     tasks: list[dict[str, Any]],
-    gpu_type: str = "A100"
+    gpu_type: str = "A100",
+    gpu_count: int = 1
 ) -> dict[str, Any]:
     """Launch a training run for a model."""
     return make_request_sync(
@@ -99,6 +100,7 @@ def launch_training(
             "config": config,
             "tasks": tasks,
             "gpu_type": gpu_type,
+            "gpu_count": gpu_count
         },
         api_key=settings.api_key
     )

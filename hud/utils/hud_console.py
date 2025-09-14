@@ -113,7 +113,7 @@ class HUDConsole:
             stderr: If True, output to stderr (default), otherwise stdout
         """
         console = self._stderr_console if stderr else self._stdout_console
-        console.print(f"[{TEXT}]{message}[/{TEXT}]")
+        console.print(f"[{TEXT} not bold]{message}[/{TEXT} not bold]")
 
     def print(self, message: str, stderr: bool = True) -> None:
         """Print a message.
@@ -218,7 +218,7 @@ class HUDConsole:
             stderr: If True, output to stderr (default), otherwise stdout
         """
         console = self._stderr_console if stderr else self._stdout_console
-        console.print(f"\n[rgb(181,137,0)]💡 Hint: {hint}[/rgb(181,137,0)]")
+        console.print(f"[rgb(181,137,0)]💡 Hint: {hint}[/rgb(181,137,0)]")
 
     def status_item(
         self,

@@ -269,7 +269,7 @@ def run_remote_training(
         gpu_memory_gb = 80.0 if gpu_choice in ["A100", "H100"] else 48.0
         presets = get_training_presets(gpu_memory_gb)
         
-        config, estimated_memory = generate_config_interactive(
+        config, _ = generate_config_interactive(
             model_name=model_info.base_model,
             tasks_count=len(tasks),
             presets=presets,
@@ -281,7 +281,7 @@ def run_remote_training(
         save_config(config, temp_config_path)
         
         # Ask to edit config
-        hud_console.info(f"Training configuration saved to [underline cyan]{temp_config_path.absolute()}[/underline cyan]")
+        hud_console.info(f"Using training configuration from [underline cyan]{temp_config_path.absolute()}[/underline cyan]")
         edit_choice = hud_console.select(
             "Would you like to start training?",
             choices=[
@@ -330,7 +330,7 @@ def run_remote_training(
         
         hud_console.success("Training Started Successfully!")
         
-        hud_console.info("See your model training on https://app.hud.so/models")
+        hud_console.info(f"See your model {model_name} training on https://app.hud.so/models")
         hud_console.hint("Launch another training run via: hud rl <tasks_file>")
         hud_console.hint("Or evaluate the model via: hud eval <tasks_file>")
         
