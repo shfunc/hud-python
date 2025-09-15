@@ -840,6 +840,7 @@ def eval(
     ),
 ) -> None:
     """🚀 Run evaluation on datasets or individual tasks with agents."""
+    from hud.settings import settings
     from hud.utils.hud_console import HUDConsole
 
     hud_console = HUDConsole()
@@ -914,8 +915,9 @@ def eval(
         # Add HUD models as agent choices
         for hud_model in hud_models:
             model_name = hud_model["name"]
+            base_model = hud_model["base_model"]
             vllm_status = " ⚡" if hud_model.get("vllm_url") else ""
-            choices.append({"name": f"🚀 {model_name}{vllm_status}", "value": f"hud:{model_name}"})
+            choices.append({"name": f"{model_name}{vllm_status}", "value": f"hud:{model_name}"})
         
         # Add standard agent choices
         choices.extend([
@@ -932,10 +934,16 @@ def eval(
 
     # Handle HUD model selection
     if agent and agent.startswith("hud:"):
+        # Find remote model name
         model = agent.split(":", 1)[1]
+        if not vllm_base_url:
+            vllm_base_url = f"{settings.hud_rl_url}/models/{model}/vllm"
+
+        # Set model to base model for the vllm endpoint
+        model = base_model
         agent = "vllm"  # Use vLLM backend for HUD models
-        hud_console.info(f"Using HUD model: {model}")
-    
+        hud_console.info(f"Using HUD model: {model} (trained on {base_model})")
+
     # Validate agent choice
     valid_agents = ["claude", "openai", "vllm"]
     if agent not in valid_agents:

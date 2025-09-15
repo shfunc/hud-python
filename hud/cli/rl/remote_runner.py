@@ -341,7 +341,3 @@ def run_remote_training(
         hud_console.error(f"Failed to launch training: {e}")
         raise
     
-
-# Exports for backward compatibility
-remote_train_command = run_remote_training
-remote_main = run_remote_training

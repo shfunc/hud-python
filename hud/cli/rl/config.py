@@ -20,7 +20,7 @@ def generate_config_interactive(
     model_name: str,
     tasks_count: int,
     presets: list[dict[str, Any]],
-    output_dir: str = "checkpoints",
+    output_dir: str = "/checkpoints",
     vllm_url: str | None = None,
 ) -> tuple[Config, float]:
     """Generate RL training configuration interactively."""
@@ -84,6 +84,7 @@ def generate_config_interactive(
             max_new_tokens=2048,
             max_steps_per_episode=max_steps_per_episode,
             max_parallel_episodes=selected_preset.get("max_parallel_episodes", selected_preset["batch_size"]),
+            force_tool_choice=True,
             system_prompt="You are an expert agent. Complete the task efficiently.",
         ),
     )
@@ -93,40 +94,7 @@ def generate_config_interactive(
 
 def save_config(config: Config, path: Path) -> None:
     """Save configuration to a JSON file."""
-    config_dict = {
-        "seed": config.seed,
-        "out_dir": config.out_dir,
-        "adapter_prefix": config.adapter_prefix,
-        "verbose": config.verbose,
-        "model": {
-            "base_model": config.model.base_model,
-            "lora_r": config.model.lora_r,
-            "lora_alpha": config.model.lora_alpha,
-            "lora_dropout": config.model.lora_dropout,
-            "target_modules": list(config.model.target_modules),
-            "min_pixels": config.model.min_pixels,
-            "max_pixels": config.model.max_pixels,
-        },
-        "training": {
-            "lr": config.training.lr,
-            "epochs": config.training.epochs,
-            "mini_batch_size": config.training.mini_batch_size,
-            "batch_size": config.training.batch_size,
-            "group_size": config.training.group_size,
-            "training_steps": config.training.training_steps,
-            "kl_beta": config.training.kl_beta,
-            "save_every_batches": config.training.save_every_batches,
-        },
-        "actor": {
-            "vllm_base_url": config.actor.vllm_base_url,
-            "vllm_api_key": config.actor.vllm_api_key,
-            "temperature": config.actor.temperature,
-            "max_new_tokens": config.actor.max_new_tokens,
-            "max_steps_per_episode": config.actor.max_steps_per_episode,
-            "max_parallel_episodes": config.actor.max_parallel_episodes,
-            "system_prompt": config.actor.system_prompt,
-        },
-    }
+    config_dict = config.to_dict()
     
     with open(path, "w") as f:
         json.dump(config_dict, f, indent=2)

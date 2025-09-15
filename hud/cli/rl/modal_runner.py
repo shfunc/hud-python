@@ -129,6 +129,8 @@ def _run_training(
     elif not config_data["model"].get("base_model"):
         # Default to Qwen if no model specified
         config_data["model"]["base_model"] = "Qwen/Qwen2.5-VL-3B-Instruct"
+
+    config_data["out_dir"] = output_dir or "/checkpoints"
     
     # Debug: Print the final config
     print(f"Final config model: {config_data['model'].get('base_model')}")
