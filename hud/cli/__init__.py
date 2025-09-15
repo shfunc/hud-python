@@ -785,7 +785,7 @@ def eval(
         None,
         "--agent",
         help=(
-            "Agent backend to use (claude or openai). If not provided, will prompt interactively."
+            "Agent backend to use (claude, openai, or vllm). If not provided, will prompt interactively."
         ),
     ),
     model: str | None = typer.Option(
@@ -827,6 +827,16 @@ def eval(
         False,
         "--verbose",
         help="Enable verbose output from the agent",
+    ),
+    vllm_base_url: str | None = typer.Option(
+        None,
+        "--vllm-base-url",
+        help="Base URL for vLLM server (when using --agent vllm)",
+    ),
+    group_size: int = typer.Option(
+        1,
+        "--group-size",
+        help="Number of times to run each task (similar to RL training)",
     ),
 ) -> None:
     """🚀 Run evaluation on datasets or individual tasks with agents."""
@@ -945,7 +955,8 @@ def eval(
         max_workers=max_workers,
         max_concurrent_per_worker=max_concurrent_per_worker,
         verbose=verbose,
-        vllm_base_url=None,  # Pass None to use HUD defaults
+        vllm_base_url=vllm_base_url,
+        group_size=group_size,
     )
 
 
