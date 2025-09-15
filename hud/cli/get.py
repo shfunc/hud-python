@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import contextlib
 from pathlib import Path
 
 import typer
@@ -28,6 +29,12 @@ def get_command(
         "-o",
         help="Output filename (defaults to dataset_name.jsonl)"
     ),
+    format: str = typer.Option(
+        "json",
+        "--format",
+        "-f",
+        help="Output format: json (list) or jsonl (one task per line)",
+    ),
     limit: int = typer.Option(
         None,
         "--limit",
@@ -35,7 +42,7 @@ def get_command(
         help="Limit number of examples to download"
     ),
 ):
-    """Download a HuggingFace dataset and save it as JSONL."""
+    """Download a HuggingFace dataset and save it as JSON (list) or JSONL."""
     console.print(f"\n[cyan]📥 Downloading dataset: {dataset_name}[/cyan]")
     
     # Import datasets library
@@ -48,8 +55,9 @@ def get_command(
     
     # Determine output filename
     if output is None:
-        # Convert dataset name to filename (e.g., "hud-evals/browser-2048" -> "browser-2048.jsonl")
-        dataset_filename = dataset_name.split("/")[-1] + ".jsonl"
+        # Convert dataset name to filename (e.g., "hud-evals/browser-2048" -> "browser-2048.json|jsonl")
+        ext = ".json" if format.lower() == "json" else ".jsonl"
+        dataset_filename = dataset_name.split("/")[-1] + ext
         output = Path(dataset_filename)
     
     # Download dataset with progress
@@ -87,7 +95,7 @@ def get_command(
         dataset = dataset.select(range(min(limit, len(dataset))))
         console.print(f"[yellow]Limited to {len(dataset)} examples[/yellow]")
     
-    # Save as JSONL
+    # Save as JSON or JSONL
     console.print(f"[cyan]Writing to {output}...[/cyan]")
     
     with Progress(
@@ -98,15 +106,31 @@ def get_command(
     ) as progress:
         task = progress.add_task("Saving...", total=len(dataset))
         
-        with open(output, "w") as f:
+        if format.lower() == "json":
+            # Write a single JSON array
+            data_list = []
             for i, example in enumerate(dataset):
-                # Convert to dict if needed
-                if hasattr(example, "to_dict"):
-                    example = example.to_dict()
-                
-                # Write as JSON line
-                f.write(json.dumps(example) + "\n")
+                item = example.to_dict() if hasattr(example, "to_dict") else example
+                for key, value in item.items():
+                    with contextlib.suppress(json.JSONDecodeError):
+                        item[key] = json.loads(value)
+                data_list.append(item)
                 progress.update(task, advance=1)
+            with open(output, "w", encoding="utf-8") as f:
+                json.dump(data_list, f, ensure_ascii=False, indent=2)
+        else:
+            # Write JSONL
+            with open(output, "w", encoding="utf-8") as f:
+                for i, example in enumerate(dataset):
+                    # Convert to dict if needed
+                    if hasattr(example, "to_dict"):
+                        example = example.to_dict()
+                    for key, value in example.items():
+                        with contextlib.suppress(json.JSONDecodeError):
+                            example[key] = json.loads(value)
+                    # Write as JSON line
+                    f.write(json.dumps(example) + "\n")
+                    progress.update(task, advance=1)
     
     # Show summary
     console.print(f"\n[green]✅ Downloaded {len(dataset)} examples to {output}[/green]")
@@ -128,7 +152,6 @@ def get_command(
     
     # Show next steps
     console.print("\n[dim]Next steps:[/dim]")
-    console.print(f"[dim]• View the file: cat {output} | head[/dim]")
     console.print(f"[dim]• Use for training: hud rl {output}[/dim]")
     console.print(f"[dim]• Use for evaluation: hud eval {output}[/dim]")
 

@@ -36,10 +36,8 @@ def rl_command(
         None,
         help="Path to tasks file (JSON/JSONL) or HuggingFace dataset name",
     ),
-    model: str | None = typer.Option(
+    model: str | None = typer.Argument(
         None,
-        "--model",
-        "-m",
         help="Model to train (default: interactive selection)",
     ),
     config_file: Path | None = typer.Option(

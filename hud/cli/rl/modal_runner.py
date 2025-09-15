@@ -161,7 +161,7 @@ def _run_training(
         verbose=True,
         modal=False,
         modal_gpu="",
-        no_ddp=True,
+        no_ddp=False,
         ddp_gpus=None,
         vllm_gpu=None,  # Not using local vLLM
         skip_vllm_startup=True,  # Using remote vLLM server
