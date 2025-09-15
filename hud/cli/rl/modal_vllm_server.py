@@ -33,20 +33,19 @@ vllm_image = (
     })
 )
 
-# Add chat template if available (at build time)
-# This happens when the module is imported during deployment
-if __name__ != "__main__":  # Only during import, not direct execution
-    try:
-        chat_template_path = Path(__file__).parent.parent.parent / "rl" / "chat_template.jinja"
-        if chat_template_path.exists():
-            vllm_image = vllm_image.add_local_file(
-                chat_template_path,
-                "/root/chat_template.jinja",
-                copy=True  # Copy at build time
-            )
-            print("Chat template added to image")
-    except Exception as e:
-        print(f"Chat template not added: {e}")
+# Add chat template if available (at build time), regardless of entrypoint
+try:
+    # The template lives alongside this file in hud/rl/chat_template.jinja
+    chat_template_path = Path(__file__).parent.parent.parent / "rl" / "chat_template.jinja"
+    if chat_template_path.exists():
+        vllm_image = vllm_image.add_local_file(
+            chat_template_path,
+            "/root/chat_template.jinja",
+            copy=True  # Copy at build time
+        )
+        print("Chat template added to image")
+except Exception as e:
+    print(f"Chat template not added: {e}")
 
 
 # Volumes for model cache and checkpoints
