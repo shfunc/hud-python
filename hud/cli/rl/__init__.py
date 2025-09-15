@@ -544,7 +544,7 @@ def rl_command(
     # Step 9: Run training (DDP or single GPU)
     if use_ddp:
         console.print(f"\n[bold green]🎯 Starting DDP training on {len(training_gpus)} GPUs...[/bold green]\n")
-        launch_ddp_training(config, training_gpus, vllm_gpu_idx, tasks_file, temp_config_path, verbose)
+        launch_ddp_training(training_gpus, tasks_file, temp_config_path, verbose)
         console.print("\n[green]✅ Training completed successfully![/green]")
     else:
         console.print("\n[bold green]🎯 Starting single-GPU training...[/bold green]\n")
@@ -572,9 +572,7 @@ def rl_command(
 
 
 def launch_ddp_training(
-    config: Config,
     training_gpus: list[int],
-    vllm_gpu: int,
     tasks_file: str,
     config_path: Path,
     verbose: bool
