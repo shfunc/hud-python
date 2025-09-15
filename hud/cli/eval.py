@@ -21,7 +21,7 @@ def get_available_models() -> list[dict[str, str | None]]:
     """Fetch available models from the HUD API (only ready models).
     
     Returns:
-        List of dicts with 'name' and 'vllm_url' keys
+        List of dicts with 'name', 'vllm_url', and 'base_model' keys
     """
     try:
         from hud.cli.rl import rl_api
@@ -46,7 +46,7 @@ def get_available_models() -> list[dict[str, str | None]]:
             if training_count > 0:
                 hud_console.info(f"\n({training_count} models currently training)")
             
-            return [{"name": model.name, "vllm_url": model.vllm_url} for model in ready_models]
+            return [{"name": model.name, "vllm_url": model.vllm_url, "base_model": model.base_model} for model in ready_models]
         else:
             if training_count > 0:
                 hud_console.warning(f"No ready models found. You have {training_count} models currently training.")
@@ -86,14 +86,9 @@ def build_agent(
         # Determine the base URL to use
         if vllm_base_url is not None:
             # Use the provided vLLM URL (for custom/local servers)
-            base_url = str(vllm_base_url)
+            base_url = vllm_base_url
             hud_console.info(f"Using vLLM server at {base_url}")
             api_key = settings.api_key if base_url.startswith(settings.hud_rl_url) else "token-abc123"
-        elif model:
-            # Always use standard HUD vLLM endpoint for HUD models
-            base_url = f"{settings.hud_rl_url}/models/{model}/vllm"
-            api_key = settings.api_key
-            hud_console.info(f"Using HUD vLLM endpoint: {base_url}")
         else:
             # Default to localhost
             base_url = "http://localhost:8000/v1"
@@ -112,6 +107,7 @@ def build_agent(
             completion_kwargs={
                 "temperature": 0.7,
                 "max_tokens": 2048,
+                "force_tool_choice": True,
             }
         )
     
@@ -583,9 +579,8 @@ def eval_command(
         if model:
             hud_console.info(f"Using vLLM with model: {model}")
         else:
-            # Default to served-model if no model specified
-            model = "served-model"
-            hud_console.info("Using vLLM with default model: served-model")
+            hud_console.error("Model name is required for vLLM agent, specify with --model")
+            raise typer.Exit(1)
 
     # Check for HUD_API_KEY if using HUD services
     if not settings.api_key:

@@ -26,6 +26,12 @@ class Settings(BaseSettings):
         validation_alias="HUD_MCP_URL",
     )
 
+    hud_rl_url: str = Field(
+        default="http://rl.hud.so/v1",
+        description="Base URL for the HUD RL API server",
+        validation_alias="HUD_RL_URL",
+    )
+
     api_key: str | None = Field(
         default=None,
         description="API key for authentication with the HUD API",
@@ -78,12 +84,6 @@ class Settings(BaseSettings):
         default="stdout",
         description="Stream to use for logging output: 'stdout' or 'stderr'",
         validation_alias="HUD_LOG_STREAM",
-    )
-
-    hud_rl_url: str | None = Field(
-        default="http://localhost:8002",
-        description="Base URL for the HUD RL API server (e.g., http://localhost:8002)",
-        validation_alias="HUD_RL_URL",
     )
 
 

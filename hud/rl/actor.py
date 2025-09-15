@@ -90,7 +90,7 @@ class Actor:
                         self._run_task(t, job_id),
                         timeout=self.actor_config.episode_timeout_sec,
                     )
-                except TimeoutError:
+                except asyncio.TimeoutError:
                     hud_console.warning_log(f"Episode timed out for task {t.id}")
                     return Trace(isError=True, content="Episode timeout")
 

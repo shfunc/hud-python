@@ -20,7 +20,7 @@ def generate_config_interactive(
     model_name: str,
     tasks_count: int,
     presets: list[dict[str, Any]],
-    output_dir: str = "checkpoints",
+    output_dir: str = "/checkpoints",
     vllm_url: str | None = None,
 ) -> tuple[Config, float]:
     """Generate RL training configuration interactively."""
@@ -84,6 +84,7 @@ def generate_config_interactive(
             max_new_tokens=2048,
             max_steps_per_episode=max_steps_per_episode,
             max_parallel_episodes=selected_preset.get("max_parallel_episodes", selected_preset["batch_size"]),
+            force_tool_choice=True,
             system_prompt="You are an expert agent. Complete the task efficiently.",
         ),
     )

@@ -49,7 +49,7 @@ def rl_command(
         help="Path to existing configuration file",
     ),
     output_dir: str = typer.Option(
-        "checkpoints",
+        "/checkpoints",
         "--output-dir",
         "-o",
         help="Output directory for checkpoints",
