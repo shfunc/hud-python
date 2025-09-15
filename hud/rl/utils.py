@@ -103,18 +103,15 @@ def aggregate_metrics_across_ranks(metrics: Any, metrics_to_aggregate: list[str]
         dtype=torch.float32
     )
     
-    # Gather from all ranks
-    if is_main_process():
-        gathered_tensors = [torch.zeros_like(values_tensor) for _ in range(get_world_size())]
-    else:
-        gathered_tensors = None
-    
-    torch.distributed.gather(values_tensor, gathered_tensors, dst=0)
-    
+    # Gather from all ranks using NCCL-supported all_gather
+    world_size = get_world_size()
+    gather_list = [torch.zeros_like(values_tensor) for _ in range(world_size)]
+    torch.distributed.all_gather(gather_list, values_tensor)
+
     # Update metrics on main process only
-    if is_main_process() and gathered_tensors:
+    if is_main_process():
         # Reshape: [num_gpus, num_metrics]
-        all_values = torch.stack(gathered_tensors).cpu().numpy()
+        all_values = torch.stack(gather_list).cpu().numpy()
         
         # Update each metric with aggregated values
         for i, metric_name in enumerate(local_values.keys()):
