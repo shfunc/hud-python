@@ -98,6 +98,7 @@ def build_agent(
         openai_client = AsyncOpenAI(
             base_url=base_url,
             api_key=api_key,
+            timeout=30.0,
         )
         
         return GenericOpenAIChatAgent(
