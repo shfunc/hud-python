@@ -234,24 +234,21 @@ def prepare_conversation_history(
 
 def prepare_inputs(
     trace: Trace,
-    processor: Any,
-    learner: Any,
-    config: Config
-) -> list[dict[str, torch.Tensor]]:
+    processor: Any
+) -> dict[str, torch.Tensor]:
     """
     Prepare inputs from a trace.
     
     Args:
         trace: Trace to process
         processor: Model processor
-        learner: Learner instance (for computing logprobs)
     
     Returns:
         Inputs for the model
     """
     # Skip error traces or traces with no messages
     if trace.isError or len(trace.messages) == 0:
-        return []
+        return {}
 
     # Get images for current turn
     conversation, images = prepare_conversation_history(trace.messages)
@@ -285,9 +282,8 @@ def prepare_inputs(
     # logits_to_keep are positions where previous token (label axis) is assistant
     logits_to_keep = (mask_tensor[0, 1:] == 1).nonzero(as_tuple=True)[0]
     inputs["logits_to_keep"] = logits_to_keep
-    inputs = {k: v.to(learner.device) for k, v in inputs.items()}
 
-    return [inputs]
+    return inputs
 
 
 def preprocess_advantages(group: list[Trace], group_size: int) -> list[TrainingSample]:
@@ -314,10 +310,10 @@ def preprocess_advantages(group: list[Trace], group_size: int) -> list[TrainingS
 
     return all_samples
 
-# def concat_training_samples(
+# def batch_training_samples(
 #     samples: list[TrainingSample],
 # ) -> TrainingSample:
-#     """Concatenate training samples from a list of episodes."""
+#     """Batch training samples from a list of episodes."""
 #     sample = TrainingSample(
 #         inputs={},
 #         advantage=torch.tensor([]),

@@ -25,7 +25,7 @@ from hud.rl.distributed import (
 )
 from hud.rl.utils import get_gpu_utilization, get_memory_usage, prepare_inputs
 from hud.utils.hud_console import HUDConsole
-
+from contextlib import nullcontext
 from .config import Config
 from .types import TrainingMetrics, TrainingSample
 
@@ -180,106 +180,111 @@ class GRPOLearner:
         gathered = torch.gather(log_probs, dim=-1, index=target_ids.unsqueeze(-1)).squeeze(-1)
         
         return gathered
-    
-    def update(self, samples: list[TrainingSample]) -> TrainingMetrics:
-        """Perform a gradient update on a batch."""
-        import time
-        training_start_time = time.time()
-        
-        # Always create metrics for synchronization
-        self.metrics.append(TrainingMetrics())
-        metrics = self.metrics[-1]
-        
-        # Handle empty batch - still need to call backward for DDP sync
-        if not samples or len(samples) == 0:
-            if self.world_size > 1:
-                hud_console.warning_log("Empty batch, performing dummy backward for DDP sync")
-                # Perform a dummy forward/backward with the model to maintain DDP synchronization
-                dummy_input_ids = torch.zeros((1, 1), dtype=torch.long, device=self.device)
-                dummy_inputs = {"input_ids": dummy_input_ids}
-                dummy_output = self.policy(**dummy_inputs)
-                dummy_loss = dummy_output.logits.sum() * 0  # Zero loss but uses model
-                dummy_loss.backward()
-                self.optimizer.step()
-                self.optimizer.zero_grad()
-            return metrics
-        
+
+    def prepare_groups(self, samples: list[TrainingSample],) -> list[list[TrainingSample]]:
+        """Prepare groups of samples for training."""
         # Prepare inputs with messages
         batch = []
         for sample in samples:
-            inputs = prepare_inputs(sample, self.processor, self.policy, self.config)
-            for inp in inputs:
-                new_sample = TrainingSample(**sample.model_dump())
-                new_sample.inputs = inp
-                batch.append(new_sample)
+            inputs = prepare_inputs(sample, self.processor)
+            new_sample = TrainingSample(**sample.model_dump())
+            new_sample.inputs = inputs
+            batch.append(new_sample)
 
         hud_console.info_log(f"[update] Processing batch of {len(batch)} traces")
-        
-        # Initialize accumulated_loss to handle empty groups
-        accumulated_loss = 0.0
 
         # Precompute logprobs
         with torch.no_grad():
             for sample in batch:
+                sample = sample.to_device(self.device)
                 sample.old_logprobs = self.compute_logprobs(
                     self.policy,
                     sample.inputs,
-                ).cpu()  # Move to CPU immediately
+                )
             policy_module = self.policy.module if hasattr(self.policy, "module") else self.policy
             with policy_module.disable_adapter():
                 for sample in batch:
                     sample.ref_logprobs = self.compute_logprobs(
                         self.policy,
                         sample.inputs,
-                    ).cpu()  # Move to CPU immediately
+                    )
+                    sample.to_device(torch.device("cpu"))
+
+        # Convert back to grouped batches
+        return [batch[i:i+self.config.training.group_size] for i in range(0, len(batch), self.config.training.group_size)]
+            
+    def update(self, samples: list[TrainingSample]) -> TrainingMetrics:
+        """Perform a gradient update on a batch."""
+        import time
+        training_start_time = time.time()
+
+        # Always create metrics for synchronization
+        self.metrics.append(TrainingMetrics())
+        metrics = self.metrics[-1]
+        
+        # Prepare groups for GRPO training
+        groups = self.prepare_groups(samples)
         
         # Update over mini batch size
         with hud_console.progress("Gradient update...") as progress:
-            progress.update(f"Computing logprobs for {len(batch)} samples")
-            mini_batch_size = min(self.config.training.mini_batch_size, len(batch))
-            grad_accum_steps = max(1, len(batch) // mini_batch_size)
             for epoch in range(self.config.training.epochs):
-                progress.update(f"Training epoch {epoch+1}/{self.config.training.epochs}")
-                    
-                self.optimizer.zero_grad()
-                accumulated_loss = 0.0
-                
-                for accum_step in range(grad_accum_steps):
-                    # Get samples for this accumulation step
-                    start_idx = accum_step * mini_batch_size
-                    end_idx = min(start_idx + mini_batch_size, len(batch))
-                    if start_idx >= len(batch):
-                        break
+                for group_idx, group in enumerate(groups):
+                    mini_batch_size = min(self.config.training.mini_batch_size, len(group))
+                    grad_accum_steps = max(1, len(group) // mini_batch_size)
+                    progress.update(f"Training epoch {epoch+1}/{self.config.training.epochs}")
                         
-                    step_samples = batch[start_idx:end_idx]
+                    self.optimizer.zero_grad()
+                    accumulated_loss = 0.0
                     
-                    loss = self.compute_loss(step_samples) / grad_accum_steps
-                    accumulated_loss += loss.item() * grad_accum_steps
+                    for accum_step in range(grad_accum_steps):
+                        is_last = accum_step == grad_accum_steps - 1
+                        ddp_ctx = nullcontext() if (is_last or self.world_size == 1) else self.policy.no_sync()
+                        amp_ctx = torch.autocast(device_type="cuda", dtype=torch.bfloat16) if self.config.training.use_amp else nullcontext()
+                    
+                        # Get samples for this accumulation step
+                        start_idx = accum_step * mini_batch_size
+                        end_idx = min(start_idx + mini_batch_size, len(group))
+                        if start_idx >= len(group):
+                            break
+                            
+                        step_samples = group[start_idx:end_idx]
+                        for s in step_samples:
+                            s.to_device(self.device)
 
-                    metrics.update({
-                        "gpu_util": get_gpu_utilization(),  # Track peak utilization
-                        "gpu_memory": get_memory_usage(),  # Track memory usage
-                    })
-                    progress.update(f"GPU Util: {get_gpu_utilization():.1f}% | Memory: {get_memory_usage():.2f} GB")
-                    
-                    loss.backward()
+                        with ddp_ctx, amp_ctx:
+                            loss = self.compute_loss(step_samples) / grad_accum_steps
+                            accumulated_loss += loss.item() * grad_accum_steps
+
+                            metrics.update({
+                                "gpu_util": get_gpu_utilization(),  # Track peak utilization
+                                "gpu_memory": get_memory_usage(),  # Track memory usage
+                            })
+                            progress.update(f"GPU Util: {get_gpu_utilization():.1f}% | Memory: {get_memory_usage():.2f} GB")
+                            
+                            loss.backward()
+                            
+                        for s in step_samples:
+                            s.to_device(torch.device("cpu"))
+                            
                     progress.update(f"Step {accum_step}, Epoch {epoch}, Loss: {accumulated_loss:.4f}")
 
-                
-                grad_norm = torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.config.training.grad_clip)
-                self.optimizer.step()
+                    hud_console.info_log(f"Gradient update completed: {group_idx} group, final loss: {accumulated_loss:.4f}, {len(step_samples)} samples")
+                    grad_norm = torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.config.training.grad_clip)
+                    self.optimizer.step()
 
-                metrics.update({
-                    "grad_norm": grad_norm.item() if isinstance(grad_norm, torch.Tensor) else float(grad_norm),
-                })
+                    metrics.update({
+                        "grad_norm": grad_norm.item() if isinstance(grad_norm, torch.Tensor) else float(grad_norm),
+                    })
+                
+                hud_console.info_log(f"Gradient update completed: {group_idx} group, final loss: {accumulated_loss:.4f}, {len(step_samples)} samples")
                 
         
         # Log summary after progress completes
-        hud_console.info_log(f"Gradient update completed: {len(batch)} samples, final loss: {accumulated_loss:.4f}")
+        hud_console.info_log(f"Gradient update completed: {group_idx} group, final loss: {accumulated_loss:.4f}")
         
         # Calculate training time and throughput
         training_time = time.time() - training_start_time
-        total_samples = len(samples)
+        total_samples = len(groups) * self.config.training.group_size
         samples_per_second = total_samples / training_time if training_time > 0 else 0.0
         
         metrics.update({
@@ -316,7 +321,7 @@ class GRPOLearner:
                 1 + training_cfg.bottom_eps
             ) * sample.advantage
             
-            policy_term = torch.minimum(unclipped, clipped)
+            policy_term = -torch.minimum(unclipped, clipped)
             policy_terms.append(policy_term)
             
             # Clip log probability differences to prevent numerical explosion in KL
@@ -336,7 +341,7 @@ class GRPOLearner:
         policy_loss = torch.stack(policy_terms).mean()
         kl_loss = torch.stack(kl_terms).mean()
         
-        total_loss = -policy_loss + training_cfg.kl_beta * kl_loss
+        total_loss = policy_loss + training_cfg.kl_beta * kl_loss
         
         metrics.update({
             "loss": total_loss.item(),

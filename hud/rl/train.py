@@ -58,6 +58,8 @@ async def train(config: Config, tasks: list[Task]) -> None:
         hud_console.header("Starting GRPO Training")
         hud_console.section_title(f"\n[1/3] Initializing components (world_size={get_world_size()})...")
 
+    num_gpus = get_world_size()
+
     # Actor is responsible for running tasks and collecting episodes
     actor = Actor(config) if is_main_process() else None
 
@@ -71,6 +73,10 @@ async def train(config: Config, tasks: list[Task]) -> None:
     )
     if is_main_process():
         hud_console.key_value_table(dataset_buffer.info)
+    
+    if dataset_buffer.groups_per_batch % num_gpus != 0:
+        hud_console.warning(f"Groups per batch {dataset_buffer.groups_per_batch} is not divisible by number of GPUs {num_gpus}")
+        exit(1)
 
     # Replay buffer is responsible for storing episodes for training
     trace_buffer = ReplayBuffer(config)
@@ -133,19 +139,18 @@ async def train(config: Config, tasks: list[Task]) -> None:
                 assert len(traces) == len(all_traces)
 
                 # Preprocess traces to training samples
-                preprocessed_traces = preprocess_advantages(all_traces, config.training.group_size)
+                preprocessed_traces = preprocess_advantages(all_traces, dataset_buffer.group_size)
                 
                 # Store these for later use in metrics
                 global_reward_stats = [trace.reward for trace in all_traces]
                 global_advantage_stats = [sample.advantage for sample in preprocessed_traces]
                 
                 # Distribute traces in groups across ranks
-                num_gpus = get_world_size()
                 gpu_batch_size = len(all_traces) // num_gpus
                 rank_traces = [all_traces[i:i+gpu_batch_size] for i in range(0, len(all_traces), gpu_batch_size)]
                 
                 # Log distribution info
-                hud_console.info(f"Distributing {len(all_traces)} traces as {gpu_batch_size} batches across {num_gpus} GPUs")
+                hud_console.info(f"Distributing {len(all_traces)} traces as {gpu_batch_size} sized batches across {num_gpus} GPUs")
                 for rank in range(num_gpus):
                     n_traces = len(rank_traces[rank])
                     hud_console.info(f"  Rank {rank}: {n_traces} traces")

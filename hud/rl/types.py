@@ -25,6 +25,14 @@ class TrainingSample(Trace):
 
     # Weighted advantage of group calculation
     advantage: float = Field(default=0.0)
+    
+    def to_device(self, device: torch.device) -> TrainingSample:
+        """Move sample to device."""
+        self.inputs = {k: (t.to(device, non_blocking=True) if hasattr(t, "to") else t)
+                        for k, t in self.inputs.items()}
+        self.old_logprobs = self.old_logprobs.to(device) if self.old_logprobs is not None else None
+        self.ref_logprobs = self.ref_logprobs.to(device) if self.ref_logprobs is not None else None
+        return self
 
 @dataclass
 class Metric:
