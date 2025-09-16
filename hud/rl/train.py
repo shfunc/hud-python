@@ -5,7 +5,7 @@ import os
 
 # Disable tokenizer parallelism warnings
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import argparse
 import asyncio
 import json

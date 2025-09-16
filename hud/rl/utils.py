@@ -413,6 +413,8 @@ def batch_training_samples(samples: list[TrainingSample]) -> list[TrainingSample
             # Shape of pixel_values: (sum of all patches from all images, feature_dim)
             # Shape of image_grid_thw: (sum of all images, 3)
             updated_inputs[k] = torch.cat(updated_inputs[k], dim=0)
+        else:
+            updated_inputs.pop(k)
 
     new_samples[0].inputs = updated_inputs
 
