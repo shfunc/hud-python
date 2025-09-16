@@ -214,75 +214,65 @@ class GRPOLearner:
                 batch.append(new_sample)
 
         hud_console.info_log(f"[update] Processing batch of {len(batch)} traces")
-        group_size = self.config.training.group_size
-        if len(batch) % group_size != 0:
-            hud_console.warning_log(f"Group size {group_size} does not divide batch size {len(batch)}")
-            # Continue anyway with partial group
-        
-        groups = [batch[i:i+group_size] for i in range(0, len(batch), group_size)]
         
         # Initialize accumulated_loss to handle empty groups
         accumulated_loss = 0.0
+
+        # Precompute logprobs
+        with torch.no_grad():
+            for sample in batch:
+                sample.old_logprobs = self.compute_logprobs(
+                    self.policy,
+                    sample.inputs,
+                ).cpu()  # Move to CPU immediately
+            policy_module = self.policy.module if hasattr(self.policy, "module") else self.policy
+            with policy_module.disable_adapter():
+                for sample in batch:
+                    sample.ref_logprobs = self.compute_logprobs(
+                        self.policy,
+                        sample.inputs,
+                    ).cpu()  # Move to CPU immediately
         
+        # Update over mini batch size
         with hud_console.progress("Gradient update...") as progress:
-            for i, samples in enumerate(groups):
-                progress.update(f"Computing logprobs for {len(samples)} samples")
-                hud_console.debug_log(f"Computing old and reference logprobs for {len(samples)} samples")
-                with torch.no_grad():
-                    for sample in samples:
-                        sample.old_logprobs = self.compute_logprobs(
-                            self.policy,
-                            sample.inputs,
-                        ).cpu()  # Move to CPU immediately
-                    policy_module = self.policy.module if hasattr(self.policy, "module") else self.policy
-                    with policy_module.disable_adapter():
-                        for sample in samples:
-                            sample.ref_logprobs = self.compute_logprobs(
-                                self.policy,
-                                sample.inputs,
-                            ).cpu()  # Move to CPU immediately
-
-                progress.update(f"Training group {i+1}/{len(groups)} for {self.config.training.epochs} epochs")
-                for epoch in range(self.config.training.epochs):
-                    mini_batch_size = min(self.config.training.mini_batch_size, len(samples))
-                    grad_accum_steps = max(1, len(samples) // mini_batch_size)
+            progress.update(f"Computing logprobs for {len(batch)} samples")
+            mini_batch_size = min(self.config.training.mini_batch_size, len(batch))
+            grad_accum_steps = max(1, len(batch) // mini_batch_size)
+            for epoch in range(self.config.training.epochs):
+                progress.update(f"Training epoch {epoch+1}/{self.config.training.epochs}")
                     
-                    self.optimizer.zero_grad()
-                    accumulated_loss = 0.0
+                self.optimizer.zero_grad()
+                accumulated_loss = 0.0
+                
+                for accum_step in range(grad_accum_steps):
+                    # Get samples for this accumulation step
+                    start_idx = accum_step * mini_batch_size
+                    end_idx = min(start_idx + mini_batch_size, len(batch))
+                    if start_idx >= len(batch):
+                        break
+                        
+                    step_samples = batch[start_idx:end_idx]
                     
-                    for accum_step in range(grad_accum_steps):
-                        # Get samples for this accumulation step
-                        start_idx = accum_step * mini_batch_size
-                        end_idx = min(start_idx + mini_batch_size, len(samples))
-                        if start_idx >= len(samples):
-                            break
-                            
-                        step_samples = samples[start_idx:end_idx]
-                        
-                        # Track GPU utilization during compute
-                        gpu_util_before = get_gpu_utilization()
-                        
-                        loss = self.compute_loss(step_samples) / grad_accum_steps
-                        accumulated_loss += loss.item() * grad_accum_steps
-
-                        gpu_util_after = get_gpu_utilization()
-                        gpu_mem = get_memory_usage()
-                        progress.update(f"GPU Util: {gpu_util_after:.1f}% | Memory: {gpu_mem:.2f} GB")
-                        metrics.update({
-                            "gpu_util": gpu_util_after,  # Track peak utilization
-                            "gpu_memory": gpu_mem,  # Track memory usage
-                        })
-                        
-                        loss.backward()
-                    
-                    grad_norm = torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.config.training.grad_clip)
-                    self.optimizer.step()
+                    loss = self.compute_loss(step_samples) / grad_accum_steps
+                    accumulated_loss += loss.item() * grad_accum_steps
 
                     metrics.update({
-                        "grad_norm": grad_norm.item() if isinstance(grad_norm, torch.Tensor) else float(grad_norm),
+                        "gpu_util": get_gpu_utilization(),  # Track peak utilization
+                        "gpu_memory": get_memory_usage(),  # Track memory usage
                     })
+                    progress.update(f"GPU Util: {get_gpu_utilization():.1f}% | Memory: {get_memory_usage():.2f} GB")
                     
-                    progress.update(f"Step {i}, Epoch {epoch}, Loss: {accumulated_loss:.4f}, GradNorm: {grad_norm:.4f} (grad_accum={grad_accum_steps})")
+                    loss.backward()
+                    progress.update(f"Step {accum_step}, Epoch {epoch}, Loss: {accumulated_loss:.4f}")
+
+                
+                grad_norm = torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.config.training.grad_clip)
+                self.optimizer.step()
+
+                metrics.update({
+                    "grad_norm": grad_norm.item() if isinstance(grad_norm, torch.Tensor) else float(grad_norm),
+                })
+                
         
         # Log summary after progress completes
         hud_console.info_log(f"Gradient update completed: {len(groups)} groups, final loss: {accumulated_loss:.4f}")

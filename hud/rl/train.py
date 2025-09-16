@@ -130,6 +130,8 @@ async def train(config: Config, tasks: list[Task]) -> None:
                 
                 # Get all traces from buffer for distribution
                 all_traces = trace_buffer.sample_traces()
+                
+                assert len(traces) == len(all_traces)
 
                 # Preprocess traces to training samples
                 preprocessed_traces = preprocess_advantages(all_traces, config.training.group_size)
@@ -140,15 +142,14 @@ async def train(config: Config, tasks: list[Task]) -> None:
                 
                 # Distribute traces in groups across ranks
                 num_gpus = get_world_size()
-                total_groups = len(all_traces) // num_gpus
-                rank_traces = distribute_groups(preprocessed_traces, total_groups)
+                gpu_batch_size = len(all_traces) // num_gpus
+                rank_traces = [all_traces[i:i+gpu_batch_size] for i in range(0, len(all_traces), gpu_batch_size)]
                 
                 # Log distribution info
-                hud_console.info(f"Distributing {len(all_traces)} traces as {total_groups} groups across {num_gpus} GPUs")
+                hud_console.info(f"Distributing {len(all_traces)} traces as {gpu_batch_size} batches across {num_gpus} GPUs")
                 for rank in range(num_gpus):
                     n_traces = len(rank_traces[rank])
-                    n_groups = n_traces // num_gpus if n_traces > 0 else 0
-                    hud_console.info(f"  Rank {rank}: {n_traces} traces ({n_groups} groups)")
+                    hud_console.info(f"  Rank {rank}: {n_traces} traces")
                 
                 hud_console.section_title(f"Training on {len(all_traces)} traces")
                 episode_time_value = episode_time

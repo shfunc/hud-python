@@ -94,26 +94,3 @@ def gather_tensors(tensor: torch.Tensor) -> list[torch.Tensor] | None:
         return None
 
 
-def distribute_groups(items: list[Any], group_size: int) -> list[list[Any]]:
-    """Distribute items in groups across ranks, preserving group integrity.
-    
-    Args:
-        items: List of items to distribute
-        group_size: Size of each group (groups must stay together)
-        
-    Returns:
-        List of items assigned to each rank
-    """
-    if not items:
-        return [[] for _ in range(get_world_size())]
-    
-    # Form groups
-    groups = [items[i:i+group_size] for i in range(0, len(items), group_size)]
-    
-    # Distribute groups round-robin
-    rank_items = [[] for _ in range(get_world_size())]
-    for i, group in enumerate(groups):
-        rank_idx = i % get_world_size()
-        rank_items[rank_idx].extend(group)
-    
-    return rank_items
