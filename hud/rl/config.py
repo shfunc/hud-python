@@ -103,6 +103,7 @@ class ActorConfig:
     max_parallel_episodes: int = 48
     max_new_tokens: int = 2048
     force_tool_choice: bool = False
+    allowed_tools: list[str] | None = None
 
     # Model parameters
     temperature: float = 1.0

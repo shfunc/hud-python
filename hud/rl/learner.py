@@ -179,6 +179,7 @@ class GRPOLearner:
         # Find minibatches and group them via batch_training_samples
         # Minibatches control the batch size of the forward pass to the model
         mb_size = self.config.training.mini_batch_size
+        adj_group_size = self.config.training.group_size // mb_size
         samples_minibatched = []
         for i in range(0, len(batch), mb_size):
             samples_minibatched.extend(batch_training_samples(batch[i:i+mb_size]))
@@ -188,7 +189,7 @@ class GRPOLearner:
 
         # Convert to grouped batches (if updating the model after each task group)
         if self.config.training.update_after_group:
-            return [samples_minibatched[i:i+self.config.training.group_size] for i in range(0, len(samples_minibatched), self.config.training.group_size)]
+            return [samples_minibatched[i:i+adj_group_size] for i in range(0, len(samples_minibatched), adj_group_size)]
         else:
             return [samples_minibatched]
             
@@ -209,14 +210,15 @@ class GRPOLearner:
         # Update over mini batch size
         with hud_console.progress("Gradient update...") as progress:
             for epoch in range(self.config.training.epochs):
+                progress.update(f"Training epoch {epoch+1}/{self.config.training.epochs}")
                 for group_idx, group in enumerate(groups):
-                    progress.update(f"Training epoch {epoch+1}/{self.config.training.epochs}")
                         
                     self.optimizer.zero_grad(set_to_none=True)
                     accumulated_loss = 0.0
                     
                     grad_accum_steps = len(group)
                     update_after_minibatch = self.config.training.update_after_minibatch and len(group) > 1
+                    skip_this_group = False
                     for s_idx, sample_minibatch in enumerate(group):
                         is_last = s_idx == len(group) - 1 and not update_after_minibatch
                         ddp_ctx = nullcontext() if (is_last or self.world_size == 1) else self.policy.no_sync()
@@ -231,26 +233,38 @@ class GRPOLearner:
                             self.optimizer.zero_grad(set_to_none=True)
 
                         with ddp_ctx, torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-                            if global_has:
-                                if local_has:
-                                    loss = self.compute_loss(sample_minibatch) / grad_accum_steps
-                                    loss.backward()
+                            try:
+                                if global_has:
+                                    if local_has:
+                                        loss = self.compute_loss(sample_minibatch) / grad_accum_steps
+                                        loss.backward()
+                                    else:
+                                        # Dummy backward that touches all params, produces zero grads, triggers hooks
+                                        hud_console.info_log(f"Dummy backward for {sample_minibatch.inputs['input_ids'].numel()} tokens")
+                                        dummy = sum(p.sum() for p in self.policy.parameters()) * 0.0
+                                        dummy.backward()
                                 else:
-                                    # Dummy backward that touches all params, produces zero grads, triggers hooks
+                                    # Everyone does a synchronized zero backward; no step after accumulation
                                     hud_console.info_log(f"Dummy backward for {sample_minibatch.inputs['input_ids'].numel()} tokens")
                                     dummy = sum(p.sum() for p in self.policy.parameters()) * 0.0
                                     dummy.backward()
-                            else:
-                                # Everyone does a synchronized zero backward; no step after accumulation
-                                hud_console.info_log(f"Dummy backward for {sample_minibatch.inputs['input_ids'].numel()} tokens")
+                                hud_console.info_log(f"GPU Backward: {get_gpu_utilization():.1f}% | Memory: {get_memory_usage():.2f} GB")
+                            except torch.cuda.OutOfMemoryError:
+                                hud_console.warning_log("CUDA OOM on rank %s; skipping minibatch", str(self.local_rank))
+                                torch.cuda.empty_cache()
+                                skip_flag = torch.tensor(1, device=self.device)
+                                if torch.distributed.is_initialized():
+                                    torch.distributed.all_reduce(skip_flag, op=torch.distributed.ReduceOp.MAX)
+                                # Dummy backward to keep DDP happy
                                 dummy = sum(p.sum() for p in self.policy.parameters()) * 0.0
                                 dummy.backward()
-                            hud_console.info_log(f"GPU Backward: {get_gpu_utilization():.1f}% | Memory: {get_memory_usage():.2f} GB")
-                            
+                                skip_this_group = True
+                                continue
+
                         if torch.cuda.is_available():
                             torch.cuda.empty_cache()
 
-                        if update_after_minibatch:
+                        if update_after_minibatch and not skip_this_group:
                             grad_norm = torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.config.training.grad_clip, error_if_nonfinite=True)
                             self.optimizer.step()
 
@@ -258,7 +272,9 @@ class GRPOLearner:
                         # Skip step if no updates are needed
                         continue
 
-                    hud_console.info_log(f"Gradient update completed: {group_idx} group, final loss: {accumulated_loss:.4f}")
+                    if skip_this_group:
+                        continue
+                    
                     grad_norm = torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.config.training.grad_clip, error_if_nonfinite=True)
                     self.optimizer.step()
 
@@ -266,12 +282,6 @@ class GRPOLearner:
                         "grad_norm": grad_norm.item() if isinstance(grad_norm, torch.Tensor) else float(grad_norm),
                     })
                 
-                hud_console.info_log(f"Gradient update completed: {group_idx} group, final loss: {accumulated_loss:.4f}")
-                
-        
-        # Log summary after progress completes
-        hud_console.info_log(f"Gradient update completed: {group_idx} group, final loss: {accumulated_loss:.4f}")
-        
         # Calculate training time and throughput
         training_time = time.time() - training_start_time
         total_samples = len(groups) * self.config.training.group_size * self.config.training.mini_batch_size
