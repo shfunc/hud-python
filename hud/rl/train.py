@@ -21,7 +21,6 @@ from hud.rl.config import Config
 from hud.rl.distributed import (
     broadcast_object,
     cleanup_distributed,
-    distribute_groups,
     get_global_rank,
     get_world_size,
     is_main_process,
