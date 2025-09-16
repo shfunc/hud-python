@@ -280,9 +280,18 @@ def prepare_inputs(
 
     # Log amount of assistant tokens, and the first 10 tokens that are non 0, decoded
     hud_console.info(f"Amount of assistant tokens: {mask_tensor.sum()}")
-    hud_console.info(f"Decoded assistant tokens: {processor.tokenizer.decode(mask_tensor[0].nonzero())}")
-
+    hud_console.info(f"Assistant|||{render_assistant_tokens(mask_tensor, inputs['input_ids'], processor)}|||")
+    
     return inputs
+
+def render_assistant_tokens(mask_tensor: torch.Tensor, input_ids: torch.Tensor, processor: Any) -> str:
+    """Render assistant tokens."""
+    # Get positions where mask is non-zero
+    nonzero_indices = mask_tensor[0].nonzero().squeeze(-1)
+    # Get the actual token IDs at those positions
+    assistant_token_ids = input_ids[0][nonzero_indices].tolist()
+    # Decode the token IDs
+    return processor.tokenizer.decode(assistant_token_ids)
 
 
 def entropy_from_logits(logits: torch.Tensor) -> torch.Tensor:
@@ -291,8 +300,9 @@ def entropy_from_logits(logits: torch.Tensor) -> torch.Tensor:
     entropy = torch.logsumexp(logits, dim=-1) - torch.sum(pd * logits, dim=-1)
     return entropy
 
-def preprocess_advantages(group: list[Trace], group_size: int, config: Config) -> list[TrainingSample]:
+def preprocess_advantages(group: list[Trace], config: Config) -> list[TrainingSample]:
     """Preprocess a group of traces."""
+    group_size = config.training.group_size
     if config.training.batch_level == "group":
         groups = [group[i:i+group_size] for i in range(0, len(group), group_size)]
     elif config.training.batch_level == "batch":
@@ -310,7 +320,8 @@ def preprocess_advantages(group: list[Trace], group_size: int, config: Config) -
         samples = [TrainingSample(**trace.model_dump()) for trace in group]
         for sample, reward in zip(samples, rewards, strict=True):
             if sample.isError:
-                sample.advantage = torch.Tensor(0.0)
+                hud_console.info_log(f"Error trace: {sample.model_dump_json()}")
+                sample.advantage = torch.Tensor(np.array([0.0]))
                 continue
             # No std (DR-GRPO)
             if config.training.no_std:
@@ -318,14 +329,17 @@ def preprocess_advantages(group: list[Trace], group_size: int, config: Config) -
             else:
                 # Avoid division by zero
                 if std_reward < 1e-6:
-                    advantage_value = torch.Tensor(0.0)
+                    hud_console.info_log(f"Zero std reward: {reward} - {mean_reward}")
+                    advantage_value = torch.Tensor(np.array([0.0]))
                 else:
                     advantage_value = ((reward - mean_reward) / std_reward)
             # Leave one out RLOO/LOOP
             if config.training.leave_one_out:
                 advantage_value = advantage_value * len(group) / (len(group) - 1)
-            sample.advantage = torch.Tensor(advantage_value)
+            sample.advantage = torch.Tensor(np.array([advantage_value]))
         all_samples.extend(samples)
+    
+    print(type(all_samples[0]))
 
     return all_samples
 

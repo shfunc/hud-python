@@ -173,14 +173,14 @@ class GRPOLearner:
         with torch.no_grad():
             for sample in batch:
                 sample = sample.to_device(self.device)
-                sample.old_logprobs = self.compute_logprobs(
+                sample.old_logprobs, _ = self.compute_logprobs(
                     self.policy,
                     sample.inputs,
                 )
             policy_module = self.policy.module if hasattr(self.policy, "module") else self.policy
             with policy_module.disable_adapter():
                 for sample in batch:
-                    sample.ref_logprobs = self.compute_logprobs(
+                    sample.ref_logprobs, _ = self.compute_logprobs(
                         self.policy,
                         sample.inputs,
                     )
@@ -208,6 +208,8 @@ class GRPOLearner:
         
         # Prepare groups for GRPO training
         groups = self.prepare_groups(samples)
+
+        hud_console.info_log(f"Updating over {len(groups)} groups")
         
         # Update over mini batch size
         with hud_console.progress("Gradient update...") as progress:
@@ -240,10 +242,12 @@ class GRPOLearner:
                                     loss.backward()
                                 else:
                                     # Dummy backward that touches all params, produces zero grads, triggers hooks
+                                    hud_console.info_log(f"Dummy backward for {sample_minibatch.inputs['input_ids'].numel()} tokens")
                                     dummy = sum(p.sum() for p in self.policy.parameters()) * 0.0
                                     dummy.backward()
                             else:
                                 # Everyone does a synchronized zero backward; no step after accumulation
+                                hud_console.info_log(f"Dummy backward for {sample_minibatch.inputs['input_ids'].numel()} tokens")
                                 dummy = sum(p.sum() for p in self.policy.parameters()) * 0.0
                                 dummy.backward()
 

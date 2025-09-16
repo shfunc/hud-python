@@ -30,10 +30,9 @@ class TrainingSample(Trace):
         """Move sample to device."""
         self.inputs = {k: (t.to(device, non_blocking=True) if hasattr(t, "to") else t)
                         for k, t in self.inputs.items()}
-        if self.advantage is not None:
-            self.advantage = self.advantage.to(device)
-        self.old_logprobs = self.old_logprobs.to(device)
-        self.ref_logprobs = self.ref_logprobs.to(device)
+        self.advantage = self.advantage.to(device) if self.advantage is not None else None
+        self.old_logprobs = self.old_logprobs.to(device) if self.old_logprobs is not None else None
+        self.ref_logprobs = self.ref_logprobs.to(device) if self.ref_logprobs is not None else None
         return self
 
 @dataclass

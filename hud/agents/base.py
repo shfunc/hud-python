@@ -290,6 +290,7 @@ class MCPAgent(ABC):
                     # Extract reward and content from evaluation
                     if results:
                         reward = find_reward(results[0])
+                        self.console.info_log(f"Evaluation reward: {reward}")
                         eval_content = find_content(results[0])
 
                         # Update the prompt result with evaluation reward

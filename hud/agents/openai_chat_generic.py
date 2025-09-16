@@ -290,7 +290,6 @@ class GenericOpenAIChatAgent(MCPAgent):
                     "content": text_content,
                 }
             )
-            print(rendered)
 
         # If there are images, add them as a separate user message
         if image_parts:
