@@ -269,24 +269,29 @@ def prepare_inputs(
         return_offsets_mapping=False,  # we no longer need char offsets
     )
 
-    # Build assistant masks from token IDs
-    input_ids = inputs["input_ids"]  # list of lists (length 1 batch)
-    assistant_masks = build_assistant_masks(input_ids, processor.tokenizer)
-    inputs["assistant_masks"] = assistant_masks
+    input_ids_list = inputs["input_ids"]
+    assistant_masks = build_assistant_masks(input_ids_list, processor.tokenizer)
     inputs.convert_to_tensors(tensor_type="pt")
-
-    mask_tensor = inputs["assistant_masks"]  # shape [B, T]
+    mask_tensor = torch.tensor(assistant_masks, dtype=torch.long)
     if mask_tensor.dim() == 1:
         mask_tensor = mask_tensor.unsqueeze(0)
 
-    # logits_to_keep are positions where previous token (label axis) is assistant
-    logits_to_keep = (mask_tensor[0, 1:] == 1).nonzero(as_tuple=True)[0]
-    inputs["logits_to_keep"] = logits_to_keep
+    inputs["logits_to_keep"] = mask_tensor[:, 1:].bool()
+
+    # Log amount of assistant tokens, and the first 10 tokens that are non 0, decoded
+    hud_console.info(f"Amount of assistant tokens: {mask_tensor.sum()}")
+    hud_console.info(f"Decoded assistant tokens: {processor.tokenizer.decode(mask_tensor[0].nonzero())}")
 
     return inputs
 
 
-def preprocess_advantages(group: list[Trace], group_size: int) -> list[TrainingSample]:
+def entropy_from_logits(logits: torch.Tensor) -> torch.Tensor:
+    """Calculate entropy from logits."""
+    pd = torch.nn.functional.softmax(logits, dim=-1)
+    entropy = torch.logsumexp(logits, dim=-1) - torch.sum(pd * logits, dim=-1)
+    return entropy
+
+def preprocess_advantages(group: list[Trace], group_size: int, config: Config) -> list[TrainingSample]:
     """Preprocess a group of traces."""
     groups = [group[i:i+group_size] for i in range(0, len(group), group_size)]
     all_samples = []
@@ -299,37 +304,61 @@ def preprocess_advantages(group: list[Trace], group_size: int) -> list[TrainingS
         samples = [TrainingSample(**trace.model_dump()) for trace in group]
         for sample, reward in zip(samples, rewards, strict=True):
             if sample.isError:
-                sample.advantage = 0.0
+                sample.advantage = torch.Tensor(0.0)
                 continue
             if std_reward < 1e-6:
-                sample.advantage = 0.0
+                sample.advantage = torch.Tensor(0.0)
                 continue
+            if config.training.no_std:
+                advantage_value = (reward - mean_reward)
+            else:
+                advantage_value = ((reward - mean_reward) / std_reward)
             advantage_value = ((reward - mean_reward) / std_reward)
-            sample.advantage = float(advantage_value)
+            sample.advantage = torch.Tensor(advantage_value)
         all_samples.extend(samples)
 
     return all_samples
 
-# def batch_training_samples(
-#     samples: list[TrainingSample],
-# ) -> TrainingSample:
-#     """Batch training samples from a list of episodes."""
-#     sample = TrainingSample(
-#         inputs={},
-#         advantage=torch.tensor([]),
-#         old_logprobs=torch.tensor([]),
-#         ref_logprobs=torch.tensor([]),
-#         weight=torch.tensor([]),
-#     )
-#     # apply padding to all inputs and make it so that the length of the inputs is the same for all samples
-#     max_length = max(len(s.inputs["input_ids"][0]) for s in samples)
-#     for s in samples:
-#         for k in ["input_ids", "assistant_masks", "attention_mask"]:
-#             s.inputs[k] = torch.nn.functional.pad(s.inputs[k], (0, max_length - s.inputs[k].shape[-1]))
-    
-#     sample.inputs = {k: torch.stack([s.inputs[k] for s in samples]) for k in samples[0].inputs}
-#     sample.advantage = torch.stack([s.advantage for s in samples])
-#     sample.old_logprobs = torch.stack([s.old_logprobs for s in samples])
-#     sample.ref_logprobs = torch.stack([s.ref_logprobs for s in samples])
-#     sample.weight = torch.stack([s.weight for s in samples])
-#     return sample
+def batch_training_samples(samples: list[TrainingSample]) -> TrainingSample:
+    """Create batched model inputs from a list of TrainingSample.
+
+    Pads token sequences to the maximum length in the list and zero-pads
+    images to the maximum H/W when present. Returns a dictionary of batched
+    tensors suitable for a single forward pass. Keeps assistant_masks for
+    masked scoring.
+    """
+    if not samples:
+        return {}
+
+    import torch.nn.functional as F
+    new_sample = TrainingSample()
+
+    input_keys_to_expand = ["input_ids", "attention_mask", "logits_to_keep", "pixel_values", "image_grid_thw"]
+    updated_inputs = {k: [] for k in input_keys_to_expand}
+
+    for s in samples:
+        for k in input_keys_to_expand:
+            val = s.inputs[k]
+            if val is not None:
+                if val.dim() >= 2 and val.size(0) == 1:
+                    val = val[0]
+                updated_inputs[k].append(val)
+
+
+    # Pad 1D sequences to max length
+    max_len = max(t.size(-1) for t in updated_inputs["input_ids"])
+    def pad_1d(x: torch.Tensor, pad_to: int, pad_value: int) -> torch.Tensor:
+        pad = pad_to - x.size(-1)
+        return F.pad(x, (0, pad), value=pad_value) if pad > 0 else x
+
+    for k in input_keys_to_expand:
+        updated_inputs[k] = torch.stack([pad_1d(x, max_len, 0) for x in updated_inputs[k]], dim=0)
+
+    new_sample.inputs = updated_inputs
+
+    # Add the logprobs and advantages
+    new_sample.old_logprobs = torch.stack([s.old_logprobs for s in samples], dim=0)
+    new_sample.ref_logprobs = torch.stack([s.ref_logprobs for s in samples], dim=0)
+    new_sample.advantage = torch.stack([s.advantage for s in samples], dim=0)
+
+    return new_sample

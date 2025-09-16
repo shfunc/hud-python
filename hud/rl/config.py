@@ -58,30 +58,37 @@ class TrainingConfig:
     shuffle_dataset: bool = False
     save_every_batches: int = 1
 
-    # Batch parameters
+    # Batching parameters
     epochs: int = 2
     batch_size: int = 36
     group_size: int = 6
     mini_batch_size: int = 2
+    update_after_group: bool = True
 
     # Replay buffer parameters
     buffer_steps: int = 6
     select_strategy: Literal["recent", "variance", "random"] = "variance"
 
-    # Training hyperparameters
-    lr: float = 5e-5
+    # Normalization parameters
+    token_agg: Literal["mean", "sum"] = "mean"
+
+    # Group parameters
+    no_std: bool = True
+
+    # Regularization parameters
     kl_beta: float = 0.001
-    grad_clip: float = 1.0
+    entropy_beta: float = 0.0
     top_eps: float = 0.2
     bottom_eps: float = 0.1
+
+    # Training hyperparameters
+    lr: float = 5e-5
+    grad_clip: float = 1.0
 
     # Adam hyperparameters
     use_8bit_optimizer: bool = True
     adam_betas: tuple[float, float] = (0.9, 0.999)
     adam_eps: float = 1e-8
-
-    # Misc
-    token_agg: Literal["mean", "sum"] = "mean"
 
 
 @dataclass

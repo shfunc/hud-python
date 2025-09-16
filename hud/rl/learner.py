@@ -23,7 +23,7 @@ from hud.rl.distributed import (
     get_world_size,
     is_main_process,
 )
-from hud.rl.utils import get_gpu_utilization, get_memory_usage, prepare_inputs
+from hud.rl.utils import get_gpu_utilization, get_memory_usage, prepare_inputs, entropy_from_logits, batch_training_samples
 from hud.utils.hud_console import HUDConsole
 from contextlib import nullcontext
 from .config import Config
@@ -97,32 +97,6 @@ class GRPOLearner:
             policy.gradient_checkpointing_enable()
             hud_console.info_log("Gradient checkpointing enabled for memory efficiency")
         
-        # Apply vision-specific optimizations
-        if hasattr(policy, "model") and hasattr(policy.model, "vision_tower"):
-            vision_tower = policy.model.vision_tower
-            
-            # Freeze vision tower if configured
-            if model_cfg.freeze_vision_tower:
-                for param in vision_tower.parameters():
-                    param.requires_grad = False
-                hud_console.info_log("Vision tower frozen to save memory")
-            
-            # Enable gradient checkpointing for vision tower
-            if model_cfg.vision_gradient_checkpointing and hasattr(vision_tower, "gradient_checkpointing_enable"):
-                vision_tower.gradient_checkpointing_enable()
-                hud_console.info_log("Vision tower gradient checkpointing enabled")
-            
-            # Set vision compute dtype
-            if model_cfg.vision_compute_dtype == "float16":
-                vision_tower = vision_tower.half()
-            elif model_cfg.vision_compute_dtype == "bfloat16":
-                vision_tower = vision_tower.to(torch.bfloat16)
-            
-            # Apply vision feature selection strategy
-            if model_cfg.vision_feature_select_strategy == "cls_only":
-                # This would need model-specific implementation
-                hud_console.info_log("Vision feature selection: CLS token only (saves memory)")
-        
         # Add LoRA adapters
         lora_config = LoraConfig(
             r=model_cfg.lora_r,
@@ -169,17 +143,19 @@ class GRPOLearner:
         return processor, policy, None, optimizer
 
     def compute_logprobs(self, model: Any, inputs: Any) -> torch.Tensor:
-        """Compute per-token log probabilities via the model."""
+        """Compute masked per-token log probabilities via the model.
+
+        Uses assistant_masks to select tokens to score and returns a 1D tensor
+        of log-probs for those positions.
+        """
         out = model(**inputs)
 
-        logits = out.logits / self.config.actor.temperature
+        logits = out.logits / self.config.actor.temperature  # [B, T, V]
         log_probs = F.log_softmax(logits, dim=-1)
-        
-        # Gather log probs of actual generated tokens
-        target_ids = inputs["input_ids"][:, inputs["logits_to_keep"] + 1]
-        gathered = torch.gather(log_probs, dim=-1, index=target_ids.unsqueeze(-1)).squeeze(-1)
-        
-        return gathered
+
+        entropy = entropy_from_logits(logits)
+
+        return log_probs, entropy
 
     def prepare_groups(self, samples: list[TrainingSample],) -> list[list[TrainingSample]]:
         """Prepare groups of samples for training."""
@@ -209,9 +185,17 @@ class GRPOLearner:
                         sample.inputs,
                     )
                     sample.to_device(torch.device("cpu"))
+        
+        # Find minibatches and group them via batch_training_samples
+        # Minibatches control the size of the forward pass to the model
+        mb_size = self.config.training.mini_batch_size
+        samples_minibatched = [batch_training_samples(batch[i:i+mb_size]) for i in range(0, len(batch), mb_size)]
 
-        # Convert back to grouped batches
-        return [batch[i:i+self.config.training.group_size] for i in range(0, len(batch), self.config.training.group_size)]
+        # Convert to grouped batches (if updating the model after each task group)
+        if self.config.training.update_after_group:
+            return [samples_minibatched[i:i+self.config.training.group_size] for i in range(0, len(samples_minibatched), self.config.training.group_size)]
+        else:
+            return [samples_minibatched]
             
     def update(self, samples: list[TrainingSample]) -> TrainingMetrics:
         """Perform a gradient update on a batch."""
@@ -229,31 +213,21 @@ class GRPOLearner:
         with hud_console.progress("Gradient update...") as progress:
             for epoch in range(self.config.training.epochs):
                 for group_idx, group in enumerate(groups):
-                    mini_batch_size = min(self.config.training.mini_batch_size, len(group))
-                    grad_accum_steps = max(1, len(group) // mini_batch_size)
                     progress.update(f"Training epoch {epoch+1}/{self.config.training.epochs}")
                         
                     self.optimizer.zero_grad()
                     accumulated_loss = 0.0
                     
-                    for accum_step in range(grad_accum_steps):
-                        is_last = accum_step == grad_accum_steps - 1
+                    for s_idx, sample_minibatch in enumerate(group):
+                        is_last = s_idx == len(group) - 1
                         ddp_ctx = nullcontext() if (is_last or self.world_size == 1) else self.policy.no_sync()
-                        amp_ctx = torch.autocast(device_type="cuda", dtype=torch.bfloat16) if self.config.training.use_amp else nullcontext()
+                        amp_ctx = torch.autocast(device_type="cuda", dtype=torch.bfloat16) if torch.cuda.is_available() else nullcontext()
                     
-                        # Get samples for this accumulation step
-                        start_idx = accum_step * mini_batch_size
-                        end_idx = min(start_idx + mini_batch_size, len(group))
-                        if start_idx >= len(group):
-                            break
-                            
-                        step_samples = group[start_idx:end_idx]
-                        for s in step_samples:
-                            s.to_device(self.device)
+                        sample_minibatch.to_device(self.device)
 
                         with ddp_ctx, amp_ctx:
-                            loss = self.compute_loss(step_samples) / grad_accum_steps
-                            accumulated_loss += loss.item() * grad_accum_steps
+                            loss = self.compute_loss(sample_minibatch) / len(group)
+                            accumulated_loss += loss.item() * len(group)
 
                             metrics.update({
                                 "gpu_util": get_gpu_utilization(),  # Track peak utilization
@@ -263,12 +237,11 @@ class GRPOLearner:
                             
                             loss.backward()
                             
-                        for s in step_samples:
-                            s.to_device(torch.device("cpu"))
+                        sample_minibatch.to_device(torch.device("cpu"))
                             
-                    progress.update(f"Step {accum_step}, Epoch {epoch}, Loss: {accumulated_loss:.4f}")
+                    progress.update(f"Step {s_idx}, Epoch {epoch}, Loss: {accumulated_loss:.4f}")
 
-                    hud_console.info_log(f"Gradient update completed: {group_idx} group, final loss: {accumulated_loss:.4f}, {len(step_samples)} samples")
+                    hud_console.info_log(f"Gradient update completed: {group_idx} group, final loss: {accumulated_loss:.4f}")
                     grad_norm = torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.config.training.grad_clip)
                     self.optimizer.step()
 
@@ -276,7 +249,7 @@ class GRPOLearner:
                         "grad_norm": grad_norm.item() if isinstance(grad_norm, torch.Tensor) else float(grad_norm),
                     })
                 
-                hud_console.info_log(f"Gradient update completed: {group_idx} group, final loss: {accumulated_loss:.4f}, {len(step_samples)} samples")
+                hud_console.info_log(f"Gradient update completed: {group_idx} group, final loss: {accumulated_loss:.4f}")
                 
         
         # Log summary after progress completes
@@ -284,7 +257,7 @@ class GRPOLearner:
         
         # Calculate training time and throughput
         training_time = time.time() - training_start_time
-        total_samples = len(groups) * self.config.training.group_size
+        total_samples = len(groups) * self.config.training.group_size * self.config.training.mini_batch_size
         samples_per_second = total_samples / training_time if training_time > 0 else 0.0
         
         metrics.update({
@@ -294,56 +267,45 @@ class GRPOLearner:
         
         return metrics
     
-    def compute_loss(self, samples: list[TrainingSample]) -> torch.Tensor:
+    def compute_loss(self, sample: TrainingSample) -> torch.Tensor:
         """Compute GRPO loss for a batch of samples."""
         training_cfg = self.config.training
         metrics = self.metrics[-1]
 
-        policy_terms = []
-        kl_terms = []
+        pol_logp, pol_entropy = self.compute_logprobs(
+            self.policy,
+            sample.inputs,
+        )
         
-        for sample in samples:
-            pol_logp = self.compute_logprobs(
-                self.policy,
-                sample.inputs,
-            )
-            
-            # Clip log probability differences to prevent numerical explosion
-            log_ratio = pol_logp - sample.old_logprobs.to(self.device)
-            log_ratio = torch.clamp(log_ratio, min=-20.0, max=20.0)
-            ratio_tok = torch.exp(log_ratio)
-            ratio = ratio_tok.mean() if training_cfg.token_agg == "mean" else ratio_tok.sum()
+        # Clip log probability differences to prevent numerical explosion
+        log_ratio = pol_logp - sample.old_logprobs.to(self.device)
+        log_ratio = torch.clamp(log_ratio, min=-20.0, max=20.0)
+        ratio_tok = torch.exp(log_ratio)
 
-            unclipped = ratio * sample.advantage
-            clipped = torch.clamp(
-                ratio,
-                1 - training_cfg.top_eps,
-                1 + training_cfg.bottom_eps
-            ) * sample.advantage
-            
-            policy_term = -torch.minimum(unclipped, clipped)
-            policy_terms.append(policy_term)
-            
-            # Clip log probability differences to prevent numerical explosion in KL
-            log_rho = pol_logp - sample.ref_logprobs.to(self.device)
-            log_rho = torch.clamp(log_rho, min=-20.0, max=20.0)
-            rho_tok = torch.exp(log_rho)
-            kl_approx = (rho_tok - torch.log(rho_tok) - 1).mean()
-            kl_terms.append(kl_approx)
+        unclipped = ratio_tok * sample.advantage
+        clipped = torch.clamp(
+            ratio_tok,
+            1 - training_cfg.top_eps,
+            1 + training_cfg.bottom_eps
+        ) * sample.advantage
+        
+        policy_term = -torch.minimum(unclipped, clipped)
+        
+        # Clip log probability differences to prevent numerical explosion in KL
+        log_rho = pol_logp - sample.ref_logprobs.to(self.device)
+        log_rho = torch.clamp(log_rho, min=-20.0, max=20.0)
+        rho_tok = torch.exp(log_rho)
+        kl_approx = (rho_tok - torch.log(rho_tok) - 1)
 
-            metrics.update({
-                "policy_ratio": ratio.detach().mean().item(),
-                "kl": kl_approx.item(),
-                "tokens": sample.inputs["input_ids"].numel(),
-            })
-        
-        # Combine losses
-        policy_loss = torch.stack(policy_terms).mean()
-        kl_loss = torch.stack(kl_terms).mean()
-        
-        total_loss = policy_loss + training_cfg.kl_beta * kl_loss
-        
+        total_loss = policy_term + training_cfg.kl_beta * kl_approx + training_cfg.entropy_beta * pol_entropy
+
+        total_loss = total_loss.mean() if training_cfg.token_agg == "mean" else total_loss.sum()
+
         metrics.update({
+            "policy_ratio": ratio_tok.detach().mean().item(),
+            "kl": kl_approx.mean().item(),
+            "entropy": pol_entropy.mean().item(),
+            "tokens": sample.inputs["input_ids"].numel(),
             "loss": total_loss.item(),
         })
         
