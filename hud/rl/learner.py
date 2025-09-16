@@ -142,7 +142,7 @@ class GRPOLearner:
         
         return processor, policy, None, optimizer
 
-    def compute_logprobs(self, model: Any, inputs: Any) -> torch.Tensor:
+    def compute_logprobs(self, model: Any, inputs: Any) -> tuple[torch.Tensor, torch.Tensor]:
         """Compute masked per-token log probabilities via the model.
 
         Uses assistant_masks to select tokens to score and returns a 1D tensor
@@ -219,17 +219,19 @@ class GRPOLearner:
                     accumulated_loss = 0.0
                     
                     grad_accum_steps = len(group)
+                    update_after_minibatch = self.config.training.update_after_minibatch and len(group) > 1
                     for s_idx, sample_minibatch in enumerate(group):
-                        is_last = s_idx == len(group) - 1
+                        is_last = s_idx == len(group) - 1 and not update_after_minibatch
                         ddp_ctx = nullcontext() if (is_last or self.world_size == 1) else self.policy.no_sync()
-                    
-                        sample_minibatch.to_device(self.device)
 
                         local_has = (sample_minibatch.advantage.abs().sum() > 0)
                         flag = torch.tensor(int(local_has), device=self.device)
                         if torch.distributed.is_initialized():
                             torch.distributed.all_reduce(flag, op=torch.distributed.ReduceOp.SUM)
                         global_has = flag.item() > 0
+
+                        if update_after_minibatch:
+                            self.optimizer.zero_grad(set_to_none=True)
 
                         with ddp_ctx, torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                             if global_has:
@@ -250,8 +252,10 @@ class GRPOLearner:
                                 "gpu_memory": get_memory_usage(),  # Track memory usage
                             })
                             progress.update(f"GPU Util: {get_gpu_utilization():.1f}% | Memory: {get_memory_usage():.2f} GB")
-                            
-                        sample_minibatch.to_device(torch.device("cpu"))
+
+                        if update_after_minibatch:
+                            grad_norm = torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.config.training.grad_clip, error_if_nonfinite=True)
+                            self.optimizer.step()
 
                     if not global_has:
                         # Skip step if no updates are needed
@@ -286,14 +290,16 @@ class GRPOLearner:
     def compute_loss(self, sample: TrainingSample) -> torch.Tensor:
         """Compute GRPO loss for a batch of samples."""
         training_cfg = self.config.training
-        metrics = self.metrics[-1]
+        metrics = self.metrics[-1] if len(self.metrics) > 0 else TrainingMetrics()
+                    
+        sample.to_device(self.device)
 
         pol_logp, pol_entropy = self.compute_logprobs(
             self.policy,
             sample.inputs,
         )
-        old_logp = sample.old_logprobs.to(self.device)
-        ref_logp = sample.ref_logprobs.to(self.device)
+        old_logp = sample.old_logprobs
+        ref_logp = sample.ref_logprobs
 
         # Aggregate per trace or per token
         if self.config.training.ppo_mode == "per_trace":
@@ -333,6 +339,8 @@ class GRPOLearner:
             "tokens": sample.inputs["input_ids"].numel(),
             "loss": total_loss.item(),
         })
+
+        sample.to_device(torch.device("cpu"))
         
         return total_loss
     

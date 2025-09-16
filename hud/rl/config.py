@@ -63,7 +63,8 @@ class TrainingConfig:
     batch_size: int = 36
     group_size: int = 6
     mini_batch_size: int = 2
-    update_after_group: bool = True
+    update_after_group: bool = True # Whether to update the policy after each task group
+    update_after_minibatch: bool = False # Whether to update the policy after each mini-batch
 
     # Advantage calculation parameters
     batch_level: Literal["group", "batch"] = "batch"
