@@ -5,7 +5,6 @@ import logging
 import os
 from typing import Any
 
-import bitsandbytes as bnb
 import torch
 import torch.nn.functional as F
 from peft import LoraConfig, get_peft_model
@@ -19,9 +18,12 @@ from transformers import (
 
 try:
     from liger_kernel.transformers import apply_liger_kernel_to_qwen2_5_vl, apply_liger_kernel_to_qwen2_5
+    import bitsandbytes as bnb
     LIGER_AVAILABLE = True
+    BNB_AVAILABLE = True
 except ImportError:
     LIGER_AVAILABLE = False
+    BNB_AVAILABLE = False
 
 from hud.rl.distributed import (
     get_local_rank,
@@ -147,7 +149,7 @@ class GRPOLearner:
         trainable_params = [p for _, p in base_model.named_parameters() if p.requires_grad]
         
         # Use 8-bit optimizer if configured
-        if self.config.training.use_8bit_optimizer:
+        if self.config.training.use_8bit_optimizer and BNB_AVAILABLE:
             hud_console.info("Using 8-bit AdamW optimizer from bitsandbytes")
             optimizer = bnb.optim.AdamW8bit(
                 trainable_params,
