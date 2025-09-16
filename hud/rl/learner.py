@@ -245,9 +245,10 @@ class GRPOLearner:
                                 hud_console.info_log(f"Dummy backward for {sample_minibatch.inputs['input_ids'].numel()} tokens")
                                 dummy = sum(p.sum() for p in self.policy.parameters()) * 0.0
                                 dummy.backward()
+                            hud_console.info_log(f"GPU Backward: {get_gpu_utilization():.1f}% | Memory: {get_memory_usage():.2f} GB")
                             
-                            if torch.cuda.is_available():
-                                torch.cuda.empty_cache()
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
 
                         if update_after_minibatch:
                             grad_norm = torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.config.training.grad_clip, error_if_nonfinite=True)
@@ -405,10 +406,6 @@ def sanity_check(sample: TrainingSample, pol_logp: torch.Tensor, old_logp: torch
         assert old_logp.shape == (B, K), "old_logp shape mismatch"
         assert ref_logp.shape == (B, K), "ref_logp shape mismatch"
         assert m.shape == (B, K), "assistant_mask shape mismatch"
-
-        # Check assistant token counts
-        counts = m.sum(dim=1)
-        hud_console.info_log("assistant token counts per sample: %s", str(counts.tolist()))
 
         # Check mask is subset of attention_mask[:, 1:]
         att = sample.inputs.get("attention_mask", None)

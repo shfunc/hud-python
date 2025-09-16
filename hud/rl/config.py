@@ -69,7 +69,7 @@ class TrainingConfig:
     # Advantage calculation parameters
     batch_level: Literal["group", "batch"] = "batch"
     no_std: bool = True
-    leave_one_out: bool = False
+    leave_one_out: bool = True
 
     # Replay buffer parameters
     buffer_steps: int = 6
@@ -77,7 +77,7 @@ class TrainingConfig:
 
     # Aggregation parameters
     ppo_mode: Literal["per_token", "per_trace"] = "per_token"
-    token_agg: Literal["mean", "sum"] = "mean"
+    token_agg: Literal["mean", "sum"] = "sum"
 
     # Regularization parameters
     kl_beta: float = 0.001
