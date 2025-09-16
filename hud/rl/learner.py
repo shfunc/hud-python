@@ -275,7 +275,7 @@ class GRPOLearner:
                 
         
         # Log summary after progress completes
-        hud_console.info_log(f"Gradient update completed: {len(groups)} groups, final loss: {accumulated_loss:.4f}")
+        hud_console.info_log(f"Gradient update completed: {len(batch)} samples, final loss: {accumulated_loss:.4f}")
         
         # Calculate training time and throughput
         training_time = time.time() - training_start_time
