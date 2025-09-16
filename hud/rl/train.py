@@ -145,29 +145,29 @@ async def train(config: Config, tasks: list[Task]) -> None:
                 global_reward_stats = [trace.reward for trace in all_traces]
                 global_advantage_stats = [sample.advantage for sample in preprocessed_traces]
                 
-                # Distribute traces in groups across ranks
-                gpu_batch_size = len(all_traces) // num_gpus
-                rank_traces = [all_traces[i:i+gpu_batch_size] for i in range(0, len(all_traces), gpu_batch_size)]
+                # Distribute preprocessed samples in groups across ranks
+                gpu_batch_size = len(preprocessed_traces) // num_gpus
+                rank_samples = [preprocessed_traces[i:i+gpu_batch_size] for i in range(0, len(preprocessed_traces), gpu_batch_size)]
                 
                 # Log distribution info
-                hud_console.info(f"Distributing {len(all_traces)} traces as {gpu_batch_size} sized batches across {num_gpus} GPUs")
+                hud_console.info(f"Distributing {len(preprocessed_traces)} samples as {gpu_batch_size} sized batches across {num_gpus} GPUs")
                 for rank in range(num_gpus):
-                    n_traces = len(rank_traces[rank])
-                    hud_console.info(f"  Rank {rank}: {n_traces} traces")
+                    n_samples = len(rank_samples[rank])
+                    hud_console.info(f"  Rank {rank}: {n_samples} samples")
                 
                 hud_console.section_title(f"Training on {len(all_traces)} traces")
                 episode_time_value = episode_time
             else:
-                rank_traces = None
+                rank_samples = None
                 episode_time_value = None
             
-            # Broadcast each rank's traces and episode time
-            rank_traces = broadcast_object(rank_traces, src=0)
+            # Broadcast each rank's samples and episode time
+            rank_samples = broadcast_object(rank_samples, src=0)
             episode_time_value = broadcast_object(episode_time_value, src=0)
-            my_traces = rank_traces[get_global_rank()] if rank_traces else []
+            my_samples = rank_samples[get_global_rank()] if rank_samples else []
             
-            # Process only assigned traces
-            last_metrics = learner.update(my_traces)
+            # Process only assigned samples
+            last_metrics = learner.update(my_samples)
             
             # Add episode time (same for all ranks since episodes run on rank 0)
             if episode_time_value is not None:
@@ -189,8 +189,8 @@ async def train(config: Config, tasks: list[Task]) -> None:
                     # Fallback: use only this rank's data
                     hud_console.warning("Global statistics not available, using partial data")
                     last_metrics.update({
-                        "advantage": [sample.advantage for sample in my_traces] if my_traces else [],
-                        "reward": [sample.reward for sample in my_traces] if my_traces else [],
+                        "advantage": [sample.advantage for sample in my_samples] if my_samples else [],
+                        "reward": [sample.reward for sample in my_samples] if my_samples else [],
                     })
                 
                 job_obj.log_sync(last_metrics.to_dict())

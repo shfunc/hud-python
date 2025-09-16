@@ -66,6 +66,7 @@ class TrainingMetrics:
     advantage: Metric = Field(default=Metric())
     policy_ratio: Metric = Field(default=Metric())
     tokens: Metric = Field(default=Metric())
+    entropy: Metric = Field(default=Metric())
 
     # Computation metrics
     gpu_util: Metric = Field(default=Metric())  # GPU utilization percentage

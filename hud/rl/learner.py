@@ -142,29 +142,16 @@ class GRPOLearner:
         
         return processor, policy, None, optimizer
 
-    def compute_logprobs(self, model: Any, inputs: Any) -> tuple[torch.Tensor, torch.Tensor]:
-        """Compute masked per-token log probabilities via the model.
-
-        Uses assistant_masks to select tokens to score and returns a 1D tensor
-        of log-probs for those positions.
-        """
-        out = model(**inputs)
-
-        logits = out.logits / self.config.actor.temperature  # [B, T, V]
-        log_probs = F.log_softmax(logits, dim=-1)
-
-        entropy = entropy_from_logits(logits)
-
-        return log_probs, entropy
-
     def prepare_groups(self, samples: list[TrainingSample],) -> list[list[TrainingSample]]:
         """Prepare groups of samples for training."""
         # Prepare inputs with messages
         batch = []
         for sample in samples:
             inputs = prepare_inputs(sample, self.processor)
+            # Create new sample, preserving tensor fields that don't serialize well
             new_sample = TrainingSample(**sample.model_dump())
             new_sample.inputs = inputs
+            new_sample.advantage = sample.advantage
             batch.append(new_sample)
 
         hud_console.info_log(f"[update] Processing batch of {len(batch)} traces")
@@ -177,9 +164,12 @@ class GRPOLearner:
                     self.policy,
                     sample.inputs,
                 )
+                sample.to_device(torch.device("cpu"))
+                
             policy_module = self.policy.module if hasattr(self.policy, "module") else self.policy
             with policy_module.disable_adapter():
                 for sample in batch:
+                    sample = sample.to_device(self.device)
                     sample.ref_logprobs, _ = self.compute_logprobs(
                         self.policy,
                         sample.inputs,
@@ -187,9 +177,14 @@ class GRPOLearner:
                     sample.to_device(torch.device("cpu"))
         
         # Find minibatches and group them via batch_training_samples
-        # Minibatches control the size of the forward pass to the model
+        # Minibatches control the batch size of the forward pass to the model
         mb_size = self.config.training.mini_batch_size
-        samples_minibatched = [batch_training_samples(batch[i:i+mb_size]) for i in range(0, len(batch), mb_size)]
+        samples_minibatched = []
+        for i in range(0, len(batch), mb_size):
+            samples_minibatched.extend(batch_training_samples(batch[i:i+mb_size]))
+
+        for sample in samples_minibatched:
+            sample.to_device(torch.device("cpu"))
 
         # Convert to grouped batches (if updating the model after each task group)
         if self.config.training.update_after_group:
@@ -250,12 +245,9 @@ class GRPOLearner:
                                 hud_console.info_log(f"Dummy backward for {sample_minibatch.inputs['input_ids'].numel()} tokens")
                                 dummy = sum(p.sum() for p in self.policy.parameters()) * 0.0
                                 dummy.backward()
-
-                            metrics.update({
-                                "gpu_util": get_gpu_utilization(),  # Track peak utilization
-                                "gpu_memory": get_memory_usage(),  # Track memory usage
-                            })
-                            progress.update(f"GPU Util: {get_gpu_utilization():.1f}% | Memory: {get_memory_usage():.2f} GB")
+                            
+                            if torch.cuda.is_available():
+                                torch.cuda.empty_cache()
 
                         if update_after_minibatch:
                             grad_norm = torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.config.training.grad_clip, error_if_nonfinite=True)
@@ -302,39 +294,60 @@ class GRPOLearner:
             self.policy,
             sample.inputs,
         )
+
+        sanity_check(sample, pol_logp, sample.old_logprobs, sample.ref_logprobs)
+
+        metrics.update({
+            "gpu_util": get_gpu_utilization(),  # Track peak utilization
+            "gpu_memory": get_memory_usage(),  # Track memory usage
+        })
+        hud_console.info_log(f"GPU Util: {get_gpu_utilization():.1f}% | Memory: {get_memory_usage():.2f} GB")
+
         old_logp = sample.old_logprobs
         ref_logp = sample.ref_logprobs
 
+        # Use assistant mask to remove non-assistant tokens
+        m = sample.inputs["assistant_mask"]
+
         # Aggregate per trace or per token
-        if self.config.training.ppo_mode == "per_trace":
-            pol_logp = pol_logp.mean(dim=1)
-            pol_entropy = pol_entropy.mean(dim=1)
-            old_logp = old_logp.mean(dim=1)
-            ref_logp = ref_logp.mean(dim=1)
+        if training_cfg.ppo_mode == "per_trace":
+            counts = m.sum(dim=1).clamp_min(1.0)
+            pol_logp = (pol_logp * m.float()).sum(dim=1) / counts
+            pol_entropy = (pol_entropy * m.float()).sum(dim=1) / counts
+            old_logp = (old_logp * m.float()).sum(dim=1) / counts
+            ref_logp = (ref_logp * m.float()).sum(dim=1) / counts
         
         # Clip log probability differences
-        log_ratio = pol_logp - old_logp
-        ratio_tok = torch.exp(log_ratio.clamp(min=-20.0, max=20.0))
+        log_ratio = torch.where(m, pol_logp - old_logp, torch.zeros_like(pol_logp))
+        ratio_tok = torch.exp(log_ratio.clamp(-20.0, 20.0))
 
-        unclipped = ratio_tok * sample.advantage
+        # Ensure advantage shape matches ratio_tok for broadcasting
+        advantage = sample.advantage.view(-1, 1) if ratio_tok.dim() == 2 else sample.advantage.squeeze(-1)
+        
+        unclipped = ratio_tok * advantage
         clipped = torch.clamp(
             ratio_tok,
             1 - training_cfg.top_eps,
             1 + training_cfg.bottom_eps
-        ) * sample.advantage
+        ) * advantage
         
         policy_term = -torch.minimum(unclipped, clipped)
         
         # Clip log probability differences in KL
-        log_rho = pol_logp - ref_logp
-        rho_tok = torch.exp(log_rho.clamp(min=-20.0, max=20.0))
+        log_rho = torch.where(m, pol_logp - ref_logp, torch.zeros_like(pol_logp))
+        rho_tok = torch.exp(log_rho.clamp(-20.0, 20.0))
         kl_approx = (rho_tok - torch.log(rho_tok) - 1)
 
         total_loss = policy_term + training_cfg.kl_beta * kl_approx + training_cfg.entropy_beta * pol_entropy
 
-        # Aggregate via normalizing by the number of tokens or allowing sum
-        # This is a no-op for per_trace mode
-        total_loss = total_loss.mean() if training_cfg.token_agg == "mean" else total_loss.sum()
+        # Aggregate loss
+        if training_cfg.ppo_mode == "per_trace":
+            total_loss = total_loss.mean() if training_cfg.token_agg == "mean" else total_loss.sum()
+        else:
+            if training_cfg.token_agg == "mean":
+                total_loss = (total_loss * m).sum() / m.sum().clamp_min(1.0)
+            else:
+                total_loss = (total_loss * m).sum()
 
         metrics.update({
             "policy_ratio": ratio_tok.detach().mean().item(),
@@ -347,6 +360,27 @@ class GRPOLearner:
         sample.to_device(torch.device("cpu"))
         
         return total_loss
+
+    def compute_logprobs(self, model: Any, inputs: Any) -> tuple[torch.Tensor, torch.Tensor]:
+        """Compute masked per-token log probabilities via the model.
+
+        Returns log probabilities for the actual next tokens.
+        """
+        model_inputs = {k: v for k, v in inputs.items() if k != "assistant_mask"}
+        out = model(**model_inputs)
+
+        logits = out.logits / self.config.actor.temperature 
+        log_probs = F.log_softmax(logits, dim=-1)
+
+        targets = inputs["input_ids"][:, 1:]
+        token_log_probs = log_probs[:, :-1].gather(-1, targets.unsqueeze(-1)).squeeze(-1)
+        
+        # Compute entropy only for assistant tokens to save memory
+        assistant_mask = inputs["assistant_mask"]
+        entropy = torch.zeros_like(token_log_probs)
+        entropy[assistant_mask] = entropy_from_logits(logits[:, :-1][assistant_mask])
+
+        return token_log_probs, entropy
     
     def save(self, path: str) -> None:
         """Save the current policy checkpoint (only on rank 0)."""
@@ -362,3 +396,60 @@ class GRPOLearner:
         # Would need to reload LoRA weights
         logger.info(f"[Learner] Loading checkpoint from {path}")
         # Implementation depends on PEFT version
+
+
+def sanity_check(sample: TrainingSample, pol_logp: torch.Tensor, old_logp: torch.Tensor, ref_logp: torch.Tensor) -> None:
+    m = sample.inputs["assistant_mask"]
+    with torch.no_grad():
+        B, K = pol_logp.shape
+        assert old_logp.shape == (B, K), "old_logp shape mismatch"
+        assert ref_logp.shape == (B, K), "ref_logp shape mismatch"
+        assert m.shape == (B, K), "assistant_mask shape mismatch"
+
+        # Check assistant token counts
+        counts = m.sum(dim=1)
+        hud_console.info_log("assistant token counts per sample: %s", str(counts.tolist()))
+
+        # Check mask is subset of attention_mask[:, 1:]
+        att = sample.inputs.get("attention_mask", None)
+        if att is not None and att.dim() == 2:
+            att_shift = att[:, 1:].bool()
+            bad = (m & ~att_shift).sum().item()
+            if bad > 0:
+                hud_console.warning_log("assistant_mask overlaps padding: %s tokens", str(bad))
+
+        # Finiteness on masked entries only
+        def _stats(name: str, t: torch.Tensor) -> None:
+            sel = t[m]
+            if sel.numel() == 0:
+                hud_console.info_log("%s empty under mask", name)
+                return
+            finite = torch.isfinite(sel)
+            if finite.sum() < sel.numel():
+                hud_console.warning_log("%s non-finite: %s/%s", name, str((~finite).sum().item()), str(sel.numel()))
+            sel = sel[finite].float()
+
+        _stats("pol_logp", pol_logp)
+        _stats("old_logp", old_logp)
+        _stats("ref_logp", ref_logp)
+
+        # Log-probabilities should be <= 0 (log-softmax)
+        if (pol_logp[m] > 1e-6).any():
+            hud_console.warning_log("pol_logp has positive values under mask")
+
+        # Precompute masked deltas and ratios for diagnostics (before exp)
+        masked_log_ratio = torch.zeros_like(pol_logp)
+        masked_log_ratio[m] = (pol_logp - old_logp)[m]
+        masked_log_rho = torch.zeros_like(pol_logp)
+        masked_log_rho[m] = (pol_logp - ref_logp)[m]
+
+        _stats("log_ratio(masked)", masked_log_ratio)
+        _stats("log_rho(masked)", masked_log_rho)
+
+        # Ratios after clamp (diagnostic only)
+        ratio_diag = torch.zeros_like(pol_logp)
+        rho_diag = torch.zeros_like(pol_logp)
+        ratio_diag[m] = torch.exp(masked_log_ratio[m].clamp(-20.0, 20.0))
+        rho_diag[m] = torch.exp(masked_log_rho[m].clamp(-20.0, 20.0))
+        _stats("ratio_tok(masked)", ratio_diag)
+        _stats("rho_tok(masked)", rho_diag)
