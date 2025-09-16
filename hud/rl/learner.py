@@ -215,19 +215,35 @@ class GRPOLearner:
                 for group_idx, group in enumerate(groups):
                     progress.update(f"Training epoch {epoch+1}/{self.config.training.epochs}")
                         
-                    self.optimizer.zero_grad()
+                    self.optimizer.zero_grad(set_to_none=True)
                     accumulated_loss = 0.0
                     
+                    grad_accum_steps = len(group)
                     for s_idx, sample_minibatch in enumerate(group):
                         is_last = s_idx == len(group) - 1
                         ddp_ctx = nullcontext() if (is_last or self.world_size == 1) else self.policy.no_sync()
-                        amp_ctx = torch.autocast(device_type="cuda", dtype=torch.bfloat16) if torch.cuda.is_available() else nullcontext()
                     
                         sample_minibatch.to_device(self.device)
 
-                        with ddp_ctx, amp_ctx:
-                            loss = self.compute_loss(sample_minibatch) / len(group)
-                            accumulated_loss += loss.item() * len(group)
+                        local_has = (sample_minibatch.advantage.abs().sum() > 0)
+                        flag = torch.tensor(int(local_has), device=self.device)
+                        if torch.distributed.is_initialized():
+                            torch.distributed.all_reduce(flag, op=torch.distributed.ReduceOp.SUM)
+                        global_has = flag.item() > 0
+
+                        with ddp_ctx, torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                            if global_has:
+                                if local_has:
+                                    loss = self.compute_loss(sample_minibatch) / grad_accum_steps
+                                    loss.backward()
+                                else:
+                                    # Dummy backward that touches all params, produces zero grads, triggers hooks
+                                    dummy = sum(p.sum() for p in self.policy.parameters()) * 0.0
+                                    dummy.backward()
+                            else:
+                                # Everyone does a synchronized zero backward; no step after accumulation
+                                dummy = sum(p.sum() for p in self.policy.parameters()) * 0.0
+                                dummy.backward()
 
                             metrics.update({
                                 "gpu_util": get_gpu_utilization(),  # Track peak utilization
@@ -235,14 +251,14 @@ class GRPOLearner:
                             })
                             progress.update(f"GPU Util: {get_gpu_utilization():.1f}% | Memory: {get_memory_usage():.2f} GB")
                             
-                            loss.backward()
-                            
                         sample_minibatch.to_device(torch.device("cpu"))
-                            
-                    progress.update(f"Step {s_idx}, Epoch {epoch}, Loss: {accumulated_loss:.4f}")
+
+                    if not global_has:
+                        # Skip step if no updates are needed
+                        continue
 
                     hud_console.info_log(f"Gradient update completed: {group_idx} group, final loss: {accumulated_loss:.4f}")
-                    grad_norm = torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.config.training.grad_clip)
+                    grad_norm = torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.config.training.grad_clip, error_if_nonfinite=True)
                     self.optimizer.step()
 
                     metrics.update({
@@ -276,11 +292,19 @@ class GRPOLearner:
             self.policy,
             sample.inputs,
         )
+        old_logp = sample.old_logprobs.to(self.device)
+        ref_logp = sample.ref_logprobs.to(self.device)
+
+        # Aggregate per trace or per token
+        if self.config.training.ppo_mode == "per_trace":
+            pol_logp = pol_logp.mean(dim=1)
+            pol_entropy = pol_entropy.mean(dim=1)
+            old_logp = old_logp.mean(dim=1)
+            ref_logp = ref_logp.mean(dim=1)
         
-        # Clip log probability differences to prevent numerical explosion
-        log_ratio = pol_logp - sample.old_logprobs.to(self.device)
-        log_ratio = torch.clamp(log_ratio, min=-20.0, max=20.0)
-        ratio_tok = torch.exp(log_ratio)
+        # Clip log probability differences
+        log_ratio = pol_logp - old_logp
+        ratio_tok = torch.exp(log_ratio.clamp(min=-20.0, max=20.0))
 
         unclipped = ratio_tok * sample.advantage
         clipped = torch.clamp(
@@ -291,14 +315,15 @@ class GRPOLearner:
         
         policy_term = -torch.minimum(unclipped, clipped)
         
-        # Clip log probability differences to prevent numerical explosion in KL
-        log_rho = pol_logp - sample.ref_logprobs.to(self.device)
-        log_rho = torch.clamp(log_rho, min=-20.0, max=20.0)
-        rho_tok = torch.exp(log_rho)
+        # Clip log probability differences in KL
+        log_rho = pol_logp - ref_logp
+        rho_tok = torch.exp(log_rho.clamp(min=-20.0, max=20.0))
         kl_approx = (rho_tok - torch.log(rho_tok) - 1)
 
         total_loss = policy_term + training_cfg.kl_beta * kl_approx + training_cfg.entropy_beta * pol_entropy
 
+        # Aggregate via normalizing by the number of tokens or allowing sum
+        # This is a no-op for per_trace mode
         total_loss = total_loss.mean() if training_cfg.token_agg == "mean" else total_loss.sum()
 
         metrics.update({

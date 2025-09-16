@@ -293,27 +293,37 @@ def entropy_from_logits(logits: torch.Tensor) -> torch.Tensor:
 
 def preprocess_advantages(group: list[Trace], group_size: int, config: Config) -> list[TrainingSample]:
     """Preprocess a group of traces."""
-    groups = [group[i:i+group_size] for i in range(0, len(group), group_size)]
+    if config.training.batch_level == "group":
+        groups = [group[i:i+group_size] for i in range(0, len(group), group_size)]
+    elif config.training.batch_level == "batch":
+        groups = [group]
+    else:
+        raise ValueError(f"Invalid batch level: {config.training.batch_level}")
+
     all_samples = []
     for group in groups:
         rewards = np.array([trace.reward for trace in group])
         mean_reward = np.mean(rewards)
         std_reward = np.std(rewards)
         
-        # Normalize advantages
+        # Calculate advantages
         samples = [TrainingSample(**trace.model_dump()) for trace in group]
         for sample, reward in zip(samples, rewards, strict=True):
             if sample.isError:
                 sample.advantage = torch.Tensor(0.0)
                 continue
-            if std_reward < 1e-6:
-                sample.advantage = torch.Tensor(0.0)
-                continue
+            # No std (DR-GRPO)
             if config.training.no_std:
                 advantage_value = (reward - mean_reward)
             else:
-                advantage_value = ((reward - mean_reward) / std_reward)
-            advantage_value = ((reward - mean_reward) / std_reward)
+                # Avoid division by zero
+                if std_reward < 1e-6:
+                    advantage_value = torch.Tensor(0.0)
+                else:
+                    advantage_value = ((reward - mean_reward) / std_reward)
+            # Leave one out RLOO/LOOP
+            if config.training.leave_one_out:
+                advantage_value = advantage_value * len(group) / (len(group) - 1)
             sample.advantage = torch.Tensor(advantage_value)
         all_samples.extend(samples)
 

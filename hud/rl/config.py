@@ -36,8 +36,8 @@ def validate_vl_model(model_name: str) -> None:
 class ModelConfig:
     """Model and LoRA configuration."""
     base_model: str = "Qwen/Qwen2.5-VL-3B-Instruct"
-    lora_r: int = 32
-    lora_alpha: int = 64
+    lora_r: int = 16
+    lora_alpha: int = 32
     lora_dropout: float = 0.05
     target_modules: tuple[str, ...] = (
         "q_proj", "k_proj", "v_proj", "o_proj",
@@ -65,15 +65,18 @@ class TrainingConfig:
     mini_batch_size: int = 2
     update_after_group: bool = True
 
+    # Advantage calculation parameters
+    batch_level: Literal["group", "batch"] = "batch"
+    no_std: bool = True
+    leave_one_out: bool = False
+
     # Replay buffer parameters
     buffer_steps: int = 6
     select_strategy: Literal["recent", "variance", "random"] = "variance"
 
-    # Normalization parameters
+    # Aggregation parameters
+    ppo_mode: Literal["per_token", "per_trace"] = "per_token"
     token_agg: Literal["mean", "sum"] = "mean"
-
-    # Group parameters
-    no_std: bool = True
 
     # Regularization parameters
     kl_beta: float = 0.001
