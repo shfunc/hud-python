@@ -5,7 +5,7 @@ import os
 
 # Disable tokenizer parallelism warnings
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import argparse
 import asyncio
 import json
@@ -21,7 +21,6 @@ from hud.rl.config import Config
 from hud.rl.distributed import (
     broadcast_object,
     cleanup_distributed,
-    distribute_groups,
     get_global_rank,
     get_world_size,
     is_main_process,
@@ -59,6 +58,8 @@ async def train(config: Config, tasks: list[Task]) -> None:
         hud_console.header("Starting GRPO Training")
         hud_console.section_title(f"\n[1/3] Initializing components (world_size={get_world_size()})...")
 
+    num_gpus = get_world_size()
+
     # Actor is responsible for running tasks and collecting episodes
     actor = Actor(config) if is_main_process() else None
 
@@ -72,6 +73,10 @@ async def train(config: Config, tasks: list[Task]) -> None:
     )
     if is_main_process():
         hud_console.key_value_table(dataset_buffer.info)
+    
+    if dataset_buffer.groups_per_batch % num_gpus != 0:
+        hud_console.warning(f"Groups per batch {dataset_buffer.groups_per_batch} is not divisible by number of GPUs {num_gpus}")
+        exit(1)
 
     # Replay buffer is responsible for storing episodes for training
     trace_buffer = ReplayBuffer(config)
@@ -130,39 +135,39 @@ async def train(config: Config, tasks: list[Task]) -> None:
                 
                 # Get all traces from buffer for distribution
                 all_traces = trace_buffer.sample_traces()
+                
+                assert len(traces) == len(all_traces)
 
                 # Preprocess traces to training samples
-                preprocessed_traces = preprocess_advantages(all_traces, config.training.group_size)
+                preprocessed_traces = preprocess_advantages(all_traces, config)
                 
                 # Store these for later use in metrics
                 global_reward_stats = [trace.reward for trace in all_traces]
                 global_advantage_stats = [sample.advantage for sample in preprocessed_traces]
                 
-                # Distribute traces in groups across ranks
-                num_gpus = get_world_size()
-                total_groups = len(all_traces) // num_gpus
-                rank_traces = distribute_groups(preprocessed_traces, total_groups)
+                # Distribute preprocessed samples in groups across ranks
+                gpu_batch_size = len(preprocessed_traces) // num_gpus
+                rank_samples = [preprocessed_traces[i:i+gpu_batch_size] for i in range(0, len(preprocessed_traces), gpu_batch_size)]
                 
                 # Log distribution info
-                hud_console.info(f"Distributing {len(all_traces)} traces as {total_groups} groups across {num_gpus} GPUs")
+                hud_console.info(f"Distributing {len(preprocessed_traces)} samples as {gpu_batch_size} sized batches across {num_gpus} GPUs")
                 for rank in range(num_gpus):
-                    n_traces = len(rank_traces[rank])
-                    n_groups = n_traces // num_gpus if n_traces > 0 else 0
-                    hud_console.info(f"  Rank {rank}: {n_traces} traces ({n_groups} groups)")
+                    n_samples = len(rank_samples[rank])
+                    hud_console.info(f"  Rank {rank}: {n_samples} samples")
                 
                 hud_console.section_title(f"Training on {len(all_traces)} traces")
                 episode_time_value = episode_time
             else:
-                rank_traces = None
+                rank_samples = None
                 episode_time_value = None
             
-            # Broadcast each rank's traces and episode time
-            rank_traces = broadcast_object(rank_traces, src=0)
+            # Broadcast each rank's samples and episode time
+            rank_samples = broadcast_object(rank_samples, src=0)
             episode_time_value = broadcast_object(episode_time_value, src=0)
-            my_traces = rank_traces[get_global_rank()] if rank_traces else []
+            my_samples = rank_samples[get_global_rank()] if rank_samples else []
             
-            # Process only assigned traces
-            last_metrics = learner.update(my_traces)
+            # Process only assigned samples
+            last_metrics = learner.update(my_samples)
             
             # Add episode time (same for all ranks since episodes run on rank 0)
             if episode_time_value is not None:
@@ -184,8 +189,8 @@ async def train(config: Config, tasks: list[Task]) -> None:
                     # Fallback: use only this rank's data
                     hud_console.warning("Global statistics not available, using partial data")
                     last_metrics.update({
-                        "advantage": [sample.advantage for sample in my_traces] if my_traces else [],
-                        "reward": [sample.reward for sample in my_traces] if my_traces else [],
+                        "advantage": [sample.advantage for sample in my_samples] if my_samples else [],
+                        "reward": [sample.reward for sample in my_samples] if my_samples else [],
                     })
                 
                 job_obj.log_sync(last_metrics.to_dict())
@@ -285,9 +290,9 @@ async def main() -> None:
     # Calculate the memory usage
     INITIAL_MEMORY = 8.0
     SCALING_FACTOR = 2
-    constant = config.training.mini_batch_size * config.actor.max_steps_per_episode
-    quadratic = (config.model.max_pixels / (28 * 28 * 256))
-    total_memory = INITIAL_MEMORY + SCALING_FACTOR * constant * quadratic
+    token_estimate = config.training.mini_batch_size * config.actor.max_steps_per_episode
+    image_estimate = (config.model.max_pixels / (28 * 28 * 256))
+    total_memory = INITIAL_MEMORY + SCALING_FACTOR * token_estimate * image_estimate
     hud_console.info(f"Total memory usage: {total_memory:.2f} GB")
     if total_memory > 75.0:
         hud_console.warning("Potential memory usage is too high, decrease either training steps or mini batch size")

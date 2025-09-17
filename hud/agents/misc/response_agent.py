@@ -34,7 +34,8 @@ class ResponseAgent:
         
         - STOP: If the agent indicates it has successfully completed a task, even if phrased as a question
           like "I have entered the right values into this form. Would you like me to do anything else?"
-          or "Here is the website. Is there any other information you need?"
+          or "Here is the website. Is there any other information you need?" or if the agent has
+          strongly determined it wants to stop the task.
         
         - CONTINUE: If the agent is asking for clarification before proceeding with a task
           like "I'm about to clear cookies from this website. Would you like me to proceed?"

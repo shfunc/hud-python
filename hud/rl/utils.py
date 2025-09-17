@@ -103,18 +103,15 @@ def aggregate_metrics_across_ranks(metrics: Any, metrics_to_aggregate: list[str]
         dtype=torch.float32
     )
     
-    # Gather from all ranks
-    if is_main_process():
-        gathered_tensors = [torch.zeros_like(values_tensor) for _ in range(get_world_size())]
-    else:
-        gathered_tensors = None
-    
-    torch.distributed.gather(values_tensor, gathered_tensors, dst=0)
-    
+    # Gather from all ranks using NCCL-supported all_gather
+    world_size = get_world_size()
+    gather_list = [torch.zeros_like(values_tensor) for _ in range(world_size)]
+    torch.distributed.all_gather(gather_list, values_tensor)
+
     # Update metrics on main process only
-    if is_main_process() and gathered_tensors:
+    if is_main_process():
         # Reshape: [num_gpus, num_metrics]
-        all_values = torch.stack(gathered_tensors).cpu().numpy()
+        all_values = torch.stack(gather_list).cpu().numpy()
         
         # Update each metric with aggregated values
         for i, metric_name in enumerate(local_values.keys()):
@@ -237,24 +234,21 @@ def prepare_conversation_history(
 
 def prepare_inputs(
     trace: Trace,
-    processor: Any,
-    learner: Any,
-    config: Config
-) -> list[dict[str, torch.Tensor]]:
+    processor: Any
+) -> dict[str, torch.Tensor]:
     """
     Prepare inputs from a trace.
     
     Args:
         trace: Trace to process
         processor: Model processor
-        learner: Learner instance (for computing logprobs)
     
     Returns:
         Inputs for the model
     """
     # Skip error traces or traces with no messages
     if trace.isError or len(trace.messages) == 0:
-        return []
+        return {}
 
     # Get images for current turn
     conversation, images = prepare_conversation_history(trace.messages)
@@ -275,68 +269,183 @@ def prepare_inputs(
         return_offsets_mapping=False,  # we no longer need char offsets
     )
 
-    # Build assistant masks from token IDs
-    input_ids = inputs["input_ids"]  # list of lists (length 1 batch)
-    assistant_masks = build_assistant_masks(input_ids, processor.tokenizer)
-    inputs["assistant_masks"] = assistant_masks
-    inputs.convert_to_tensors(tensor_type="pt")
-
-    mask_tensor = inputs["assistant_masks"]  # shape [B, T]
+    assistant_masks = build_assistant_masks(inputs["input_ids"], processor.tokenizer)
+    mask_tensor = torch.tensor(assistant_masks, dtype=torch.long)
+    
+    # Ensure mask_tensor is 2D before slicing
     if mask_tensor.dim() == 1:
         mask_tensor = mask_tensor.unsqueeze(0)
+    
+    # Slice to align with targets [B, T-1]
+    inputs["assistant_mask"] = mask_tensor[:, 1:].bool()
 
-    # logits_to_keep are positions where previous token (label axis) is assistant
-    logits_to_keep = (mask_tensor[0, 1:] == 1).nonzero(as_tuple=True)[0]
-    inputs["logits_to_keep"] = logits_to_keep
-    inputs = {k: v.to(learner.device) for k, v in inputs.items()}
+    # Log amount of assistant tokens, and the first 10 tokens that are non 0, decoded
+    # assistant_batches = render_assistant_tokens(mask_tensor, inputs['input_ids'], processor)
+    inputs.convert_to_tensors(tensor_type="pt")
+    
+    return inputs
 
-    return [inputs]
+def render_assistant_tokens(mask_tensor: torch.Tensor, input_ids: torch.Tensor, processor: Any) -> list[str]:
+    """Render assistant tokens as a list of continuous batches."""
+    # Get the mask as a 1D tensor
+    mask_1d = mask_tensor[0]
+    
+    # Find continuous sequences of non-zero values
+    batches = []
+    start_idx = None
+    
+    for i in range(len(mask_1d)):
+        if mask_1d[i] != 0 and start_idx is None:
+            # Start of a new batch
+            start_idx = i
+        elif mask_1d[i] == 0 and start_idx is not None:
+            # End of current batch
+            # Extract and decode the tokens in this batch
+            batch_token_ids = input_ids[0][start_idx:i].tolist()
+            decoded_batch = processor.tokenizer.decode(batch_token_ids)
+            batches.append(decoded_batch)
+            start_idx = None
+    
+    # Handle case where the last batch extends to the end
+    if start_idx is not None:
+        batch_token_ids = input_ids[0][start_idx:].tolist()
+        decoded_batch = processor.tokenizer.decode(batch_token_ids)
+        batches.append(decoded_batch)
+    
+    return batches
 
 
-def preprocess_advantages(group: list[Trace], group_size: int) -> list[TrainingSample]:
+def entropy_from_logits(logits: torch.Tensor) -> torch.Tensor:
+    """Calculate entropy from logits in a memory-efficient way."""
+    log_probs = torch.nn.functional.log_softmax(logits, dim=-1)
+    entropy = -torch.sum(torch.exp(log_probs) * log_probs, dim=-1)
+    return entropy
+
+def preprocess_advantages(group: list[Trace], config: Config) -> list[TrainingSample]:
     """Preprocess a group of traces."""
-    groups = [group[i:i+group_size] for i in range(0, len(group), group_size)]
+    group_size = config.training.group_size
+    if config.training.batch_level == "group":
+        groups = [group[i:i+group_size] for i in range(0, len(group), group_size)]
+    elif config.training.batch_level == "batch":
+        groups = [group]
+    else:
+        raise ValueError(f"Invalid batch level: {config.training.batch_level}")
+
     all_samples = []
     for group in groups:
         rewards = np.array([trace.reward for trace in group])
         mean_reward = np.mean(rewards)
         std_reward = np.std(rewards)
         
-        # Normalize advantages
+        # Calculate advantages
         samples = [TrainingSample(**trace.model_dump()) for trace in group]
         for sample, reward in zip(samples, rewards, strict=True):
             if sample.isError:
-                sample.advantage = 0.0
+                sample.advantage = torch.Tensor(np.array([0.0]))
                 continue
-            if std_reward < 1e-6:
-                sample.advantage = 0.0
-                continue
-            advantage_value = ((reward - mean_reward) / std_reward)
-            sample.advantage = float(advantage_value)
+            # No std (non-baseline GRPO)
+            if config.training.no_std:
+                advantage_value = (reward - mean_reward)
+            else:
+                # Avoid division by zero
+                if std_reward < 1e-6:
+                    hud_console.info_log(f"Zero std reward: {reward} - {mean_reward}")
+                    advantage_value = torch.Tensor(np.array([0.0]))
+                else:
+                    advantage_value = ((reward - mean_reward) / std_reward)
+            # Leave one out RLOO/LOOP
+            if config.training.leave_one_out:
+                advantage_value = advantage_value * len(group) / (len(group) - 1)
+            sample.advantage = torch.Tensor(np.array([advantage_value]))
+            print(f"Advantage: {sample.advantage}")
         all_samples.extend(samples)
 
     return all_samples
 
-# def concat_training_samples(
-#     samples: list[TrainingSample],
-# ) -> TrainingSample:
-#     """Concatenate training samples from a list of episodes."""
-#     sample = TrainingSample(
-#         inputs={},
-#         advantage=torch.tensor([]),
-#         old_logprobs=torch.tensor([]),
-#         ref_logprobs=torch.tensor([]),
-#         weight=torch.tensor([]),
-#     )
-#     # apply padding to all inputs and make it so that the length of the inputs is the same for all samples
-#     max_length = max(len(s.inputs["input_ids"][0]) for s in samples)
-#     for s in samples:
-#         for k in ["input_ids", "assistant_masks", "attention_mask"]:
-#             s.inputs[k] = torch.nn.functional.pad(s.inputs[k], (0, max_length - s.inputs[k].shape[-1]))
+def batch_training_samples(samples: list[TrainingSample]) -> list[TrainingSample]:
+    """Create batched model inputs from a list of TrainingSample.
+
+    Pads token sequences to the maximum length in the list and zero-pads
+    images to the maximum H/W when present. Returns a dictionary of batched
+    tensors suitable for a single forward pass. Keeps assistant_masks for
+    masked scoring.
+    """
+    if not samples:
+        return []
+
+    import torch.nn.functional as F
+    new_samples = [TrainingSample()]
+
+    input_keys_to_expand = ["input_ids", "attention_mask", "assistant_mask"]
+    input_keys_to_cat = ["pixel_values", "image_grid_thw"]
+    updated_inputs = {k: [] for k in input_keys_to_expand + input_keys_to_cat}
+
+    # Sanity check dimensions
+    for s in samples:
+        for k in input_keys_to_expand + input_keys_to_cat:
+            val = s.inputs.get(k)
+            if val is not None:
+                if k in input_keys_to_expand:
+                    if val.dim() == 2 and val.size(0) == 1:
+                        val = val[0]
+                    elif val.dim() != 1:
+                        raise ValueError(f"{k} has unexpected dimensions: {val.shape}")
+                updated_inputs[k].append(val)
+
+    # Pad 1D sequences to max length
+    max_len = max(t.size(-1) for t in updated_inputs["input_ids"])
+    def pad_1d(x: torch.Tensor, pad_to: int, pad_value: int) -> torch.Tensor:
+        pad = pad_to - x.size(-1)
+        return F.pad(x, (0, pad), value=pad_value) if pad > 0 else x
+
+    # These are 1D sequences that need padding
+    for k in input_keys_to_expand:
+        if updated_inputs[k]:
+            # assistant_mask is T-1, others are T
+            if k == "assistant_mask":
+                updated_inputs[k] = torch.stack([pad_1d(x, max_len - 1, 0) for x in updated_inputs[k]], dim=0)
+            else:
+                updated_inputs[k] = torch.stack([pad_1d(x, max_len, 0) for x in updated_inputs[k]], dim=0)
+
+    for k in input_keys_to_cat:
+        if updated_inputs[k]:
+            # pixel_values and image_grid_thw are concatenated across all images from all samples
+            # Shape of pixel_values: (sum of all patches from all images, feature_dim)
+            # Shape of image_grid_thw: (sum of all images, 3)
+            updated_inputs[k] = torch.cat(updated_inputs[k], dim=0)
+        else:
+            updated_inputs.pop(k)
+
+    new_samples[0].inputs = updated_inputs
+
+    # Pad logprobs to max length before stacking
+    # old_logprobs and ref_logprobs have shape [seq_len] or [1, seq_len] after gathering
+    def pad_logprobs(logprobs: torch.Tensor, max_len: int) -> torch.Tensor:
+        # Always work with 1D tensor, squeeze batch dim if present
+        if logprobs.dim() == 2 and logprobs.size(0) == 1:
+            logprobs = logprobs.squeeze(0)
+        elif logprobs.dim() != 1:
+            raise ValueError(f"Expected logprobs to have 1 or 2 dimensions, got {logprobs.dim()} with shape {logprobs.shape}")
+        
+        # Now logprobs is [seq_len]
+        seq_len = logprobs.size(0)
+        if seq_len < max_len:
+            pad_size = max_len - seq_len
+            # Pad with -inf (log of 0 probability) along sequence dimension
+            return F.pad(logprobs, (0, pad_size), value=float('-inf'))
+        return logprobs
+
+    # Stack padded logprobs (these are T-1 length)
+    old_logprobs_list = [pad_logprobs(s.old_logprobs, max_len - 1) for s in samples]
+    ref_logprobs_list = [pad_logprobs(s.ref_logprobs, max_len - 1) for s in samples]
     
-#     sample.inputs = {k: torch.stack([s.inputs[k] for s in samples]) for k in samples[0].inputs}
-#     sample.advantage = torch.stack([s.advantage for s in samples])
-#     sample.old_logprobs = torch.stack([s.old_logprobs for s in samples])
-#     sample.ref_logprobs = torch.stack([s.ref_logprobs for s in samples])
-#     sample.weight = torch.stack([s.weight for s in samples])
-#     return sample
+    new_samples[0].old_logprobs = torch.stack(old_logprobs_list, dim=0)
+    new_samples[0].ref_logprobs = torch.stack(ref_logprobs_list, dim=0)
+    
+    # Stack advantages, checking for None values
+    advantages = [s.advantage for s in samples]
+    if any(adv is None for adv in advantages):
+        raise ValueError("Some samples have None advantages. Make sure advantages are computed before batching.")
+    new_samples[0].advantage = torch.stack(advantages, dim=0)
+
+    return new_samples

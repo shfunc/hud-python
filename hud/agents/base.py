@@ -290,6 +290,7 @@ class MCPAgent(ABC):
                     # Extract reward and content from evaluation
                     if results:
                         reward = find_reward(results[0])
+                        self.console.info_log(f"Evaluation reward: {reward}")
                         eval_content = find_content(results[0])
 
                         # Update the prompt result with evaluation reward
@@ -569,26 +570,10 @@ class MCPAgent(ABC):
 
         all_tools = await self.mcp_client.list_tools()
 
-        # Filter tools
-        self._available_tools = []
-        self._tool_map = {}
-
-        # Track response tools by server
         response_tools_by_server: dict[str, str] = {}  # server_name -> tool_name
-
         for tool in all_tools:
-            # Check if tool should be included
-            if self.allowed_tools and tool.name not in self.allowed_tools:
-                continue
-            if tool.name in self.disallowed_tools:
-                continue
-
-            self._available_tools.append(tool)
-            # Simplified mapping - just tool name to tool
-            self._tool_map[tool.name] = tool
-
-            # Track response tools
             if "response" in tool.name or tool.name == "response":
+                self.console.debug(f"Found response tool: '{tool.name}'")
                 # Extract server name from tool name (e.g., "grader_response" -> "grader")
                 if "_" in tool.name:
                     server_name = tool.name.split("_", 1)[0]
@@ -596,27 +581,67 @@ class MCPAgent(ABC):
                 else:
                     response_tools_by_server["_default"] = tool.name
 
-        # Find the response tool to use (prioritize last server in config)
+        # Add response tool to lifecycle tools BEFORE filtering
         if response_tools_by_server and hasattr(self.mcp_client, "mcp_config"):
             # Get server names in order from mcp_config
             server_names = list(self.mcp_client.mcp_config.keys())
+            self.console.debug(f"Server names: {server_names}")
 
             # Try to find response tool from last server first
             response_tool_name = None
             for server_name in reversed(server_names):
                 if server_name in response_tools_by_server:
                     response_tool_name = response_tools_by_server[server_name]
+                    self.console.debug(
+                        f"Found response tool '{response_tool_name}' from server '{server_name}'"
+                    )
                     break
 
             # Fallback to any response tool
             if not response_tool_name and response_tools_by_server:
                 response_tool_name = next(iter(response_tools_by_server.values()))
+                self.console.debug(f"Using fallback response tool '{response_tool_name}'")
 
             # Add to lifecycle tools if found
             if response_tool_name and response_tool_name not in self.lifecycle_tools:
                 self.console.debug(f"Auto-detected '{response_tool_name}' tool as a lifecycle tool")
                 self.response_tool_name = response_tool_name
                 self.lifecycle_tools.append(response_tool_name)
+            elif response_tool_name:
+                self.console.debug(
+                    f"Response tool '{response_tool_name}' already in lifecycle_tools"
+                )
+                self.response_tool_name = response_tool_name
+        else:
+            self.console.debug("No response tools found or no mcp_config")
+
+        # Filter tools
+        self._available_tools = []
+        self._tool_map = {}
+
+        self.console.debug(f"All tools: {[t.name for t in all_tools]}")
+        self.console.debug(f"Allowed tools: {self.allowed_tools}")
+        self.console.debug(f"Disallowed tools: {self.disallowed_tools}")
+        self.console.debug(f"Lifecycle tools: {self.lifecycle_tools}")
+
+        for tool in all_tools:
+            # Lifecycle tools (setup, evaluate, response) should always be included
+            is_lifecycle = tool.name in self.lifecycle_tools
+
+            # Check if tool should be included
+            if not is_lifecycle:
+                if self.allowed_tools and tool.name not in self.allowed_tools:
+                    self.console.debug(f"Skipping tool '{tool.name}' - not in allowed_tools")
+                    continue
+                if tool.name in self.disallowed_tools:
+                    self.console.debug(f"Skipping tool '{tool.name}' - in disallowed_tools")
+                    continue
+
+            self.console.debug(
+                f"Adding tool '{tool.name}' to available tools (lifecycle={is_lifecycle})"
+            )
+            self._available_tools.append(tool)
+            self._tool_map[tool.name] = tool
 
         # Check if all required tools are available
         if self.required_tools:

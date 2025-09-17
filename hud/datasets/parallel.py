@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import multiprocessing
 import os
 import traceback
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -114,58 +115,36 @@ def _process_worker(
                     task_name = task_dict.get("prompt") or f"Task {index}"
 
                     # Use the job_id to group all tasks under the same job
-                    with hud.trace(
-                        task_name, job_id=job_id, task_id=task_dict.get("id")
-                    ):
-                        try:
-                            # Convert dict to Task
-                            task = Task(**task_dict)
+                    with hud.trace(task_name, job_id=job_id, task_id=task_dict.get("id")):
+                        # Convert dict to Task
+                        task = Task(**task_dict)
 
-                            # Create agent instance
-                            agent = agent_class(**(agent_config or {}))
+                        # Create agent instance
+                        agent = agent_class(**(agent_config or {}))
 
-                            if auto_respond:
-                                agent.response_agent = ResponseAgent()
+                        if auto_respond:
+                            agent.response_agent = ResponseAgent()
 
-                            # Run the task - this should ALWAYS return a result, even on error
-                            result = await agent.run(task, max_steps=max_steps)
+                        # Run the task
+                        result = await agent.run(task, max_steps=max_steps)
 
-                            # Extract and print evaluation score for visibility
-                            reward = getattr(result, "reward", "N/A")
-                            logger.info(
-                                "[Worker %s] Task %s: ✓ Completed (reward: %s)",
-                                worker_id,
-                                index,
-                                reward,
-                            )
+                        # Extract and print evaluation score for visibility
+                        reward = getattr(result, "reward", "N/A")
+                        logger.info(
+                            "[Worker %s] Task %s: ✓ Completed (reward: %s)",
+                            worker_id,
+                            index,
+                            reward,
+                        )
 
-                            logger.info(
-                                "[Worker %s] Completed task %s (reward: %s)",
-                                worker_id,
-                                index,
-                                reward,
-                            )
+                        logger.info(
+                            "[Worker %s] Completed task %s (reward: %s)",
+                            worker_id,
+                            index,
+                            reward,
+                        )
 
-                            return (index, result)
-                        except Exception as e:
-                            # Even if there's an exception, ensure we have a proper result
-                            logger.error(
-                                "[Worker %s] Task %s failed during execution: %s",
-                                worker_id,
-                                index,
-                                str(e)[:200],
-                            )
-                            # Create a proper Trace result for errors
-                            from hud.types import Trace
-
-                            error_result = Trace(
-                                reward=0.0,
-                                done=True,
-                                content=f"Task execution failed: {e}",
-                                isError=True,
-                                info={"error": str(e), "traceback": traceback.format_exc()},
-                            )
-                            return (index, error_result)
+                        return (index, result)
 
                 except Exception as e:
                     error_msg = f"Worker {worker_id}: Task {index} failed: {e}"
@@ -212,6 +191,19 @@ def _process_worker(
     try:
         # Run the async batch processing
         results = loop.run_until_complete(process_batch())
+
+        # Ensure telemetry is fully sent before process exits
+        # Spans are buffered in BatchSpanProcessor and need explicit flush
+
+        from opentelemetry import trace as otel_trace
+
+        provider = otel_trace.get_tracer_provider()
+        if provider and hasattr(provider, "force_flush"):
+            # Flush of buffered spans
+            success = provider.force_flush(timeout_millis=2000)  # type: ignore[arg-type]
+            if not success:
+                logger.warning("Worker %s: Telemetry flush timed out", worker_id)
+
         return results
     except KeyboardInterrupt:
         logger.info("Worker %s: Interrupted by user, stopping gracefully", worker_id)
@@ -236,24 +228,17 @@ def _process_worker(
         logger.error("Worker %s batch processing failed: %s", worker_id, e)
         return [(idx, {"error": str(e), "isError": True}) for idx, _ in task_batch]
     finally:
-        # CRITICAL: Always ensure telemetry is fully sent before process exits
-        # This must happen in finally block to ensure it runs even on errors
         try:
             from opentelemetry import trace as otel_trace
 
             provider = otel_trace.get_tracer_provider()
             if provider and hasattr(provider, "force_flush"):
-                # This forces BatchSpanProcessor to export all buffered spans NOW
-                # The method returns True if successful, False if timeout
-                success = provider.force_flush(
-                    timeout_millis=10000
-                )  # 10 second timeout # type: ignore
+                # Flush buffered spans with reasonable timeout
+                success = provider.force_flush(timeout_millis=2000)  # type: ignore[arg-type]
                 if not success:
                     logger.warning("Worker %s: Telemetry flush timed out", worker_id)
-                else:
-                    logger.debug("Worker %s: Telemetry flushed successfully", worker_id)
-        except Exception as flush_error:
-            logger.error("Worker %s: Failed to flush telemetry: %s", worker_id, flush_error)
+        except Exception as e:
+            logger.warning("Worker %s: Failed to flush telemetry: %s", worker_id, e)
 
         # Clean up the event loop
         try:
@@ -367,6 +352,8 @@ async def run_dataset_parallel_manual(
         for task_dict in task_dicts:
             if "system_prompt" not in task_dict:
                 task_dict["system_prompt"] = custom_system_prompt
+            else:
+                task_dict["system_prompt"] += "\n" + custom_system_prompt
 
     # Prepare job metadata
     job_metadata = metadata or {}
@@ -390,6 +377,8 @@ async def run_dataset_parallel_manual(
             dataset_link = f"{project}/{dataset_name}"
         except Exception:
             logger.warning("Failed to extract dataset verification info")
+
+    # task_dicts = task_dicts[:10]
 
     # Create job context
     with hud.job(name, metadata=job_metadata, dataset_link=dataset_link) as job_obj:
@@ -435,7 +424,10 @@ async def run_dataset_parallel_manual(
         )
 
         # Process batches in parallel using ProcessPoolExecutor
-        executor = ProcessPoolExecutor(max_workers=max_workers)
+        executor = ProcessPoolExecutor(
+            max_workers=max_workers,
+            mp_context=multiprocessing.get_context("spawn"),
+        )
         try:
             # Submit all batches to workers
             future_to_batch = {

@@ -1,0 +1,25 @@
+{
+    "training": {
+      "training_steps": 50,
+      "epochs": 2,
+      "batch_size": 64,
+      "group_size": 8,
+      "mini_batch_size": 2,
+      "update_after_group": true,
+      "update_after_minibatch": false,
+      "batch_level": "group",
+      "no_std": false,
+      "leave_one_out": true,
+      "buffer_steps": 4,
+      "select_strategy": "recent",
+      "token_agg": "mean",
+      "kl_beta": 0.0,
+      "entropy_beta": 0.0,
+      "lr": 1e-4,
+      "grad_clip": 1.0
+    },
+    "actor": {
+      "max_steps_per_episode": 4,
+      "max_parallel_episodes": 32
+    }
+  }

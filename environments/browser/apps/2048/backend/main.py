@@ -51,6 +51,7 @@ class GameState(BaseModel):
     game_over: bool
     won: bool
     highest_tile: int
+    initial_highest_tile: int
     target_tile: int
     board_size: int
 

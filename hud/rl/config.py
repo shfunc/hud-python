@@ -36,8 +36,8 @@ def validate_vl_model(model_name: str) -> None:
 class ModelConfig:
     """Model and LoRA configuration."""
     base_model: str = "Qwen/Qwen2.5-VL-3B-Instruct"
-    lora_r: int = 32
-    lora_alpha: int = 64
+    lora_r: int = 16
+    lora_alpha: int = 32
     lora_dropout: float = 0.05
     target_modules: tuple[str, ...] = (
         "q_proj", "k_proj", "v_proj", "o_proj",
@@ -58,30 +58,41 @@ class TrainingConfig:
     shuffle_dataset: bool = False
     save_every_batches: int = 1
 
-    # Batch parameters
+    # Batching parameters
     epochs: int = 2
     batch_size: int = 36
     group_size: int = 6
     mini_batch_size: int = 2
+    update_after_group: bool = True # Whether to update the policy after each task group
+    update_after_minibatch: bool = False # Whether to update the policy after each mini-batch
+
+    # Advantage calculation parameters
+    batch_level: Literal["group", "batch"] = "batch"
+    no_std: bool = True
+    leave_one_out: bool = True
 
     # Replay buffer parameters
     buffer_steps: int = 6
     select_strategy: Literal["recent", "variance", "random"] = "variance"
 
-    # Training hyperparameters
-    lr: float = 5e-5
+    # Aggregation parameters
+    ppo_mode: Literal["per_token", "per_trace"] = "per_token"
+    token_agg: Literal["mean", "sum"] = "sum"
+
+    # Regularization parameters
     kl_beta: float = 0.001
-    grad_clip: float = 1.0
+    entropy_beta: float = 0.0
     top_eps: float = 0.2
     bottom_eps: float = 0.1
+
+    # Training hyperparameters
+    lr: float = 5e-5
+    grad_clip: float = 1.0
 
     # Adam hyperparameters
     use_8bit_optimizer: bool = True
     adam_betas: tuple[float, float] = (0.9, 0.999)
     adam_eps: float = 1e-8
-
-    # Misc
-    token_agg: Literal["mean", "sum"] = "mean"
 
 
 @dataclass
@@ -92,6 +103,7 @@ class ActorConfig:
     max_parallel_episodes: int = 48
     max_new_tokens: int = 2048
     force_tool_choice: bool = False
+    allowed_tools: list[str] | None = None
 
     # Model parameters
     temperature: float = 1.0

@@ -103,7 +103,7 @@ class HUDConsole:
             stderr: If True, output to stderr (default), otherwise stdout
         """
         console = self._stderr_console if stderr else self._stdout_console
-        console.print(f"⚠️ [{YELLOW} not bold]{message}[/{YELLOW} not bold]")
+        console.print(f"⚠️  [{YELLOW} not bold]{message}[/{YELLOW} not bold]")
 
     def info(self, message: str, stderr: bool = True) -> None:
         """Print an info message.

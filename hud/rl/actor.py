@@ -58,7 +58,7 @@ class Actor:
         return GenericOpenAIChatAgent(
             openai_client=self.openai_client,
             model_name=self.current_adapter,
-            allowed_tools=["computer"],
+            allowed_tools=self.actor_config.allowed_tools or ["computer"],
             append_setup_output=False,
             system_prompt=self.actor_config.system_prompt,
             verbose=self.config.verbose,
@@ -128,3 +128,54 @@ class Actor:
         result.info["tool_spec"] = agent.get_tool_schemas()
 
         return result
+
+
+if __name__ == "__main__":
+    from hud.datasets import Task
+
+    async def test_actor():
+        """Test the actor with a single 2048 task using local hud-browser image."""
+        config = Config()
+        config.actor.max_parallel_episodes = 1
+        config.actor.max_steps_per_episode = 6
+        config.actor.episode_timeout_sec = 120
+        config.verbose = True
+
+        # Create test task with local hud-browser image
+        task_data = {
+            "id": "test_2048_128",
+            "prompt": "Play the browser-based 2048 game and try to reach the 128 tile. Start by taking a screenshot, then make strategic moves using arrow keys.",
+            "mcp_config": {
+                "local": {
+                    "command": "sh",
+                    "args": ["-c", "docker run --rm --platform linux/amd64 -i hud-browser:latest 2>/dev/null"]
+                }
+            },
+            "setup_tool": {"name": "launch_app", "arguments": {"app_name": "2048"}},
+            "evaluate_tool": {
+                "name": "evaluate",
+                "arguments": {"name": "game_2048_max_number", "arguments": {"target": 128}}
+            },
+            "system_prompt": "You are an expert 2048 game player. Use arrow keys to reach the target tile. First take a screenshot, then make strategic moves.",
+        }
+
+        task = Task(**task_data)
+        actor = Actor(config)
+
+        print(f"Testing actor with task: {task.id}")
+        print(f"Model: {config.model.base_model}")
+        print(f"VLLM: {config.actor.vllm_base_url}\n")
+
+        traces = await actor.run_tasks([task], job_id="test_2048")
+
+        for trace in traces:
+            if trace.isError:
+                print(f"Error: {trace.content}")
+            else:
+                print("Success!")
+                print(f"Trace info: {trace.info if hasattr(trace, 'info') else 'No info'}")
+                # Check for evaluation in the trace info
+                if hasattr(trace, 'info') and 'evaluation' in trace.info:
+                    print(f"  Evaluation: {trace.info['evaluation']}")
+
+    asyncio.run(test_actor())

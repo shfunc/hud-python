@@ -21,6 +21,9 @@ class Game2048:
         self.add_random_tile()
         self.add_random_tile()
 
+        # Track initial highest tile for reward calculation
+        self.initial_highest_tile = int(self.board.max())
+
     def add_random_tile(self) -> bool:
         """Add a random 2 or 4 tile to an empty position"""
         empty_cells = [
@@ -152,6 +155,7 @@ class Game2048:
             "game_over": bool(self.game_over),
             "won": bool(self.won),
             "highest_tile": int(self.board.max()),
+            "initial_highest_tile": int(self.initial_highest_tile),
             "target_tile": self.target_tile,
             "board_size": self.size,
         }
@@ -182,6 +186,9 @@ class Game2048:
         self.moves_made = 0
         self.add_random_tile()
         self.add_random_tile()
+
+        # Track initial highest tile after reset
+        self.initial_highest_tile = int(self.board.max())
 
     def can_move(self) -> dict:
         """Check which moves are valid"""

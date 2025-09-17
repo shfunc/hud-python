@@ -1,0 +1,56 @@
+---
+title: Train Agents — Quickstart
+---
+
+## Quickstart
+
+Install and download a taskset:
+
+```bash
+uv tool install "hud-python[rl]"
+hud get hud-evals/basic-2048
+```
+
+### 1) Simple: Train (remote by default)
+
+```bash
+hud rl basic-2048.jsonl
+```
+
+This launches training remotely and automatically provisions a vLLM server and a trainer for you. You can monitor progress on https://app.hud.so. The server persists between runs, so you can rerun training or evaluate against the same endpoint.
+
+Optional baseline first (Claude or Operator):
+
+```bash
+hud eval basic-2048.jsonl
+```
+
+### 2) Run on your own machine/remote
+
+Use any provider with at least 2 GPUs (one for inference, one for training). Run locally with the flag `--local`:
+
+```bash
+uv tool install hud-python
+hud get basic-2048
+hud rl basic-2048.jsonl --local
+```
+
+### 3) Advanced: Manual run via your own modal instances
+
+```bash
+hud rl basic-2048.jsonl --modal
+```
+
+This spins up:
+
+- A vLLM server for your model
+- A training job that periodically saves LoRA checkpoints to a shared volume
+
+### Recommended setups
+
+- 2× A100: quick iteration, shorter runs
+- 8× A100: higher throughput for larger tasksets
+
+Training throughput depends on task complexity and parallelism (`max_parallel_episodes`).
+
+
