@@ -291,6 +291,7 @@ async def main() -> None:
     INITIAL_MEMORY = 8.0
     SCALING_FACTOR = 4 / (28 * 28 * 256 * 1024)
     token_estimate = config.training.mini_batch_size * config.actor.max_steps_per_episode * config.actor.max_new_tokens
+    hud_console.info(f"Estimated tokens per forward pass: {token_estimate}")
     image_estimate = config.model.max_pixels
     total_memory = INITIAL_MEMORY + SCALING_FACTOR * token_estimate * image_estimate
     hud_console.info(f"Estimated memory peak: {total_memory:.2f} GB")

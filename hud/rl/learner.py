@@ -17,7 +17,7 @@ from transformers import (
 )
 
 try:
-    from liger_kernel.transformers import apply_liger_kernel_to_qwen2_5_vl, apply_liger_kernel_to_qwen2_5
+    from liger_kernel.transformers import apply_liger_kernel_to_qwen2_5_vl
     LIGER_AVAILABLE = True
 except ImportError:
     LIGER_AVAILABLE = False
@@ -75,14 +75,6 @@ class GRPOLearner:
             if is_vl_model:
                 self.log("Applying Liger kernel optimizations to Qwen2.5-VL")
                 apply_liger_kernel_to_qwen2_5_vl(
-                    rope=True,  # Optimized RoPE
-                    rms_norm=True,  # Optimized RMSNorm
-                    swiglu=True,  # Optimized SwiGLU
-                    fused_linear_cross_entropy=True  # Fused Linear+CrossEntropy for memory efficiency
-                )
-            else:
-                self.log("Applying Liger kernel optimizations to Qwen2.5")
-                apply_liger_kernel_to_qwen2_5(
                     rope=True,  # Optimized RoPE
                     rms_norm=True,  # Optimized RMSNorm
                     swiglu=True,  # Optimized SwiGLU
@@ -196,21 +188,24 @@ class GRPOLearner:
             new_sample.advantage = sample.advantage
             batch.append(new_sample)
 
-        self.log(f"Processing batch of {len(batch)} traces")
-
-        # Precompute logprobs
-        with torch.no_grad():
-            for sample in batch:
-                if sample.inputs:
-                    sample = sample.to_device(self.device)
-                    sample.old_logprobs, _ = self.compute_logprobs(self.policy, sample.inputs)
-
-            policy_module = self.policy.module if hasattr(self.policy, "module") else self.policy
-            with policy_module.disable_adapter():
-                for sample in batch:
+        with hud_console.progress("Processing batch of traces...") as progress:
+            # Precompute logprobs
+            with torch.no_grad():
+                for i, sample in enumerate(batch):
+                    if is_main_process():
+                        progress.update(f"Processing batch of traces... {i}/{len(batch)}")
                     if sample.inputs:
-                        sample.ref_logprobs, _ = self.compute_logprobs(self.policy, sample.inputs)
-        
+                        sample = sample.to_device(self.device)
+                        sample.old_logprobs, _ = self.compute_logprobs(self.policy, sample.inputs)
+
+                policy_module = self.policy.module if hasattr(self.policy, "module") else self.policy
+                with policy_module.disable_adapter():
+                    for i, sample in enumerate(batch):
+                        if is_main_process():
+                            progress.update(f"Processing batch of traces... {i}/{len(batch)}")
+                        if sample.inputs:
+                            sample.ref_logprobs, _ = self.compute_logprobs(self.policy, sample.inputs)
+
         hud_console.info_log(f"Creating mini-batches...")
         group_size = self.config.training.group_size
         processed_batch = []
@@ -281,26 +276,23 @@ class GRPOLearner:
                         with ddp_ctx, torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                             try:
                                 if mini_updated:
-                                    self.log(f"Computing loss for {sample_minibatch.inputs['input_ids'].numel()} tokens")
-                                    self.log(f"Sample: {sample_minibatch.inputs['input_ids'].shape}")
                                     loss = self.compute_loss(sample_minibatch) / grad_accum_steps
                                     debug_per_group += f"l{s_idx}:{str(round(loss.item(), 3))} "
                                     loss.backward()
                                 else: # Dummy backward that touches all params, produces zero grads, triggers hooks
-                                    self.log(f"Dummy backward for {sample_minibatch.inputs['input_ids'].numel()} tokens")
                                     dummy = sum(p.sum() for p in self.policy.parameters()) * 0.0
                                     debug_per_group += f"d{s_idx}:{str(round(dummy.item(), 3))} "
                                     dummy.backward()
                                 self.log(f"GPU Backward: {get_gpu_utilization():.1f}% | Memory: {get_memory_usage():.2f} GB")
                             except torch.cuda.OutOfMemoryError:
-                                hud_console.warning_log(f"CUDA OOM; skipping minibatch")
+                                hud_console.warning_log(f"CUDA OOM for {sample_minibatch.inputs['input_ids'].numel()} tokens; skipping minibatch")
                                 torch.cuda.empty_cache()
                                 skip_flag = torch.tensor(1, device=self.device)
                                 if torch.distributed.is_initialized():
                                     torch.distributed.all_reduce(skip_flag, op=torch.distributed.ReduceOp.MAX)
                                 # Dummy backward to keep DDP happy
                                 dummy = sum(p.sum() for p in self.policy.parameters()) * 0.0
-                                debug_per_group += f"m{s_idx}:{str(round(dummy.item(), 3))} "
+                                debug_per_group += f"o{s_idx}:{str(round(dummy.item(), 3))} "
                                 dummy.backward()
                                 group_updated = False
                                 continue
