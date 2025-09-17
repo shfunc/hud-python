@@ -256,18 +256,30 @@ def prepare_inputs(
     # Get absolute path to chat template
     chat_template_path = Path(__file__).parent / "chat_template.jinja"
     
+    # For VL models, processor has a tokenizer attribute; for text models, processor IS the tokenizer
+    tokenizer = processor.tokenizer if hasattr(processor, 'tokenizer') else processor
+    
     text_list, _ = render_jinja_template(
         conversations=[conversation],
         chat_template=load_chat_template(str(chat_template_path)),
         tools=trace.info["tool_spec"] if trace.info["tool_spec"] else None, # mcp_tools
         return_assistant_tokens_mask=True,
-        **processor.tokenizer.special_tokens_map,
+        **tokenizer.special_tokens_map,
     )
-    inputs = processor(
-        images=images if len(images) > 0 else None,
-        text=text_list,
-        return_offsets_mapping=False,  # we no longer need char offsets
-    )
+    # For text models, don't pass images parameter
+    if hasattr(processor, 'tokenizer'):
+        # VL model - processor accepts images
+        inputs = processor(
+            images=images if len(images) > 0 else None,
+            text=text_list,
+            return_offsets_mapping=False,  # we no longer need char offsets
+        )
+    else:
+        # Text model - processor is tokenizer, doesn't accept images
+        inputs = processor(
+            text=text_list,
+            return_offsets_mapping=False,  # we no longer need char offsets
+        )
 
     assistant_masks = build_assistant_masks(inputs["input_ids"], processor.tokenizer)
     mask_tensor = torch.tensor(assistant_masks, dtype=torch.long)
