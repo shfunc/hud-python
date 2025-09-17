@@ -18,11 +18,14 @@ from transformers import (
 
 try:
     from liger_kernel.transformers import apply_liger_kernel_to_qwen2_5_vl, apply_liger_kernel_to_qwen2_5
-    import bitsandbytes as bnb
     LIGER_AVAILABLE = True
-    BNB_AVAILABLE = True
 except ImportError:
     LIGER_AVAILABLE = False
+
+try:
+    import bitsandbytes as bnb
+    BNB_AVAILABLE = True
+except ImportError:
     BNB_AVAILABLE = False
 
 from hud.rl.distributed import (
