@@ -56,13 +56,10 @@ async def main():
             
             Make strategic moves to maximize your score and reach the target.""",
             "mcp_config": mcp_config,
-            "setup_tool": {
-                "name": "setup",
-                "arguments": [
-                    {"name": "launch_app", "arguments": {"app_name": "2048"}},
-                    {"name": "game_2048_board", "arguments": {"board_size": 4, "target_tile": 512}},
-                ],
-            },
+            "setup_tool": [
+                {"name": "launch_app", "arguments": {"app_name": "2048"}},
+                {"name": "setup", "arguments": {"name": "game_2048_board", "arguments": {"board_size": 4, "target_tile": 512}}},
+            ],
             "evaluate_tool": {
                 "name": "evaluate",
                 "arguments": {"name": "game_2048_max_number", "arguments": {"target": 512}},
@@ -78,13 +75,10 @@ async def main():
             
             Be systematic and interact with the app's features.""",
             "mcp_config": mcp_config,
-            "setup_tool": {
-                "name": "setup",
-                "arguments": [
-                    {"name": "launch_app", "arguments": {"app_name": "todo"}},
-                    {"name": "todo_seed", "arguments": {"num_items": 5}},
-                ],
-            },
+            "setup_tool": [
+                {"name": "launch_app", "arguments": {"app_name": "todo"}},
+                {"name": "setup", "arguments": {"name": "todo_seed", "arguments": {"num_items": 5}}},
+            ],
             "evaluate_tool": {
                 "name": "evaluate",
                 "arguments": {"name": "todo_completed", "arguments": {"expected_count": 4}},
