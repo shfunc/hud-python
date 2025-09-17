@@ -11,6 +11,7 @@ SUPPORTED_VL_MODELS = [
     "Qwen/Qwen2.5-VL-14B-Instruct",
     "Qwen/Qwen2.5-VL-32B-Instruct",
     "Qwen/Qwen2.5-VL-72B-Instruct",
+    "Qwen/Qwen2.5-7B-Instruct"
 ]
 
 

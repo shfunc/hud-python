@@ -58,7 +58,7 @@ class Actor:
         return GenericOpenAIChatAgent(
             openai_client=self.openai_client,
             model_name=self.current_adapter,
-            allowed_tools=self.actor_config.allowed_tools or ["computer"],
+            allowed_tools= None,
             append_setup_output=False,
             system_prompt=self.actor_config.system_prompt,
             verbose=self.config.verbose,

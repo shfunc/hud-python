@@ -281,7 +281,7 @@ def prepare_inputs(
             return_offsets_mapping=False,  # we no longer need char offsets
         )
 
-    assistant_masks = build_assistant_masks(inputs["input_ids"], processor.tokenizer)
+    assistant_masks = build_assistant_masks(inputs["input_ids"], tokenizer)
     mask_tensor = torch.tensor(assistant_masks, dtype=torch.long)
     
     # Ensure mask_tensor is 2D before slicing
@@ -314,14 +314,14 @@ def render_assistant_tokens(mask_tensor: torch.Tensor, input_ids: torch.Tensor, 
             # End of current batch
             # Extract and decode the tokens in this batch
             batch_token_ids = input_ids[0][start_idx:i].tolist()
-            decoded_batch = processor.tokenizer.decode(batch_token_ids)
+            decoded_batch = tokenizer.decode(batch_token_ids)
             batches.append(decoded_batch)
             start_idx = None
     
     # Handle case where the last batch extends to the end
     if start_idx is not None:
         batch_token_ids = input_ids[0][start_idx:].tolist()
-        decoded_batch = processor.tokenizer.decode(batch_token_ids)
+        decoded_batch = tokenizer.decode(batch_token_ids)
         batches.append(decoded_batch)
     
     return batches
