@@ -38,10 +38,16 @@ async def game_2048_max_number(target: int):
             game_state = response.json()
 
         highest_tile = game_state.get("highest_tile", 0)
+        initial_highest_tile = game_state.get("initial_highest_tile", 0)
+        score = game_state.get("score", 0)
 
-        # Logarithmic reward scale (matching text-2048)
-        # Reward is proportional to log(highest_tile) / log(target), capped at 1.0
-        if target > 1 and highest_tile > 1:
+        # Only give reward if progress has been made
+        # Score > 0 means merges have happened (real progress)
+        # OR highest_tile > initial means we've created a higher tile
+        if score == 0 and highest_tile <= initial_highest_tile:
+            reward = 0.0
+        elif target > 1 and highest_tile > 1:
+            # Logarithmic reward scale
             reward = min(1.0, math.log(highest_tile) / math.log(target))
         else:
             reward = 0.0
