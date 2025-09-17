@@ -830,7 +830,12 @@ def eval(
     vllm_base_url: str | None = typer.Option(
         None,
         "--vllm-base-url",
-        help="Base URL for vLLM server",
+        help="Base URL for vLLM server (when using --agent vllm)",
+    ),
+    group_size: int = typer.Option(
+        1,
+        "--group-size",
+        help="Number of times to run each task (similar to RL training)",
     ),
 ) -> None:
     """🚀 Run evaluation on datasets or individual tasks with agents."""
@@ -968,6 +973,7 @@ def eval(
         max_concurrent_per_worker=max_concurrent_per_worker,
         verbose=verbose,
         vllm_base_url=vllm_base_url,
+        group_size=group_size,
     )
 
 

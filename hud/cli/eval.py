@@ -12,6 +12,7 @@ import typer
 import hud
 from hud.settings import settings
 from hud.utils.hud_console import HUDConsole
+from hud.utils.group_eval import run_tasks_grouped, display_group_statistics
 
 logger = logging.getLogger(__name__)
 hud_console = HUDConsole()
@@ -164,6 +165,7 @@ async def run_single_task(
     max_steps: int = 10,
     verbose: bool = False,
     vllm_base_url: str | None = None,
+    group_size: int = 1,
 ) -> None:
     """Load one task and execute it, or detect if JSON contains a list and run as dataset."""
 
@@ -204,17 +206,75 @@ async def run_single_task(
 
     task_prompt = task.prompt[:50] + "..." if len(task.prompt) > 50 else task.prompt
 
-    with hud.trace(name=task_prompt):
-        agent = build_agent(
-            agent_type,
-            model=model,
-            allowed_tools=allowed_tools,
-            verbose=verbose,
-            vllm_base_url=vllm_base_url,
-        )
-        hud_console.info(task.prompt)
-        result = await agent.run(task, max_steps=max_steps)
-        hud_console.success(f"Reward: {result.reward}")
+    # Use grouped evaluation if group_size > 1
+    if group_size > 1:
+        hud_console.info(f"🔄 Running task with group_size={group_size}")
+        
+        # Build agent configuration
+        if agent_type == "vllm":
+            # Special handling for vLLM
+            sample_agent = build_agent(
+                agent_type,
+                model=model,
+                allowed_tools=allowed_tools,
+                verbose=verbose,
+                vllm_base_url=vllm_base_url,
+            )
+            agent_config = {
+                "openai_client": sample_agent.oai,
+                "model_name": sample_agent.model_name,
+                "verbose": verbose,
+                "completion_kwargs": sample_agent.completion_kwargs,
+            }
+            if allowed_tools:
+                agent_config["allowed_tools"] = allowed_tools
+            
+            from hud.agents.openai_chat_generic import GenericOpenAIChatAgent
+            agent_class = GenericOpenAIChatAgent
+        elif agent_type == "openai":
+            from hud.agents import OperatorAgent
+            agent_class = OperatorAgent
+            agent_config = {"verbose": verbose}
+            if allowed_tools:
+                agent_config["allowed_tools"] = allowed_tools
+        else:
+            from hud.agents import ClaudeAgent
+            agent_class = ClaudeAgent
+            agent_config = {
+                "model": model or "claude-sonnet-4-20250514",
+                "verbose": verbose,
+            }
+            if allowed_tools:
+                agent_config["allowed_tools"] = allowed_tools
+        
+        # Run with grouping
+        with hud.trace(name=f"{task_prompt} (group_size={group_size})"):
+            stats = await run_tasks_grouped(
+                tasks=[task],
+                agent_class=agent_class,
+                agent_config=agent_config,
+                group_size=group_size,
+                max_parallel_episodes=48,  # Same as RL default
+                max_steps=max_steps,
+                verbose=verbose,
+            )
+            
+        # Display results
+        display_group_statistics(stats, show_details=True)
+        
+    else:
+        # Original single-run logic
+        with hud.trace(name=task_prompt):
+            agent = build_agent(
+                agent_type,
+                model=model,
+                allowed_tools=allowed_tools,
+                verbose=verbose,
+                vllm_base_url=vllm_base_url,
+            )
+            hud_console.info(task.prompt)
+            result = await agent.run(task, max_steps=max_steps)
+            hud_console.success(f"Reward: {result.reward}")
 
 
 async def run_full_dataset(
@@ -230,6 +290,7 @@ async def run_full_dataset(
     max_concurrent_per_worker: int = 25,
     verbose: bool = False,
     vllm_base_url: str | None = None,
+    group_size: int = 1,
 ) -> list[Any]:
     """Run evaluation across the entire dataset.
 
@@ -239,11 +300,11 @@ async def run_full_dataset(
     # Import run_dataset lazily
     try:
         from hud.datasets import run_dataset, run_dataset_parallel, run_dataset_parallel_manual
-        from hud.rl.utils import load_tasks
+        from hud.utils.tasks import load_tasks
     except ImportError as e:
         hud_console.error(
             "Dataset dependencies are not installed. "
-            "Please install with: pip install 'hud-python[[agent]]'"
+            "Please install with: pip install 'hud-python[agent]'"
         )
         raise typer.Exit(1) from e
 
@@ -330,7 +391,48 @@ async def run_full_dataset(
         if allowed_tools:
             agent_config["allowed_tools"] = allowed_tools
 
-    if parallel:
+    # Use grouped evaluation if group_size > 1
+    if group_size > 1:
+        hud_console.info(f"🔄 Running dataset with group_size={group_size}")
+        
+        # Run with job tracking
+        with hud.job(
+            name=f"Evaluation {dataset_name} (group_size={group_size})",
+            metadata={
+                "dataset": source,
+                "group_size": group_size,
+                "tasks": len(dataset_or_tasks),
+                "total_episodes": len(dataset_or_tasks) * group_size,
+            }
+        ) as job:
+            # Convert dicts to Task objects if needed
+            from hud.datasets import Task
+            tasks = []
+            for item in dataset_or_tasks:
+                if isinstance(item, dict):
+                    tasks.append(Task(**item))
+                else:
+                    tasks.append(item)
+            
+            stats = await run_tasks_grouped(
+                tasks=tasks,
+                agent_class=agent_class,
+                agent_config=agent_config,
+                group_size=group_size,
+                max_parallel_episodes=max_concurrent if not parallel else max_concurrent_per_worker * (max_workers or 4),
+                max_steps=max_steps,
+                verbose=verbose,
+                job_id=job.id,
+            )
+        
+        # Display results
+        display_group_statistics(stats, show_details=len(stats) <= 20)
+        
+        # Return stats for consistency with other modes
+        return stats
+        
+    # Original logic for non-grouped evaluation
+    elif parallel:
         hud_console.info(
             f"🚀 Running PARALLEL evaluation (workers: {max_workers or 'auto'}, max_concurrent: {max_concurrent})…"  # noqa: E501
         )
@@ -433,6 +535,11 @@ def eval_command(
         "--vllm-base-url",
         help="Base URL for vLLM server (when using --agent vllm)",
     ),
+    group_size: int = typer.Option(
+        1,
+        "--group-size",
+        help="Number of times to run each task (similar to RL training)",
+    ),
 ) -> None:
     """🚀 Run evaluation on datasets or individual tasks with agents.
 
@@ -520,6 +627,7 @@ def eval_command(
                 max_concurrent_per_worker=max_concurrent_per_worker,
                 verbose=verbose,
                 vllm_base_url=vllm_base_url,
+                group_size=group_size,
             )
         )
     else:
@@ -532,5 +640,6 @@ def eval_command(
                 max_steps=max_steps,
                 verbose=verbose,
                 vllm_base_url=vllm_base_url,
+                group_size=group_size,
             )
         )
