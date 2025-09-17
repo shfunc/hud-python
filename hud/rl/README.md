@@ -1,0 +1,32 @@
+We suggest running hud rl (or with the --local flag) for optimal hyperparameters and native HuggingFace running.
+
+However, if you want to run the training directly, launch a vllm server with:
+```bash
+export VLLM_ALLOW_RUNTIME_LORA_UPDATING=True
+export TOKENIZERS_PARALLELISM=false
+export VLLM_LOGGING_LEVEL=INFO
+export CUDA_VISIBLE_DEVICES=7 # Set this to your last GPU
+
+uv run vllm serve Qwen/Qwen2.5-VL-3B-Instruct \
+    --api-key token-abc123 --host 0.0.0.0 --port 8000 --tensor-parallel-size 1 --trust-remote-code \
+    --max-model-len 16384 --enable-lora --max-lora-rank 64 --max-cpu-loras 4 --enable-auto-tool-choice \
+    --tool-call-parser hermes --disable-log-requests --dtype auto
+```
+
+And training with (replace 2 with your spare GPUs):
+```bash
+torchrun --nproc-per-node 2 -m hud.rl.train --tasks path/to/tasks.jsonl --verbose
+```
+
+Add a `--config path/to/config.json` flag to run a specific configuration (or change the defaults in config.py)
+
+Make sure to have flash attention installed:
+```bash
+uv pip install ninja
+uv pip install flash-attn --no-build-isolation
+```
+
+To get the tasks from a HuggingFace Dataset:
+```bash
+hud get hudevals/dataset
+```
