@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+import traceback
 
 from mcp import Implementation, types
 from mcp.shared.exceptions import McpError
@@ -173,7 +174,8 @@ class MCPUseHUDClient(BaseHUDClient):
             except Exception as e:
                 hud_console.error(f"Error discovering tools from '{server_name}': {e}")
                 if self.verbose:
-                    hud_console.exception("Full error details:")
+                    hud_console.error("Full error details:")
+                    traceback.print_exc()
 
         return all_tools
 
