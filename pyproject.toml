@@ -141,8 +141,8 @@ rl = [
     "hud-python[agent]",
     "peft>=0.17.1",
     "vllm>=0.10.1.1",
-    "bitsandbytes>=0.41.0",  # For 8-bit optimizers
-    "liger-kernel>=0.5.0",  # Optimized Triton kernels for LLM training
+    "bitsandbytes>=0.41.0 ; sys_platform == 'linux'",  # For 8-bit optimizers (Linux only)
+    "liger-kernel>=0.5.0 ; sys_platform == 'linux'",  # Optimized Triton kernels for LLM training (Linux only)
     # Note: flash-attn is recommended but optional
     # Install separately with: uv pip install flash-attn --no-build-isolation
 ]
