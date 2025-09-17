@@ -135,6 +135,7 @@ class GRPOLearner:
             bias="none",
             target_modules=list(model_cfg.target_modules)
         )
+        policy.config.use_cache = False
         policy = get_peft_model(policy, lora_config)
         
         # Wrap with DDP if in distributed mode
@@ -253,8 +254,8 @@ class GRPOLearner:
                     global_skip = torch.zeros(1, device=self.device)
 
                     for s_idx, sample_minibatch in enumerate(group):
-                        self.log(f"{group_idx} {sample_minibatch.advantage}")
-                        mini_updated = (sample_minibatch.advantage.abs().sum() > 0)
+                        self.log(f"{group_idx} {sample_minibatch.inputs['assistant_mask'].sum()}")
+                        mini_updated = sample_minibatch.inputs["assistant_mask"].sum() > 0
 
                         # Update mini_updated globally
                         self.log(f"{group_idx} Mini updated: {mini_updated}")
