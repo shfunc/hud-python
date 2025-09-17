@@ -1,4 +1,4 @@
-"""GRPO learner for vision-language models."""
+"""GRPO learner for vision-language and text models."""
 from __future__ import annotations
 
 import logging
@@ -10,10 +10,15 @@ import torch
 import torch.nn.functional as F
 from peft import LoraConfig, get_peft_model
 from torch.nn.parallel import DistributedDataParallel as DDP
-from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
+from transformers import (
+    AutoProcessor, 
+    AutoTokenizer,
+    AutoModelForCausalLM,
+    Qwen2_5_VLForConditionalGeneration,
+)
 
 try:
-    from liger_kernel.transformers import apply_liger_kernel_to_qwen2_5_vl
+    from liger_kernel.transformers import apply_liger_kernel_to_qwen2_5_vl, apply_liger_kernel_to_qwen2_5
     LIGER_AVAILABLE = True
 except ImportError:
     LIGER_AVAILABLE = False
@@ -33,13 +38,16 @@ logger = logging.getLogger(__name__)
 hud_console = HUDConsole(logger)
 
 class GRPOLearner:
-    """GRPO learning algorithm for VLMs."""
+    """GRPO learning algorithm for Vision-Language Models (VLMs) and Text Models."""
     
     def __init__(self, config: Config) -> None:
         self.config = config
         self.local_rank = get_local_rank()
         self.world_size = get_world_size()
         self.device = torch.device(f"cuda:{self.local_rank}" if torch.cuda.is_available() else "cpu")
+        
+        # Detect model type
+        self.is_vl_model = "VL" in config.model.base_model
         
         # Load models and processor
         self.processor, self.policy, self.ref, self.optimizer = self._load_models()
@@ -49,30 +57,51 @@ class GRPOLearner:
         """Load policy, reference models and optimizer."""
         model_cfg = self.config.model
         
+        # Detect if this is a VL model or standard text model
+        is_vl_model = "VL" in model_cfg.base_model
+        model_type = "Vision-Language" if is_vl_model else "Text"
+        hud_console.info_log(f"Loading {model_type} model: {model_cfg.base_model}")
+        
         # Apply Liger kernel optimizations if available and enabled
         if model_cfg.use_liger and LIGER_AVAILABLE:
-            hud_console.info_log("Applying Liger kernel optimizations to Qwen2.5-VL")
-            apply_liger_kernel_to_qwen2_5_vl(
-                rope=True,  # Optimized RoPE
-                rms_norm=True,  # Optimized RMSNorm
-                swiglu=True,  # Optimized SwiGLU
-                fused_linear_cross_entropy=True  # Fused Linear+CrossEntropy for memory efficiency
-            )
+            if is_vl_model:
+                hud_console.info_log("Applying Liger kernel optimizations to Qwen2.5-VL")
+                apply_liger_kernel_to_qwen2_5_vl(
+                    rope=True,  # Optimized RoPE
+                    rms_norm=True,  # Optimized RMSNorm
+                    swiglu=True,  # Optimized SwiGLU
+                    fused_linear_cross_entropy=True  # Fused Linear+CrossEntropy for memory efficiency
+                )
+            else:
+                hud_console.info_log("Applying Liger kernel optimizations to Qwen2.5")
+                apply_liger_kernel_to_qwen2_5(
+                    rope=True,  # Optimized RoPE
+                    rms_norm=True,  # Optimized RMSNorm
+                    swiglu=True,  # Optimized SwiGLU
+                    fused_linear_cross_entropy=True  # Fused Linear+CrossEntropy for memory efficiency
+                )
         elif model_cfg.use_liger and not LIGER_AVAILABLE:
             hud_console.warning_log("Liger kernel requested but not installed. Install with: pip install liger-kernel")
         
-        # Load processor
-        processor = AutoProcessor.from_pretrained(
-            model_cfg.base_model,
-            min_pixels=model_cfg.min_pixels,
-            max_pixels=model_cfg.max_pixels
-        )
+        # Load processor/tokenizer based on model type
+        if is_vl_model:
+            processor = AutoProcessor.from_pretrained(
+                model_cfg.base_model,
+                min_pixels=model_cfg.min_pixels,
+                max_pixels=model_cfg.max_pixels
+            )
+        else:
+            processor = AutoTokenizer.from_pretrained(model_cfg.base_model)
         
         # Load policy model with LoRA
         # Use attention implementation from config
         attn_implementation = model_cfg.attn_implementation
+        
+        # Choose the appropriate model class
+        model_class = Qwen2_5_VLForConditionalGeneration if is_vl_model else AutoModelForCausalLM
+        
         try:
-            policy = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+            policy = model_class.from_pretrained(
                 model_cfg.base_model,
                 torch_dtype=torch.bfloat16,
                 attn_implementation=attn_implementation,
@@ -82,7 +111,7 @@ class GRPOLearner:
             # Only fallback if explicitly using flash_attention_2 and it's not available
             if attn_implementation == "flash_attention_2":
                 hud_console.info_log(f"Flash Attention 2 not available ({e}), using eager attention")
-                policy = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                policy = model_class.from_pretrained(
                     model_cfg.base_model,
                     torch_dtype=torch.bfloat16,
                     attn_implementation="eager",
@@ -181,6 +210,57 @@ class GRPOLearner:
         
         return gathered
     
+    def prepare_model_inputs(self, sample: TrainingSample) -> list[dict]:
+        """Prepare inputs for the model, handling both VL and text models."""
+        if self.is_vl_model:
+            # Use the original prepare_inputs for VL models
+            return prepare_inputs(sample, self.processor, self.policy, self.config)
+        else:
+            # For text models, we need to handle it differently
+            from pathlib import Path
+            from hud.rl.utils import prepare_conversation_history, render_jinja_template, load_chat_template, build_assistant_masks
+            
+            # Skip error traces or traces with no messages
+            if sample.isError or len(sample.messages) == 0:
+                return []
+            
+            # Get conversation history (no images for text models)
+            conversation, _ = prepare_conversation_history(sample.messages)
+            
+            # Get absolute path to chat template
+            chat_template_path = Path(__file__).parent / "chat_template.jinja"
+            
+            text_list, _ = render_jinja_template(
+                conversations=[conversation],
+                chat_template=load_chat_template(str(chat_template_path)),
+                tools=sample.info["tool_spec"] if sample.info["tool_spec"] else None,
+                return_assistant_tokens_mask=True,
+                **self.processor.special_tokens_map,
+            )
+            
+            # For text models, just tokenize the text
+            inputs = self.processor(
+                text=text_list,
+                return_offsets_mapping=False,
+            )
+            
+            # Build assistant masks from token IDs
+            input_ids = inputs["input_ids"]  # list of lists (length 1 batch)
+            assistant_masks = build_assistant_masks(input_ids, self.processor)
+            inputs["assistant_masks"] = assistant_masks
+            inputs.convert_to_tensors(tensor_type="pt")
+            
+            mask_tensor = inputs["assistant_masks"]  # shape [B, T]
+            if mask_tensor.dim() == 1:
+                mask_tensor = mask_tensor.unsqueeze(0)
+            
+            # logits_to_keep are positions where previous token (label axis) is assistant
+            logits_to_keep = (mask_tensor[0, 1:] == 1).nonzero(as_tuple=True)[0]
+            inputs["logits_to_keep"] = logits_to_keep
+            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+            
+            return [inputs]
+    
     def update(self, samples: list[TrainingSample]) -> TrainingMetrics:
         """Perform a gradient update on a batch."""
         import time
@@ -207,7 +287,7 @@ class GRPOLearner:
         # Prepare inputs with messages
         batch = []
         for sample in samples:
-            inputs = prepare_inputs(sample, self.processor, self.policy, self.config)
+            inputs = self.prepare_model_inputs(sample)
             for inp in inputs:
                 new_sample = TrainingSample(**sample.model_dump())
                 new_sample.inputs = inp
