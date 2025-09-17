@@ -393,6 +393,9 @@ def batch_training_samples(samples: list[TrainingSample]) -> list[TrainingSample
             hud_console.info("Removing sample with zero advantage.")
             samples.remove(s)
 
+    if len(samples) == 1:
+        return samples
+
     import torch.nn.functional as F
     new_samples = [TrainingSample()]
 

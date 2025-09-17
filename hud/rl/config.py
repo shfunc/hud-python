@@ -37,8 +37,8 @@ def validate_vl_model(model_name: str) -> None:
 class ModelConfig:
     """Model and LoRA configuration."""
     base_model: str = "Qwen/Qwen2.5-VL-3B-Instruct"
-    lora_r: int = 16
-    lora_alpha: int = 32
+    lora_r: int = 8
+    lora_alpha: int = 16
     lora_dropout: float = 0.05
     target_modules: tuple[str, ...] = (
         "q_proj", "k_proj", "v_proj", "o_proj",

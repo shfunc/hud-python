@@ -249,28 +249,24 @@ class GRPOLearner:
 
                     debug_per_group = ""
                     grad_accum_steps = len(group)
+                    # Tensor for distributed sync
+                    global_skip = torch.zeros(1, device=self.device)
 
-                    group_updated = False
                     for s_idx, sample_minibatch in enumerate(group):
+                        self.log(f"{group_idx} {sample_minibatch.advantage}")
                         mini_updated = (sample_minibatch.advantage.abs().sum() > 0)
 
-                        # Update group_updated globally
-                        self.log(f"{group_idx} Group updated: {group_updated}")
+                        # Update mini_updated globally
                         self.log(f"{group_idx} Mini updated: {mini_updated}")
-                        group_updated = group_updated or mini_updated
-                        flag = torch.tensor(int(group_updated), device=self.device)
+                        mini_updated = torch.tensor(int(mini_updated), device=self.device)
                         if torch.distributed.is_initialized():
-                            torch.distributed.all_reduce(flag, op=torch.distributed.ReduceOp.SUM)
-                        group_updated = flag.item() > 0
+                            torch.distributed.all_reduce(mini_updated, op=torch.distributed.ReduceOp.SUM)
+                        mini_updated = bool(mini_updated.item())
 
                         # Do not sync until the last minibatch
                         if s_idx < len(group) - 1 and self.world_size > 1:
-                            if not mini_updated: # Skip if no work to do for this minibatch
-                                continue
                             ddp_ctx = self.policy.no_sync()
                         else:
-                            if not group_updated: # Skip if noone has done work
-                                continue
                             ddp_ctx = nullcontext()
 
                         with ddp_ctx, torch.autocast(device_type="cuda", dtype=torch.bfloat16):
@@ -287,21 +283,24 @@ class GRPOLearner:
                             except torch.cuda.OutOfMemoryError:
                                 hud_console.warning_log(f"{group_idx} CUDA OOM for {sample_minibatch.inputs['input_ids'].numel()} tokens; skipping minibatch")
                                 torch.cuda.empty_cache()
-                                skip_flag = torch.tensor(1, device=self.device)
-                                if torch.distributed.is_initialized():
-                                    torch.distributed.all_reduce(skip_flag, op=torch.distributed.ReduceOp.MAX)
                                 # Dummy backward to keep DDP happy
                                 dummy = sum(p.sum() for p in self.policy.parameters()) * 0.0
                                 debug_per_group += f"o{s_idx}:{str(round(dummy.item(), 3))} "
                                 dummy.backward()
+                                # mark global skip if OOM
+                                global_skip.fill_(1)
                                 continue
 
                         if torch.cuda.is_available():
                             torch.cuda.empty_cache()
 
-                    if not group_updated:
-                        # Skip step if no updates are needed
-                        self.log(f"G[{group_idx}] {debug_per_group} N/A")
+                    # After minibatches loop, sync skip across ranks
+                    if torch.distributed.is_initialized():
+                        torch.distributed.all_reduce(global_skip, op=torch.distributed.ReduceOp.MAX)
+                    skip_any = bool(global_skip.item())
+
+                    if skip_any:
+                        self.log(f"G[{group_idx}] {debug_per_group} N/A (skipped)")
                         continue
                     
                     grad_norm = torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.config.training.grad_clip, error_if_nonfinite=True)
