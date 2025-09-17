@@ -144,7 +144,6 @@ class GRPOLearner:
                 device_ids=[self.local_rank],
                 output_device=self.local_rank,
                 broadcast_buffers=False,
-                find_unused_parameters=True,
             )
             self.log(f"Wrapped model (find_unused_parameters=True)")
         
@@ -256,12 +255,13 @@ class GRPOLearner:
                         mini_updated = (sample_minibatch.advantage.abs().sum() > 0)
 
                         # Update group_updated globally
+                        self.log(f"{group_idx} Group updated: {group_updated}")
+                        self.log(f"{group_idx} Mini updated: {mini_updated}")
                         group_updated = group_updated or mini_updated
                         flag = torch.tensor(int(group_updated), device=self.device)
                         if torch.distributed.is_initialized():
                             torch.distributed.all_reduce(flag, op=torch.distributed.ReduceOp.SUM)
                         group_updated = flag.item() > 0
-                        self.log(f"Have work: {group_updated}")
 
                         # Do not sync until the last minibatch
                         if s_idx < len(group) - 1 and self.world_size > 1:
@@ -283,9 +283,9 @@ class GRPOLearner:
                                     dummy = sum(p.sum() for p in self.policy.parameters()) * 0.0
                                     debug_per_group += f"d{s_idx}:{str(round(dummy.item(), 3))} "
                                     dummy.backward()
-                                self.log(f"GPU Backward: {get_gpu_utilization():.1f}% | Memory: {get_memory_usage():.2f} GB")
+                                self.log(f"{group_idx} GPU Backward: {get_gpu_utilization():.1f}% | Memory: {get_memory_usage():.2f} GB")
                             except torch.cuda.OutOfMemoryError:
-                                hud_console.warning_log(f"CUDA OOM for {sample_minibatch.inputs['input_ids'].numel()} tokens; skipping minibatch")
+                                hud_console.warning_log(f"{group_idx} CUDA OOM for {sample_minibatch.inputs['input_ids'].numel()} tokens; skipping minibatch")
                                 torch.cuda.empty_cache()
                                 skip_flag = torch.tensor(1, device=self.device)
                                 if torch.distributed.is_initialized():
@@ -294,7 +294,6 @@ class GRPOLearner:
                                 dummy = sum(p.sum() for p in self.policy.parameters()) * 0.0
                                 debug_per_group += f"o{s_idx}:{str(round(dummy.item(), 3))} "
                                 dummy.backward()
-                                group_updated = False
                                 continue
 
                         if torch.cuda.is_available():
