@@ -16,8 +16,10 @@ from hud.version import __version__ as hud_version
 
 from .base import BaseHUDClient
 from .utils.mcp_use_retry import patch_all_sessions
+from hud.utils.hud_console import HUDConsole
 
 logger = logging.getLogger(__name__)
+hud_console = HUDConsole(logger=logger)
 
 
 class MCPUseHUDClient(BaseHUDClient):
@@ -62,11 +64,11 @@ class MCPUseHUDClient(BaseHUDClient):
         try:
             assert self._client is not None  # noqa: S101
             self._sessions = await self._client.create_all_sessions()
-            logger.info("Created %d MCP sessions", len(self._sessions))
+            hud_console.info(f"Created {len(self._sessions)} MCP sessions")
 
             # Patch all sessions with retry logic
             patch_all_sessions(self._sessions)
-            logger.debug("Applied retry logic to all MCP sessions")
+            hud_console.debug("Applied retry logic to all MCP sessions")
 
             # Configure validation for all sessions based on client setting
             try:
@@ -86,21 +88,21 @@ class MCPUseHUDClient(BaseHUDClient):
             # Log session details in verbose mode
             if self.verbose and self._sessions:
                 for name, session in self._sessions.items():
-                    logger.debug("  - %s: %s", name, type(session).__name__)
+                    hud_console.debug(f"  - {name}: {type(session).__name__}")
 
         except McpError as e:
             # Protocol error - the server is reachable but rejecting our request
-            logger.error("MCP protocol error: %s", e)
-            logger.error("This typically means:")
-            logger.error("- Invalid or missing initialization parameters")
-            logger.error("- Incompatible protocol version")
-            logger.error("- Server-side configuration issues")
+            hud_console.warning(f"MCP protocol error: {e}")
+            hud_console.warning("This typically means:")
+            hud_console.warning("- Invalid or missing initialization parameters")
+            hud_console.warning("- Incompatible protocol version")
+            hud_console.warning("- Server-side configuration issues")
             raise
         except Exception as e:
             # Transport or other errors
-            logger.error("Failed to create sessions: %s", e)
+            hud_console.error(f"Failed to create sessions: {e}")
             if self.verbose:
-                logger.info("Check that the MCP server is running and accessible")
+                hud_console.info("Check that the MCP server is running and accessible")
             raise
 
         # Populate tool map during initialization
@@ -129,17 +131,14 @@ class MCPUseHUDClient(BaseHUDClient):
                     await session.initialize()
 
                 if session.connector.client_session is None:
-                    logger.warning("Client session not initialized for %s", server_name)
+                    hud_console.warning(f"Client session not initialized for {server_name}")
                     continue
 
                 # List tools (retry logic is handled at transport level)
                 tools_result = await session.connector.client_session.list_tools()
 
-                logger.info(
-                    "Discovered %d tools from '%s': %s",
-                    len(tools_result.tools),
-                    server_name,
-                    [tool.name for tool in tools_result.tools],
+                hud_console.info(
+                    f"Discovered {len(tools_result.tools)} tools from '{server_name}': {", ".join([tool.name for tool in tools_result.tools])}",
                 )
 
                 # Add to collections with optional prefix
@@ -167,16 +166,14 @@ class MCPUseHUDClient(BaseHUDClient):
                 if self.verbose:
                     for tool in tools_result.tools:
                         description = tool.description or ""
-                        logger.debug(
-                            "  Tool '%s': %s",
-                            tool.name,
-                            description[:100] + "..." if len(description) > 100 else description,
+                        hud_console.debug(
+                            f"  Tool '{tool.name}': {description[:100] + '...' if len(description) > 100 else description}",
                         )
 
             except Exception as e:
-                logger.error("Error discovering tools from '%s': %s", server_name, e)
+                hud_console.error(f"Error discovering tools from '{server_name}': {e}")
                 if self.verbose:
-                    logger.exception("Full error details:")
+                    hud_console.exception("Full error details:")
 
         return all_tools
 
@@ -196,12 +193,8 @@ class MCPUseHUDClient(BaseHUDClient):
         session = self._sessions[server_name]
 
         if self.verbose:
-            logger.debug(
-                "Calling tool '%s' (original: '%s') on server '%s' with arguments: %s",
-                tool_call.name,
-                original_tool.name,
-                server_name,
-                tool_call.arguments,
+            hud_console.debug(
+                f"Calling tool '{tool_call.name}' (original: '{original_tool.name}') on server '{server_name}' with arguments: {tool_call.arguments}"
             )
 
         if session.connector.client_session is None:
@@ -214,7 +207,7 @@ class MCPUseHUDClient(BaseHUDClient):
         )
 
         if self.verbose:
-            logger.debug("Tool '%s' result: %s", tool_call.name, result)
+            hud_console.debug(f"Tool '{tool_call.name}' result: {result}")
 
         # MCP-use already returns the correct type, but we need to ensure it's MCPToolResult
         return MCPToolResult(
@@ -246,7 +239,7 @@ class MCPUseHUDClient(BaseHUDClient):
                 return resources.resources
             except Exception as e:
                 if self.verbose:
-                    logger.debug("Could not list resources from server '%s': %s", server_name, e)
+                    hud_console.debug(f"Could not list resources from server '{server_name}': {e}")
                 continue
         return []
 
@@ -276,8 +269,8 @@ class MCPUseHUDClient(BaseHUDClient):
                     raise AttributeError("read_resource not available")
 
                 if self.verbose:
-                    logger.debug(
-                        "Successfully read resource '%s' from server '%s'", uri, server_name
+                    hud_console.debug(
+                        f"Successfully read resource '{uri}' from server '{server_name}'"
                     )
 
                 return result
@@ -285,24 +278,21 @@ class MCPUseHUDClient(BaseHUDClient):
             except McpError as e:
                 # McpError is expected for unsupported resources
                 if "telemetry://" in str(uri):
-                    logger.debug(
-                        "Telemetry resource not supported by server '%s': %s", server_name, e
+                    hud_console.debug(
+                        f"Telemetry resource not supported by server '{server_name}': {e}"
                     )
                 elif self.verbose:
-                    logger.debug(
-                        "MCP resource error for '%s' from server '%s': %s", uri, server_name, e
+                    hud_console.debug(
+                        f"MCP resource error for '{uri}' from server '{server_name}': {e}"
                     )
                 continue
             except Exception as e:
                 # Other errors might be more serious
                 if "telemetry://" in str(uri):
-                    logger.debug("Failed to fetch telemetry from server '%s': %s", server_name, e)
+                    hud_console.debug(f"Failed to fetch telemetry from server '{server_name}': {e}")
                 else:
-                    logger.warning(
-                        "Unexpected error reading resource '%s' from server '%s': %s",
-                        uri,
-                        server_name,
-                        e,
+                    hud_console.warning(
+                        f"Unexpected error reading resource '{uri}' from server '{server_name}': {e}"
                     )
                 continue
 
@@ -311,14 +301,14 @@ class MCPUseHUDClient(BaseHUDClient):
     async def _disconnect(self) -> None:
         """Close all active sessions."""
         if self._client is None:
-            logger.warning("Client is not connected, cannot close")
+            hud_console.warning("Client is not connected, cannot close")
             return
 
         await self._client.close_all_sessions()
         self._sessions = {}
         self._tool_map = {}
         self._initialized = False
-        logger.debug("MCP-use client disconnected")
+        hud_console.debug("MCP-use client disconnected")
 
     # Legacy compatibility methods (limited; tests should not rely on these)
     def get_sessions(self) -> dict[str, Any]:

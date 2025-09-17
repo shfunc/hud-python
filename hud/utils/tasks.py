@@ -29,15 +29,7 @@ def load_tasks(tasks_input: str | list[dict], system_prompt: str | None = None) 
         # Direct list of task dicts
         hud_console.info(f"Loading {len(tasks_input)} tasks from provided list")
         for item in tasks_input:
-            task = Task(
-                id=item.get("id"),
-                prompt=item["prompt"],
-                mcp_config=item["mcp_config"],
-                setup_tool=item.get("setup_tool"),
-                evaluate_tool=item.get("evaluate_tool"),
-                system_prompt=item.get("system_prompt", system_prompt),
-                metadata=item.get("metadata", {})
-            )
+            task = Task(**item)
             tasks.append(task)
     
     elif isinstance(tasks_input, str):
@@ -54,15 +46,7 @@ def load_tasks(tasks_input: str | list[dict], system_prompt: str | None = None) 
                         raise ValueError(f"JSON file must contain an array of tasks, got {type(data)}")
                     
                     for item in data:
-                        task = Task(
-                            id=item.get("id"),
-                            prompt=item["prompt"],
-                            mcp_config=item["mcp_config"],
-                            setup_tool=item.get("setup_tool"),
-                            evaluate_tool=item.get("evaluate_tool"),
-                            system_prompt=item.get("system_prompt", system_prompt),
-                            metadata=item.get("metadata", {})
-                        )
+                        task = Task(**item)
                         tasks.append(task)
                 
                 # Handle JSONL files (one task per line)
@@ -75,27 +59,11 @@ def load_tasks(tasks_input: str | list[dict], system_prompt: str | None = None) 
                             # Handle case where line contains an array of tasks
                             if isinstance(item, list):
                                 for task_item in item:
-                                    task = Task(
-                                        id=task_item.get("id"),
-                                        prompt=task_item["prompt"],
-                                        mcp_config=task_item["mcp_config"],
-                                        setup_tool=task_item.get("setup_tool"),
-                                        evaluate_tool=task_item.get("evaluate_tool"),
-                                        system_prompt=task_item.get("system_prompt", system_prompt),
-                                        metadata=task_item.get("metadata", {})
-                                    )
+                                    task = Task(**task_item)
                                     tasks.append(task)
                             # Handle normal case where line contains a single task object
                             elif isinstance(item, dict):
-                                task = Task(
-                                    id=item.get("id"),
-                                    prompt=item["prompt"],
-                                    mcp_config=item["mcp_config"],
-                                    setup_tool=item.get("setup_tool"),
-                                    evaluate_tool=item.get("evaluate_tool"),
-                                    system_prompt=item.get("system_prompt", system_prompt),
-                                    metadata=item.get("metadata", {})
-                                )
+                                task = Task(**item)
                                 tasks.append(task)
                             else:
                                 raise ValueError(
@@ -119,20 +87,7 @@ def load_tasks(tasks_input: str | list[dict], system_prompt: str | None = None) 
                 
                 # Convert dataset rows to Task objects
                 for item in dataset:
-                    # Handle different possible field names in HF datasets
-                    task_id = item.get("id") or item.get("task_id") or None
-                    prompt = item.get("prompt") or item.get("instruction") or item.get("question")
-                    mcp_config = item.get("mcp_config") or {"local": {"command": "echo", "args": ["No MCP config provided"]}}
-                    
-                    task = Task(
-                        id=task_id,
-                        prompt=prompt,
-                        mcp_config=mcp_config,
-                        setup_tool=item.get("setup_tool"),
-                        evaluate_tool=item.get("evaluate_tool"),
-                        system_prompt=item.get("system_prompt", system_prompt),
-                        metadata=item.get("metadata", {})
-                    )
+                    task = Task(**item)
                     tasks.append(task)
                     
             except ImportError:

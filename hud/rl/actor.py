@@ -8,6 +8,7 @@ import httpx
 from openai import AsyncOpenAI
 
 import hud
+from hud.clients.utils.retry_transport import create_retry_httpx_client
 from hud.agents.openai_chat_generic import GenericOpenAIChatAgent
 from hud.datasets import Task
 from hud.types import Trace
@@ -34,23 +35,15 @@ class Actor:
         """Create OpenAI client with optimized settings for vLLM."""
         # Match connection limits to parallel_episodes to avoid bottlenecks
         max_parallel = self.actor_config.max_parallel_episodes
-        http_client = httpx.AsyncClient(
-            timeout=httpx.Timeout(
-                timeout=30.0,
-                connect=5.0,
-                read=25.0,
-            ),
-            limits=httpx.Limits(
-                max_connections=max_parallel + 2,
-                max_keepalive_connections=max_parallel,
-            ),
-            http2=False,
+        # Use shorter per-request timeout and keep retries modest to avoid long blocking
+        http_client = create_retry_httpx_client(
+            timeout=httpx.Timeout(30.0),
         )
-        
         return AsyncOpenAI(
             base_url=base_url,
             api_key=self.actor_config.vllm_api_key,
             http_client=http_client,
+            max_retries=2,
         )
         
     def create_agent(self) -> GenericOpenAIChatAgent:
@@ -58,7 +51,7 @@ class Actor:
         return GenericOpenAIChatAgent(
             openai_client=self.openai_client,
             model_name=self.current_adapter,
-            allowed_tools= None,
+            allowed_tools=self.actor_config.allowed_tools,
             append_setup_output=False,
             system_prompt=self.actor_config.system_prompt,
             verbose=self.config.verbose,

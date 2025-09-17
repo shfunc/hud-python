@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 # List of supported VL (Vision-Language) models
-SUPPORTED_VL_MODELS = [
+SUPPORTED_MODELS = [
     "Qwen/Qwen2.5-VL-3B-Instruct",
     "Qwen/Qwen2.5-VL-7B-Instruct",
     "Qwen/Qwen2.5-VL-14B-Instruct",
@@ -24,11 +24,11 @@ def validate_vl_model(model_name: str) -> None:
     Raises:
         ValueError: If the model is not a supported VL model
     """
-    if not any(model_name.startswith(supported) for supported in SUPPORTED_VL_MODELS):
+    if not any(model_name.startswith(supported) for supported in SUPPORTED_MODELS):
         raise ValueError(
             f"Model '{model_name}' is not a supported VL model. "
             f"Only VL (Vision-Language) models are supported for RL training.\n"
-            f"Supported models: {', '.join(SUPPORTED_VL_MODELS)}\n"
+            f"Supported models: {', '.join(SUPPORTED_MODELS)}\n"
             f"Note: '{model_name}' appears to be a text-only model."
         )
 
@@ -65,7 +65,7 @@ class TrainingConfig:
     group_size: int = 6
     mini_batch_size: int = 2
     update_after_group: bool = True # Whether to update the policy after each task group
-    update_after_minibatch: bool = False # Whether to update the policy after each mini-batch
+    accumulate_over_minibatches: bool = True # Whether to accumulate over minibatches
 
     # Advantage calculation parameters
     batch_level: Literal["group", "batch"] = "batch"
@@ -102,12 +102,12 @@ class ActorConfig:
     # Execution parameters
     max_steps_per_episode: int = 6
     max_parallel_episodes: int = 48
-    max_new_tokens: int = 2048
+    max_new_tokens: int = 1024
     force_tool_choice: bool = False
     allowed_tools: list[str] | None = None
 
     # Model parameters
-    temperature: float = 1.0
+    temperature: float = 0.7
 
     # Hud agent parameters
     system_prompt: str = "You are an expert agent. Complete the task efficiently."
@@ -129,7 +129,7 @@ class Config:
     job_name: str = "RL Training"
     job_id: str | None = None  # Use existing job ID if provided
     stats_interval: int = 1
-    verbose: bool = True
+    verbose: bool = False
     
     # Paths
     out_dir: str = "./checkpoints"
@@ -152,7 +152,7 @@ class Config:
             job_name=d.get("job_name", "RL Training"),
             job_id=d.get("job_id"),
             stats_interval=d.get("stats_interval", 1),
-            verbose=d.get("verbose", True),
+            verbose=d.get("verbose", False),
             out_dir=d.get("out_dir", "./checkpoints"),
             adapter_prefix=d.get("adapter_prefix", "cua-grpo-step"),
             seed=d.get("seed", 1234),

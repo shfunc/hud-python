@@ -188,9 +188,13 @@ class GenericOpenAIChatAgent(MCPAgent):
                 **extra,
             )
         except Exception as e:
-            self.hud_console.error(f"Error getting response: {e}")
+            error_content = f"Error getting response {e}"
+            if "Invalid JSON" in str(e):
+                error_content = "Invalid JSON, response was truncated"
+            self.hud_console.warning_log(error_content)
+
             return AgentResponse(
-                content=f"Error getting response {e}",
+                content=error_content,
                 tool_calls=[],
                 done=True,
                 isError=True,
@@ -229,7 +233,7 @@ class GenericOpenAIChatAgent(MCPAgent):
         # Only stop on length (token limit), never on "stop"
         done = choice.finish_reason == "length"
         if done:
-            self.hud_console.info(f"Done decision: finish_reason={choice.finish_reason}")
+            self.hud_console.info_log(f"Done decision: finish_reason={choice.finish_reason}")
         
         return AgentResponse(
             content=msg.content or "",

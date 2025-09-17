@@ -5,23 +5,22 @@ from __future__ import annotations
 import json
 import logging
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Any, Protocol, overload, runtime_checkable
+from typing import Any, Protocol, overload, runtime_checkable
 
+import mcp.types as types
 from mcp.types import Implementation
 
 from hud.shared.exceptions import HudAuthenticationError, HudException
 from hud.types import MCPToolCall, MCPToolResult
 from hud.utils.mcp import setup_hud_telemetry
 from hud.version import __version__ as hud_version
-
-if TYPE_CHECKING:
-    import mcp.types as types
-
-else:
-    pass
-
+from hud.utils.hud_console import HUDConsole
 
 logger = logging.getLogger(__name__)
+
+hud_console = HUDConsole(logger=logger)
+
+
 
 
 @runtime_checkable
@@ -113,7 +112,7 @@ class BaseHUDClient(AgentMCPClient):
     async def initialize(self, mcp_config: dict[str, dict[str, Any]] | None = None) -> None:
         """Initialize connection and fetch tools."""
         if self._initialized:
-            logger.warning(
+            hud_console.warning(
                 "Client already connected, if you want to reconnect or change the configuration, "
                 "call shutdown() first. This is especially important if you are using an agent."
             )
@@ -130,7 +129,7 @@ class BaseHUDClient(AgentMCPClient):
 
         self._auto_trace_cm = setup_hud_telemetry(self._mcp_config, auto_trace=self._auto_trace)
 
-        logger.debug("Initializing MCP client...")
+        hud_console.debug("Initializing MCP client...")
 
         try:
             # Check if API key is set for HUD API
@@ -155,7 +154,6 @@ class BaseHUDClient(AgentMCPClient):
         await self._fetch_telemetry()
 
         self._initialized = True
-        logger.info("Client initialized")
 
     async def shutdown(self) -> None:
         """Disconnect from the MCP server."""
@@ -163,9 +161,9 @@ class BaseHUDClient(AgentMCPClient):
         if self._auto_trace_cm:
             try:
                 self._auto_trace_cm.__exit__(None, None, None)
-                logger.info("Closed auto-created trace")
+                hud_console.info("Closed auto-created trace")
             except Exception as e:
-                logger.warning("Failed to close auto-created trace: %s", e)
+                hud_console.warning(f"Failed to close auto-created trace: {e}")
             finally:
                 self._auto_trace_cm = None
 
@@ -173,9 +171,9 @@ class BaseHUDClient(AgentMCPClient):
         if self._initialized:
             await self._disconnect()
             self._initialized = False
-            logger.info("Client disconnected")
+            hud_console.info("Shutdown completed")
         else:
-            logger.debug("Client was not initialized, skipping disconnect")
+            hud_console.debug("Client was not initialized, skipping disconnect")
 
     @overload
     async def call_tool(self, tool_call: MCPToolCall, /) -> MCPToolResult: ...
@@ -280,27 +278,26 @@ class BaseHUDClient(AgentMCPClient):
                 telemetry_data = json.loads(result.contents[0].text)  # type: ignore
                 self._telemetry_data = telemetry_data
 
-                logger.info("📡 Telemetry data fetched:")
                 if "live_url" in telemetry_data:
-                    logger.info("   🖥️  Live URL: %s", telemetry_data["live_url"])
+                    hud_console.info(f"   🖥️  Live URL: {telemetry_data['live_url']}")
                 if "vnc_url" in telemetry_data:
-                    logger.info("   🖥️  VNC URL: %s", telemetry_data["vnc_url"])
+                    hud_console.info(f"   🖥️  VNC URL: {telemetry_data['vnc_url']}")
                 if "cdp_url" in telemetry_data:
-                    logger.info("   🦾  CDP URL: %s", telemetry_data["cdp_url"])
+                    hud_console.info(f"   🦾  CDP URL: {telemetry_data['cdp_url']}")
                 if "status" in telemetry_data:
-                    logger.info("   📊 Status: %s", telemetry_data["status"])
+                    hud_console.debug(f"   📊 Status: {telemetry_data['status']}")
                 if "services" in telemetry_data:
-                    logger.debug("   📋 Services:")
+                    hud_console.debug("   📋 Services:")
                     for service, status in telemetry_data["services"].items():
                         status_icon = "✅" if status == "running" else "❌"
-                        logger.debug("      %s %s: %s", status_icon, service, status)
+                        hud_console.debug(f"      {status_icon} {service}: {status}")
 
                 if self.verbose:
-                    logger.debug("Full telemetry data:\n%s", json.dumps(telemetry_data, indent=2))
+                    hud_console.debug(f"Full telemetry data:\n{json.dumps(telemetry_data, indent=2)}")
         except Exception as e:
             # Telemetry is optional
             if self.verbose:
-                logger.debug("No telemetry available: %s", e)
+                hud_console.debug(f"No telemetry available: {e}")
 
     async def analyze_environment(self) -> dict[str, Any]:
         """Complete analysis of the MCP environment.
@@ -363,7 +360,7 @@ class BaseHUDClient(AgentMCPClient):
                 analysis["resources"].append(resource_info)
         except Exception as e:
             if self.verbose:
-                logger.debug("Could not list resources: %s", e)
+                hud_console.debug(f"Could not list resources: {e}")
 
         return analysis
 
@@ -387,5 +384,5 @@ class BaseHUDClient(AgentMCPClient):
                 return functions
         except Exception as e:
             if self.verbose:
-                logger.debug("Could not read hub functions for '%s': %s", hub_name, e)
+                hud_console.debug(f"Could not read hub functions for '{hub_name}': {e}")
         return []

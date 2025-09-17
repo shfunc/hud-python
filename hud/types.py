@@ -39,6 +39,7 @@ class Task(BaseModel):
     mcp_config: dict[str, Any]
     setup_tool: MCPToolCall | list[MCPToolCall] | None = None
     evaluate_tool: MCPToolCall | list[MCPToolCall] | None = None
+    agent_tools: list[str] | None = None
     system_prompt: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 

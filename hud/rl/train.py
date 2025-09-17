@@ -49,7 +49,7 @@ async def train(config: Config, tasks: list[Task]) -> None:
     # Initialize components
     set_seed(config.seed + get_global_rank())  # Different seed per rank
     ensure_dir(config.out_dir)
-    if config.verbose and is_main_process():
+    if config.verbose:
         logging.basicConfig(level=logging.INFO)
         # Remove httpx logger
         logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -289,11 +289,11 @@ async def main() -> None:
 
     # Calculate the memory usage
     INITIAL_MEMORY = 8.0
-    SCALING_FACTOR = 2
-    token_estimate = config.training.mini_batch_size * config.actor.max_steps_per_episode
-    image_estimate = (config.model.max_pixels / (28 * 28 * 256))
+    SCALING_FACTOR = 4 / (28 * 28 * 256 * 1024)
+    token_estimate = config.training.mini_batch_size * config.actor.max_steps_per_episode * config.actor.max_new_tokens
+    image_estimate = config.model.max_pixels
     total_memory = INITIAL_MEMORY + SCALING_FACTOR * token_estimate * image_estimate
-    hud_console.info(f"Total memory usage: {total_memory:.2f} GB")
+    hud_console.info(f"Estimated memory peak: {total_memory:.2f} GB")
     if total_memory > 75.0:
         hud_console.warning("Potential memory usage is too high, decrease either training steps or mini batch size")
         exit(1)

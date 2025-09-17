@@ -197,78 +197,90 @@ class ReplayBuffer(Buffer[Trace]):
     
     def _sample_high_variance_traces(self) -> list[Trace]:
         from collections import Counter, defaultdict, deque
-        
-        # Handle case where buffer has fewer traces than batch_size
-        if len(self.buffer) < self.batch_size:
-            hud_console.warning(f"[group-sampler] Buffer has only {len(self.buffer)} traces, need {self.batch_size}")
-            # Pad with duplicates to reach batch_size
-            available = list(self.buffer)
-            while len(available) < self.batch_size:
-                available.extend(available[:min(len(available), self.batch_size - len(available))])
-            recent_traces = available[:self.batch_size]
-        else:
-            recent_traces = self.get(self.batch_size)
+
+        # Expect recent window to already be grouped by task id
+
+        # Build recent window and earlier lookup (short form)
+        buf_list = list(self.buffer)
+        if len(buf_list) < self.batch_size:
+            hud_console.warning(f"[group-sampler] Buffer has only {len(buf_list)} traces, need {self.batch_size}")
+            while len(buf_list) < self.batch_size:
+                take = min(len(buf_list) or 1, self.batch_size - len(buf_list))
+                buf_list.extend(buf_list[:take])
+        recent_traces = buf_list[-self.batch_size:]
         hud_console.info(
             f"[group-sampler] recent-window histogram: {Counter(getattr(t.task, 'id', 'NA') for t in recent_traces)}"
         )
 
-        # Build a fast lookup of earlier traces by task-id (excluding the recent window)
-        hud_console.info(f"[group-sampler] Building earlier traces lookup, buffer size: {len(self.buffer)}")
+        hud_console.info(f"[group-sampler] Building earlier traces lookup, buffer size: {len(buf_list)}")
         earlier_traces_by_task: dict[str, deque[Trace]] = defaultdict(deque)
-        
-        # More efficient: iterate through deque without converting to list
-        count = 0
-        for i, tr in enumerate(self.buffer):
-            if i < self.batch_size:
-                continue  # skip recent window
-            tid = getattr(tr.task, "id", "NA")
-            earlier_traces_by_task[tid].append(tr)
-            count += 1
-            
-        hud_console.info(f"[group-sampler] Earlier traces built: {count} traces from {len(earlier_traces_by_task)} tasks")
+        for tr in buf_list[:-self.batch_size]:
+            earlier_traces_by_task[getattr(tr.task, "id", "NA")].append(tr)
 
+        # Chunk from the most-recent end
         final_traces: list[Trace] = []
         groups_per_batch = self.batch_size // self.group_size
-
         hud_console.info(f"[group-sampler] Processing {groups_per_batch} groups")
         for g_idx in range(groups_per_batch):
-            group_start = g_idx * self.group_size
-            group = recent_traces[group_start : group_start + self.group_size]
+            start = g_idx * self.group_size
+            end = start + self.group_size
+            group = recent_traces[start:end]
 
-            # Determine dominant task-id
-            counts = Counter(getattr(t.task, "id", "NA") for t in group)
-            dominant_tid, _ = counts.most_common(1)[0]
-            hud_console.info(f"[group-sampler] group {g_idx} dominant task: {dominant_tid} ({counts[dominant_tid]}/{self.group_size})")
+            # Assert homogeneity: every trace in a group must share the same task id
+            cnt = Counter(getattr(t.task, "id", "NA") for t in group)
+            if len(cnt) != 1:
+                raise RuntimeError(f"Group {g_idx} is not homogeneous: {dict(cnt)}")
+            target_tid = next(iter(cnt.keys()))
 
-            homogeneous: list[Trace] = [t for t in group if getattr(t.task, "id", "NA") == dominant_tid]
+            # Build homogeneous group of target_tid, filling from earlier traces to increase spread
+            homogeneous: list[Trace] = [t for t in group if getattr(t.task, "id", "NA") == target_tid]
             needed = self.group_size - len(homogeneous)
-            hud_console.info(f"[group-sampler] Group {g_idx}: homogeneous={len(homogeneous)}, needed={needed}")
 
-            # Pull additional traces with same task-id from earlier buffer or duplicate
+            # Greedy fill: choose earlier traces (same task-id) farthest from current mean reward
+            def current_mean() -> float:
+                if not homogeneous:
+                    return 0.0
+                vals = [float(getattr(t, "reward", 0.0) or 0.0) for t in homogeneous]
+                return sum(vals) / len(vals)
+
             while needed > 0:
-                if earlier_traces_by_task[dominant_tid]:
-                    homogeneous.append(earlier_traces_by_task[dominant_tid].popleft())
+                pool = earlier_traces_by_task.get(target_tid, deque())
+                if pool:
+                    mu = current_mean()
+                    # pick element farthest from current mean
+                    best_i = None
+                    best_dist = -1.0
+                    for i, tr in enumerate(list(pool)):
+                        r = float(getattr(tr, "reward", 0.0) or 0.0)
+                        dist = abs(r - mu)
+                        if dist > best_dist:
+                            best_dist = dist
+                            best_i = i
+                    # pop selected
+                    chosen = list(pool)[best_i]  # type: ignore[index]
+                    # remove from deque efficiently by rotating
+                    left = list(pool)
+                    left.pop(best_i)  # O(n) but pool is small in practice
+                    earlier_traces_by_task[target_tid] = deque(left)
+                    homogeneous.append(chosen)
                 else:
-                    # Duplicate a random existing homogeneous trace (safe for training-time)
+                    # duplicate extreme within current homogeneous set
                     if not homogeneous:
-                        hud_console.error(f"[group-sampler] Cannot duplicate from empty homogeneous list! dominant_tid={dominant_tid}")
-                        raise RuntimeError(f"Group {g_idx} has no traces with dominant task {dominant_tid}")
-                    homogeneous.append(random.choice(homogeneous))
+                        raise RuntimeError(f"Group {g_idx} has no traces for target {target_tid}")
+                    mu = current_mean()
+                    extreme = max(homogeneous, key=lambda t: abs(float(getattr(t, "reward", 0.0) or 0.0) - mu))
+                    homogeneous.append(extreme)
                 needed -= 1
 
-            assert len(homogeneous) == self.group_size
-            # Final validation for this group
-            if any(getattr(t.task, "id", "NA") != dominant_tid for t in homogeneous):
+            # Validate homogeneity
+            if any(getattr(t.task, "id", "NA") != target_tid for t in homogeneous):
                 raise RuntimeError(f"Group {g_idx} is not homogeneous after sampling")
-
             final_traces.extend(homogeneous)
 
-        # Global validation
         for i in range(0, len(final_traces), self.group_size):
             block = final_traces[i : i + self.group_size]
-            tids = {getattr(t.task, "id", "NA") for t in block}
-            if len(tids) != 1:
-                raise RuntimeError("Homogeneity validation failed for block starting at index {i}")
+            if len({getattr(t.task, "id", "NA") for t in block}) != 1:
+                raise RuntimeError(f"Homogeneity validation failed for block starting at index {i}")
 
         hud_console.info(
             f"[group-sampler] final histogram: {Counter(getattr(t.task,'id','NA') for t in final_traces)}"

@@ -246,8 +246,7 @@ def prepare_inputs(
     Returns:
         Inputs for the model
     """
-    # Skip error traces or traces with no messages
-    if trace.isError or len(trace.messages) == 0:
+    if len(trace.messages) == 0:
         return {}
 
     # Get images for current turn
@@ -344,7 +343,7 @@ def preprocess_advantages(group: list[Trace], config: Config) -> list[TrainingSa
         raise ValueError(f"Invalid batch level: {config.training.batch_level}")
 
     all_samples = []
-    for group in groups:
+    for i,group in enumerate(groups):
         rewards = np.array([trace.reward for trace in group])
         mean_reward = np.mean(rewards)
         std_reward = np.std(rewards)
@@ -361,7 +360,6 @@ def preprocess_advantages(group: list[Trace], config: Config) -> list[TrainingSa
             else:
                 # Avoid division by zero
                 if std_reward < 1e-6:
-                    hud_console.info_log(f"Zero std reward: {reward} - {mean_reward}")
                     advantage_value = torch.Tensor(np.array([0.0]))
                 else:
                     advantage_value = ((reward - mean_reward) / std_reward)
@@ -369,7 +367,11 @@ def preprocess_advantages(group: list[Trace], config: Config) -> list[TrainingSa
             if config.training.leave_one_out:
                 advantage_value = advantage_value * len(group) / (len(group) - 1)
             sample.advantage = torch.Tensor(np.array([advantage_value]))
-            print(f"Advantage: {sample.advantage}")
+        hud_console.info_log(
+            f"Advantages for group {i} [{mean_reward:.4f} ± {std_reward:.4f}]:" 
+            f"{[round(sample.advantage.item(), 4) for sample in samples]}"
+        )
+
         all_samples.extend(samples)
 
     return all_samples
@@ -384,6 +386,14 @@ def batch_training_samples(samples: list[TrainingSample]) -> list[TrainingSample
     """
     if not samples:
         return []
+
+
+    for s in samples:
+        if s.inputs is None:
+            hud_console.warning_log("Some samples have no inputs. Make sure inputs are computed before batching.")
+        if s.advantage == 0.0:
+            hud_console.info("Removing sample with zero advantage.")
+            samples.remove(s)
 
     import torch.nn.functional as F
     new_samples = [TrainingSample()]

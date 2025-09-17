@@ -6,7 +6,7 @@
       "group_size": 8,
       "mini_batch_size": 2,
       "update_after_group": true,
-      "update_after_minibatch": false,
+      "accumulate_over_minibatches": false,
       "batch_level": "group",
       "no_std": false,
       "leave_one_out": true,
@@ -15,11 +15,15 @@
       "token_agg": "mean",
       "kl_beta": 0.0,
       "entropy_beta": 0.0,
-      "lr": 1e-4,
+      "lr": 5e-5,
       "grad_clip": 1.0
     },
     "actor": {
+      "max_new_tokens": 512,
       "max_steps_per_episode": 4,
-      "max_parallel_episodes": 32
-    }
+      "force_tool_choice": true,
+      "max_parallel_episodes": 64
+    },
+    "verbose": true,
+    "job_name": "L-GRPO-TEST"
   }
