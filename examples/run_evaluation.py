@@ -18,6 +18,9 @@ python examples/run_evaluation.py hud-evals/OSWorld-Verified-XLang --agent opena
 # Same but with detailed agent step logs visible
 python examples/run_evaluation.py hud-evals/OSWorld-Verified-XLang --agent openai --verbose
 
+# Enable debug-level logs for maximum visibility
+python examples/run_evaluation.py hud-evals/OSWorld-Verified-XLang --agent openai --very-verbose
+
 # Evaluate the FULL SheetBench dataset with Claude (Single Process concurrency)
 python examples/run_evaluation.py hud-evals/SheetBench-50 --full --agent claude --max-concurrent 25
 
@@ -118,7 +121,7 @@ async def run_single_task(
             model=model,
             allowed_tools=allowed_tools,
         )
-        print(task.prompt)
+        print("Task prompt: ", task.prompt)
         result = await agent.run(task, max_steps=max_steps)
         print("✅ Reward:", result.reward)
 
@@ -216,6 +219,7 @@ Examples:
   %(prog)s hud-evals/SheetBench-50                    # Single task test
   %(prog)s hud-evals/SheetBench-50 --full             # Full dataset (<100 tasks)
   %(prog)s hud-evals/LargeDataset --full --parallel   # Large dataset (100+ tasks)
+  %(prog)s hud-evals/SheetBench-50 --very-verbose     # Run with debug logs
         """,
     )
 
@@ -264,6 +268,12 @@ Examples:
     parser.add_argument(
         "--verbose", "-v", action="store_true", help="Show detailed agent step logs"
     )
+    parser.add_argument(
+        "--very-verbose",
+        "-vv",
+        action="store_true",
+        help="Show debug-level logs for maximum visibility",
+    )
 
     return parser.parse_args()
 
@@ -271,7 +281,15 @@ Examples:
 async def main() -> None:
     args = parse_args()
 
-    if args.verbose:
+    if args.very_verbose:
+        # Debug-level logs - maximum visibility
+        logging.basicConfig(
+            level=logging.DEBUG, format="%(asctime)s - %(name)s - %(message)s", datefmt="%H:%M:%S"
+        )
+        # Ensure HUD agent logs are at debug level
+        logging.getLogger("hud.agents").setLevel(logging.DEBUG)
+        logging.getLogger("hud.agents.base").setLevel(logging.DEBUG)
+    elif args.verbose:
         # Detailed logs - show everything including agent steps
         logging.basicConfig(
             level=logging.INFO, format="%(asctime)s - %(name)s - %(message)s", datefmt="%H:%M:%S"
