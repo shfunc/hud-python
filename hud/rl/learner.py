@@ -233,7 +233,6 @@ class GRPOLearner:
         
         # Prepare groups for GRPO training
         groups = self.prepare_groups(samples)
-
         hud_console.info_log(f"Updating over {len(groups)} groups")
         
         # Update over mini batch size
