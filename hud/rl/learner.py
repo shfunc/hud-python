@@ -52,12 +52,7 @@ class GRPOLearner:
         # Apply Liger kernel optimizations if available and enabled
         if model_cfg.use_liger and LIGER_AVAILABLE:
             hud_console.info_log("Applying Liger kernel optimizations to Qwen2.5-VL")
-            apply_liger_kernel_to_qwen2_5_vl(
-                rope=True,  # Optimized RoPE
-                rms_norm=True,  # Optimized RMSNorm
-                swiglu=True,  # Optimized SwiGLU
-                fused_linear_cross_entropy=True  # Fused Linear+CrossEntropy for memory efficiency
-            )
+            apply_liger_kernel_to_qwen2_5_vl()
         elif model_cfg.use_liger and not LIGER_AVAILABLE:
             hud_console.warning_log("Liger kernel requested but not installed. Install with: pip install liger-kernel")
         
