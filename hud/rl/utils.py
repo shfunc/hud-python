@@ -385,13 +385,11 @@ def batch_training_samples(samples: list[TrainingSample]) -> list[TrainingSample
     masked scoring.
     """
     if not samples:
+        hud_console.warning("No samples to batch.")
         return []
 
-
     for s in samples:
-        if s.inputs is None:
-            hud_console.warning_log("Some samples have no inputs. Make sure inputs are computed before batching.")
-        if s.advantage == 0.0:
+        if s.advantage == 0.0 and len(samples) > 1:
             hud_console.info("Removing sample with zero advantage.")
             samples.remove(s)
 
