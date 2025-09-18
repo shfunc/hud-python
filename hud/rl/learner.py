@@ -259,10 +259,10 @@ class GRPOLearner:
 
                         # Update mini_updated globally
                         self.log(f"{group_idx} Mini updated: {mini_updated}")
-                        mini_updated = torch.tensor(int(mini_updated), device=self.device)
-                        if torch.distributed.is_initialized():
-                            torch.distributed.all_reduce(mini_updated, op=torch.distributed.ReduceOp.SUM)
-                        mini_updated = bool(mini_updated.item())
+                        # mini_updated = torch.tensor(int(mini_updated), device=self.device)
+                        # if torch.distributed.is_initialized():
+                        #     torch.distributed.all_reduce(mini_updated, op=torch.distributed.ReduceOp.SUM)
+                        # mini_updated = bool(mini_updated.item())
 
                         # Do not sync until the last minibatch
                         if s_idx < len(group) - 1 and self.world_size > 1:
@@ -272,15 +272,15 @@ class GRPOLearner:
 
                         with ddp_ctx, torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                             try:
-                                if mini_updated:
-                                    loss = self.compute_loss(sample_minibatch) / grad_accum_steps
-                                    debug_per_group += f"l{s_idx}:{str(round(loss.item(), 3))} "
-                                    loss.backward()
-                                else: # Dummy backward that touches all params, produces zero grads, triggers hooks
-                                    dummy = sum(p.sum() for p in self.policy.parameters()) * 0.0
-                                    debug_per_group += f"d{s_idx}:{str(round(dummy.item(), 3))} "
-                                    dummy.backward()
-                                self.log(f"{group_idx} GPU Backward: {get_gpu_utilization():.1f}% | Memory: {get_memory_usage():.2f} GB")
+                                # if mini_updated:
+                                loss = self.compute_loss(sample_minibatch) / grad_accum_steps
+                                debug_per_group += f"l{s_idx}:{str(round(loss.item(), 3))} "
+                                loss.backward()
+                                # else: # Dummy backward that touches all params, produces zero grads, triggers hooks
+                                #     dummy = sum(p.sum() for p in self.policy.parameters()) * 0.0
+                                #     debug_per_group += f"d{s_idx}:{str(round(dummy.item(), 3))} "
+                                #     dummy.backward()
+                                # self.log(f"{group_idx} GPU Backward: {get_gpu_utilization():.1f}% | Memory: {get_memory_usage():.2f} GB")
                             except torch.cuda.OutOfMemoryError:
                                 hud_console.warning_log(f"{group_idx} CUDA OOM for {sample_minibatch.inputs['input_ids'].numel()} tokens; skipping minibatch")
                                 torch.cuda.empty_cache()

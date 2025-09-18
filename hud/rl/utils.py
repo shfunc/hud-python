@@ -86,7 +86,19 @@ def aggregate_metrics_across_ranks(metrics: Any, metrics_to_aggregate: list[str]
     
     # Default metrics that typically vary across GPUs
     if metrics_to_aggregate is None:
-        metrics_to_aggregate = ["training_time", "samples_per_second", "gpu_util", "gpu_memory", "grad_norm"]
+        metrics_to_aggregate = [
+            "training_time",
+            "samples_per_second",
+            "gpu_util",
+            "gpu_memory",
+            "grad_norm",
+            # Include core training scalars
+            "loss",
+            "kl",
+            "entropy",
+            "tokens",
+            "policy_ratio",
+        ]
     
     # Collect current values from this rank
     local_values = {}
@@ -118,10 +130,14 @@ def aggregate_metrics_across_ranks(metrics: Any, metrics_to_aggregate: list[str]
             metric_obj = getattr(metrics, metric_name)
             gpu_values = all_values[:, i].tolist()
             
-            # Replace single value with all GPU values
-            metric_obj.values = gpu_values
-            metric_obj.mean = float(np.mean(gpu_values))
-            metric_obj.std = float(np.std(gpu_values))
+            # Replace last value with cross-rank mean for reporting
+            if len(metric_obj.values) == 0:
+                metric_obj.values.append(0.0)
+            metric_obj.values[-1] = float(sum(gpu_values) / len(gpu_values))
+            # Recompute mean/std across history using updated last value
+            metric_obj.mean = float(sum(metric_obj.values) / len(metric_obj.values))
+            variance = sum((x - metric_obj.mean) ** 2 for x in metric_obj.values) / len(metric_obj.values)
+            metric_obj.std = float(variance ** 0.5)
 
 
 def b64_to_pil(b64_str: str) -> Image.Image:
@@ -389,7 +405,7 @@ def batch_training_samples(samples: list[TrainingSample]) -> list[TrainingSample
         return []
 
     for s in samples:
-        if s.advantage == 0.0 and len(samples) > 1:
+        if (s.inputs['assistant_mask'].sum() == 0 or s.advantage == 0.0) and len(samples) > 1:
             hud_console.info("Removing sample with zero advantage.")
             samples.remove(s)
 

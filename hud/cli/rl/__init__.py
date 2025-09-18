@@ -85,16 +85,6 @@ def rl_command(
         "--local",
         help="Run training locally instead of using remote API server",
     ),
-    modal: bool = typer.Option(
-        False,
-        "--modal",
-        help="Run training on Modal cloud infrastructure",
-    ),
-    modal_gpu: str = typer.Option(
-        "",
-        "--modal-gpu",
-        help="GPU type for Modal (e.g., H100, A100, L40S)",
-    ),
     # Internal flag
     skip_vllm_startup: bool = typer.Option(
         False,
@@ -127,14 +117,8 @@ def rl_command(
     
     hud_console.header("HUD RL Training")
     
-    # Check execution mode
-    if local and modal:
-        console.print("[red]❌ Cannot use both --local and --modal flags[/red]")
-        raise typer.Exit(1)
-    
     # Determine execution mode
-    use_remote = not local and not modal
-    use_modal = modal
+    use_remote = not local
     
     # Handle remote execution
     if use_remote:
@@ -150,72 +134,6 @@ def rl_command(
         except Exception as e:
             console.print(f"[red]❌ Remote training failed: {str(e)}[/red]")
             raise typer.Exit(1)
-    
-    # If using Modal, skip local setup and jump straight to config
-    if use_modal:
-        try:
-            from .modal_runner import launch_on_modal
-        except ImportError:
-            console.print("[red]❌ Modal not installed. Install with: pip install modal[/red]")
-            raise typer.Exit(1)
-        
-        # Load tasks first
-        console.print(f"[yellow]Loading tasks from: {tasks_file}[/yellow]")
-        tasks = load_tasks(tasks_file)
-        console.print(f"[green]✅ Loaded {len(tasks)} tasks[/green]")
-        
-        # Validate tasks
-        invalid_tasks = []
-        for i, task in enumerate(tasks):
-            if not hasattr(task, "prompt") or not task.prompt:
-                invalid_tasks.append((i, "missing 'prompt' field"))
-            if not hasattr(task, "mcp_config") or not task.mcp_config:
-                invalid_tasks.append((i, "missing 'mcp_config' field"))
-        
-        if invalid_tasks:
-            console.print(f"\n[red]❌ Found {len(invalid_tasks)} invalid tasks:[/red]")
-            for i, reason in invalid_tasks[:5]:  # Show first 5
-                console.print(f"  Task {i}: {reason}")
-            if len(invalid_tasks) > 5:
-                console.print(f"  ... and {len(invalid_tasks) - 5} more")
-            raise typer.Exit(1)
-        
-        # If config file provided, load it
-        if config_file:
-            config = load_config(config_file)
-            # Convert to JSON string using dataclasses
-            from dataclasses import asdict
-            config_dict = asdict(config)
-            config_json = json.dumps(config_dict, indent=2, default=str)
-        else:
-            # Generate config interactively
-            # For Modal, we'll use default GPU memory assumptions
-            gpu_memory_gb = 80.0  # Assume H100/A100 80GB
-            presets = get_training_presets(gpu_memory_gb)
-            config, estimated_memory = generate_config_interactive(
-                model_name=model,
-                tasks_count=len(tasks),
-                presets=presets,
-                output_dir=output_dir,
-            )
-            # Convert to JSON string using dataclasses
-            from dataclasses import asdict
-            config_dict = asdict(config)
-            config_json = json.dumps(config_dict, indent=2, default=str)
-        
-        # Launch on Modal and exit
-        launch_on_modal(
-            tasks_file=tasks_file,
-            config_json=config_json,
-            model=model,
-            output_dir=output_dir,
-            verbose=verbose,
-            modal_gpu=modal_gpu,
-            no_ddp=no_ddp,
-            ddp_gpus=ddp_gpus,
-            vllm_gpu=vllm_gpu,
-        )
-        return
     
     # Check Python version compatibility
     python_version = sys.version_info

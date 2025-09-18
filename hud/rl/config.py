@@ -45,7 +45,7 @@ class ModelConfig:
         "gate_proj", "up_proj", "down_proj"
     )
     min_pixels: int = 256 * 28 * 28
-    max_pixels: int = 256 * 28 * 28
+    max_pixels: int = 512 * 28 * 28
     attn_implementation: str = "flash_attention_2"
     use_liger: bool = True
     gradient_checkpointing: bool = True
