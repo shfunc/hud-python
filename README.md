@@ -110,21 +110,34 @@ The above example let's the agent play 2048 ([See replay](https://app.hud.so/tra
 
 ## Reinforcement Learning with GRPO
 
-This is a Qwen-2.5-3B agent training a policy on the [`text-2048`](environments/text_2048/) environment (see above) using [Verifiers](rl/):
+This is a Qwen‑2.5‑VL‑3B agent training a policy on the 2048-basic browser environment:
 
 ![RL curve](https://raw.githubusercontent.com/hud-evals/hud-python/main/docs/src/images/rl_2.png)
 
-To start training, check out the [`rl/README.md`](rl/README.md) folder:
+Train with the new interactive `hud rl` flow:
 
 ```bash
-git clone https://github.com/hud-evals/hud-python
-cd hud-python/rl
-python train_2048.py
+# Install CLI with RL extras
+uv tool install "hud-python[rl]"
+
+# Option A: Run directly from a HuggingFace dataset
+hud rl hud-evals/basic-2048
+
+# Option B: Download first, modify, then train
+hud get hud-evals/basic-2048
+hud rl basic-2048.jsonl
+
+# Optional: baseline evaluation
+hud eval basic-2048.jsonl
 ```
 
-Any hud MCP environment and evaluation works with our RL pipeline. Even our remote configurations!
+Supports multi‑turn RL for both:
+- Language‑only models (e.g., `Qwen/Qwen2.5-7B-Instruct`)
+- Vision‑Language models (e.g., `Qwen/Qwen2.5-VL-3B-Instruct`)
 
-> The [`rl/README.md`](rl/README.md) walks you through several examples of RL training and takes less than 15 minutes to set up for your custom agent!
+By default, `hud rl` provisions a persistant server and trainer in the cloud, streams telemetry to `app.hud.so`, and lets you monitor/manage models at `app.hud.so/models`. Use `--local` to run entirely on your machines (typically 2+ GPUs: one for vLLM, the rest for training).
+
+Any HUD MCP environment and evaluation works with our RL pipeline (including remote configurations). See the guided docs: `https://docs.hud.so/train-agents/quickstart`.
 
 ## Benchmarking Agents
 
