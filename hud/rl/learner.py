@@ -184,6 +184,20 @@ class GRPOLearner:
         batch = []
         for sample in samples:
             inputs = prepare_inputs(sample, self.processor)
+            # If inputs are invalid, create dummy inputs to maintain batch size
+            if not inputs or "input_ids" not in inputs or inputs.get("input_ids", torch.tensor([])).numel() == 0:
+                hud_console.warning_log(f"Sample has invalid inputs, using dummy values")
+                # Create minimal dummy inputs to keep batch size consistent
+                inputs = {
+                    "input_ids": torch.zeros(1, 2, dtype=torch.long),  # Minimal sequence
+                    "attention_mask": torch.ones(1, 2, dtype=torch.long),
+                    "assistant_mask": torch.zeros(1, 1, dtype=torch.bool),  # T-1 length
+                }
+            elif "assistant_mask" not in inputs:
+                hud_console.warning_log(f"Sample missing assistant_mask, creating zero mask")
+                seq_len = inputs["input_ids"].shape[-1]
+                inputs["assistant_mask"] = torch.zeros(inputs["input_ids"].shape[0], seq_len - 1, dtype=torch.bool)
+            
             new_sample = TrainingSample(**sample.model_dump())
             new_sample.inputs = inputs
             new_sample.advantage = sample.advantage
@@ -388,10 +402,12 @@ class GRPOLearner:
             else:
                 total_loss = (total_loss * m).sum()
 
+        # Compute metrics only over masked (assistant) tokens
+        mask_count = m.sum().clamp_min(1.0)
         metrics.update({
-            "policy_ratio": ratio_tok.detach().mean().item(),
-            "kl": kl_approx.mean().item(),
-            "entropy": pol_entropy.mean().item(),
+            "policy_ratio": (ratio_tok * m).sum().item() / mask_count.item() if mask_count.item() > 0 else 1.0,
+            "kl": (kl_approx * m).sum().item() / mask_count.item() if mask_count.item() > 0 else 0.0,
+            "entropy": (pol_entropy * m).sum().item() / mask_count.item() if mask_count.item() > 0 else 0.0,
             "tokens": sample.inputs["input_ids"].numel(),
             "loss": total_loss.item(),
         })
@@ -405,21 +421,32 @@ class GRPOLearner:
 
         Returns log probabilities for the actual next tokens.
         """
-        model_inputs = {k: v for k, v in inputs.items() if k != "assistant_mask"}
-        out = model(**model_inputs)
+        try:
+            model_inputs = {k: v for k, v in inputs.items() if k != "assistant_mask"}
+            out = model(**model_inputs)
 
-        logits = out.logits / self.config.actor.temperature 
-        log_probs = F.log_softmax(logits, dim=-1)
+            logits = out.logits / self.config.actor.temperature 
+            log_probs = F.log_softmax(logits, dim=-1)
 
-        targets = inputs["input_ids"][:, 1:]
-        token_log_probs = log_probs[:, :-1].gather(-1, targets.unsqueeze(-1)).squeeze(-1)
-        
-        # Compute entropy only for assistant tokens to save memory
-        assistant_mask = inputs["assistant_mask"]
-        entropy = torch.zeros_like(token_log_probs)
-        entropy[assistant_mask] = entropy_from_logits(logits[:, :-1][assistant_mask])
+            targets = inputs["input_ids"][:, 1:]
+            token_log_probs = log_probs[:, :-1].gather(-1, targets.unsqueeze(-1)).squeeze(-1)
+            
+            # Compute entropy only for assistant tokens to save memory
+            assistant_mask = inputs["assistant_mask"]
+            entropy = torch.zeros_like(token_log_probs)
+            if assistant_mask.any():
+                entropy[assistant_mask] = entropy_from_logits(logits[:, :-1][assistant_mask])
 
-        return token_log_probs, entropy
+            return token_log_probs, entropy
+        except (IndexError, RuntimeError) as e:
+            # Handle empty inputs or DDP errors
+            hud_console.warning_log(f"Error in compute_logprobs: {e}. Returning dummy values.")
+            # Return dummy values that match expected shapes
+            seq_len = inputs["input_ids"].shape[1] - 1 if "input_ids" in inputs else 0
+            batch_size = inputs["input_ids"].shape[0] if "input_ids" in inputs else 1
+            dummy_logprobs = torch.zeros(batch_size, seq_len, device=self.device)
+            dummy_entropy = torch.zeros(batch_size, seq_len, device=self.device)
+            return dummy_logprobs, dummy_entropy
     
     def save(self, path: str) -> None:
         """Save the current policy checkpoint (only on rank 0)."""

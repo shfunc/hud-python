@@ -132,6 +132,7 @@ async def train(config: Config, tasks: list[Task]) -> None:
                 episode_time = time.time() - episode_start_time
                 hud_console.info(f"Sampled {len(traces)} traces in {episode_time:.1f}s")
                 trace_buffer.add(traces)
+                global_reward_stats = [trace.reward for trace in traces]
                 
                 # Get all traces from buffer for distribution
                 all_traces = trace_buffer.sample_traces()
@@ -142,7 +143,6 @@ async def train(config: Config, tasks: list[Task]) -> None:
                 preprocessed_traces = preprocess_advantages(all_traces, config)
                 
                 # Store these for later use in metrics
-                global_reward_stats = [trace.reward for trace in all_traces]
                 global_advantage_stats = [sample.advantage for sample in preprocessed_traces]
                 
                 # Distribute preprocessed samples in groups across ranks
