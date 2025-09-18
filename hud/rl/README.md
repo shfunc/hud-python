@@ -24,11 +24,8 @@ uv run vllm serve Qwen/Qwen2.5-VL-3B-Instruct \
 
 And training with (replace 2 with your spare GPUs):
 ```bash
-torchrun --nproc-per-node 2 -m hud.rl.train --tasks path/to/tasks.jsonl --verbose
+hud get hud-evals/2048-basic
+torchrun --nproc-per-node 2 -m hud.rl.train --tasks 2048-basic.json --verbose
 ```
 
 Add a `--config path/to/config.json` flag to run a specific configuration (or change the defaults in config.py)
-To get the tasks from a HuggingFace Dataset:
-```bash
-hud get hud-evals/2048-basic
-```
