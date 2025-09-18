@@ -1061,16 +1061,6 @@ def rl(
         "--local",
         help="Run training locally instead of using remote API server",
     ),
-    modal: bool = typer.Option(
-        False,
-        "--modal",
-        help="Run training on Modal",
-    ),
-    gpu: str = typer.Option(
-        "H100:2",
-        "--gpu",
-        help="GPU type to use for training",
-    ),
     no_ddp: bool = typer.Option(
         False,
         "--no-ddp",
@@ -1099,8 +1089,6 @@ def rl(
         restart=restart,
         verbose=verbose,
         local=local,
-        modal=modal,
-        modal_gpu=gpu,
         no_ddp=no_ddp,
         ddp_gpus=ddp_gpus,
         vllm_gpu=vllm_gpu,

@@ -35,17 +35,6 @@ hud get basic-2048
 hud rl basic-2048.jsonl --local
 ```
 
-### 3) Advanced: Manual run via your own modal instances
-
-```bash
-hud rl basic-2048.jsonl --modal
-```
-
-This spins up:
-
-- A vLLM server for your model
-- A training job that periodically saves LoRA checkpoints to a shared volume
-
 ### Recommended setups
 
 - 2× A100: quick iteration, shorter runs

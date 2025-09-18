@@ -14,7 +14,7 @@ console = Console()
 
 
 def get_vllm_args(model_name: str, chat_template_path: Path | None = None) -> list[str]:
-    """Get common vLLM server arguments for both local and Modal deployments."""
+    """Get common vLLM server arguments for both local and remote deployments."""
     args = [
         "serve", model_name,
         "--api-key", "token-abc123",
