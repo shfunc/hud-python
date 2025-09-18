@@ -44,7 +44,7 @@ async def game_2048_max_number(target: int):
         # Only give reward if progress has been made
         # Score > 0 means merges have happened (real progress)
         # OR highest_tile > initial means we've created a higher tile
-        if score == 0 and highest_tile <= initial_highest_tile:
+        if score == 0:
             reward = 0.0
         elif target > 1 and highest_tile > 1:
             # Logarithmic reward scale

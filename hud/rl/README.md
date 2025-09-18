@@ -1,6 +1,6 @@
 We suggest running hud rl (or with the --local flag) for optimal hyperparameters and native HuggingFace running.
 
-Install:
+However, to run this independently, sping up an instance with at least 2 GPUs and run:
 ```bash
 sudo apt-get update -y && sudo apt-get install -y cuda-toolkit-12-6
 uv pip install -e .[rl]
@@ -8,8 +8,7 @@ uv pip install ninja
 uv pip install flash-attn --no-build-isolation
 ```
 
-
-However, if you want to run the training directly, launch a vllm server with:
+Launch a vllm server with:
 ```bash
 export VLLM_ALLOW_RUNTIME_LORA_UPDATING=True
 export TOKENIZERS_PARALLELISM=false

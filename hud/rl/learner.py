@@ -103,10 +103,12 @@ class GRPOLearner:
 
         # Load processor/tokenizer based on model type
         if is_vl_model:
+            # Some environments require remote code for Qwen2.5-VL processors
             processor = AutoProcessor.from_pretrained(
                 model_cfg.base_model,
                 min_pixels=model_cfg.min_pixels,
                 max_pixels=model_cfg.max_pixels,
+                trust_remote_code=True,
             )
         else:
             processor = AutoTokenizer.from_pretrained(model_cfg.base_model)
@@ -123,6 +125,7 @@ class GRPOLearner:
                 model_cfg.base_model,
                 torch_dtype=torch.bfloat16,
                 attn_implementation=attn_implementation,
+                trust_remote_code=True,
             )
             self.log(f"Using {attn_implementation} for attention")
         except (ImportError, ValueError) as e:

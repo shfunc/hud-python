@@ -230,7 +230,8 @@ class GenericOpenAIChatAgent(MCPAgent):
         if msg.tool_calls:
             for tc in msg.tool_calls:
                 if tc.function.name is not None:  # type: ignore
-                    tool_calls.extend(self._oai_to_mcp(tc))
+                    # _oai_to_mcp returns a single MCPToolCall; append it
+                    tool_calls.append(self._oai_to_mcp(tc))
 
         # Only stop on length (token limit), never on "stop"
         done = choice.finish_reason == "length"
