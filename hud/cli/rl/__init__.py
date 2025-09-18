@@ -131,7 +131,9 @@ def rl_command(
     if not tasks_file:
         tasks_file = find_tasks_file(tasks_file)
         if not tasks_file:
-            console.print("[red]❌ No tasks file found in current directory[/red]")
+            hud_console.warning("No tasks file found in current directory")
+            hud_console.hint("Download a HF dataset using `hud get <dataset_name>` (e.g., `hud get hud-evals/2048-basic`)")  # noqa: E501
+            hud_console.hint("or create a tasks file manually.")
             raise typer.Exit(1)
 
     # Handle remote execution
