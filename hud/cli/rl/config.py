@@ -58,7 +58,7 @@ def generate_config_interactive(
             "max_parallel_episodes": selected_preset["batch_size"],
             "max_steps_per_episode": selected_preset["max_steps_per_episode"],
             "force_tool_choice": true,
-        }
+        },
         "training": {
             "mini_batch_size": selected_preset["mini_batch_size"],
             "group_size": selected_preset["group_size"],
