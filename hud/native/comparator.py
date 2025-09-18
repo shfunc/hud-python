@@ -513,11 +513,11 @@ def make_alias_tool(name: str, preset_mode: ComparisonMode, description: str) ->
 
 
 # Create MCP server
-comparator_server = MCPServer(name="comparator")
+comparator = MCPServer(name="comparator")
 
 # Register main tool
-comparator_server.add_tool(SubmitTool())
-comparator_server.add_tool(CompareTool())
+comparator.add_tool(SubmitTool())
+comparator.add_tool(CompareTool())
 
 # Register aliases - these are just thin wrappers
 ALIASES = [
@@ -534,13 +534,13 @@ ALIASES = [
 
 for name, mode, desc in ALIASES:
     AliasTool = make_alias_tool(name, mode, desc)
-    comparator_server.add_tool(AliasTool())
+    comparator.add_tool(AliasTool())
 
 # Export for mounting
-__all__ = ["comparator_server"]
+__all__ = ["comparator"]
 
 
 if __name__ == "__main__":
     # Run as standalone server
     logger.info("Starting Comparator MCP Server...")
-    comparator_server.run()
+    comparator.run()

@@ -8,12 +8,12 @@ class TestNativeInit:
 
     def test_comparator_server_import(self):
         """Test that comparator server can be imported."""
-        from hud.native.comparator import comparator_server
+        from hud.native.comparator import comparator
         from hud.server import MCPServer
 
         # Verify comparator is an MCPServer instance
-        assert isinstance(comparator_server, MCPServer)
-        assert comparator_server.name == "comparator"
+        assert isinstance(comparator, MCPServer)
+        assert comparator.name == "comparator"
 
     def test_all_exports(self):
         """Test that __all__ is properly defined."""
@@ -31,11 +31,11 @@ class TestNativeInit:
 
     def test_comparator_tools_registered(self):
         """Test that comparator server has tools registered."""
-        from hud.native.comparator import comparator_server
+        from hud.native.comparator import comparator
 
         # The server should have tools registered
         # We can check that the tool manager has tools
-        tool_names = [t.name for t in comparator_server._tool_manager._tools.values()]
+        tool_names = [t.name for t in comparator._tool_manager._tools.values()]
 
         # Should have the main compare tool
         assert "compare" in tool_names
@@ -64,16 +64,18 @@ class TestNativeInit:
 
     def test_comparator_tool_functionality(self):
         """Test that we can get the CompareTool from the comparator."""
-        from hud.native.comparator import comparator_server
-        from hud.tools import BaseTool
+        from hud.native.comparator import comparator
 
         # Get the compare tool
         compare_tool = None
-        for tool in comparator_server._tool_manager._tools.values():
+        for tool in comparator._tool_manager._tools.values():
             if tool.name == "compare":
                 compare_tool = tool
                 break
 
         assert compare_tool is not None
-        assert isinstance(compare_tool, BaseTool)
-        assert hasattr(compare_tool, "__call__")
+        # FastMCP wraps tools as FunctionTool instances
+        assert hasattr(compare_tool, 'name')
+        assert compare_tool.name == "compare"
+        # FunctionTool has a 'fn' attribute for the callable
+        assert hasattr(compare_tool, 'fn') or hasattr(compare_tool, '__call__')

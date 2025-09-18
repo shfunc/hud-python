@@ -11,7 +11,7 @@ from hud.native.comparator import (
     ComparisonResult,
     DataType,
     auto_select_mode,
-    comparator_server,
+    comparator,
     detect_type,
     extract_boolean,
     extract_json,
@@ -321,10 +321,10 @@ class TestAliasTools:
     @pytest.mark.asyncio
     async def test_aliases_work(self):
         """Test that aliases are properly registered and work."""
-        from hud.native.comparator import comparator_server
+        from hud.native.comparator import comparator
 
         # Check that aliases are registered
-        tool_names = [t.name for t in comparator_server._tool_manager._tools.values()]
+        tool_names = [t.name for t in comparator._tool_manager._tools.values()]
 
         expected_aliases = [
             "compare_exact",
@@ -433,7 +433,7 @@ class TestAliasPreprocessing:
     @pytest.mark.asyncio
     async def test_json_alias_preprocessing(self):
         """Test JSON extraction in compare_json tool."""
-        tools = {t.name: t for t in comparator_server._tool_manager._tools.values()}
+        tools = {t.name: t for t in comparator._tool_manager._tools.values()}
         json_tool = tools["compare_json"]
 
         assert isinstance(json_tool, FunctionTool)
@@ -448,7 +448,7 @@ class TestAliasPreprocessing:
     @pytest.mark.asyncio
     async def test_numeric_alias_preprocessing(self):
         """Test number extraction in numeric tools."""
-        tools = {t.name: t for t in comparator_server._tool_manager._tools.values()}
+        tools = {t.name: t for t in comparator._tool_manager._tools.values()}
 
         # Float tool
         float_tool = tools["compare_float"]
@@ -471,7 +471,7 @@ class TestAliasPreprocessing:
     @pytest.mark.asyncio
     async def test_boolean_alias_preprocessing(self):
         """Test boolean extraction in compare_boolean tool."""
-        tools = {t.name: t for t in comparator_server._tool_manager._tools.values()}
+        tools = {t.name: t for t in comparator._tool_manager._tools.values()}
         bool_tool = tools["compare_boolean"]
 
         assert isinstance(bool_tool, FunctionTool)
@@ -485,7 +485,7 @@ class TestAliasPreprocessing:
     @pytest.mark.asyncio
     async def test_list_alias_preprocessing(self):
         """Test list extraction in compare_list tool."""
-        tools = {t.name: t for t in comparator_server._tool_manager._tools.values()}
+        tools = {t.name: t for t in comparator._tool_manager._tools.values()}
         list_tool = tools["compare_list"]
 
         assert isinstance(list_tool, FunctionTool)
@@ -499,7 +499,7 @@ class TestAliasPreprocessing:
     @pytest.mark.asyncio
     async def test_complex_llm_output(self):
         """Test extraction from complex LLM outputs with reasoning."""
-        tools = {t.name: t for t in comparator_server._tool_manager._tools.values()}
+        tools = {t.name: t for t in comparator._tool_manager._tools.values()}
         json_tool = tools["compare_json"]
 
         llm_output = """
