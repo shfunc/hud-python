@@ -75,7 +75,7 @@ class TestNativeInit:
 
         assert compare_tool is not None
         # FastMCP wraps tools as FunctionTool instances
-        assert hasattr(compare_tool, 'name')
+        assert hasattr(compare_tool, "name")
         assert compare_tool.name == "compare"
         # FunctionTool has a 'fn' attribute for the callable
-        assert hasattr(compare_tool, 'fn') or hasattr(compare_tool, '__call__')
+        assert hasattr(compare_tool, "fn") or hasattr(compare_tool, "__call__")
