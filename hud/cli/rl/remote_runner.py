@@ -251,7 +251,7 @@ def run_remote_training(
                 {"name": "A100 80GB", "value": "A100"},
                 {"name": "H100 80GB", "value": "H100"},
             ],
-            default="A100"
+            default=0
         )
         
         num_gpus = hud_console.select(
@@ -293,7 +293,7 @@ def run_remote_training(
                 {"name": "✏️  Review configuration", "value": "edit"},
                 {"name": "❌ Cancel", "value": "cancel"},
             ],
-            default="start"
+            default=0
         )
         
         if edit_choice == "cancel":

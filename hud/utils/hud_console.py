@@ -452,7 +452,7 @@ class HUDConsole:
         self,
         message: str,
         choices: list[str | dict[str, Any]] | list[str],
-        default: str | None = None,
+        default: int | None = None,
     ) -> str:
         """Interactive selection with arrow key navigation.
 
@@ -471,13 +471,14 @@ class HUDConsole:
             if isinstance(choice, dict):
                 name = choice.get("name", str(choice.get("value", "")))
                 value = choice.get("value", name)
-                q_choices.append(questionary.Choice(title=name, value=value))
+                q_choices.append(questionary.Choice(title=name, value=value ))
             else:
                 q_choices.append(choice)
 
         result = questionary.select(
             message,
             choices=q_choices,
+            default=q_choices[default] if default is not None else None,
             instruction="(Use ↑/↓ arrows, Enter to select)",
         ).ask()
 

@@ -65,7 +65,8 @@ def generate_config_interactive(
             "batch_size": selected_preset["batch_size"],
             "lr": selected_preset["lr"],
             "epochs": selected_preset["epochs"],
-        }
+        },
+        "verbose": True,
     }
     
     # Create config
