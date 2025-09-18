@@ -35,20 +35,35 @@ class VLLMAdapter:
         url = f"{self.base_url}/load_lora_adapter"
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         payload = {"lora_name": adapter_name, "lora_path": adapter_path}
+        # Implement exponential backoff for retrying the adapter load request.
+        max_retries = 5
+        backoff_factor = 2
+        delay = 1  # initial delay in seconds
 
-        try:
-            response = requests.post(
-                url, headers=headers, data=json.dumps(payload), timeout=timeout
-            )
-            response.raise_for_status()
+        for attempt in range(1, max_retries + 1):
+            try:
+                response = requests.post(
+                    url, headers=headers, data=json.dumps(payload), timeout=timeout
+                )
+                response.raise_for_status()
 
-            self.current_adapter = adapter_name
-            hud_console.info(f"[VLLMAdapter] Loaded adapter: {adapter_name}")
-            return True
+                self.current_adapter = adapter_name
+                hud_console.info(f"[VLLMAdapter] Loaded adapter: {adapter_name}")
+                return True
 
-        except requests.exceptions.RequestException as e:
-            hud_console.error(f"[VLLMAdapter] Failed to load adapter {adapter_name}: {e}")
-            return False
+            except requests.exceptions.RequestException as e:
+                if attempt == max_retries:
+                    hud_console.error(
+                        f"[VLLMAdapter] Failed to load adapter {adapter_name} after {attempt} attempts: {e}"
+                    )
+                    return False
+                else:
+                    hud_console.warning(
+                        f"[VLLMAdapter] Load adapter {adapter_name} failed (attempt {attempt}/{max_retries}): {e}. Retrying in {delay} seconds...",
+                    )
+                    import time
+                    time.sleep(delay)
+                    delay *= backoff_factor
 
     def unload_adapter(self, adapter_name: str) -> bool:
         """
