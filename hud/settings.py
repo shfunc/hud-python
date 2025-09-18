@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     )
 
     hud_rl_url: str = Field(
-        default="http://rl.hud.so/v1",
+        default="https://rl.hud.so/v1",
         description="Base URL for the HUD RL API server",
         validation_alias="HUD_RL_URL",
     )
