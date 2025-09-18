@@ -12,6 +12,7 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
+from hud.cli.utils.tasks import find_tasks_file
 from hud.rl.config import validate_vl_model
 from hud.rl.train import train
 
@@ -126,6 +127,12 @@ def rl_command(
 
     # Determine execution mode
     use_remote = not local
+
+    if not tasks_file:
+        tasks_file = find_tasks_file(tasks_file)
+        if not tasks_file:
+            console.print("[red]❌ No tasks file found in current directory[/red]")
+            raise typer.Exit(1)
 
     # Handle remote execution
     if use_remote:

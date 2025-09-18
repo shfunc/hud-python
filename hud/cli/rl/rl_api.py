@@ -54,7 +54,11 @@ def list_models() -> list[RLModelInfo]:
     response = make_request_sync(
         method="GET", url=f"{settings.hud_rl_url}/models", api_key=settings.api_key
     )
-    return [RLModelInfo(**model.__dict__) for model in response]
+    if not isinstance(response, list):
+        response = [response]
+    return [
+        RLModelInfo(**(model if isinstance(model, dict) else model.__dict__)) for model in response
+    ]  # noqa: E501
 
 
 def deploy_vllm(model_name: str, gpu_type: str = "A100") -> dict[str, Any]:
