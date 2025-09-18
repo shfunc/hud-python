@@ -57,7 +57,7 @@ def generate_config_interactive(
             "max_new_tokens": selected_preset["max_new_tokens"],
             "max_parallel_episodes": selected_preset["batch_size"],
             "max_steps_per_episode": selected_preset["max_steps_per_episode"],
-            "force_tool_choice": true,
+            "force_tool_choice": True,
         },
         "training": {
             "mini_batch_size": selected_preset["mini_batch_size"],
@@ -69,7 +69,7 @@ def generate_config_interactive(
     }
     
     # Create config
-    config = Config(**config_adds)
+    config = Config.from_dict(config_adds)
     
     return config, estimated_memory
 
