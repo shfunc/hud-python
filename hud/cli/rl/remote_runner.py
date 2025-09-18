@@ -297,8 +297,7 @@ def run_remote_training(
                 {"name": "🚀 Start training!", "value": "start"},
                 {"name": "✏️  Review configuration", "value": "edit"},
                 {"name": "❌ Cancel", "value": "cancel"},
-            ],
-            default=0,
+            ]
         )
 
         if edit_choice == "cancel":
