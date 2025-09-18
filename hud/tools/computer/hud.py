@@ -231,7 +231,7 @@ class HudComputerTool(BaseTool):
 
     async def __call__(
         self,
-        action: str = Field(..., description="The action name (click, type, move, etc.)"),
+        action: str = Field(..., description="The action name (click, press, write, move, etc.)"),
         # Click parameters
         x: int | None = Field(None, description="X coordinate for click/move/scroll actions"),
         y: int | None = Field(None, description="Y coordinate for click/move/scroll actions"),
@@ -242,7 +242,7 @@ class HudComputerTool(BaseTool):
             None, description="Click pattern for multi-clicks (e.g., [100] for double-click)"
         ),
         # Key/Type parameters
-        text: str | None = Field(None, description="Text for type/response actions"),
+        text: str | None = Field(None, description="Text for write/response actions"),
         keys: list[str] | None = Field(None, description="Keys for press/keydown/keyup actions"),
         enter_after: bool | None = Field(None, description="Whether to press Enter after typing"),
         # Scroll parameters
@@ -300,9 +300,9 @@ class HudComputerTool(BaseTool):
                     raise ToolError("keys parameter is required for keyup")
                 result = await self.executor.keyup(keys=keys)
 
-            elif action == "type":
+            elif action == "write":
                 if text is None:
-                    raise ToolError("text parameter is required for type")
+                    raise ToolError("text parameter is required for write")
                 result = await self.executor.write(text=text, enter_after=enter_after or False)
 
             elif action == "scroll":
