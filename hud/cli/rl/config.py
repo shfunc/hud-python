@@ -48,46 +48,28 @@ def generate_config_interactive(
     estimated_memory = estimate_memory_usage(
         selected_preset["mini_batch_size"],
         max_steps_per_episode,
+        selected_preset["max_new_tokens"],
         max_pixels
     )
+
+    config_adds = {
+        "actor": {
+            "max_new_tokens": selected_preset["max_new_tokens"],
+            "max_parallel_episodes": selected_preset["batch_size"],
+            "max_steps_per_episode": selected_preset["max_steps_per_episode"],
+            "force_tool_choice": true,
+        }
+        "training": {
+            "mini_batch_size": selected_preset["mini_batch_size"],
+            "group_size": selected_preset["group_size"],
+            "batch_size": selected_preset["batch_size"],
+            "lr": selected_preset["lr"],
+            "epochs": selected_preset["epochs"],
+        }
+    }
     
     # Create config
-    config = Config(
-        seed=42,
-        out_dir=output_dir,
-        adapter_prefix="rl-adapter",
-        model=ModelConfig(
-            base_model=model_name,
-            lora_r=32,
-            lora_alpha=64,
-            lora_dropout=0.05,
-            target_modules=(
-                "q_proj", "k_proj", "v_proj", "o_proj", "vision_language_merger.*"
-            ),
-            min_pixels=max_pixels,
-            max_pixels=max_pixels,
-        ),
-        training=TrainingConfig(
-            lr=selected_preset["lr"],
-            epochs=selected_preset["epochs"],
-            mini_batch_size=selected_preset["mini_batch_size"],
-            batch_size=selected_preset["batch_size"],
-            group_size=selected_preset["group_size"],
-            kl_beta=0.001,
-            save_every_batches=1,
-            training_steps=100,  # Default, can be overridden
-        ),
-        actor=ActorConfig(
-            vllm_base_url=vllm_url or "http://localhost:8000/v1",
-            vllm_api_key="token-abc123",
-            temperature=temperature,
-            max_new_tokens=2048,
-            max_steps_per_episode=max_steps_per_episode,
-            max_parallel_episodes=selected_preset.get("max_parallel_episodes", selected_preset["batch_size"]),
-            force_tool_choice=True,
-            system_prompt="You are an expert agent. Complete the task efficiently.",
-        ),
-    )
+    config = Config(**config_adds)
     
     return config, estimated_memory
 

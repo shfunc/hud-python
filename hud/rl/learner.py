@@ -145,6 +145,7 @@ class GRPOLearner:
                 device_ids=[self.local_rank],
                 output_device=self.local_rank,
                 broadcast_buffers=False,
+                find_unused_parameters=True,
             )
             self.log(f"Wrapped model (find_unused_parameters=True)")
         
@@ -259,11 +260,7 @@ class GRPOLearner:
 
                         # Update mini_updated globally
                         self.log(f"{group_idx} Mini updated: {mini_updated}")
-                        # mini_updated = torch.tensor(int(mini_updated), device=self.device)
-                        # if torch.distributed.is_initialized():
-                        #     torch.distributed.all_reduce(mini_updated, op=torch.distributed.ReduceOp.SUM)
-                        # mini_updated = bool(mini_updated.item())
-
+                        
                         # Do not sync until the last minibatch
                         if s_idx < len(group) - 1 and self.world_size > 1:
                             ddp_ctx = self.policy.no_sync()
@@ -283,7 +280,6 @@ class GRPOLearner:
                                 # self.log(f"{group_idx} GPU Backward: {get_gpu_utilization():.1f}% | Memory: {get_memory_usage():.2f} GB")
                             except torch.cuda.OutOfMemoryError:
                                 hud_console.warning_log(f"{group_idx} CUDA OOM for {sample_minibatch.inputs['input_ids'].numel()} tokens; skipping minibatch")
-                                torch.cuda.empty_cache()
                                 # Dummy backward to keep DDP happy
                                 dummy = sum(p.sum() for p in self.policy.parameters()) * 0.0
                                 debug_per_group += f"o{s_idx}:{str(round(dummy.item(), 3))} "
@@ -292,8 +288,8 @@ class GRPOLearner:
                                 global_skip.fill_(1)
                                 continue
 
-                        if torch.cuda.is_available():
-                            torch.cuda.empty_cache()
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
 
                     # After minibatches loop, sync skip across ranks
                     if torch.distributed.is_initialized():

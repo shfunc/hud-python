@@ -280,6 +280,7 @@ def rl_command(
         estimated_memory = estimate_memory_usage(
             config.training.mini_batch_size,
             config.actor.max_steps_per_episode,
+            config.actor.max_new_tokens,
             config.model.max_pixels
         )
     else:
