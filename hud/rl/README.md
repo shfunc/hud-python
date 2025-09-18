@@ -1,5 +1,14 @@
 We suggest running hud rl (or with the --local flag) for optimal hyperparameters and native HuggingFace running.
 
+Install:
+```bash
+sudo apt-get update -y && sudo apt-get install -y cuda-toolkit-12-6
+uv pip install -e .[rl]
+uv pip install ninja
+uv pip install flash-attn --no-build-isolation
+```
+
+
 However, if you want to run the training directly, launch a vllm server with:
 ```bash
 export VLLM_ALLOW_RUNTIME_LORA_UPDATING=True
@@ -19,14 +28,7 @@ torchrun --nproc-per-node 2 -m hud.rl.train --tasks path/to/tasks.jsonl --verbos
 ```
 
 Add a `--config path/to/config.json` flag to run a specific configuration (or change the defaults in config.py)
-
-Make sure to have flash attention installed:
-```bash
-uv pip install ninja
-uv pip install flash-attn --no-build-isolation
-```
-
 To get the tasks from a HuggingFace Dataset:
 ```bash
-hud get hudevals/dataset
+hud get hud-evals/2048-basic
 ```
