@@ -249,7 +249,7 @@ class MCPAgent(ABC):
                 self.console.progress_log(f"Setting up tool phase: {task.setup_tool}")
                 results = await self.call_tools(task.setup_tool)
                 if any(result.isError for result in results):
-                    raise RuntimeError(f"{results}")
+                    return Trace(reward=0.0, done=True, content=f"Setup tool failed: {results}", isError=True, task=task)
 
                 if self.append_setup_output and isinstance(results[0].content, list):
                     start_context.extend(results[0].content)
@@ -279,6 +279,7 @@ class MCPAgent(ABC):
                             done=True,
                             content="Task failed before evaluation",
                             isError=True,
+                            task=task,
                         )
                     prompt_result.reward = 0.0  # Default to 0 on error
                 else:
@@ -291,7 +292,7 @@ class MCPAgent(ABC):
                         # Update the prompt result with evaluation reward
                         if prompt_result is None:
                             prompt_result = Trace(
-                                reward=reward, done=True, content=eval_content or "", isError=False
+                                reward=reward, done=True, content=eval_content or "", isError=False, task=task
                             )
                         else:
                             prompt_result.reward = reward
@@ -310,7 +311,7 @@ class MCPAgent(ABC):
                 # Ensure we have a result even if evaluation failed
                 if prompt_result is None:
                     prompt_result = Trace(
-                        reward=0.0, done=True, content=f"Evaluation failed: {e}", isError=True
+                        reward=0.0, done=True, content=f"Evaluation failed: {e}", isError=True, task=task
                     )
 
         prompt_result.task = task

@@ -58,10 +58,15 @@ class GenericOpenAIChatAgent(MCPAgent):
     @staticmethod
     def _oai_to_mcp(tool_call: Any) -> MCPToolCall:  # type: ignore[valid-type]
         """Convert an OpenAI ``tool_call`` to :class:`MCPToolCall`."""
+        args = json.loads(tool_call.function.arguments or "{}")
+        if isinstance(args, list):
+            args = args[0]
+        if not isinstance(args, dict):
+            args = {}
         return MCPToolCall(
             id=tool_call.id,
             name=tool_call.function.name,
-            arguments=json.loads(tool_call.function.arguments or "{}"),
+            arguments=args,
         )
 
     async def get_system_messages(self) -> list[Any]:
