@@ -153,16 +153,24 @@ class MCPAgent(ABC):
             if task.setup_tool:
                 if isinstance(task.setup_tool, list):
                     for tool in task.setup_tool:
-                        if not self.agent_tools or (self.agent_tools and tool.name not in self.agent_tools):
+                        if not self.agent_tools or (
+                            self.agent_tools and tool.name not in self.agent_tools
+                        ):
                             self.lifecycle_tools.append(tool.name)
-                elif not self.agent_tools or (self.agent_tools and task.setup_tool.name not in self.agent_tools):
+                elif not self.agent_tools or (
+                    self.agent_tools and task.setup_tool.name not in self.agent_tools
+                ):
                     self.lifecycle_tools.append(task.setup_tool.name)
             if task.evaluate_tool:
                 if isinstance(task.evaluate_tool, list):
                     for tool in task.evaluate_tool:
-                        if not self.agent_tools or (self.agent_tools and tool.name not in self.agent_tools):
+                        if not self.agent_tools or (
+                            self.agent_tools and tool.name not in self.agent_tools
+                        ):
                             self.lifecycle_tools.append(tool.name)
-                elif not self.agent_tools or (self.agent_tools and task.evaluate_tool.name not in self.agent_tools):
+                elif not self.agent_tools or (
+                    self.agent_tools and task.evaluate_tool.name not in self.agent_tools
+                ):
                     self.lifecycle_tools.append(task.evaluate_tool.name)
             if task.system_prompt:
                 self.system_prompt += "\n\n" + task.system_prompt

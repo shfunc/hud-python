@@ -42,7 +42,7 @@ def display_preset_table(presets: list[dict[str, Any]], gpu_memory_gb: float) ->
     # Add time columns for A100
     if gpu_memory_gb >= 40:
         preset_table.add_column("Tasks/hour", style="green")
-        preset_table.add_column("Steps/hour", style="green")
+        preset_table.add_column("Updates/hour", style="green")
 
     for i, preset in enumerate(presets):
         row = [
