@@ -151,7 +151,7 @@ class TestHudComputerToolExtended:
     async def test_type_action(self, base_executor):
         """Test type action with BaseExecutor."""
         tool = HudComputerTool(executor=base_executor)
-        result = await tool(action="type", text="Hello World", enter_after=True)
+        result = await tool(action="write", text="Hello World", enter_after=True)
         assert result
         assert any(
             "[SIMULATED] Type" in content.text
@@ -329,7 +329,7 @@ class TestHudComputerToolExtended:
         assert result
 
         # Test type without coordinates
-        result = await tool(action="type", text="test")
+        result = await tool(action="write", text="test")
         assert result
 
     @pytest.mark.asyncio
@@ -360,7 +360,7 @@ class TestHudComputerToolExtended:
         from hud.tools.types import ToolError
 
         with pytest.raises(ToolError, match="text parameter is required"):
-            await tool(action="type", text=None)
+            await tool(action="write", text=None)
 
         # Test press without keys
         with pytest.raises(ToolError, match="keys parameter is required"):

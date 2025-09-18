@@ -97,7 +97,6 @@ class TestBaseMCPAgent:
         assert agent.disallowed_tools == []
         assert agent.initial_screenshot is True
         assert agent.system_prompt is not None  # Default system prompt is set
-        assert agent.lifecycle_tools == []
 
     def test_init_with_params(self):
         """Test initialization with custom parameters."""
@@ -108,7 +107,6 @@ class TestBaseMCPAgent:
             disallowed_tools=["bad_tool"],
             initial_screenshot=True,
             system_prompt="Custom prompt",
-            lifecycle_tools=["custom_setup", "custom_eval"],
         )
 
         assert agent.mcp_client == client
@@ -116,7 +114,6 @@ class TestBaseMCPAgent:
         assert agent.disallowed_tools == ["bad_tool"]
         assert agent.initial_screenshot is True
         assert agent.system_prompt == "Custom prompt"
-        assert agent.lifecycle_tools == ["custom_setup", "custom_eval"]
 
     @pytest.mark.asyncio
     async def test_init_no_client_no_task(self):
@@ -631,7 +628,6 @@ class TestMCPAgentExtended:
         # Lifecycle tools are specified by name, not as objects
         agent = MockAgentExtended(
             mcp_client=mock_client,
-            lifecycle_tools=["screenshot"],  # Use tool name
             responses=[{"role": "assistant", "content": "Done", "tool_calls": []}],
         )
 

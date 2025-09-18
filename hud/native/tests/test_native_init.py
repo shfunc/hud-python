@@ -41,7 +41,7 @@ class TestNativeInit:
         assert "compare" in tool_names
 
         # Should have the submit tool
-        assert "submit" in tool_names
+        assert "response" in tool_names
 
         # Should have all the alias tools
         expected_aliases = [

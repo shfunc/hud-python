@@ -529,6 +529,7 @@ def sanity_check(
     old_logp: torch.Tensor | None,
     ref_logp: torch.Tensor | None,
 ) -> None:
+    assert "assistant_mask" in sample.inputs  # noqa: S101
     m = sample.inputs["assistant_mask"]
     if old_logp is None or ref_logp is None:
         return

@@ -96,7 +96,7 @@ class MCPAgent(ABC):
             self.console.set_verbose(True)
 
         # User filtering
-        self.allowed_tools = allowed_tools or []
+        self.allowed_tools = allowed_tools
         self.disallowed_tools = disallowed_tools or []
 
         # Task filtering
@@ -186,6 +186,8 @@ class MCPAgent(ABC):
 
         if isinstance(prompt_or_task, dict):
             prompt_or_task = Task(**prompt_or_task)
+        elif not isinstance(prompt_or_task, str) and not isinstance(prompt_or_task, Task):
+            raise TypeError(f"prompt_or_task must be str or Task, got {type(prompt_or_task)}")
 
         try:
             # Establish the connection with the MCP server/Environment
@@ -200,8 +202,6 @@ class MCPAgent(ABC):
                 context = text_to_blocks(prompt_or_task)
                 return await self._run_context(context, max_steps=max_steps)
 
-            else:
-                raise TypeError(f"prompt_or_task must be str or Task, got {type(prompt_or_task)}")
         except Exception as e:
             # Always return a Trace object for any exception
             if self._is_connection_error(e):
