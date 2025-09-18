@@ -5,9 +5,10 @@ tools for building, evaluating, and training AI agents.
 
 from __future__ import annotations
 
-from .telemetry import clear_trace, create_job, get_trace, instrument, job, trace
+from .telemetry import Trace, clear_trace, create_job, get_trace, instrument, job, trace
 
 __all__ = [
+    "Trace",
     "clear_trace",
     "create_job",
     "get_trace",

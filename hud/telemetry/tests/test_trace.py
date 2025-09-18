@@ -23,7 +23,7 @@ class TestTraceAPI:
 
             with trace("test-trace") as task_run_id:
                 # Should use placeholder ID for custom backends
-                assert task_run_id == "custom-otlp-trace"
+                assert task_run_id.id == "custom-otlp-trace"
 
     def test_trace_with_enabled_telemetry_and_api_key(self):
         """Test trace behavior when telemetry is enabled with API key."""
@@ -39,7 +39,7 @@ class TestTraceAPI:
 
             with trace("test-trace") as task_run_id:
                 # Should use generated UUID
-                assert task_run_id == "mock-uuid-123"
+                assert task_run_id.id == "mock-uuid-123"
 
     def test_trace_with_no_api_key(self):
         """Test trace behavior with no API key (custom backend scenario)."""
@@ -60,4 +60,4 @@ class TestTraceAPI:
 
             with trace("test-trace") as task_run_id:
                 # Should use custom backend placeholder
-                assert task_run_id == "custom-otlp-trace"
+                assert task_run_id.id == "custom-otlp-trace"

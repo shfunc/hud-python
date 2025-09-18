@@ -1,9 +1,9 @@
 [project]
 name = "hud-python"
-version = "0.4.28"
+version = "0.4.29"
 description = "SDK for the HUD platform."
 readme = "README.md"
-requires-python = ">=3.11, <3.14"
+requires-python = ">=3.11, <3.13"
 authors = [
 { name = "HUD SDK", email = "founders@hud.so" },
 ]
@@ -30,7 +30,7 @@ dependencies = [
     "opentelemetry-instrumentation-mcp==0.47.0",
     "opentelemetry-api>=1.34.1",
     "opentelemetry-sdk>=1.34.1",
-    "opentelemetry-exporter-otlp-proto-http>=1.34.1",
+    "opentelemetry-exporter-otlp-proto-http>=1.34.1"
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -59,7 +59,10 @@ exclude = [
     "environments/",
     "docs/",
     "examples/",
-    "/rl/",  # Only exclude top-level rl directory, not hud/cli/rl/
+    "**/checkpoints/",
+    "**/*.safetensors",
+    "**/*.ckpt",
+    "**/*.pth",
 ]
 
 [tool.hud.clone]
@@ -82,7 +85,7 @@ allow-direct-references = true
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "hud/**",  # Include all files under hud/, including hud/cli/rl/
+    "hud/**",
     "README.md",
     "LICENSE",
     "pyproject.toml"
@@ -90,6 +93,9 @@ include = [
 exclude = [
     "*/tests/",
     "*/__pycache__/",
+    "**/*.safetensors",
+    "**/*.ckpt",
+    "**/*.pth",
     "*.pyc",
     "*.pyo",
     "*~",
@@ -126,6 +132,16 @@ agent = [
 ]
 
 agents = ["hud-python[agent]"]
+
+rl = [
+    "hud-python[agent]",
+    "peft>=0.17.1",
+    "vllm==0.10.1.1",
+    "bitsandbytes>=0.41.0 ; sys_platform == 'linux'",  # For 8-bit optimizers (Linux only)
+    "liger-kernel>=0.5.0 ; sys_platform == 'linux'",  # Optimized Triton kernels for LLM training (Linux only)
+    # Note: flash-attn is recommended but optional
+    # Install separately with: uv pip install flash-attn --no-build-isolation
+]
 
 # Development dependencies - includes testing, linting, and automation tools
 dev = [

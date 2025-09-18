@@ -45,7 +45,7 @@ class MCPAgent(ABC):
     `format_blocks`, and `format_tool_results`.
     """
 
-    metadata: dict[str, Any]
+    metadata: dict[str, Any] | None = None
     required_tools: ClassVar[list[str]] = []  # Tools that must be available
 
     def __init__(
@@ -54,7 +54,6 @@ class MCPAgent(ABC):
         # Filtering
         allowed_tools: list[str] | None = None,
         disallowed_tools: list[str] | None = None,
-        lifecycle_tools: list[str] | None = None,
         # Messages
         system_prompt: str = GLOBAL_SYSTEM_PROMPT,
         append_setup_output: bool = True,
@@ -74,8 +73,6 @@ class MCPAgent(ABC):
                 that provides `mcp_config`.
             allowed_tools: Names of tools to allow (None means allow all).
             disallowed_tools: Names of tools to always exclude.
-            lifecycle_tools: Tools reserved for lifecycle phases (e.g., setup,
-                evaluate). These are hidden from normal tool calling.
             system_prompt: System prompt to seed the conversation.
             append_setup_output: Whether to append setup tool output to the
                 first turn's messages.
@@ -98,10 +95,13 @@ class MCPAgent(ABC):
         if verbose:
             self.console.set_verbose(True)
 
-        # Filtering
+        # User filtering
         self.allowed_tools = allowed_tools
         self.disallowed_tools = disallowed_tools or []
-        self.lifecycle_tools = lifecycle_tools or []
+
+        # Task filtering
+        self.agent_tools = None
+        self.lifecycle_tools = []
 
         # Messages
         self.system_prompt = system_prompt
@@ -112,7 +112,6 @@ class MCPAgent(ABC):
         self._available_tools: list[types.Tool] = []
         self._tool_map: dict[str, types.Tool] = {}  # Simplified: just name to tool
         self.response_tool_name = None
-        self.initialization_complete = False
 
         # Trace
         self._auto_trace = auto_trace
@@ -131,7 +130,7 @@ class MCPAgent(ABC):
 
             self.mcp_client = MCPClient(mcp_config=task.mcp_config)
             self._auto_created_client = True
-            self.console.info_log("Auto-created MCPClient from task.mcp_config")
+            self.console.debug("Auto-created MCPClient from task.mcp_config")
 
         # Ensure we have a client
         if self.mcp_client is None:
@@ -149,28 +148,27 @@ class MCPAgent(ABC):
 
         # If task is provided, add lifecycle tools
         if isinstance(task, Task):
+            if task.agent_tools:
+                self.agent_tools = task.agent_tools
             if task.setup_tool:
                 if isinstance(task.setup_tool, list):
                     for tool in task.setup_tool:
-                        self.lifecycle_tools.append(tool.name)
-                else:
+                        if self.agent_tools and tool.name not in self.agent_tools:
+                            self.lifecycle_tools.append(tool.name)
+                elif self.agent_tools and task.setup_tool.name not in self.agent_tools:
                     self.lifecycle_tools.append(task.setup_tool.name)
             if task.evaluate_tool:
                 if isinstance(task.evaluate_tool, list):
                     for tool in task.evaluate_tool:
-                        self.lifecycle_tools.append(tool.name)
-                else:
+                        if self.agent_tools and tool.name not in self.agent_tools:
+                            self.lifecycle_tools.append(tool.name)
+                elif self.agent_tools and task.evaluate_tool.name not in self.agent_tools:
                     self.lifecycle_tools.append(task.evaluate_tool.name)
             if task.system_prompt:
                 self.system_prompt += "\n\n" + task.system_prompt
 
         # Re-apply filtering with updated lifecycle tools
         await self._filter_tools()
-
-        num_tools = len(self._available_tools)
-        self.console.success_log(
-            f"Agent initialized with {num_tools} available tools (after filtering)"
-        )
 
     async def run(self, prompt_or_task: str | Task | dict[str, Any], max_steps: int = 10) -> Trace:
         """
@@ -188,12 +186,12 @@ class MCPAgent(ABC):
 
         if isinstance(prompt_or_task, dict):
             prompt_or_task = Task(**prompt_or_task)
+        elif not isinstance(prompt_or_task, str) and not isinstance(prompt_or_task, Task):
+            raise TypeError(f"prompt_or_task must be str or Task, got {type(prompt_or_task)}")
 
         try:
             # Establish the connection with the MCP server/Environment
-            if not self.initialization_complete:
-                await self.initialize(prompt_or_task)
-                self.initialization_complete = True
+            await self.initialize(prompt_or_task)
 
             # Handle Task objects with full lifecycle
             if isinstance(prompt_or_task, Task):
@@ -204,8 +202,6 @@ class MCPAgent(ABC):
                 context = text_to_blocks(prompt_or_task)
                 return await self._run_context(context, max_steps=max_steps)
 
-            else:
-                raise TypeError(f"prompt_or_task must be str or Task, got {type(prompt_or_task)}")
         except Exception as e:
             # Always return a Trace object for any exception
             if self._is_connection_error(e):
@@ -240,8 +236,6 @@ class MCPAgent(ABC):
         Returns:
             Trace with reward from evaluation
         """
-        prompt_result = None
-
         try:
             # Setup phase
             start_context: list[types.ContentBlock] = []
@@ -255,7 +249,13 @@ class MCPAgent(ABC):
                 self.console.progress_log(f"Setting up tool phase: {task.setup_tool}")
                 results = await self.call_tools(task.setup_tool)
                 if any(result.isError for result in results):
-                    raise RuntimeError(f"{results}")
+                    return Trace(
+                        reward=0.0,
+                        done=True,
+                        content=f"Setup tool failed: {results}",
+                        isError=True,
+                        task=task,
+                    )
 
                 if self.append_setup_output and isinstance(results[0].content, list):
                     start_context.extend(results[0].content)
@@ -268,13 +268,12 @@ class MCPAgent(ABC):
         except Exception as e:
             self.console.error_log(f"Task execution failed: {e}")
             # Create an error result but don't return yet - we still want to evaluate
-            prompt_result = Trace(reward=0.0, done=True, content=str(e), isError=True)
+            prompt_result = Trace(reward=0.0, done=True, content=str(e), isError=True, task=task)
             prompt_result.populate_from_context()
 
         # Always evaluate if we have evaluate tool, regardless of errors
         if task.evaluate_tool is not None:
             try:
-                self.console.progress_log(f"Evaluating tool phase: {task.evaluate_tool}")
                 results = await self.call_tools(task.evaluate_tool)
 
                 if any(result.isError for result in results):
@@ -286,18 +285,24 @@ class MCPAgent(ABC):
                             done=True,
                             content="Task failed before evaluation",
                             isError=True,
+                            task=task,
                         )
                     prompt_result.reward = 0.0  # Default to 0 on error
                 else:
                     # Extract reward and content from evaluation
                     if results:
                         reward = find_reward(results[0])
+                        self.console.info_log(f"Eval: {reward:.4f} {task.evaluate_tool}")
                         eval_content = find_content(results[0])
 
                         # Update the prompt result with evaluation reward
                         if prompt_result is None:
                             prompt_result = Trace(
-                                reward=reward, done=True, content=eval_content or "", isError=False
+                                reward=reward,
+                                done=True,
+                                content=eval_content or "",
+                                isError=False,
+                                task=task,
                             )
                         else:
                             prompt_result.reward = reward
@@ -316,14 +321,16 @@ class MCPAgent(ABC):
                 # Ensure we have a result even if evaluation failed
                 if prompt_result is None:
                     prompt_result = Trace(
-                        reward=0.0, done=True, content=f"Evaluation failed: {e}", isError=True
+                        reward=0.0,
+                        done=True,
+                        content=f"Evaluation failed: {e}",
+                        isError=True,
+                        task=task,
                     )
 
-        return (
-            prompt_result
-            if prompt_result
-            else Trace(reward=0.0, done=True, content="No result available", isError=True)
-        )
+        prompt_result.task = task
+
+        return prompt_result
 
     async def _run_context(
         self, context: list[types.ContentBlock], *, max_steps: int = 10
@@ -388,7 +395,11 @@ class MCPAgent(ABC):
 
                     # 2. Execute tools
                     tool_calls = response.tool_calls
+                    for tool_call in tool_calls:
+                        self.console.info_log(f"{tool_call}")
                     tool_results = await self.call_tools(tool_calls)
+                    for tool_result in tool_results:
+                        self.console.info_log(f"{tool_result}")
 
                     # 3. Format tool results and add to messages
                     tool_messages = await self.format_tool_results(tool_calls, tool_results)
@@ -422,13 +433,23 @@ class MCPAgent(ABC):
             error = str(e)
 
         # Build result
-        trace_result = Trace(
-            reward=0.0,  # Default - will be set by task evaluation if applicable
-            done=True,
-            content=final_response.content if final_response else None,
-            isError=error is not None,
-            info={"error": error} if error else {},
-        )
+        if error is not None or (
+            final_response and hasattr(final_response, "isError") and final_response.isError
+        ):
+            is_error = True
+        else:
+            is_error = False
+
+        # Ensure all parameters are the correct type
+        trace_params = {
+            "reward": 0.0,
+            "done": True,
+            "messages": messages,
+            "content": final_response.content if final_response else error,
+            "isError": is_error,
+            "info": {"error": error} if error else {},
+        }
+        trace_result = Trace(**trace_params)
 
         # Populate trace steps from current context
         trace_result.populate_from_context()
@@ -474,16 +495,14 @@ class MCPAgent(ABC):
         return results
 
     @abstractmethod
-    async def get_system_messages(self) -> list[Any]:
+    async def get_system_messages(self) -> list[types.ContentBlock]:
         """
         Get the system prompt.
         """
         raise NotImplementedError
 
     @abstractmethod
-    async def get_response(
-        self, messages: list[Any]
-    ) -> AgentResponse:  # maybe type messages as list[types.ContentBlock]
+    async def get_response(self, messages: list[Any]) -> AgentResponse:
         """
         Get response from the model including any tool calls.
 
@@ -607,6 +626,7 @@ class MCPAgent(ABC):
 
         self.console.debug(f"All tools: {[t.name for t in all_tools]}")
         self.console.debug(f"Allowed tools: {self.allowed_tools}")
+        self.console.debug(f"Agent tools: {self.agent_tools}")
         self.console.debug(f"Disallowed tools: {self.disallowed_tools}")
         self.console.debug(f"Lifecycle tools: {self.lifecycle_tools}")
 
@@ -618,6 +638,9 @@ class MCPAgent(ABC):
             if not is_lifecycle:
                 if self.allowed_tools and tool.name not in self.allowed_tools:
                     self.console.debug(f"Skipping tool '{tool.name}' - not in allowed_tools")
+                    continue
+                if self.agent_tools and tool.name not in self.agent_tools:
+                    self.console.debug(f"Skipping tool '{tool.name}' - not in agent_tools")
                     continue
                 if tool.name in self.disallowed_tools:
                     self.console.debug(f"Skipping tool '{tool.name}' - in disallowed_tools")
@@ -640,6 +663,11 @@ class MCPAgent(ABC):
                     f"Required tools not available: {missing_tools}. "
                     f"Available tools: {list(available_tool_names)}"
                 )
+
+        available_tools = self.get_available_tools()
+        self.console.info(
+            f"Agent initialized with {len(available_tools)} tools: {', '.join([t.name for t in available_tools])}"  # noqa: E501
+        )
 
     async def _maybe_submit_response(self, response: AgentResponse, messages: list[Any]) -> None:
         """Submit response through lifecycle tool if available.

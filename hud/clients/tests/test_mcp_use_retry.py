@@ -36,20 +36,20 @@ class TestRetrySession:
 
         # Check adapter configuration
         adapter = session.adapters["http://"]
-        assert adapter.max_retries.total == 5
-        assert 500 in adapter.max_retries.status_forcelist
-        assert 502 in adapter.max_retries.status_forcelist
-        assert adapter.max_retries.backoff_factor == 2.0
+        assert hasattr(adapter, "max_retries") and adapter.max_retries.total == 5  # type: ignore
+        assert 500 in adapter.max_retries.status_forcelist  # type: ignore
+        assert 502 in adapter.max_retries.status_forcelist  # type: ignore
+        assert adapter.max_retries.backoff_factor == 2.0  # type: ignore
 
     def test_retry_session_default_values(self):
         """Test retry session with default values."""
         session = create_retry_session()
 
         adapter = session.adapters["https://"]
-        assert adapter.max_retries.total == 3
-        assert 502 in adapter.max_retries.status_forcelist
-        assert 503 in adapter.max_retries.status_forcelist
-        assert 504 in adapter.max_retries.status_forcelist
+        assert adapter.max_retries.total == 3  # type: ignore
+        assert 502 in adapter.max_retries.status_forcelist  # type: ignore
+        assert 503 in adapter.max_retries.status_forcelist  # type: ignore
+        assert 504 in adapter.max_retries.status_forcelist  # type: ignore
 
 
 class TestAsyncRetryWrapper:
@@ -316,7 +316,7 @@ class TestMCPUseClientRetry:
             # Verify retry worked
             assert call_count == 2  # Failed once, then succeeded
             assert not result.isError
-            assert result.content[0].text == "Success"
+            assert result.content[0].text == "Success"  # type: ignore
 
     @pytest.mark.asyncio
     async def test_resource_read_with_retry(self):
@@ -371,7 +371,7 @@ class TestMCPUseClientRetry:
             # Verify retry worked
             assert call_count == 2  # Failed once, then succeeded
             assert result is not None
-            assert result.contents[0].text == '{"status": "ok"}'
+            assert result.contents[0].text == '{"status": "ok"}'  # type: ignore
 
 
 if __name__ == "__main__":

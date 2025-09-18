@@ -131,7 +131,6 @@ async def run_example(mode: Literal["text", "browser"], target: int) -> None:
         openai_client=openai_client,
         model_name=model_name,
         allowed_tools=allowed_tools,
-        parallel_tool_calls=False,
         append_setup_output=False,
         system_prompt=system_prompt,
     )

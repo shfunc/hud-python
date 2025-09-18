@@ -8,7 +8,7 @@ from typing import Any
 
 from datasets import Dataset
 
-from .task import Task
+from hud.types import Task
 
 logger = logging.getLogger("hud.datasets")
 

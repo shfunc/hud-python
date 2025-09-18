@@ -16,7 +16,9 @@ Color Palette:
 from __future__ import annotations
 
 import logging
-from typing import Any
+import time
+import traceback
+from typing import TYPE_CHECKING, Any, Literal, Self
 
 import questionary
 import typer
@@ -24,11 +26,14 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+if TYPE_CHECKING:
+    from rich.status import Status
 # HUD Brand Colors - Optimized for both light and dark modes
 GOLD = "rgb(192,150,12)"  # #c0960c - Primary brand color
 RED = "rgb(220,50,47)"  # Slightly muted red that works on both backgrounds
 GREEN = "rgb(133,153,0)"  # Slightly muted green that works on both backgrounds
 DIM = "bright_black"  # Grey that's visible on both light and dark backgrounds
+YELLOW = "yellow"
 TEXT = "bright_white"  # Off-white that's readable on dark, not too bright on light
 SECONDARY = "rgb(108,113,196)"  # Muted blue-purple for secondary text
 
@@ -85,7 +90,11 @@ class HUDConsole:
             stderr: If True, output to stderr (default), otherwise stdout
         """
         console = self._stderr_console if stderr else self._stdout_console
-        console.print(f"[{RED}]❌ {message}[/{RED}]")
+        tb = traceback.format_exc()
+        if "NoneType: None" not in tb:
+            console.print(f"[{RED} not bold]❌ {message}\n{tb}[/{RED} not bold]")
+        else:
+            console.print(f"[{RED} not bold]❌ {message}[/{RED} not bold]")
 
     def warning(self, message: str, stderr: bool = True) -> None:
         """Print a warning message.
@@ -95,7 +104,7 @@ class HUDConsole:
             stderr: If True, output to stderr (default), otherwise stdout
         """
         console = self._stderr_console if stderr else self._stdout_console
-        console.print(f"[rgb(181,137,0)]⚠️  {message}[/rgb(181,137,0)]")
+        console.print(f"⚠️  [{YELLOW} not bold]{message}[/{YELLOW} not bold]")
 
     def info(self, message: str, stderr: bool = True) -> None:
         """Print an info message.
@@ -105,7 +114,7 @@ class HUDConsole:
             stderr: If True, output to stderr (default), otherwise stdout
         """
         console = self._stderr_console if stderr else self._stdout_console
-        console.print(f"[{TEXT}]{message}[/{TEXT}]")
+        console.print(f"[{TEXT} not bold]{message}[/{TEXT} not bold]")
 
     def print(self, message: str, stderr: bool = True) -> None:
         """Print a message.
@@ -126,7 +135,9 @@ class HUDConsole:
             stderr: If True, output to stderr (default), otherwise stdout
         """
         console = self._stderr_console if stderr else self._stdout_console
-        console.print(f"[{DIM}]{label}[/{DIM}] [{TEXT}]{value}[/{TEXT}]")
+        console.print(
+            f"[{DIM} not bold][default]{label}[/default][/{DIM} not bold] [default]{value}[/default]"  # noqa: E501
+        )
 
     def link(self, url: str, stderr: bool = True) -> None:
         """Print an underlined link.
@@ -150,7 +161,7 @@ class HUDConsole:
         console.print(f"[{TEXT}]{json_str}[/{TEXT}]")
 
     def key_value_table(
-        self, data: dict[str, str], show_header: bool = False, stderr: bool = True
+        self, data: dict[str, str | int | float], show_header: bool = False, stderr: bool = True
     ) -> None:
         """Print a key-value table.
 
@@ -164,7 +175,7 @@ class HUDConsole:
         table.add_column("Value")
 
         for key, value in data.items():
-            table.add_row(key, value)
+            table.add_row(key, str(value))
 
         console = self._stderr_console if stderr else self._stdout_console
         console.print(table)
@@ -210,7 +221,7 @@ class HUDConsole:
             stderr: If True, output to stderr (default), otherwise stdout
         """
         console = self._stderr_console if stderr else self._stdout_console
-        console.print(f"\n[rgb(181,137,0)]💡 Hint: {hint}[/rgb(181,137,0)]")
+        console.print(f"[rgb(181,137,0)]💡 Hint: {hint}[/rgb(181,137,0)]")
 
     def status_item(
         self,
@@ -305,7 +316,7 @@ class HUDConsole:
             if response_json and not details.get("Response"):
                 details["Response JSON"] = str(response_json)
             if details:
-                self.key_value_table(details, show_header=False, stderr=stderr)
+                self.key_value_table(details, show_header=False, stderr=stderr)  # type: ignore
 
         # Structured hints, if available
         hints = getattr(error, "hints", None)
@@ -315,7 +326,7 @@ class HUDConsole:
 
                 render_hints(hints, design=self)
             except Exception as render_error:
-                self.debug(f"Failed to render hints: {render_error}")
+                self.debug_log(f"Failed to render hints: {render_error}")
 
         # Standard support hint
         self.render_support_hint(stderr=stderr)
@@ -336,9 +347,35 @@ class HUDConsole:
         else:
             self._logger.setLevel(logging.WARNING)
 
+    @property
+    def prefix(self) -> str:
+        """Get the metadata of the current file."""
+        metadata = self._logger.findCaller(stacklevel=3)
+        return f"{metadata[0]}:{metadata[1]} in {metadata[2]} | "
+
     # Logging-aware methods that check logging levels before printing
+    def log(
+        self,
+        message: str,
+        level: Literal["info", "debug", "warning", "error"] = "info",
+        stderr: bool = True,
+    ) -> None:
+        """Print a message based on the logging level."""
+        prefix = self.prefix
+        if level == "info":
+            self.info_log(f"{prefix}{message}", stderr=stderr)
+        elif level == "debug":
+            self.debug_log(f"{prefix}{message}", stderr=stderr)
+        elif level == "warning":
+            self.warning_log(f"{prefix}{message}", stderr=stderr)
+        elif level == "error":
+            self.error_log(f"{prefix}{message}", stderr=stderr)
 
     def debug(self, message: str, stderr: bool = True) -> None:
+        """Print a debug message."""
+        self.debug_log(message, stderr=stderr)
+
+    def debug_log(self, message: str, stderr: bool = True) -> None:
         """Print a debug message only if DEBUG logging is enabled.
 
         Args:
@@ -346,7 +383,7 @@ class HUDConsole:
             stderr: If True, output to stderr (default), otherwise stdout
         """
         if self._logger.isEnabledFor(logging.DEBUG):
-            self.dim_info("[DEBUG]", message, stderr=stderr)
+            self.dim_info(message, "", stderr=stderr)
 
     def info_log(self, message: str, stderr: bool = True) -> None:
         """Print an info message only if INFO logging is enabled.
@@ -367,6 +404,25 @@ class HUDConsole:
         """
         if self._logger.isEnabledFor(logging.INFO):
             self.progress_message(message, stderr=stderr)
+
+    def progress(self, initial: str = "", stderr: bool = True) -> _ProgressContext:
+        """Create a progress context manager for inline updates.
+
+        Args:
+            initial: Initial message to display
+            stderr: If True, output to stderr (default), otherwise stdout
+
+        Returns:
+            A context manager that provides update() method
+
+        Example:
+            with console.progress("Processing...") as progress:
+                for i in range(10):
+                    progress.update(f"Processing item {i+1}/10")
+        """
+        return _ProgressContext(
+            console=self._stderr_console if stderr else self._stdout_console, initial=initial
+        )
 
     def success_log(self, message: str, stderr: bool = True) -> None:
         """Print a success message only if INFO logging is enabled.
@@ -402,7 +458,7 @@ class HUDConsole:
         self,
         message: str,
         choices: list[str | dict[str, Any]] | list[str],
-        default: str | None = None,
+        default: int | None = None,
     ) -> str:
         """Interactive selection with arrow key navigation.
 
@@ -428,6 +484,7 @@ class HUDConsole:
         result = questionary.select(
             message,
             choices=q_choices,
+            default=q_choices[default] if default is not None else None,
             instruction="(Use ↑/↓ arrows, Enter to select)",
         ).ask()
 
@@ -481,6 +538,49 @@ class HUDConsole:
         else:
             return f"  [{GREEN}]✓[/{GREEN}] [{TEXT}]{content}[/{TEXT}]"
 
+    def confirm(self, message: str, default: bool = True) -> bool:
+        """Print a confirmation message.
 
-# Global hud_console instance for convenience
+        Args:
+            message: The confirmation message
+            default: If True, the default choice is True
+        """
+        return questionary.confirm(message, default=default).ask()
+
+
+# Global design instance for convenience
+class _ProgressContext:
+    """Context manager for inline progress updates."""
+
+    def __init__(self, console: Console, initial: str = "") -> None:
+        self.console = console
+        self.initial = initial
+        self.status: Status | None = None
+        self.start_time: float | None = None
+
+    def __enter__(self) -> Self:
+        self.status = self.console.status(self.initial)
+        self.status.__enter__()
+        self.start_time = time.time()
+        return self
+
+    def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+        if self.status:
+            self.status.__exit__(exc_type, exc_val, exc_tb)  # type: ignore
+
+    def update(self, message: str, with_elapsed: bool = True) -> None:
+        """Update the progress message.
+
+        Args:
+            message: New message to display
+            with_elapsed: If True, append elapsed time to message
+        """
+        if self.status:
+            if with_elapsed and self.start_time:
+                elapsed = time.time() - self.start_time
+                self.status.update(f"{message} [{elapsed:.1f}s]")
+            else:
+                self.status.update(message)
+
+
 hud_console = HUDConsole()

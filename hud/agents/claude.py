@@ -28,6 +28,7 @@ import mcp.types as types
 from hud.settings import settings
 from hud.tools.computer.settings import computer_settings
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult
+from hud.utils.hud_console import HUDConsole
 
 from .base import MCPAgent
 
@@ -78,6 +79,7 @@ class ClaudeAgent(MCPAgent):
         self.model = model
         self.max_tokens = max_tokens
         self.use_computer_beta = use_computer_beta
+        self.hud_console = HUDConsole(logger=logger)
 
         self.model_name = self.model
 
@@ -149,7 +151,7 @@ class ClaudeAgent(MCPAgent):
                 )
             else:
                 # For other types, try to cast but log a warning
-                logger.warning("Unknown content block type: %s", type(block))
+                self.hud_console.log(f"Unknown content block type: {type(block)}", level="warning")
                 anthropic_blocks.append(cast("BetaContentBlockParam", block))
 
         return [
@@ -201,7 +203,7 @@ class ClaudeAgent(MCPAgent):
                     or "request_too_large" in str(e)
                     or e.status_code == 413
                 ):
-                    logger.warning("Prompt too long, truncating message history")
+                    self.hud_console.warning("Prompt too long, truncating message history")
                     # Keep first message and last 20 messages
                     if len(current_messages) > 21:
                         current_messages = [current_messages[0], *current_messages[-20:]]
@@ -266,7 +268,7 @@ class ClaudeAgent(MCPAgent):
             # Extract Claude-specific metadata from extra fields
             tool_use_id = tool_call.id
             if not tool_use_id:
-                logger.warning("No tool_use_id found for %s", tool_call.name)
+                self.hud_console.warning(f"No tool_use_id found for {tool_call.name}")
                 continue
 
             # Convert MCP tool results to Claude format
@@ -335,7 +337,9 @@ class ClaudeAgent(MCPAgent):
             # Map Claude's "computer" back to the actual MCP tool name
             self._claude_to_mcp_tool_map["computer"] = selected_computer_tool.name
             claude_tools.append(claude_tool)
-            logger.debug("Using %s as computer tool for Claude", selected_computer_tool.name)
+            self.hud_console.debug(
+                f"Using {selected_computer_tool.name} as computer tool for Claude"
+            )
 
         # Add other non-computer tools
         for tool in self._available_tools:

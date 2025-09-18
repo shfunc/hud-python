@@ -24,12 +24,10 @@ from .debug import debug_mcp_stdio
 from .dev import run_mcp_dev_server
 
 # Import new commands
-from .hf import hf_command
 from .init import create_environment
 from .pull import pull_command
 from .push import push_command
 from .remove import remove_command
-from .rl import rl_app
 from .utils.cursor import get_cursor_config_path, list_cursor_servers, parse_cursor_config
 from .utils.logging import CaptureLogger
 
@@ -777,17 +775,16 @@ def eval(
             "If not provided, looks for task.json in current directory."
         ),
     ),
+    agent: str | None = typer.Argument(
+        None,
+        help=(
+            "Agent backend to use (claude, openai, or vllm). If not provided, will prompt interactively."  # noqa: E501
+        ),
+    ),
     full: bool = typer.Option(
         False,
         "--full",
         help="Run the entire dataset (omit for single-task debug mode)",
-    ),
-    agent: str | None = typer.Option(
-        None,
-        "--agent",
-        help=(
-            "Agent backend to use (claude or openai). If not provided, will prompt interactively."
-        ),
     ),
     model: str | None = typer.Option(
         None,
@@ -829,8 +826,19 @@ def eval(
         "--verbose",
         help="Enable verbose output from the agent",
     ),
+    vllm_base_url: str | None = typer.Option(
+        None,
+        "--vllm-base-url",
+        help="Base URL for vLLM server (when using --agent vllm)",
+    ),
+    group_size: int = typer.Option(
+        1,
+        "--group-size",
+        help="Number of times to run each task (similar to RL training)",
+    ),
 ) -> None:
     """🚀 Run evaluation on datasets or individual tasks with agents."""
+    from hud.settings import settings
     from hud.utils.hud_console import HUDConsole
 
     hud_console = HUDConsole()
@@ -884,32 +892,69 @@ def eval(
             source = file_choice
             hud_console.success(f"Selected: {source}")
 
-    # If no agent specified, prompt for selection
-    if agent is None:
-        agent = hud_console.select(
-            "Select an agent to use:",
-            choices=[
-                {"name": "Claude 4 Sonnet", "value": "claude"},
-                {"name": "OpenAI Computer Use", "value": "openai"},
-            ],
-            default="Claude 4 Sonnet",
-        )
-
-    # Validate agent choice
-    valid_agents = ["claude", "openai"]
-    if agent not in valid_agents:
-        hud_console.error(f"Invalid agent: {agent}. Must be one of: {', '.join(valid_agents)}")
-        raise typer.Exit(1)
-
     # Import eval_command lazily to avoid importing agent dependencies
     try:
-        from .eval import eval_command
+        from .eval import eval_command, get_available_models
     except ImportError as e:
         hud_console.error(
             "Evaluation dependencies are not installed. "
             "Please install with: pip install 'hud-python[agent]'"
         )
         raise typer.Exit(1) from e
+
+    # If no agent specified, fetch available models and prompt for selection
+    base_model = None
+    if agent is None:
+        # Get available HUD models first
+        hud_models = get_available_models()
+
+        # Build choices starting with HUD models
+        choices = []
+
+        # Add HUD models as agent choices
+        for hud_model in hud_models:
+            model_name = hud_model["name"]
+            base_model = hud_model["base_model"]
+            vllm_status = " ⚡" if hud_model.get("vllm_url") else ""
+            choices.append({"name": f"{model_name}{vllm_status}", "value": f"{model_name}"})
+
+        # Add standard agent choices
+        choices.extend(
+            [
+                {"name": "Claude 4 Sonnet", "value": "claude"},
+                {"name": "OpenAI Computer Use", "value": "openai"},
+                {"name": "vLLM (Local Server)", "value": "vllm"},
+            ]
+        )
+
+        agent = hud_console.select("Select an agent to use:", choices=choices, default=0)
+
+    # Handle HUD model selection
+    if agent and agent not in ["claude", "openai", "vllm"]:
+        # Find remote model name
+        model = agent
+        if not vllm_base_url:
+            vllm_base_url = f"{settings.hud_rl_url}/models/{model}/vllm"
+
+        # Set model to base model for the vllm endpoint
+        if not base_model:
+            hud_models = get_available_models()
+            for hud_model in hud_models:
+                if hud_model["name"] == model:
+                    base_model = hud_model["base_model"]
+                    break
+        if not base_model:
+            hud_console.error(f"Model {model} not found")
+            raise typer.Exit(1)
+        model = base_model
+        agent = "vllm"  # Use vLLM backend for HUD models
+        hud_console.info(f"Using HUD model: {model} (trained on {base_model})")
+
+    # Validate agent choice
+    valid_agents = ["claude", "openai", "vllm"]
+    if agent not in valid_agents:
+        hud_console.error(f"Invalid agent: {agent}. Must be one of: {', '.join(valid_agents)}")
+        raise typer.Exit(1)
 
     # Run the command
     eval_command(
@@ -924,40 +969,117 @@ def eval(
         max_workers=max_workers,
         max_concurrent_per_worker=max_concurrent_per_worker,
         verbose=verbose,
+        vllm_base_url=vllm_base_url,
+        group_size=group_size,
     )
 
 
-# Add the RL subcommand group
-app.add_typer(rl_app, name="rl")
+@app.command()
+def get(
+    dataset_name: str = typer.Argument(
+        ..., help="HuggingFace dataset name (e.g., 'hud-evals/browser-2048-tasks')"
+    ),
+    split: str = typer.Option(
+        "train", "--split", "-s", help="Dataset split to download (train/test/validation)"
+    ),
+    output: Path | None = typer.Option(  # noqa: B008
+        None, "--output", "-o", help="Output filename (defaults to dataset_name.jsonl)"
+    ),
+    limit: int | None = typer.Option(
+        None, "--limit", "-l", help="Limit number of examples to download"
+    ),
+    format: str = typer.Option(
+        "json",
+        "--format",
+        "-f",
+        help="Output format: json (list) or jsonl (one task per line)",
+    ),
+) -> None:
+    """📥 Download a HuggingFace dataset and save it as JSONL."""
+    from .get import get_command
+
+    get_command(
+        dataset_name=dataset_name,
+        split=split,
+        output=output,
+        limit=limit,
+        format=format,
+    )
 
 
 @app.command()
-def hf(
-    tasks_file: Path | None = typer.Argument(  # noqa: B008
-        None, help="JSON file containing tasks (auto-detected if not provided)"
+def rl(
+    tasks_file: str | None = typer.Argument(
+        None,
+        help=(
+            "Path to tasks file (JSON/JSONL) or HuggingFace dataset name. "
+            "If not provided, looks for tasks.json or tasks.jsonl in current directory."
+        ),
     ),
-    name: str | None = typer.Option(
-        None, "--name", "-n", help="Dataset name (e.g., 'my-org/my-dataset')"
+    model: str | None = typer.Argument(
+        None,
+        help="Model to train (default: interactive selection)",
     ),
-    push: bool = typer.Option(True, "--push/--no-push", help="Push to HuggingFace Hub"),
-    private: bool = typer.Option(False, "--private", help="Make dataset private on Hub"),
-    update_lock: bool = typer.Option(
-        True, "--update-lock/--no-update-lock", help="Update hud.lock.yaml"
+    config_file: Path | None = typer.Option(  # noqa: B008
+        None,
+        "--config",
+        "-c",
+        help="Path to existing configuration file",
     ),
-    token: str | None = typer.Option(None, "--token", help="HuggingFace API token"),
+    output_dir: str = typer.Option(
+        "checkpoints",
+        "--output-dir",
+        "-o",
+        help="Output directory for checkpoints",
+    ),
+    restart: bool = typer.Option(
+        False,
+        "--restart",
+        help="Restart the vLLM server before training",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Enable verbose output",
+    ),
+    local: bool = typer.Option(
+        False,
+        "--local",
+        help="Run training locally instead of using remote API server",
+    ),
+    no_ddp: bool = typer.Option(
+        False,
+        "--no-ddp",
+        help="Disable DDP even with multiple GPUs",
+    ),
+    ddp_gpus: str | None = typer.Option(
+        None,
+        "--ddp-gpus",
+        help="Specific GPUs for DDP (e.g., '0,1,2,3')",
+    ),
+    vllm_gpu: int | None = typer.Option(
+        None,
+        "--vllm-gpu",
+        help="Specific GPU for vLLM server",
+    ),
 ) -> None:
-    """📊 Convert tasks to HuggingFace dataset format.
+    """🎯 Run GRPO reinforcement learning training on tasks."""
+    # Import from the rl module
+    from .rl import rl_command
 
-    Automatically detects task files if not specified.
-    Suggests dataset name based on environment if not provided.
-
-    Examples:
-        hud hf                      # Auto-detect tasks and suggest name
-        hud hf tasks.json           # Use specific file, suggest name
-        hud hf --name my-org/my-tasks  # Auto-detect tasks, use name
-        hud hf tasks.json --name hud-evals/web-tasks --private
-    """
-    hf_command(tasks_file, name, push, private, update_lock, token)
+    rl_command(
+        tasks_file=tasks_file,
+        model=model,
+        config_file=config_file,
+        output_dir=output_dir,
+        restart=restart,
+        verbose=verbose,
+        local=local,
+        no_ddp=no_ddp,
+        ddp_gpus=ddp_gpus,
+        vllm_gpu=vllm_gpu,
+    )
 
 
 def main() -> None:
@@ -990,12 +1112,20 @@ def main() -> None:
             console.print("  4. Share your environment: [cyan]hud push[/cyan]")
             console.print("  5. Get shared environments: [cyan]hud pull <org/name:tag>[/cyan]")
             console.print("  6. Run and test: [cyan]hud run <image>[/cyan]")
-            console.print("\n[yellow]RL Training:[/yellow]")
-            console.print("  1. Generate config: [cyan]hud rl init my-env:latest[/cyan]")
+            console.print("\n[yellow]Datasets & RL Training:[/yellow]")
+            console.print("  1. Get dataset: [cyan]hud get hud-evals/browser-2048-tasks[/cyan]")
             console.print(
                 "  2. Create dataset: [cyan]hud hf tasks.json --name my-org/my-tasks[/cyan]"
             )
-            console.print("  3. Start training: [cyan]hud rl --model Qwen/Qwen2.5-3B[/cyan]\n")
+            console.print(
+                "  3. Start training: [cyan]hud rl browser-2048-tasks.jsonl --local[/cyan]"
+            )
+            console.print(
+                "  4. Custom model: [cyan]hud rl tasks.jsonl --model meta-llama/Llama-3.2-3B --local[/cyan]"  # noqa: E501
+            )
+            console.print(
+                "  5. Restart server: [cyan]hud rl tasks.jsonl --restart --local[/cyan]\n"
+            )
 
         app()
     except typer.Exit as e:

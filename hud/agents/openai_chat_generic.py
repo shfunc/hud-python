@@ -23,6 +23,7 @@ import mcp.types as types
 
 from hud import instrument
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult
+from hud.utils.hud_console import HUDConsole
 
 from .base import MCPAgent
 
@@ -43,7 +44,6 @@ class GenericOpenAIChatAgent(MCPAgent):
         *,
         openai_client: AsyncOpenAI,
         model_name: str = "gpt-4o-mini",
-        parallel_tool_calls: bool = False,
         completion_kwargs: dict[str, Any] | None = None,
         **agent_kwargs: Any,
     ) -> None:
@@ -51,17 +51,22 @@ class GenericOpenAIChatAgent(MCPAgent):
         super().__init__(**agent_kwargs)
         self.oai = openai_client
         self.model_name = model_name
-        self.parallel_tool_calls = parallel_tool_calls
         self.completion_kwargs: dict[str, Any] = completion_kwargs or {}
-        self.conversation_history = []
+        self.mcp_schemas = []
+        self.hud_console = HUDConsole(logger=logger)
 
     @staticmethod
     def _oai_to_mcp(tool_call: Any) -> MCPToolCall:  # type: ignore[valid-type]
         """Convert an OpenAI ``tool_call`` to :class:`MCPToolCall`."""
+        args = json.loads(tool_call.function.arguments or "{}")
+        if isinstance(args, list):
+            args = args[0]
+        if not isinstance(args, dict):
+            args = {}
         return MCPToolCall(
             id=tool_call.id,
             name=tool_call.function.name,
-            arguments=json.loads(tool_call.function.arguments or "{}"),
+            arguments=args,
         )
 
     async def get_system_messages(self) -> list[Any]:
@@ -177,45 +182,65 @@ class GenericOpenAIChatAgent(MCPAgent):
         # Convert MCP tool schemas to OpenAI format
         mcp_schemas = self.get_tool_schemas()
 
-        protected_keys = {"model", "messages", "tools", "parallel_tool_calls"}
+        protected_keys = {"model", "messages", "tools"}
         extra = {k: v for k, v in (self.completion_kwargs or {}).items() if k not in protected_keys}
 
-        response = await self.oai.chat.completions.create(
-            model=self.model_name,
-            messages=messages,
-            tools=cast("list[ChatCompletionToolParam]", mcp_schemas),
-            parallel_tool_calls=self.parallel_tool_calls,
-            **extra,
-        )
+        try:
+            response = await self.oai.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                tools=cast("list[ChatCompletionToolParam]", mcp_schemas),
+                **extra,
+            )
+        except Exception as e:
+            error_content = f"Error getting response {e}"
+            if "Invalid JSON" in str(e):
+                error_content = "Invalid JSON, response was truncated"
+            self.hud_console.warning_log(error_content)
+
+            return AgentResponse(
+                content=error_content,
+                tool_calls=[],
+                done=True,
+                isError=True,
+                raw=None,
+            )
 
         choice = response.choices[0]
         msg = choice.message
-
         assistant_msg: dict[str, Any] = {"role": "assistant"}
 
         if msg.content:
             assistant_msg["content"] = msg.content
 
         if msg.tool_calls:
-            assistant_msg["tool_calls"] = msg.tool_calls
+            serialized_tool_calls = []
+            for tc in msg.tool_calls:
+                serialized_tc = {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                }
+                serialized_tool_calls.append(serialized_tc)
+            assistant_msg["tool_calls"] = serialized_tool_calls
 
         messages.append(assistant_msg)
-
-        # Store the complete conversation history
-        self.conversation_history = messages.copy()
 
         tool_calls = []
         if msg.tool_calls:
             for tc in msg.tool_calls:
                 if tc.function.name is not None:  # type: ignore
-                    tool_calls.append(self._oai_to_mcp(tc))
-                    if not self.parallel_tool_calls:
-                        break
+                    tool_calls.extend(self._oai_to_mcp(tc))
+
+        # Only stop on length (token limit), never on "stop"
+        done = choice.finish_reason == "length"
+        if done:
+            self.hud_console.info_log(f"Done decision: finish_reason={choice.finish_reason}")
 
         return AgentResponse(
             content=msg.content or "",
             tool_calls=tool_calls,
-            done=choice.finish_reason in ("stop", "length"),
+            done=done,
             raw=response,  # Include raw response for access to Choice objects
         )
 
@@ -230,15 +255,15 @@ class GenericOpenAIChatAgent(MCPAgent):
         When images are present, we return both a tool message and a user message.
         """
         rendered: list[dict[str, Any]] = []
+
+        # Separate text and image content
+        image_parts = []
         for call, res in zip(tool_calls, tool_results, strict=False):
             # Use structuredContent.result if available, otherwise use content
-            items = res.content
-            if res.structuredContent and isinstance(res.structuredContent, dict):
-                items = res.structuredContent.get("result", res.content)
-
-            # Separate text and image content
             text_parts = []
-            image_parts = []
+            items = res.content
+            if not res.content and res.structuredContent:
+                items = [res.structuredContent.get("result", res.content)]
 
             for item in items:
                 if isinstance(item, dict):
@@ -272,18 +297,18 @@ class GenericOpenAIChatAgent(MCPAgent):
                 }
             )
 
-            # If there are images, add them as a separate user message
-            if image_parts:
-                # Add a user message with the images
-                content_with_images = [
-                    {"type": "text", "text": "Tool returned the following:"},
-                    *image_parts,
-                ]
-                rendered.append(
-                    {
-                        "role": "user",
-                        "content": content_with_images,
-                    }
-                )
+        # If there are images, add them as a separate user message
+        if image_parts:
+            # Add a user message with the images
+            content_with_images = [
+                {"type": "text", "text": "Tool returned the following:"},
+                image_parts[-1],
+            ]
+            rendered.append(
+                {
+                    "role": "user",
+                    "content": content_with_images,
+                }
+            )
 
         return rendered

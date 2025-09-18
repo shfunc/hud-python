@@ -156,7 +156,7 @@ class TestOperatorAgent:
         messages = [{"prompt": "What's on the screen?", "screenshot": None}]
         response = await agent.get_response(messages)
 
-        assert response.content == "I can see the screen content."
+        assert response.content[0].text == "I can see the screen content."
         assert response.done is True
 
     @pytest.mark.asyncio

@@ -89,6 +89,46 @@ class Job:
             except Exception as e:
                 logger.warning("Failed to update job status: %s", e)
 
+    async def log(self, metrics: dict[str, Any]) -> None:
+        """Log metrics to the job.
+
+        Args:
+            metrics: Dictionary of metric name to value pairs
+
+        Example:
+            await job.log({"loss": 0.5, "accuracy": 0.95, "epoch": 1})
+        """
+        if settings.telemetry_enabled:
+            try:
+                await make_request(
+                    method="POST",
+                    url=f"{settings.hud_telemetry_url}/jobs/{self.id}/log",
+                    json={"metrics": metrics, "timestamp": datetime.now(UTC).isoformat()},
+                    api_key=settings.api_key,
+                )
+            except Exception as e:
+                logger.warning("Failed to log metrics to job: %s", e)
+
+    def log_sync(self, metrics: dict[str, Any]) -> None:
+        """Synchronously log metrics to the job.
+
+        Args:
+            metrics: Dictionary of metric name to value pairs
+
+        Example:
+            job.log_sync({"loss": 0.5, "accuracy": 0.95, "epoch": 1})
+        """
+        if settings.telemetry_enabled:
+            try:
+                make_request_sync(
+                    method="POST",
+                    url=f"{settings.hud_telemetry_url}/jobs/{self.id}/log",
+                    json={"metrics": metrics, "timestamp": datetime.now(UTC).isoformat()},
+                    api_key=settings.api_key,
+                )
+            except Exception as e:
+                logger.warning("Failed to log metrics to job: %s", e)
+
     def __repr__(self) -> str:
         return f"Job(id={self.id!r}, name={self.name!r}, status={self.status!r})"
 
@@ -225,7 +265,10 @@ def job(
 
 
 def create_job(
-    name: str, metadata: dict[str, Any] | None = None, dataset_link: str | None = None
+    name: str,
+    metadata: dict[str, Any] | None = None,
+    dataset_link: str | None = None,
+    job_id: str | None = None,
 ) -> Job:
     """Create a job without using context manager.
 
@@ -235,7 +278,7 @@ def create_job(
         name: Human-readable job name
         metadata: Optional metadata dictionary
         dataset_link: Optional HuggingFace dataset identifier (e.g. "hud-evals/SheetBench-50")
-
+        job_id: Optional job ID (auto-generated if not provided)
     Returns:
         Job: The created job object
 
@@ -248,7 +291,7 @@ def create_job(
         finally:
             await job.update_status("completed")
     """
-    job_id = str(uuid.uuid4())
+    job_id = job_id or str(uuid.uuid4())
     return Job(job_id, name, metadata, dataset_link)
 
 

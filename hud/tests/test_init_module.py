@@ -21,6 +21,7 @@ class TestInitModule:
         import hud
 
         expected = [
+            "Trace",
             "clear_trace",
             "create_job",
             "get_trace",
