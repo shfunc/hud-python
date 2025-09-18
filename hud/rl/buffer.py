@@ -272,6 +272,43 @@ class ReplayBuffer(Buffer[Trace]):
                     homogeneous.append(extreme)
                 needed -= 1
 
+            # Replacement step: swap in earlier traces to increase reward spread
+            pool = earlier_traces_by_task.get(target_tid, deque())
+            if pool:
+                # Log pool stats
+                pool_vals = [float(getattr(tr, "reward", 0.0) or 0.0) for tr in list(pool)]
+                if pool_vals:
+                    pool_mean = sum(pool_vals) / len(pool_vals)
+                    pool_var = sum((v - pool_mean) * (v - pool_mean) for v in pool_vals) / len(pool_vals)
+                    hud_console.info(
+                        f"[group-sampler] Group {g_idx}: earlier-pool size={len(pool_vals)} mean={pool_mean:.4f} std={(pool_var ** 0.5):.4f}"
+                    )
+
+                # Decide how many to replace (up to 1/4 of group, at least 1)
+                replace_k = max(1, self.group_size // 4)
+                replace_k = min(replace_k, len(pool), self.group_size)
+
+                if replace_k > 0:
+                    mu = current_mean()
+                    # Select replacement candidates from pool farthest from current mean
+                    pool_list = list(pool)
+                    pool_indices = list(range(len(pool_list)))
+                    pool_indices.sort(key=lambda i: abs((float(getattr(pool_list[i], "reward", 0.0) or 0.0)) - mu), reverse=True)
+                    chosen_pool_idx = set(pool_indices[:replace_k])
+                    replacements = [pool_list[i] for i in pool_indices[:replace_k]]
+
+                    # Remove chosen from pool deque
+                    remaining = [tr for i, tr in enumerate(pool_list) if i not in chosen_pool_idx]
+                    earlier_traces_by_task[target_tid] = deque(remaining)
+
+                    # Select current group positions closest to mean to replace
+                    group_indices = list(range(len(homogeneous)))
+                    group_indices.sort(key=lambda i: abs((float(getattr(homogeneous[i], "reward", 0.0) or 0.0)) - mu))
+                    target_positions = group_indices[:replace_k]
+
+                    for pos, new_tr in zip(target_positions, replacements, strict=False):
+                        homogeneous[pos] = new_tr
+
             # Validate homogeneity
             if any(getattr(t.task, "id", "NA") != target_tid for t in homogeneous):
                 raise RuntimeError(f"Group {g_idx} is not homogeneous after sampling")

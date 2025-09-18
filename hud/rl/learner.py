@@ -255,11 +255,11 @@ class GRPOLearner:
                     global_skip = torch.zeros(1, device=self.device)
 
                     for s_idx, sample_minibatch in enumerate(group):
-                        self.log(f"{group_idx} {sample_minibatch.inputs['assistant_mask'].sum()}")
-                        mini_updated = sample_minibatch.inputs["assistant_mask"].sum() > 0
+                        # self.log(f"{group_idx} {sample_minibatch.inputs['assistant_mask'].sum()}")
+                        # mini_updated = sample_minibatch.inputs["assistant_mask"].sum() > 0
 
                         # Update mini_updated globally
-                        self.log(f"{group_idx} Mini updated: {mini_updated}")
+                        # self.log(f"{group_idx} Mini updated: {mini_updated}")
                         
                         # Do not sync until the last minibatch
                         if s_idx < len(group) - 1 and self.world_size > 1:

@@ -405,7 +405,7 @@ def batch_training_samples(samples: list[TrainingSample]) -> list[TrainingSample
         return []
 
     for s in samples:
-        if (s.inputs['assistant_mask'].sum() == 0 or s.advantage == 0.0) and len(samples) > 1:
+        if ('assistant_mask' not in s.inputs or s.inputs['assistant_mask'].sum() == 0 or s.advantage == 0.0) and len(samples) > 1:
             hud_console.info("Removing sample with zero advantage.")
             samples.remove(s)
 
