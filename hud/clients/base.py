@@ -5,22 +5,21 @@ from __future__ import annotations
 import json
 import logging
 from abc import abstractmethod
-from typing import Any, Protocol, overload, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, overload, runtime_checkable
 
-import mcp.types as types
 from mcp.types import Implementation
 
 from hud.shared.exceptions import HudAuthenticationError, HudException
 from hud.types import MCPToolCall, MCPToolResult
+from hud.utils.hud_console import HUDConsole
 from hud.utils.mcp import setup_hud_telemetry
 from hud.version import __version__ as hud_version
-from hud.utils.hud_console import HUDConsole
 
+if TYPE_CHECKING:
+    import mcp.types as types
 logger = logging.getLogger(__name__)
 
 hud_console = HUDConsole(logger=logger)
-
-
 
 
 @runtime_checkable
@@ -293,7 +292,9 @@ class BaseHUDClient(AgentMCPClient):
                         hud_console.debug(f"      {status_icon} {service}: {status}")
 
                 if self.verbose:
-                    hud_console.debug(f"Full telemetry data:\n{json.dumps(telemetry_data, indent=2)}")
+                    hud_console.debug(
+                        f"Full telemetry data:\n{json.dumps(telemetry_data, indent=2)}"
+                    )
         except Exception as e:
             # Telemetry is optional
             if self.verbose:

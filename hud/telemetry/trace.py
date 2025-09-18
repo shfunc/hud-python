@@ -43,10 +43,10 @@ class Trace:
 
     async def log(self, metrics: dict[str, Any]) -> None:
         """Log metrics to this trace.
-        
+
         Args:
             metrics: Dictionary of metric name to value pairs
-            
+
         Example:
             await trace.log({"step": 1, "loss": 0.5, "accuracy": 0.92})
         """
@@ -60,13 +60,13 @@ class Trace:
                 )
             except Exception as e:
                 logger.warning("Failed to log metrics to trace: %s", e)
-    
+
     def log_sync(self, metrics: dict[str, Any]) -> None:
         """Synchronously log metrics to this trace.
-        
+
         Args:
             metrics: Dictionary of metric name to value pairs
-            
+
         Example:
             trace.log_sync({"step": 1, "loss": 0.5, "accuracy": 0.92})
         """
@@ -115,7 +115,7 @@ def trace(
         with hud.trace("My Task") as trace:
             # Your code here
             trace.log_sync({"step": 1, "progress": 0.5})
-            
+
         # Async logging
         async with hud.trace("Async Task") as trace:
             await trace.log({"loss": 0.23, "accuracy": 0.95})
@@ -142,7 +142,7 @@ def trace(
 
     # Create trace object
     trace_obj = Trace(task_run_id, name, job_id, task_id)
-    
+
     # Delegate to OpenTelemetry implementation
     with OtelTrace(
         task_run_id,
@@ -151,5 +151,5 @@ def trace(
         attributes=attrs or {},
         job_id=job_id,
         task_id=task_id,
-    ) as run_id:
+    ):
         yield trace_obj

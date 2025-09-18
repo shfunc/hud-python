@@ -1,10 +1,9 @@
-import types
-from types import SimpleNamespace
+from __future__ import annotations
 
 import pytest
 import torch
 
-from hud.rl.config import Config, TrainingConfig
+from hud.rl.config import Config
 from hud.rl.learner import GRPOLearner
 from hud.rl.types import TrainingSample
 
@@ -33,7 +32,12 @@ def learner_stub(monkeypatch):
     return GRPOLearner(cfg)
 
 
-def make_sample(pol_logp_tok: torch.Tensor, old_logp_tok: torch.Tensor, ref_logp_tok: torch.Tensor, advantage: float):
+def make_sample(
+    pol_logp_tok: torch.Tensor,
+    old_logp_tok: torch.Tensor,
+    ref_logp_tok: torch.Tensor,
+    advantage: float,
+):
     # Minimal object with required attributes for compute_loss
     # inputs only needed for metrics token count
     Tm1 = pol_logp_tok.size(-1)
@@ -46,20 +50,24 @@ def make_sample(pol_logp_tok: torch.Tensor, old_logp_tok: torch.Tensor, ref_logp
     )
 
 
-def patch_compute_logprobs(monkeypatch, learner: GRPOLearner, pol_logp_tok: torch.Tensor, pol_entropy_tok: torch.Tensor):
+def patch_compute_logprobs(
+    monkeypatch, learner: GRPOLearner, pol_logp_tok: torch.Tensor, pol_entropy_tok: torch.Tensor
+):
     # Return (pol_logp, pol_entropy) as expected by compute_loss
     def _stub_compute_logprobs(self, model, inputs):
-        return pol_logp_tok.to(inputs["input_ids"].device), pol_entropy_tok.to(inputs["input_ids"].device)
+        return pol_logp_tok.to(inputs["input_ids"].device), pol_entropy_tok.to(
+            inputs["input_ids"].device
+        )
 
     monkeypatch.setattr(GRPOLearner, "compute_logprobs", _stub_compute_logprobs, raising=True)
 
 
 def test_per_token_mean_vs_sum(monkeypatch, learner_stub: GRPOLearner):
     # Setup
-    B, Tm1 = 1, 4
-    pol = torch.tensor([[ -1.0, -1.0, -1.0, -1.0 ]], dtype=torch.float32)   # logp
-    old = torch.tensor([[ -1.2, -0.8, -1.0, -1.1 ]], dtype=torch.float32)
-    ref = torch.tensor([[ -1.0, -1.0, -1.0, -1.0 ]], dtype=torch.float32)
+    _, Tm1 = 1, 4
+    pol = torch.tensor([[-1.0, -1.0, -1.0, -1.0]], dtype=torch.float32)  # logp
+    old = torch.tensor([[-1.2, -0.8, -1.0, -1.1]], dtype=torch.float32)
+    ref = torch.tensor([[-1.0, -1.0, -1.0, -1.0]], dtype=torch.float32)
     ent = torch.zeros_like(pol)
     patch_compute_logprobs(monkeypatch, learner_stub, pol, ent)
 
@@ -86,9 +94,9 @@ def test_per_token_mean_vs_sum(monkeypatch, learner_stub: GRPOLearner):
 
 def test_per_trace_vs_per_token(monkeypatch, learner_stub: GRPOLearner):
     # Equal per-token deltas -> per_trace matches per_token(mean)
-    pol = torch.tensor([[ -1.0, -1.0, -1.0 ]], dtype=torch.float32)
-    old = torch.tensor([[ -1.2, -1.2, -1.2 ]], dtype=torch.float32)
-    ref = torch.tensor([[ -1.1, -1.1, -1.1 ]], dtype=torch.float32)
+    pol = torch.tensor([[-1.0, -1.0, -1.0]], dtype=torch.float32)
+    old = torch.tensor([[-1.2, -1.2, -1.2]], dtype=torch.float32)
+    ref = torch.tensor([[-1.1, -1.1, -1.1]], dtype=torch.float32)
     ent = torch.zeros_like(pol)
     patch_compute_logprobs(monkeypatch, learner_stub, pol, ent)
 
@@ -110,10 +118,10 @@ def test_per_trace_vs_per_token(monkeypatch, learner_stub: GRPOLearner):
 
 
 def test_entropy_beta_effect(monkeypatch, learner_stub: GRPOLearner):
-    pol = torch.tensor([[ -1.0, -1.1 ]], dtype=torch.float32)
-    old = torch.tensor([[ -1.0, -1.1 ]], dtype=torch.float32)
-    ref = torch.tensor([[ -1.0, -1.1 ]], dtype=torch.float32)
-    ent = torch.tensor([[ 0.5, 1.5 ]], dtype=torch.float32)
+    pol = torch.tensor([[-1.0, -1.1]], dtype=torch.float32)
+    old = torch.tensor([[-1.0, -1.1]], dtype=torch.float32)
+    ref = torch.tensor([[-1.0, -1.1]], dtype=torch.float32)
+    ent = torch.tensor([[0.5, 1.5]], dtype=torch.float32)
     patch_compute_logprobs(monkeypatch, learner_stub, pol, ent)
 
     # No policy/kl effect, only entropy
@@ -138,19 +146,22 @@ def test_skip_update_when_zero_adv(monkeypatch, learner_stub: GRPOLearner):
     class MiniBatch:
         def __init__(self):
             self.advantage = torch.zeros(1)
-        def to_device(self, device):
+
+        def to_device(self, device: torch.device) -> MiniBatch:
             return self
 
-    def _stub_prepare_groups(self, samples):
+    def _stub_prepare_groups(self, samples: list[TrainingSample]) -> list[list[MiniBatch]]:
         return [[MiniBatch(), MiniBatch()]]
 
     monkeypatch.setattr(GRPOLearner, "prepare_groups", _stub_prepare_groups, raising=True)
 
     # Count optimizer.step calls
     steps = {"n": 0}
-    orig_step = learner_stub.optimizer.step
+    # orig_step = learner_stub.optimizer.step
+
     def _count_step():
         steps["n"] += 1
+
     monkeypatch.setattr(learner_stub.optimizer, "step", _count_step, raising=False)
 
     # Ensure dummy backward can touch a parameter

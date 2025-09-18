@@ -1,75 +1,91 @@
 """GRPO learner for vision-language and text models."""
+
 from __future__ import annotations
 
 import logging
 import os
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 import torch.nn.functional as F
 from peft import LoraConfig, get_peft_model
 from torch.nn.parallel import DistributedDataParallel as DDP
 from transformers import (
-    AutoProcessor, 
-    AutoTokenizer,
     AutoModelForCausalLM,
+    AutoProcessor,
+    AutoTokenizer,
     Qwen2_5_VLForConditionalGeneration,
 )
 
 try:
-    from liger_kernel.transformers import apply_liger_kernel_to_qwen2_5_vl
+    from liger_kernel.transformers import apply_liger_kernel_to_qwen2_5_vl  # type: ignore
+
     LIGER_AVAILABLE = True
 except ImportError:
     LIGER_AVAILABLE = False
 
 try:
-    import bitsandbytes as bnb
+    import bitsandbytes as bnb  # type: ignore
+
     BNB_AVAILABLE = True
 except ImportError:
     BNB_AVAILABLE = False
+
+from contextlib import nullcontext
 
 from hud.rl.distributed import (
     get_local_rank,
     get_world_size,
     is_main_process,
 )
-from hud.rl.utils import get_gpu_utilization, get_memory_usage, prepare_inputs, entropy_from_logits, batch_training_samples
+from hud.rl.utils import (
+    batch_training_samples,
+    entropy_from_logits,
+    get_gpu_utilization,
+    get_memory_usage,
+    prepare_inputs,
+)
 from hud.utils.hud_console import HUDConsole
-from contextlib import nullcontext
-from .config import Config
+
 from .types import TrainingMetrics, TrainingSample
 
 logger = logging.getLogger(__name__)
 hud_console = HUDConsole(logger)
 
+if TYPE_CHECKING:
+    from .config import Config
+
+
 class GRPOLearner:
     """GRPO learning algorithm for Vision-Language Models (VLMs) and Text Models."""
-    
+
     def __init__(self, config: Config) -> None:
         self.config = config
         self.local_rank = get_local_rank()
         self.world_size = get_world_size()
-        self.device = torch.device(f"cuda:{self.local_rank}" if torch.cuda.is_available() else "cpu")
-        
+        self.device = torch.device(
+            f"cuda:{self.local_rank}" if torch.cuda.is_available() else "cpu"
+        )
+
         # Detect model type
         self.is_vl_model = "VL" in config.model.base_model
-        
+
         # Load models and processor
         self.processor, self.policy, self.ref, self.optimizer = self._load_models()
         self.metrics: list[TrainingMetrics] = []
 
     def log(self, message: str) -> None:
         hud_console.info_log(f"[{self.local_rank}] {message}")
-    
+
     def _load_models(self) -> tuple[Any, Any, Any, Any]:
         """Load policy, reference models and optimizer."""
         model_cfg = self.config.model
-        
+
         # Detect if this is a VL model or standard text model
         is_vl_model = "VL" in model_cfg.base_model
         model_type = "Vision-Language" if is_vl_model else "Text"
         self.log(f"Loading {model_type} model: {model_cfg.base_model}")
-        
+
         # Apply Liger kernel optimizations if available and enabled
         if model_cfg.use_liger and LIGER_AVAILABLE:
             if is_vl_model:
@@ -78,28 +94,30 @@ class GRPOLearner:
                     rope=True,  # Optimized RoPE
                     rms_norm=True,  # Optimized RMSNorm
                     swiglu=True,  # Optimized SwiGLU
-                    fused_linear_cross_entropy=True  # Fused Linear+CrossEntropy for memory efficiency
+                    fused_linear_cross_entropy=True,  # Fused Linear+CrossEntropy for memory
                 )
         elif model_cfg.use_liger and not LIGER_AVAILABLE:
-            self.log("Liger kernel requested but not installed. Install with: pip install liger-kernel")
-        
+            self.log(
+                "Liger kernel requested but not installed. Install with: pip install liger-kernel"
+            )
+
         # Load processor/tokenizer based on model type
         if is_vl_model:
             processor = AutoProcessor.from_pretrained(
                 model_cfg.base_model,
                 min_pixels=model_cfg.min_pixels,
-                max_pixels=model_cfg.max_pixels
+                max_pixels=model_cfg.max_pixels,
             )
         else:
             processor = AutoTokenizer.from_pretrained(model_cfg.base_model)
-        
+
         # Load policy model with LoRA
         # Use attention implementation from config
         attn_implementation = model_cfg.attn_implementation
-        
+
         # Choose the appropriate model class
         model_class = Qwen2_5_VLForConditionalGeneration if is_vl_model else AutoModelForCausalLM
-        
+
         try:
             policy = model_class.from_pretrained(
                 model_cfg.base_model,
@@ -118,14 +136,14 @@ class GRPOLearner:
                 )
             else:
                 raise  # Re-raise if it's a different error
-        
+
         # Move model to device
-        policy = policy.to(self.device)
+        policy = policy.to(self.device)  # type: ignore
         # Enable gradient checkpointing for memory efficiency
         if model_cfg.gradient_checkpointing:
             policy.gradient_checkpointing_enable()
             self.log("Gradient checkpointing enabled for memory efficiency")
-        
+
         # Add LoRA adapters
         lora_config = LoraConfig(
             r=model_cfg.lora_r,
@@ -133,11 +151,11 @@ class GRPOLearner:
             lora_dropout=model_cfg.lora_dropout,
             task_type="CAUSAL_LM",
             bias="none",
-            target_modules=list(model_cfg.target_modules)
+            target_modules=list(model_cfg.target_modules),
         )
         policy.config.use_cache = False
         policy = get_peft_model(policy, lora_config)
-        
+
         # Wrap with DDP if in distributed mode
         if self.world_size > 1:
             policy = DDP(
@@ -147,12 +165,12 @@ class GRPOLearner:
                 broadcast_buffers=False,
                 find_unused_parameters=True,
             )
-            self.log(f"Wrapped model (find_unused_parameters=True)")
-        
+            self.log("Wrapped model (find_unused_parameters=True)")
+
         # Create optimizer - need to access underlying model if DDP
         base_model = policy.module if hasattr(policy, "module") else policy
-        trainable_params = [p for _, p in base_model.named_parameters() if p.requires_grad]
-        
+        trainable_params = [p for _, p in base_model.named_parameters() if p.requires_grad]  # type: ignore
+
         # Use 8-bit optimizer if configured
         if self.config.training.use_8bit_optimizer and BNB_AVAILABLE:
             hud_console.info("Using 8-bit AdamW optimizer from bitsandbytes")
@@ -160,7 +178,7 @@ class GRPOLearner:
                 trainable_params,
                 lr=self.config.training.lr,
                 betas=self.config.training.adam_betas,
-                eps=self.config.training.adam_eps
+                eps=self.config.training.adam_eps,
             )
         else:
             self.log("Using standard FP32 AdamW optimizer")
@@ -168,25 +186,32 @@ class GRPOLearner:
                 trainable_params,
                 lr=self.config.training.lr,
                 betas=self.config.training.adam_betas,
-                eps=self.config.training.adam_eps
+                eps=self.config.training.adam_eps,
             )
-        
+
         # Log optimizer info
         self.log(f"Optimizer: {type(optimizer).__name__}")
         num_params = sum(p.numel() for p in trainable_params)
         self.log(f"Number of trainable parameters: {num_params:,}")
-        
+
         return processor, policy, None, optimizer
 
-    def prepare_groups(self, samples: list[TrainingSample],) -> list[list[TrainingSample]]:
+    def prepare_groups(
+        self,
+        samples: list[TrainingSample],
+    ) -> list[list[TrainingSample]]:
         """Prepare groups of samples for training."""
         # Prepare inputs with messages
         batch = []
         for sample in samples:
             inputs = prepare_inputs(sample, self.processor)
             # If inputs are invalid, create dummy inputs to maintain batch size
-            if not inputs or "input_ids" not in inputs or inputs.get("input_ids", torch.tensor([])).numel() == 0:
-                hud_console.warning_log(f"Sample has invalid inputs, using dummy values")
+            if (
+                not inputs
+                or "input_ids" not in inputs
+                or inputs.get("input_ids", torch.tensor([])).numel() == 0
+            ):
+                hud_console.warning_log("Sample has invalid inputs, using dummy values")
                 # Create minimal dummy inputs to keep batch size consistent
                 inputs = {
                     "input_ids": torch.zeros(1, 2, dtype=torch.long),  # Minimal sequence
@@ -194,34 +219,34 @@ class GRPOLearner:
                     "assistant_mask": torch.zeros(1, 1, dtype=torch.bool),  # T-1 length
                 }
             elif "assistant_mask" not in inputs:
-                hud_console.warning_log(f"Sample missing assistant_mask, creating zero mask")
+                hud_console.warning_log("Sample missing assistant_mask, creating zero mask")
                 seq_len = inputs["input_ids"].shape[-1]
-                inputs["assistant_mask"] = torch.zeros(inputs["input_ids"].shape[0], seq_len - 1, dtype=torch.bool)
-            
+                inputs["assistant_mask"] = torch.zeros(
+                    inputs["input_ids"].shape[0], seq_len - 1, dtype=torch.bool
+                )
+
             new_sample = TrainingSample(**sample.model_dump())
             new_sample.inputs = inputs
             new_sample.advantage = sample.advantage
             batch.append(new_sample)
 
-        with hud_console.progress("Processing batch of traces...") as progress:
-            # Precompute logprobs
-            with torch.no_grad():
+        with hud_console.progress("Processing batch of traces...") as progress, torch.no_grad():
+            for i, sample in enumerate(batch):
+                if is_main_process():
+                    progress.update(f"Processing batch of traces... {i}/{len(batch)}")
+                if sample.inputs:
+                    sample = sample.to_device(self.device)
+                    sample.old_logprobs, _ = self.compute_logprobs(self.policy, sample.inputs)
+
+            policy_module = self.policy.module if hasattr(self.policy, "module") else self.policy
+            with policy_module.disable_adapter():
                 for i, sample in enumerate(batch):
                     if is_main_process():
                         progress.update(f"Processing batch of traces... {i}/{len(batch)}")
                     if sample.inputs:
-                        sample = sample.to_device(self.device)
-                        sample.old_logprobs, _ = self.compute_logprobs(self.policy, sample.inputs)
+                        sample.ref_logprobs, _ = self.compute_logprobs(self.policy, sample.inputs)
 
-                policy_module = self.policy.module if hasattr(self.policy, "module") else self.policy
-                with policy_module.disable_adapter():
-                    for i, sample in enumerate(batch):
-                        if is_main_process():
-                            progress.update(f"Processing batch of traces... {i}/{len(batch)}")
-                        if sample.inputs:
-                            sample.ref_logprobs, _ = self.compute_logprobs(self.policy, sample.inputs)
-
-        hud_console.info_log(f"Creating mini-batches...")
+        hud_console.info_log("Creating mini-batches...")
         group_size = self.config.training.group_size
         processed_batch = []
         if not self.config.training.accumulate_over_minibatches:
@@ -230,7 +255,7 @@ class GRPOLearner:
             mb_size = self.config.training.mini_batch_size
             group_size = group_size // mb_size
             for i in range(0, len(batch), mb_size):
-                processed_batch.extend(batch_training_samples(batch[i:i+mb_size]))
+                processed_batch.extend(batch_training_samples(batch[i : i + mb_size]))
         else:
             processed_batch = batch
 
@@ -239,28 +264,32 @@ class GRPOLearner:
 
         # Convert to grouped batches (if updating the model after each task group)
         if self.config.training.update_after_group:
-            return [processed_batch[i:i+group_size] for i in range(0, len(processed_batch), group_size)]
+            return [
+                processed_batch[i : i + group_size]
+                for i in range(0, len(processed_batch), group_size)
+            ]
         else:
             return [processed_batch]
-           
+
     def update(self, samples: list[TrainingSample]) -> TrainingMetrics:
         """Perform a gradient update on a batch."""
         import time
+
         training_start_time = time.time()
 
         # Always create metrics for synchronization
         self.metrics.append(TrainingMetrics())
         metrics = self.metrics[-1]
-        
+
         # Prepare groups for GRPO training
         groups = self.prepare_groups(samples)
         self.log(f"Updating over {len(groups)} groups")
-        
+
         # Update over mini batch size
         with hud_console.progress("Gradient update...") as progress:
-            for epoch in range(self.config.training.epochs): # Do not accumulate across epochs
-                progress.update(f"Training epoch {epoch+1}/{self.config.training.epochs}")
-                for group_idx, group in enumerate(groups): # Do not accumulate across "groups"
+            for epoch in range(self.config.training.epochs):  # Do not accumulate across epochs
+                progress.update(f"Training epoch {epoch + 1}/{self.config.training.epochs}")
+                for group_idx, group in enumerate(groups):  # Do not accumulate across "groups"
                     self.optimizer.zero_grad(set_to_none=True)
 
                     debug_per_group = ""
@@ -274,7 +303,7 @@ class GRPOLearner:
 
                         # Update mini_updated globally
                         # self.log(f"{group_idx} Mini updated: {mini_updated}")
-                        
+
                         # Do not sync until the last minibatch
                         if s_idx < len(group) - 1 and self.world_size > 1:
                             ddp_ctx = self.policy.no_sync()
@@ -285,18 +314,20 @@ class GRPOLearner:
                             try:
                                 # if mini_updated:
                                 loss = self.compute_loss(sample_minibatch) / grad_accum_steps
-                                debug_per_group += f"l{s_idx}:{str(round(loss.item(), 3))} "
+                                debug_per_group += f"l{s_idx}:{round(loss.item(), 3)!s} "
                                 loss.backward()
-                                # else: # Dummy backward that touches all params, produces zero grads, triggers hooks
+                                # else: # Dummy backward that touches all params, produces zero g
                                 #     dummy = sum(p.sum() for p in self.policy.parameters()) * 0.0
                                 #     debug_per_group += f"d{s_idx}:{str(round(dummy.item(), 3))} "
                                 #     dummy.backward()
-                                # self.log(f"{group_idx} GPU Backward: {get_gpu_utilization():.1f}% | Memory: {get_memory_usage():.2f} GB")
+                                # self.log(f"{group_idx} GPU Backward: {get_gpu_utilization():.1f}% | Memory: {get_memory_usage():.2f} GB") # noqa: E501
                             except torch.cuda.OutOfMemoryError:
-                                hud_console.warning_log(f"{group_idx} CUDA OOM for {sample_minibatch.inputs['input_ids'].numel()} tokens; skipping minibatch")
+                                hud_console.warning_log(
+                                    f"{group_idx} CUDA OOM for {sample_minibatch.inputs['input_ids'].numel()} tokens; skipping minibatch"  # noqa: E501
+                                )
                                 # Dummy backward to keep DDP happy
-                                dummy = sum(p.sum() for p in self.policy.parameters()) * 0.0
-                                debug_per_group += f"o{s_idx}:{str(round(dummy.item(), 3))} "
+                                dummy = torch.sum(p.sum() for p in self.policy.parameters()) * 0.0  # type: ignore
+                                debug_per_group += f"o{s_idx}:{round(dummy.item(), 3)!s} "
                                 dummy.backward()
                                 # mark global skip if OOM
                                 global_skip.fill_(1)
@@ -313,34 +344,46 @@ class GRPOLearner:
                     if skip_any:
                         self.log(f"G[{group_idx}] {debug_per_group} N/A (skipped)")
                         continue
-                    
-                    grad_norm = torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.config.training.grad_clip, error_if_nonfinite=True)
+
+                    grad_norm = torch.nn.utils.clip_grad_norm_(
+                        self.policy.parameters(),
+                        self.config.training.grad_clip,
+                        error_if_nonfinite=True,
+                    )
                     self.optimizer.step()
 
-                    debug_per_group += f"g:{str(round(grad_norm.item(), 3))}"
+                    debug_per_group += f"g:{round(grad_norm.item(), 3)!s}"
                     self.log(f"G[{group_idx}] {debug_per_group}")
 
-                    metrics.update({
-                        "grad_norm": grad_norm.item() if isinstance(grad_norm, torch.Tensor) else float(grad_norm),
-                    })
+                    metrics.update(
+                        {
+                            "grad_norm": grad_norm.item()
+                            if isinstance(grad_norm, torch.Tensor)
+                            else float(grad_norm),
+                        }
+                    )
 
         # Calculate training time and throughput
         training_time = time.time() - training_start_time
-        total_samples = len(groups) * self.config.training.group_size * self.config.training.mini_batch_size
+        total_samples = (
+            len(groups) * self.config.training.group_size * self.config.training.mini_batch_size
+        )
         samples_per_second = total_samples / training_time if training_time > 0 else 0.0
-        
-        metrics.update({
-            "training_time": training_time,
-            "samples_per_second": samples_per_second,
-        })
-        
+
+        metrics.update(
+            {
+                "training_time": training_time,
+                "samples_per_second": samples_per_second,
+            }
+        )
+
         return metrics
-    
+
     def compute_loss(self, sample: TrainingSample) -> torch.Tensor:
         """Compute GRPO loss for a batch of samples."""
         training_cfg = self.config.training
         metrics = self.metrics[-1] if len(self.metrics) > 0 else TrainingMetrics()
-                    
+
         sample.to_device(self.device)
 
         pol_logp, pol_entropy = self.compute_logprobs(
@@ -350,14 +393,19 @@ class GRPOLearner:
 
         sanity_check(sample, pol_logp, sample.old_logprobs, sample.ref_logprobs)
 
-        metrics.update({
-            "gpu_util": get_gpu_utilization(),  # Track peak utilization
-            "gpu_memory": get_memory_usage(),  # Track memory usage
-        })
+        metrics.update(
+            {
+                "gpu_util": get_gpu_utilization(),  # Track peak utilization
+                "gpu_memory": get_memory_usage(),  # Track memory usage
+            }
+        )
         self.log(f"GPU Util: {get_gpu_utilization():.1f}% | Memory: {get_memory_usage():.2f} GB")
 
         old_logp = sample.old_logprobs
         ref_logp = sample.ref_logprobs
+
+        if old_logp is None or ref_logp is None or sample.advantage is None:
+            raise ValueError("old_logp, ref_logp, or sample.advantage is None")
 
         # Use assistant mask to remove non-assistant tokens
         m = sample.inputs["assistant_mask"]
@@ -369,51 +417,62 @@ class GRPOLearner:
             pol_entropy = (pol_entropy * m.float()).sum(dim=1) / counts
             old_logp = (old_logp * m.float()).sum(dim=1) / counts
             ref_logp = (ref_logp * m.float()).sum(dim=1) / counts
-        
+
         # Clip log probability differences
         log_ratio = torch.where(m, pol_logp - old_logp, torch.zeros_like(pol_logp))
         ratio_tok = torch.exp(log_ratio.clamp(-20.0, 20.0))
 
         # Ensure advantage shape matches ratio_tok for broadcasting
-        advantage = sample.advantage.view(-1, 1) if ratio_tok.dim() == 2 else sample.advantage.squeeze(-1)
-        
+        advantage = (
+            sample.advantage.view(-1, 1) if ratio_tok.dim() == 2 else sample.advantage.squeeze(-1)
+        )
+
         unclipped = ratio_tok * advantage
-        clipped = torch.clamp(
-            ratio_tok,
-            1 - training_cfg.top_eps,
-            1 + training_cfg.bottom_eps
-        ) * advantage
-        
+        clipped = (
+            torch.clamp(ratio_tok, 1 - training_cfg.top_eps, 1 + training_cfg.bottom_eps)
+            * advantage
+        )
+
         policy_term = -torch.minimum(unclipped, clipped)
-        
+
         # Clip log probability differences in KL
         log_rho = torch.where(m, pol_logp - ref_logp, torch.zeros_like(pol_logp))
         rho_tok = torch.exp(log_rho.clamp(-20.0, 20.0))
-        kl_approx = (rho_tok - torch.log(rho_tok) - 1)
+        kl_approx = rho_tok - torch.log(rho_tok) - 1
 
-        total_loss = policy_term + training_cfg.kl_beta * kl_approx + training_cfg.entropy_beta * pol_entropy
+        total_loss = (
+            policy_term + training_cfg.kl_beta * kl_approx + training_cfg.entropy_beta * pol_entropy
+        )
 
         # Aggregate loss
         if training_cfg.ppo_mode == "per_trace":
-            total_loss = total_loss.mean() if training_cfg.token_agg == "mean" else total_loss.sum()
+            total_loss = total_loss.mean() if training_cfg.token_agg == "mean" else total_loss.sum()  # noqa: S105
         else:
-            if training_cfg.token_agg == "mean":
+            if training_cfg.token_agg == "mean":  # noqa: S105
                 total_loss = (total_loss * m).sum() / m.sum().clamp_min(1.0)
             else:
                 total_loss = (total_loss * m).sum()
 
         # Compute metrics only over masked (assistant) tokens
         mask_count = m.sum().clamp_min(1.0)
-        metrics.update({
-            "policy_ratio": (ratio_tok * m).sum().item() / mask_count.item() if mask_count.item() > 0 else 1.0,
-            "kl": (kl_approx * m).sum().item() / mask_count.item() if mask_count.item() > 0 else 0.0,
-            "entropy": (pol_entropy * m).sum().item() / mask_count.item() if mask_count.item() > 0 else 0.0,
-            "tokens": sample.inputs["input_ids"].numel(),
-            "loss": total_loss.item(),
-        })
+        metrics.update(
+            {
+                "policy_ratio": (ratio_tok * m).sum().item() / mask_count.item()
+                if mask_count.item() > 0
+                else 1.0,
+                "kl": (kl_approx * m).sum().item() / mask_count.item()
+                if mask_count.item() > 0
+                else 0.0,
+                "entropy": (pol_entropy * m).sum().item() / mask_count.item()
+                if mask_count.item() > 0
+                else 0.0,
+                "tokens": sample.inputs["input_ids"].numel(),
+                "loss": total_loss.item(),
+            }
+        )
 
         sample.to_device(torch.device("cpu"))
-        
+
         return total_loss
 
     def compute_logprobs(self, model: Any, inputs: Any) -> tuple[torch.Tensor, torch.Tensor]:
@@ -425,12 +484,12 @@ class GRPOLearner:
             model_inputs = {k: v for k, v in inputs.items() if k != "assistant_mask"}
             out = model(**model_inputs)
 
-            logits = out.logits / self.config.actor.temperature 
+            logits = out.logits / self.config.actor.temperature
             log_probs = F.log_softmax(logits, dim=-1)
 
             targets = inputs["input_ids"][:, 1:]
             token_log_probs = log_probs[:, :-1].gather(-1, targets.unsqueeze(-1)).squeeze(-1)
-            
+
             # Compute entropy only for assistant tokens to save memory
             assistant_mask = inputs["assistant_mask"]
             entropy = torch.zeros_like(token_log_probs)
@@ -447,7 +506,7 @@ class GRPOLearner:
             dummy_logprobs = torch.zeros(batch_size, seq_len, device=self.device)
             dummy_entropy = torch.zeros(batch_size, seq_len, device=self.device)
             return dummy_logprobs, dummy_entropy
-    
+
     def save(self, path: str) -> None:
         """Save the current policy checkpoint (only on rank 0)."""
         if is_main_process():
@@ -456,7 +515,7 @@ class GRPOLearner:
             model_to_save = self.policy.module if hasattr(self.policy, "module") else self.policy
             model_to_save.save_pretrained(path)
             self.log(f"Saved checkpoint to {path}")
-    
+
     def load(self, path: str) -> None:
         """Load a policy checkpoint."""
         # Would need to reload LoRA weights
@@ -464,13 +523,20 @@ class GRPOLearner:
         # Implementation depends on PEFT version
 
 
-def sanity_check(sample: TrainingSample, pol_logp: torch.Tensor, old_logp: torch.Tensor, ref_logp: torch.Tensor) -> None:
+def sanity_check(
+    sample: TrainingSample,
+    pol_logp: torch.Tensor,
+    old_logp: torch.Tensor | None,
+    ref_logp: torch.Tensor | None,
+) -> None:
     m = sample.inputs["assistant_mask"]
+    if old_logp is None or ref_logp is None:
+        return
     with torch.no_grad():
         B, K = pol_logp.shape
-        assert old_logp.shape == (B, K), "old_logp shape mismatch"
-        assert ref_logp.shape == (B, K), "ref_logp shape mismatch"
-        assert m.shape == (B, K), "assistant_mask shape mismatch"
+        assert old_logp.shape == (B, K), "old_logp shape mismatch"  # noqa: S101
+        assert ref_logp.shape == (B, K), "ref_logp shape mismatch"  # noqa: S101
+        assert m.shape == (B, K), "assistant_mask shape mismatch"  # noqa: S101
 
         # Check mask is subset of attention_mask[:, 1:]
         att = sample.inputs.get("attention_mask", None)
@@ -488,7 +554,9 @@ def sanity_check(sample: TrainingSample, pol_logp: torch.Tensor, old_logp: torch
                 return
             finite = torch.isfinite(sel)
             if finite.sum() < sel.numel():
-                hud_console.warning_log(f"{name} non-finite: {((~finite).sum().item())}/{sel.numel()}")
+                hud_console.warning_log(
+                    f"{name} non-finite: {((~finite).sum().item())}/{sel.numel()}"
+                )
             sel = sel[finite].float()
 
         _stats("pol_logp", pol_logp)

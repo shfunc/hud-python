@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 import traceback
+from typing import Any
 
 from mcp import Implementation, types
 from mcp.shared.exceptions import McpError
@@ -13,11 +13,11 @@ from mcp_use.session import MCPSession as MCPUseSession
 from pydantic import AnyUrl
 
 from hud.types import MCPToolCall, MCPToolResult
+from hud.utils.hud_console import HUDConsole
 from hud.version import __version__ as hud_version
 
 from .base import BaseHUDClient
 from .utils.mcp_use_retry import patch_all_sessions
-from hud.utils.hud_console import HUDConsole
 
 logger = logging.getLogger(__name__)
 hud_console = HUDConsole(logger=logger)
@@ -139,7 +139,7 @@ class MCPUseHUDClient(BaseHUDClient):
                 tools_result = await session.connector.client_session.list_tools()
 
                 hud_console.info(
-                    f"Discovered {len(tools_result.tools)} tools from '{server_name}': {", ".join([tool.name for tool in tools_result.tools])}",
+                    f"Discovered {len(tools_result.tools)} tools from '{server_name}': {', '.join([tool.name for tool in tools_result.tools])}",  # noqa: E501
                 )
 
                 # Add to collections with optional prefix
@@ -168,7 +168,7 @@ class MCPUseHUDClient(BaseHUDClient):
                     for tool in tools_result.tools:
                         description = tool.description or ""
                         hud_console.debug(
-                            f"  Tool '{tool.name}': {description[:100] + '...' if len(description) > 100 else description}",
+                            f"  Tool '{tool.name}': {description[:100] + '...' if len(description) > 100 else description}",  # noqa: E501
                         )
 
             except Exception as e:
@@ -196,7 +196,7 @@ class MCPUseHUDClient(BaseHUDClient):
 
         if self.verbose:
             hud_console.debug(
-                f"Calling tool '{tool_call.name}' (original: '{original_tool.name}') on server '{server_name}' with arguments: {tool_call.arguments}"
+                f"Calling tool '{tool_call.name}' (original: '{original_tool.name}') on server '{server_name}' with arguments: {tool_call.arguments}"  # noqa: E501
             )
 
         if session.connector.client_session is None:
@@ -294,7 +294,7 @@ class MCPUseHUDClient(BaseHUDClient):
                     hud_console.debug(f"Failed to fetch telemetry from server '{server_name}': {e}")
                 else:
                     hud_console.warning(
-                        f"Unexpected error reading resource '{uri}' from server '{server_name}': {e}"
+                        f"Unexpected error reading resource '{uri}' from server '{server_name}': {e}"  # noqa: E501
                     )
                 continue
 

@@ -65,8 +65,8 @@ def _process_worker(
 
     import hud
     from hud.agents.misc.response_agent import ResponseAgent
-    from hud.datasets.task import Task
     from hud.otel import configure_telemetry
+    from hud.types import Task
 
     # Ensure stdout is not buffered for immediate output
     try:

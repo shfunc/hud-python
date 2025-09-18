@@ -151,7 +151,7 @@ class ClaudeAgent(MCPAgent):
                 )
             else:
                 # For other types, try to cast but log a warning
-                self.hud_console.log("Unknown content block type: %s", type(block), level="warning")
+                self.hud_console.log(f"Unknown content block type: {type(block)}", level="warning")
                 anthropic_blocks.append(cast("BetaContentBlockParam", block))
 
         return [
@@ -268,7 +268,7 @@ class ClaudeAgent(MCPAgent):
             # Extract Claude-specific metadata from extra fields
             tool_use_id = tool_call.id
             if not tool_use_id:
-                self.hud_console.warning("No tool_use_id found for %s", tool_call.name)
+                self.hud_console.warning(f"No tool_use_id found for {tool_call.name}")
                 continue
 
             # Convert MCP tool results to Claude format
@@ -337,7 +337,9 @@ class ClaudeAgent(MCPAgent):
             # Map Claude's "computer" back to the actual MCP tool name
             self._claude_to_mcp_tool_map["computer"] = selected_computer_tool.name
             claude_tools.append(claude_tool)
-            self.hud_console.debug("Using %s as computer tool for Claude", selected_computer_tool.name)
+            self.hud_console.debug(
+                f"Using {selected_computer_tool.name} as computer tool for Claude"
+            )
 
         # Add other non-computer tools
         for tool in self._available_tools:

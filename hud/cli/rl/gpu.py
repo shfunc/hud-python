@@ -1,4 +1,5 @@
 """GPU detection and validation utilities for RL training."""
+
 from __future__ import annotations
 
 import subprocess
@@ -10,29 +11,34 @@ def detect_cuda_devices() -> dict[str, Any]:
     try:
         # Check if CUDA is available
         result = subprocess.run(
-            ["nvidia-smi", "--query-gpu=index,name,memory.total", "--format=csv,noheader,nounits"],
+            ["nvidia-smi", "--query-gpu=index,name,memory.total", "--format=csv,noheader,nounits"],  # noqa: S607
             capture_output=True,
             text=True,
             check=True,
         )
-        
+
         if result.returncode != 0:
             return {"available": False, "error": "nvidia-smi command failed"}
-        
+
         devices = []
         for line in result.stdout.strip().split("\n"):
             parts = line.split(", ")
             if len(parts) >= 3:
-                devices.append({
-                    "index": int(parts[0]),
-                    "name": parts[1],
-                    "memory_gb": float(parts[2]) / 1024,  # Convert MB to GB
-                })
-        
+                devices.append(
+                    {
+                        "index": int(parts[0]),
+                        "name": parts[1],
+                        "memory_gb": float(parts[2]) / 1024,  # Convert MB to GB
+                    }
+                )
+
         return {"available": True, "devices": devices}
-    
+
     except FileNotFoundError:
-        return {"available": False, "error": "nvidia-smi not found - CUDA drivers may not be installed"}
+        return {
+            "available": False,
+            "error": "nvidia-smi not found - CUDA drivers may not be installed",
+        }
     except Exception as e:
         return {"available": False, "error": str(e)}
 
@@ -52,6 +58,6 @@ def validate_gpu_memory(gpu_memory_gb: float, model_size: str = "3B") -> bool:
         "7B": 24.0,
         "14B": 40.0,
     }
-    
+
     min_required = min_memory_requirements.get(model_size, 12.0)
     return gpu_memory_gb >= min_required

@@ -1,4 +1,5 @@
 """Shared types for RL training."""
+
 from __future__ import annotations
 
 import math
@@ -12,10 +13,12 @@ from hud.types import Trace
 try:
     import torch
 except ImportError:
-    raise ImportError("uv tool install hud-python[rl] to use this module")
+    raise ImportError("uv tool install hud-python[rl] to use this module") from None
+
 
 class TrainingSample(Trace):
     """A single training sample for GRPO."""
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
     # Tokenized inputs to the model (model.forward(*inputs))
     # This includes the input tokens, logit mask, etc.
@@ -25,39 +28,47 @@ class TrainingSample(Trace):
 
     # Weighted advantage of group calculation
     advantage: torch.Tensor | None = Field(default=None)
-    
+
     def to_device(self, device: torch.device) -> TrainingSample:
         """Move sample to device."""
-        self.inputs = {k: (t.to(device, non_blocking=True) if hasattr(t, "to") else t)
-                        for k, t in self.inputs.items()}
+        self.inputs = {
+            k: (t.to(device, non_blocking=True) if hasattr(t, "to") else t)
+            for k, t in self.inputs.items()
+        }
         self.advantage = self.advantage.to(device) if self.advantage is not None else None
         self.old_logprobs = self.old_logprobs.to(device) if self.old_logprobs is not None else None
         self.ref_logprobs = self.ref_logprobs.to(device) if self.ref_logprobs is not None else None
         return self
 
+
 @dataclass
 class Metric:
     """A tuple for metrics."""
+
     name: str = Field(default="")
     mean: float = Field(default=0.0)
     std: float = Field(default=0.0)
     values: list[float] = Field(default_factory=list)
 
-    def update(self, value: float | torch.Tensor | list[float] | list[int] | list[torch.Tensor]) -> None:
+    def update(
+        self, value: float | torch.Tensor | list[float] | list[int] | list[torch.Tensor]
+    ) -> None:
         """Update metric."""
         if isinstance(value, list):
-            self.values.extend(value)
+            self.values.extend(value.item() if isinstance(value, torch.Tensor) else value)  # type: ignore
         else:
-            self.values.append(value.item() if isinstance(value, torch.Tensor) else value)
+            self.values.append(value.item() if isinstance(value, torch.Tensor) else value)  # type: ignore
         mean_val = sum(self.values) / len(self.values)
-        self.mean = mean_val.item() if isinstance(mean_val, torch.Tensor) else float(mean_val)
+        self.mean = mean_val.item() if isinstance(mean_val, torch.Tensor) else float(mean_val)  # type: ignore
         variance = sum((x - self.mean) ** 2 for x in self.values) / len(self.values)
-        variance_val = variance.item() if isinstance(variance, torch.Tensor) else float(variance)
+        variance_val = variance.item() if isinstance(variance, torch.Tensor) else float(variance)  # type: ignore
         self.std = math.sqrt(variance_val)
+
 
 @dataclass
 class TrainingMetrics:
     """Metrics for GRPO training (per training step)."""
+
     # Learner metrics
     grad_norm: Metric = Field(default=Metric())
     loss: Metric = Field(default=Metric())

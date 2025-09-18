@@ -1,4 +1,5 @@
 """Distributed training utilities for GRPO."""
+
 from __future__ import annotations
 
 import os
@@ -14,7 +15,7 @@ def setup_distributed() -> None:
         # Set device for this process
         local_rank = int(os.environ["LOCAL_RANK"])
         torch.cuda.set_device(local_rank)
-        
+
         # Initialize process group
         dist.init_process_group("nccl")
 
@@ -57,7 +58,7 @@ def all_reduce_mean(tensor: torch.Tensor) -> torch.Tensor:
     """Average a tensor across all processes."""
     if not dist.is_initialized():
         return tensor
-        
+
     world_size = dist.get_world_size()
     dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
     tensor /= world_size
@@ -68,7 +69,7 @@ def broadcast_object(obj: Any, src: int = 0) -> Any:
     """Broadcast a Python object from src rank to all ranks."""
     if not dist.is_initialized():
         return obj
-        
+
     obj_list = [obj] if dist.get_rank() == src else [None]
     dist.broadcast_object_list(obj_list, src=src)
     return obj_list[0]
@@ -76,15 +77,15 @@ def broadcast_object(obj: Any, src: int = 0) -> Any:
 
 def gather_tensors(tensor: torch.Tensor) -> list[torch.Tensor] | None:
     """Gather tensors from all ranks to rank 0.
-    
+
     Returns:
         List of tensors on rank 0, None on other ranks
     """
     if not dist.is_initialized():
         return [tensor]
-        
+
     world_size = dist.get_world_size()
-    
+
     if dist.get_rank() == 0:
         gathered = [torch.zeros_like(tensor) for _ in range(world_size)]
         dist.gather(tensor, gathered, dst=0)
@@ -92,5 +93,3 @@ def gather_tensors(tensor: torch.Tensor) -> list[torch.Tensor] | None:
     else:
         dist.gather(tensor, None, dst=0)
         return None
-
-

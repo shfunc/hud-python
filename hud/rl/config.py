@@ -1,4 +1,5 @@
 """Configuration for RL training."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -11,16 +12,16 @@ SUPPORTED_MODELS = [
     "Qwen/Qwen2.5-VL-14B-Instruct",
     "Qwen/Qwen2.5-VL-32B-Instruct",
     "Qwen/Qwen2.5-VL-72B-Instruct",
-    "Qwen/Qwen2.5-7B-Instruct"
+    "Qwen/Qwen2.5-7B-Instruct",
 ]
 
 
 def validate_vl_model(model_name: str) -> None:
     """Validate that the model is a supported VL model.
-    
+
     Args:
         model_name: The model name to validate
-        
+
     Raises:
         ValueError: If the model is not a supported VL model
     """
@@ -36,13 +37,19 @@ def validate_vl_model(model_name: str) -> None:
 @dataclass
 class ModelConfig:
     """Model and LoRA configuration."""
+
     base_model: str = "Qwen/Qwen2.5-VL-3B-Instruct"
     lora_r: int = 8
     lora_alpha: int = 16
     lora_dropout: float = 0.05
     target_modules: tuple[str, ...] = (
-        "q_proj", "k_proj", "v_proj", "o_proj",
-        "gate_proj", "up_proj", "down_proj"
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj",
     )
     min_pixels: int = 256 * 28 * 28
     max_pixels: int = 512 * 28 * 28
@@ -54,6 +61,7 @@ class ModelConfig:
 @dataclass
 class TrainingConfig:
     """Training hyperparameters."""
+
     # Training parameters
     training_steps: int = 100
     shuffle_dataset: bool = False
@@ -64,8 +72,8 @@ class TrainingConfig:
     batch_size: int = 36
     group_size: int = 6
     mini_batch_size: int = 2
-    update_after_group: bool = True # Whether to update the policy after each task group
-    accumulate_over_minibatches: bool = True # Whether to accumulate over minibatches
+    update_after_group: bool = True  # Whether to update the policy after each task group
+    accumulate_over_minibatches: bool = True  # Whether to accumulate over minibatches
 
     # Advantage calculation parameters
     batch_level: Literal["group", "batch"] = "batch"
@@ -78,7 +86,7 @@ class TrainingConfig:
 
     # Aggregation parameters
     ppo_mode: Literal["per_token", "per_trace"] = "per_token"
-    token_agg: Literal["mean", "sum"] = "sum"
+    token_agg: Literal["mean", "sum"] = "sum"  # noqa: S105
 
     # Regularization parameters
     kl_beta: float = 0.001
@@ -99,6 +107,7 @@ class TrainingConfig:
 @dataclass
 class ActorConfig:
     """Actor/episode collection configuration."""
+
     # Execution parameters
     max_steps_per_episode: int = 6
     max_parallel_episodes: int = 48
@@ -113,7 +122,7 @@ class ActorConfig:
     system_prompt: str = "You are an expert agent. Complete the task efficiently."
     vllm_base_url: str = "http://localhost:8000/v1"
     vllm_api_key: str = "token-abc123"
-    
+
     # Episode execution timeout (seconds)
     episode_timeout_sec: int = 600
 
@@ -121,6 +130,7 @@ class ActorConfig:
 @dataclass
 class Config:
     """Main configuration combining all sub-configs."""
+
     model: ModelConfig = field(default_factory=ModelConfig)
     training: TrainingConfig = field(default_factory=TrainingConfig)
     actor: ActorConfig = field(default_factory=ActorConfig)
@@ -130,21 +140,21 @@ class Config:
     job_id: str | None = None  # Use existing job ID if provided
     stats_interval: int = 1
     verbose: bool = False
-    
+
     # Paths
     out_dir: str = "./checkpoints"
     adapter_prefix: str = "cua-grpo-step"
-    
+
     # Misc
     seed: int = 1234
-    
+
     @classmethod
     def from_dict(cls, d: dict) -> Config:
         """Create config from dictionary."""
         model = ModelConfig(**d.get("model", {}))
         training = TrainingConfig(**d.get("training", {}))
         actor = ActorConfig(**d.get("actor", {}))
-        
+
         return cls(
             model=model,
             training=training,
@@ -157,7 +167,7 @@ class Config:
             adapter_prefix=d.get("adapter_prefix", "cua-grpo-step"),
             seed=d.get("seed", 1234),
         )
-    
+
     def to_dict(self) -> dict:
         """Convert config to dictionary."""
         return {

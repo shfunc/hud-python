@@ -54,7 +54,7 @@ def _patch_mcp_instrumentation() -> None:
 
     try:
         from opentelemetry.instrumentation.mcp.instrumentation import McpInstrumentor
-        
+
         # First, patch the get_error_type function to handle invalid HTTP status codes
         _patch_get_error_type()
 
@@ -107,10 +107,10 @@ def _patch_get_error_type() -> None:
     """Patch get_error_type to handle invalid HTTP status codes gracefully."""
     import re
     from http import HTTPStatus
-    
+
     try:
         import opentelemetry.instrumentation.mcp.instrumentation as mcp_inst
-        
+
         def patched_get_error_type(error_message: str) -> str | None:
             """Extract HTTP status from error message, handling invalid codes."""
             if not isinstance(error_message, str):
@@ -126,10 +126,10 @@ def _patch_get_error_type() -> None:
                     # Not a valid HTTP status code
                     logger.debug("Ignoring invalid HTTP status code: %s", num)
             return None
-        
+
         # Apply the patch
         mcp_inst.get_error_type = patched_get_error_type
         logger.debug("Patched get_error_type to handle invalid HTTP status codes")
-        
+
     except Exception as e:
         logger.warning("Failed to patch get_error_type: %s", e)

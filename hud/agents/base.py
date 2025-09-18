@@ -153,16 +153,16 @@ class MCPAgent(ABC):
             if task.setup_tool:
                 if isinstance(task.setup_tool, list):
                     for tool in task.setup_tool:
-                        if task.agent_tools and tool.name not in self.agent_tools:
+                        if self.agent_tools and tool.name not in self.agent_tools:
                             self.lifecycle_tools.append(tool.name)
-                elif task.agent_tools and task.setup_tool.name not in self.agent_tools:
+                elif self.agent_tools and task.setup_tool.name not in self.agent_tools:
                     self.lifecycle_tools.append(task.setup_tool.name)
             if task.evaluate_tool:
                 if isinstance(task.evaluate_tool, list):
                     for tool in task.evaluate_tool:
-                        if task.agent_tools and tool.name not in self.agent_tools:
+                        if self.agent_tools and tool.name not in self.agent_tools:
                             self.lifecycle_tools.append(tool.name)
-                elif task.agent_tools and task.evaluate_tool.name not in self.agent_tools:
+                elif self.agent_tools and task.evaluate_tool.name not in self.agent_tools:
                     self.lifecycle_tools.append(task.evaluate_tool.name)
             if task.system_prompt:
                 self.system_prompt += "\n\n" + task.system_prompt
@@ -249,7 +249,13 @@ class MCPAgent(ABC):
                 self.console.progress_log(f"Setting up tool phase: {task.setup_tool}")
                 results = await self.call_tools(task.setup_tool)
                 if any(result.isError for result in results):
-                    return Trace(reward=0.0, done=True, content=f"Setup tool failed: {results}", isError=True, task=task)
+                    return Trace(
+                        reward=0.0,
+                        done=True,
+                        content=f"Setup tool failed: {results}",
+                        isError=True,
+                        task=task,
+                    )
 
                 if self.append_setup_output and isinstance(results[0].content, list):
                     start_context.extend(results[0].content)
@@ -292,7 +298,11 @@ class MCPAgent(ABC):
                         # Update the prompt result with evaluation reward
                         if prompt_result is None:
                             prompt_result = Trace(
-                                reward=reward, done=True, content=eval_content or "", isError=False, task=task
+                                reward=reward,
+                                done=True,
+                                content=eval_content or "",
+                                isError=False,
+                                task=task,
                             )
                         else:
                             prompt_result.reward = reward
@@ -311,7 +321,11 @@ class MCPAgent(ABC):
                 # Ensure we have a result even if evaluation failed
                 if prompt_result is None:
                     prompt_result = Trace(
-                        reward=0.0, done=True, content=f"Evaluation failed: {e}", isError=True, task=task
+                        reward=0.0,
+                        done=True,
+                        content=f"Evaluation failed: {e}",
+                        isError=True,
+                        task=task,
                     )
 
         prompt_result.task = task
@@ -419,11 +433,13 @@ class MCPAgent(ABC):
             error = str(e)
 
         # Build result
-        if error is not None or (final_response and hasattr(final_response, "isError") and final_response.isError):
+        if error is not None or (
+            final_response and hasattr(final_response, "isError") and final_response.isError
+        ):
             is_error = True
         else:
             is_error = False
-        
+
         # Ensure all parameters are the correct type
         trace_params = {
             "reward": 0.0,
@@ -486,9 +502,7 @@ class MCPAgent(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_response(
-        self, messages: list[Any]
-    ) -> AgentResponse:
+    async def get_response(self, messages: list[Any]) -> AgentResponse:
         """
         Get response from the model including any tool calls.
 
@@ -649,10 +663,11 @@ class MCPAgent(ABC):
                     f"Required tools not available: {missing_tools}. "
                     f"Available tools: {list(available_tool_names)}"
                 )
-                
-        available_tools = self.get_available_tools()
-        self.console.info(f"Agent initialized with {len(available_tools)} tools: {", ".join([t.name for t in available_tools])}")
 
+        available_tools = self.get_available_tools()
+        self.console.info(
+            f"Agent initialized with {len(available_tools)} tools: {', '.join([t.name for t in available_tools])}"  # noqa: E501
+        )
 
     async def _maybe_submit_response(self, response: AgentResponse, messages: list[Any]) -> None:
         """Submit response through lifecycle tool if available.

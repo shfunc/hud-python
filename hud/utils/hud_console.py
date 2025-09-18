@@ -18,15 +18,16 @@ from __future__ import annotations
 import logging
 import time
 import traceback
-from typing import Any, Literal, Self
+from typing import TYPE_CHECKING, Any, Literal, Self
 
 import questionary
 import typer
 from rich.console import Console
 from rich.panel import Panel
-from rich.status import Status
 from rich.table import Table
 
+if TYPE_CHECKING:
+    from rich.status import Status
 # HUD Brand Colors - Optimized for both light and dark modes
 GOLD = "rgb(192,150,12)"  # #c0960c - Primary brand color
 RED = "rgb(220,50,47)"  # Slightly muted red that works on both backgrounds
@@ -134,7 +135,9 @@ class HUDConsole:
             stderr: If True, output to stderr (default), otherwise stdout
         """
         console = self._stderr_console if stderr else self._stdout_console
-        console.print(f"[{DIM} not bold][default]{label}[/default][/{DIM} not bold] [default]{value}[/default]")
+        console.print(
+            f"[{DIM} not bold][default]{label}[/default][/{DIM} not bold] [default]{value}[/default]"  # noqa: E501
+        )
 
     def link(self, url: str, stderr: bool = True) -> None:
         """Print an underlined link.
@@ -158,7 +161,7 @@ class HUDConsole:
         console.print(f"[{TEXT}]{json_str}[/{TEXT}]")
 
     def key_value_table(
-        self, data: dict[str, str], show_header: bool = False, stderr: bool = True
+        self, data: dict[str, str | int | float], show_header: bool = False, stderr: bool = True
     ) -> None:
         """Print a key-value table.
 
@@ -313,7 +316,7 @@ class HUDConsole:
             if response_json and not details.get("Response"):
                 details["Response JSON"] = str(response_json)
             if details:
-                self.key_value_table(details, show_header=False, stderr=stderr)
+                self.key_value_table(details, show_header=False, stderr=stderr)  # type: ignore
 
         # Structured hints, if available
         hints = getattr(error, "hints", None)
@@ -351,9 +354,13 @@ class HUDConsole:
         return f"{metadata[0]}:{metadata[1]} in {metadata[2]} | "
 
     # Logging-aware methods that check logging levels before printing
-    def log(self, message: str, level: Literal["info", "debug", "warning", "error"] = "info", stderr: bool = True) -> None:
-        """Print a message based on the logging level.
-        """
+    def log(
+        self,
+        message: str,
+        level: Literal["info", "debug", "warning", "error"] = "info",
+        stderr: bool = True,
+    ) -> None:
+        """Print a message based on the logging level."""
         prefix = self.prefix
         if level == "info":
             self.info_log(f"{prefix}{message}", stderr=stderr)
@@ -363,7 +370,7 @@ class HUDConsole:
             self.warning_log(f"{prefix}{message}", stderr=stderr)
         elif level == "error":
             self.error_log(f"{prefix}{message}", stderr=stderr)
-        
+
     def debug(self, message: str, stderr: bool = True) -> None:
         """Print a debug message."""
         self.debug_log(message, stderr=stderr)
@@ -397,25 +404,24 @@ class HUDConsole:
         """
         if self._logger.isEnabledFor(logging.INFO):
             self.progress_message(message, stderr=stderr)
-    
+
     def progress(self, initial: str = "", stderr: bool = True) -> _ProgressContext:
         """Create a progress context manager for inline updates.
-        
+
         Args:
             initial: Initial message to display
             stderr: If True, output to stderr (default), otherwise stdout
-            
+
         Returns:
             A context manager that provides update() method
-            
+
         Example:
             with console.progress("Processing...") as progress:
                 for i in range(10):
                     progress.update(f"Processing item {i+1}/10")
         """
         return _ProgressContext(
-            console=self._stderr_console if stderr else self._stdout_console,
-            initial=initial
+            console=self._stderr_console if stderr else self._stdout_console, initial=initial
         )
 
     def success_log(self, message: str, stderr: bool = True) -> None:
@@ -471,7 +477,7 @@ class HUDConsole:
             if isinstance(choice, dict):
                 name = choice.get("name", str(choice.get("value", "")))
                 value = choice.get("value", name)
-                q_choices.append(questionary.Choice(title=name, value=value ))
+                q_choices.append(questionary.Choice(title=name, value=value))
             else:
                 q_choices.append(choice)
 
@@ -534,7 +540,7 @@ class HUDConsole:
 
     def confirm(self, message: str, default: bool = True) -> bool:
         """Print a confirmation message.
-        
+
         Args:
             message: The confirmation message
             default: If True, the default choice is True
@@ -545,26 +551,26 @@ class HUDConsole:
 # Global design instance for convenience
 class _ProgressContext:
     """Context manager for inline progress updates."""
-    
+
     def __init__(self, console: Console, initial: str = "") -> None:
         self.console = console
         self.initial = initial
         self.status: Status | None = None
         self.start_time: float | None = None
-        
+
     def __enter__(self) -> Self:
         self.status = self.console.status(self.initial)
         self.status.__enter__()
         self.start_time = time.time()
         return self
-        
+
     def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
         if self.status:
-            self.status.__exit__(exc_type, exc_val, exc_tb)
-    
+            self.status.__exit__(exc_type, exc_val, exc_tb)  # type: ignore
+
     def update(self, message: str, with_elapsed: bool = True) -> None:
         """Update the progress message.
-        
+
         Args:
             message: New message to display
             with_elapsed: If True, append elapsed time to message

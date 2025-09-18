@@ -219,10 +219,7 @@ class GenericOpenAIChatAgent(MCPAgent):
                 serialized_tc = {
                     "id": tc.id,
                     "type": "function",
-                    "function": {
-                        "name": tc.function.name,
-                        "arguments": tc.function.arguments
-                    }
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
                 }
                 serialized_tool_calls.append(serialized_tc)
             assistant_msg["tool_calls"] = serialized_tool_calls
@@ -233,13 +230,13 @@ class GenericOpenAIChatAgent(MCPAgent):
         if msg.tool_calls:
             for tc in msg.tool_calls:
                 if tc.function.name is not None:  # type: ignore
-                    tool_calls.append(self._oai_to_mcp(tc))
+                    tool_calls.extend(self._oai_to_mcp(tc))
 
         # Only stop on length (token limit), never on "stop"
         done = choice.finish_reason == "length"
         if done:
             self.hud_console.info_log(f"Done decision: finish_reason={choice.finish_reason}")
-        
+
         return AgentResponse(
             content=msg.content or "",
             tool_calls=tool_calls,

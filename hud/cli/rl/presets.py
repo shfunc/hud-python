@@ -1,4 +1,5 @@
 """Training configuration presets for different GPU configurations."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -7,11 +8,6 @@ from typing import Any
 def get_training_presets(gpu_memory_gb: float) -> list[dict[str, Any]]:
     """Get training configuration presets based on GPU memory."""
     # Time estimates based on provided benchmarks
-    SEC_INIT = 20
-    SEC_STEP = 2
-    SEC_START = 10
-    SEC_GRAD = 7
-    
     if gpu_memory_gb >= 40:  # A100 40GB or better
         presets = [
             {
@@ -28,11 +24,11 @@ def get_training_presets(gpu_memory_gb: float) -> list[dict[str, Any]]:
             },
             {
                 "name": "Balanced (Recommended)",
-                "max_steps_per_episode": 6,
+                "max_steps_per_episode": 5,
                 "mini_batch_size": 1,
                 "group_size": 6,
                 "batch_size": 12,
-                "max_new_tokens": 1024,
+                "max_new_tokens": 1400,
                 "tasks_per_hour": 738,
                 "steps_per_hour": 415,
                 "lr": 2e-5,
@@ -84,14 +80,17 @@ def get_training_presets(gpu_memory_gb: float) -> list[dict[str, Any]]:
                 "epochs": 1,
             },
         ]
-    
+
     return presets
 
 
-def estimate_memory_usage(mini_batch_size: int, max_steps: int, max_new_tokens: int, max_pixels: int) -> float:
+def estimate_memory_usage(
+    mini_batch_size: int, max_steps: int, max_new_tokens: int, max_pixels: int
+) -> float:
     """Calculate estimated GPU memory usage using the formula from train.py."""
     INITIAL_MEMORY = 8.0
     SCALING_FACTOR = 4 / (28 * 28 * 256 * 1024)
     token_estimate = mini_batch_size * max_steps * max_new_tokens
     image_estimate = max_pixels
     total_memory = INITIAL_MEMORY + SCALING_FACTOR * token_estimate * image_estimate
+    return total_memory

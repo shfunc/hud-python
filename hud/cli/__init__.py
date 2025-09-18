@@ -6,7 +6,6 @@ import asyncio
 import json
 import sys
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -779,7 +778,7 @@ def eval(
     agent: str | None = typer.Argument(
         None,
         help=(
-            "Agent backend to use (claude, openai, or vllm). If not provided, will prompt interactively."
+            "Agent backend to use (claude, openai, or vllm). If not provided, will prompt interactively."  # noqa: E501
         ),
     ),
     full: bool = typer.Option(
@@ -908,29 +907,27 @@ def eval(
     if agent is None:
         # Get available HUD models first
         hud_models = get_available_models()
-        
+
         # Build choices starting with HUD models
         choices = []
-        
+
         # Add HUD models as agent choices
         for hud_model in hud_models:
             model_name = hud_model["name"]
             base_model = hud_model["base_model"]
             vllm_status = " ⚡" if hud_model.get("vllm_url") else ""
             choices.append({"name": f"{model_name}{vllm_status}", "value": f"{model_name}"})
-        
+
         # Add standard agent choices
-        choices.extend([
-            {"name": "Claude 4 Sonnet", "value": "claude"},
-            {"name": "OpenAI Computer Use", "value": "openai"},
-            {"name": "vLLM (Local Server)", "value": "vllm"},
-        ])
-        
-        agent = hud_console.select(
-            "Select an agent to use:",
-            choices=choices,
-            default=choices[0]["value"] if hud_models else "Claude 4 Sonnet",
+        choices.extend(
+            [
+                {"name": "Claude 4 Sonnet", "value": "claude"},
+                {"name": "OpenAI Computer Use", "value": "openai"},
+                {"name": "vLLM (Local Server)", "value": "vllm"},
+            ]
         )
+
+        agent = hud_console.select("Select an agent to use:", choices=choices, default=0)
 
     # Handle HUD model selection
     if agent and agent not in ["claude", "openai", "vllm"]:
@@ -980,26 +977,16 @@ def eval(
 @app.command()
 def get(
     dataset_name: str = typer.Argument(
-        ...,
-        help="HuggingFace dataset name (e.g., 'hud-evals/browser-2048-tasks')"
+        ..., help="HuggingFace dataset name (e.g., 'hud-evals/browser-2048-tasks')"
     ),
     split: str = typer.Option(
-        "train",
-        "--split",
-        "-s",
-        help="Dataset split to download (train/test/validation)"
+        "train", "--split", "-s", help="Dataset split to download (train/test/validation)"
     ),
-    output: Path | None = typer.Option(
-        None,
-        "--output",
-        "-o",
-        help="Output filename (defaults to dataset_name.jsonl)"
+    output: Path | None = typer.Option(  # noqa: B008
+        None, "--output", "-o", help="Output filename (defaults to dataset_name.jsonl)"
     ),
     limit: int | None = typer.Option(
-        None,
-        "--limit",
-        "-l",
-        help="Limit number of examples to download"
+        None, "--limit", "-l", help="Limit number of examples to download"
     ),
     format: str = typer.Option(
         "json",
@@ -1010,7 +997,7 @@ def get(
 ) -> None:
     """📥 Download a HuggingFace dataset and save it as JSONL."""
     from .get import get_command
-    
+
     get_command(
         dataset_name=dataset_name,
         split=split,
@@ -1033,7 +1020,7 @@ def rl(
         None,
         help="Model to train (default: interactive selection)",
     ),
-    config_file: Path | None = typer.Option(
+    config_file: Path | None = typer.Option(  # noqa: B008
         None,
         "--config",
         "-c",
@@ -1080,7 +1067,7 @@ def rl(
     """🎯 Run GRPO reinforcement learning training on tasks."""
     # Import from the rl module
     from .rl import rl_command
-    
+
     rl_command(
         tasks_file=tasks_file,
         model=model,
@@ -1096,7 +1083,7 @@ def rl(
 
 
 def main() -> None:
-    """Main entry point for the CLI."""    
+    """Main entry point for the CLI."""
     # Handle --version flag before Typer parses args
     if "--version" in sys.argv:
         try:
@@ -1127,10 +1114,18 @@ def main() -> None:
             console.print("  6. Run and test: [cyan]hud run <image>[/cyan]")
             console.print("\n[yellow]Datasets & RL Training:[/yellow]")
             console.print("  1. Get dataset: [cyan]hud get hud-evals/browser-2048-tasks[/cyan]")
-            console.print("  2. Create dataset: [cyan]hud hf tasks.json --name my-org/my-tasks[/cyan]")
-            console.print("  3. Start training: [cyan]hud rl browser-2048-tasks.jsonl --local[/cyan]")
-            console.print("  4. Custom model: [cyan]hud rl tasks.jsonl --model meta-llama/Llama-3.2-3B --local[/cyan]")
-            console.print("  5. Restart server: [cyan]hud rl tasks.jsonl --restart --local[/cyan]\n")
+            console.print(
+                "  2. Create dataset: [cyan]hud hf tasks.json --name my-org/my-tasks[/cyan]"
+            )
+            console.print(
+                "  3. Start training: [cyan]hud rl browser-2048-tasks.jsonl --local[/cyan]"
+            )
+            console.print(
+                "  4. Custom model: [cyan]hud rl tasks.jsonl --model meta-llama/Llama-3.2-3B --local[/cyan]"  # noqa: E501
+            )
+            console.print(
+                "  5. Restart server: [cyan]hud rl tasks.jsonl --restart --local[/cyan]\n"
+            )
 
         app()
     except typer.Exit as e:

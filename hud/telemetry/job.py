@@ -91,10 +91,10 @@ class Job:
 
     async def log(self, metrics: dict[str, Any]) -> None:
         """Log metrics to the job.
-        
+
         Args:
             metrics: Dictionary of metric name to value pairs
-            
+
         Example:
             await job.log({"loss": 0.5, "accuracy": 0.95, "epoch": 1})
         """
@@ -108,13 +108,13 @@ class Job:
                 )
             except Exception as e:
                 logger.warning("Failed to log metrics to job: %s", e)
-    
+
     def log_sync(self, metrics: dict[str, Any]) -> None:
         """Synchronously log metrics to the job.
-        
+
         Args:
             metrics: Dictionary of metric name to value pairs
-            
+
         Example:
             job.log_sync({"loss": 0.5, "accuracy": 0.95, "epoch": 1})
         """
@@ -265,7 +265,10 @@ def job(
 
 
 def create_job(
-    name: str, metadata: dict[str, Any] | None = None, dataset_link: str | None = None, job_id: str | None = None
+    name: str,
+    metadata: dict[str, Any] | None = None,
+    dataset_link: str | None = None,
+    job_id: str | None = None,
 ) -> Job:
     """Create a job without using context manager.
 

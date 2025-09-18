@@ -15,6 +15,7 @@ from hud.settings import settings
 
 logger = logging.getLogger(__name__)
 
+
 class Task(BaseModel):
     """
     A task configuration that can be used to create a task.
@@ -256,12 +257,13 @@ class Trace(BaseModel):
     - isError: Whether the execution resulted in an error
     - trace: The steps taken in the run (empty if not tracing)
     """
+
     reward: float = Field(default=0.0)
     done: bool = Field(default=True)
     info: dict[str, Any] = Field(default_factory=dict)
     content: str | None = Field(default=None)
     isError: bool = Field(default=False)
-    
+
     # Metadata
     task: Task | None = Field(default=None)
 
