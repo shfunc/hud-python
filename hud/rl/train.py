@@ -232,6 +232,9 @@ async def train(config: Config, tasks: list[Task]) -> None:
                     )
                     learner.save(str(checkpoint_path))
 
+                    # Wait for 6 seconds to ensure the checkpoint is saved
+                    await asyncio.sleep(6)
+
                     adapter_name = f"{config.adapter_prefix}-{checkpoint_id}"
                     if vllm.load_adapter(adapter_name, str(checkpoint_path)):
                         actor.update_adapter(adapter_name)
