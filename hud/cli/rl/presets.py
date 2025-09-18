@@ -19,7 +19,7 @@ def get_training_presets(gpu_memory_gb: float) -> list[dict[str, Any]]:
                 "max_new_tokens": 256,
                 "tasks_per_hour": 847,
                 "steps_per_hour": 424,
-                "lr": 2e-5,
+                "lr": 3e-5,
                 "epochs": 2,
             },
             {
@@ -28,10 +28,10 @@ def get_training_presets(gpu_memory_gb: float) -> list[dict[str, Any]]:
                 "mini_batch_size": 1,
                 "group_size": 6,
                 "batch_size": 12,
-                "max_new_tokens": 1400,
+                "max_new_tokens": 1024,
                 "tasks_per_hour": 738,
                 "steps_per_hour": 415,
-                "lr": 2e-5,
+                "lr": 3e-5,
                 "epochs": 2,
             },
             {
@@ -43,15 +43,15 @@ def get_training_presets(gpu_memory_gb: float) -> list[dict[str, Any]]:
                 "max_new_tokens": 512,
                 "tasks_per_hour": 900,
                 "steps_per_hour": 450,
-                "lr": 2e-5,
+                "lr": 3e-5,
                 "epochs": 2,
             },
         ]
     elif gpu_memory_gb >= 24:  # RTX 4090, A10, etc
         presets = [
             {
-                "name": "Test",
-                "max_steps_per_episode": 10,
+                "name": "Balanced (Recommended)",
+                "max_steps_per_episode": 4,
                 "mini_batch_size": 1,
                 "group_size": 4,
                 "batch_size": 16,
@@ -59,8 +59,8 @@ def get_training_presets(gpu_memory_gb: float) -> list[dict[str, Any]]:
                 "epochs": 2,
             },
             {
-                "name": "Balanced (Recommended)",
-                "max_steps_per_episode": 5,
+                "name": "Low Variance",
+                "max_steps_per_episode": 3,
                 "mini_batch_size": 2,
                 "group_size": 4,
                 "batch_size": 16,
@@ -74,7 +74,7 @@ def get_training_presets(gpu_memory_gb: float) -> list[dict[str, Any]]:
                 "name": "Test",
                 "max_steps_per_episode": 5,
                 "mini_batch_size": 1,
-                "group_size": 2,
+                "group_size": 4,
                 "batch_size": 8,
                 "lr": 1e-4,
                 "epochs": 1,

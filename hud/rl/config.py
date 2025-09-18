@@ -69,33 +69,33 @@ class TrainingConfig:
 
     # Batching parameters
     epochs: int = 2
-    batch_size: int = 36
-    group_size: int = 6
-    mini_batch_size: int = 2
+    batch_size: int = 24
+    group_size: int = 4
+    mini_batch_size: int = 1
     update_after_group: bool = True  # Whether to update the policy after each task group
-    accumulate_over_minibatches: bool = True  # Whether to accumulate over minibatches
+    accumulate_over_minibatches: bool = False  # Whether to accumulate over minibatches
 
     # Advantage calculation parameters
-    batch_level: Literal["group", "batch"] = "batch"
-    no_std: bool = True
+    batch_level: Literal["group", "batch"] = "group"
+    no_std: bool = False
     leave_one_out: bool = True
 
     # Replay buffer parameters
-    buffer_steps: int = 6
+    buffer_steps: int = 4
     select_strategy: Literal["recent", "variance", "random"] = "variance"
 
     # Aggregation parameters
     ppo_mode: Literal["per_token", "per_trace"] = "per_token"
-    token_agg: Literal["mean", "sum"] = "sum"  # noqa: S105
+    token_agg: Literal["mean", "sum"] = "mean"  # noqa: S105
 
     # Regularization parameters
-    kl_beta: float = 0.001
+    kl_beta: float = 0.0
     entropy_beta: float = 0.0
     top_eps: float = 0.2
     bottom_eps: float = 0.1
 
     # Training hyperparameters
-    lr: float = 5e-5
+    lr: float = 3e-5
     grad_clip: float = 1.0
 
     # Adam hyperparameters
@@ -109,10 +109,10 @@ class ActorConfig:
     """Actor/episode collection configuration."""
 
     # Execution parameters
-    max_steps_per_episode: int = 6
+    max_steps_per_episode: int = 5
     max_parallel_episodes: int = 48
     max_new_tokens: int = 1024
-    force_tool_choice: bool = False
+    force_tool_choice: bool = True
     allowed_tools: list[str] | None = None
 
     # Model parameters

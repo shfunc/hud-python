@@ -58,7 +58,7 @@ def list_models() -> list[RLModelInfo]:
         response = [response]
     return [
         RLModelInfo(**(model if isinstance(model, dict) else model.__dict__)) for model in response
-    ]  # noqa: E501
+    ]
 
 
 def deploy_vllm(model_name: str, gpu_type: str = "A100") -> dict[str, Any]:
