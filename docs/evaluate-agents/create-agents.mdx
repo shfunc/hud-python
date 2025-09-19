@@ -39,7 +39,7 @@ class MyAgent(MCPAgent):
         pass
 
     async def get_response(self, messages: list[Any]) -> AgentResponse:
-        """2. Called EACH TURN - sends messages to your LLM, returns its response."""
+        """2. Called EACH TURN - sends messages to your LLM, returns its response, optionally adds the assistant message to messages."""
         pass
 
     async def format_blocks(self, blocks: list[ContentBlock]) -> list[Any]:
@@ -60,123 +60,9 @@ The agent loop calls your methods in this sequence:
 
 1. **`get_system_messages()`** - Once at start
 2. **`format_blocks()`** - Converts initial task prompt
-3. **`get_response()`** - Gets LLM decision
+3. **`get_response()`** - Gets LLM decision, adds assistant message to messages
 4. **`format_tool_results()`** - After each tool execution
 5. Back to step 3 until done
-
-## Complete Implementation Example
-
-Here's a working agent for OpenAI-compatible APIs:
-
-```python
-from hud.agents import MCPAgent
-from hud.types import AgentResponse, MCPToolCall, MCPToolResult
-from openai import AsyncOpenAI
-import json
-
-class MyOpenAIAgent(MCPAgent):
-    def __init__(self, api_key: str, model: str = "gpt-4", **kwargs):
-        super().__init__(**kwargs)
-        self.client = AsyncOpenAI(api_key=api_key)
-        self.model = model
-
-    async def get_system_messages(self) -> list[dict]:
-        """System prompt - called once at start."""
-        return [{
-            "role": "system",
-            "content": self.system_prompt or "You are a helpful assistant that uses tools."
-        }]
-
-    async def get_response(self, messages: list[dict]) -> AgentResponse:
-        """Main decision point - called each turn."""
-        # Convert MCP tools to OpenAI format
-        tools = []
-        for tool in self.get_available_tools():  # Base class provides filtered tools
-            tools.append({
-                "type": "function",
-                "function": {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "parameters": tool.inputSchema or {}
-                }
-            })
-
-        # Call OpenAI
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            tools=tools if tools else None
-        )
-
-        # Parse tool calls
-        tool_calls = []
-        choice = response.choices[0]
-        if choice.message.tool_calls:
-            for tc in choice.message.tool_calls:
-                tool_calls.append(MCPToolCall(
-                    name=tc.function.name,
-                    arguments=json.loads(tc.function.arguments),
-                    id=tc.id
-                ))
-
-        return AgentResponse(
-            content=choice.message.content or "",
-            tool_calls=tool_calls,
-            done=len(tool_calls) == 0  # Stop if no tools requested
-        )
-
-    async def format_blocks(self, blocks: list) -> list[dict]:
-        """Convert initial prompt to OpenAI format."""
-        content = []
-        for block in blocks:
-            if block.type == "text":
-                content.append({"type": "text", "text": block.text})
-            elif block.type == "image":
-                content.append({
-                    "type": "image_url",
-                    "image_url": {"url": f"data:{block.mime_type};base64,{block.data}"}
-                })
-
-        return [{"role": "user", "content": content}]
-
-    async def format_tool_results(
-        self,
-        tool_calls: list[MCPToolCall],
-        tool_results: list[MCPToolResult]
-    ) -> list[dict]:
-        """Convert tool results back to OpenAI format."""
-        messages = []
-
-        # Add assistant's tool call message
-        messages.append({
-            "role": "assistant",
-            "content": None,
-            "tool_calls": [{
-                "id": call.id,
-                "type": "function",
-                "function": {
-                    "name": call.name,
-                    "arguments": json.dumps(call.arguments)
-                }
-            } for call in tool_calls]
-        })
-
-        # Add tool results
-        for call, result in zip(tool_calls, tool_results):
-            content = ""
-            if result.content:
-                for block in result.content:
-                    if hasattr(block, 'text'):
-                        content += block.text
-
-            messages.append({
-                "role": "tool",
-                "tool_call_id": call.id,
-                "content": content or "Tool executed successfully"
-            })
-
-        return messages
-```
 
 ## What MCPAgent Does For You
 
@@ -220,10 +106,10 @@ The base `MCPAgent` class handles the entire execution loop. When you call `agen
 
 **Tool Discovery & Filtering**
 ```python
-agent = MyOpenAIAgent(
+agent = ClaudeAgent(
     api_key="...",
-    allowed_tools=["click", "type", "screenshot"],  # Only these tools
-    disallowed_tools=["execute_script"],  # Never these tools
+    allowed_tools=["anthropic_computer"],  # Only these tools
+    disallowed_tools=["openai_computer"],  # Never these tools
     lifecycle_tools=["setup", "evaluate"]  # Hidden from LLM
 )
 ```
@@ -303,128 +189,6 @@ task = Task(
 Test your agent on a simple task:
 
 ```python
-from hud.agents import MCPAgent
-from hud.types import AgentResponse, MCPToolCall, MCPToolResult
-from typing import Any
-import json
-
-class CustomAgent(MCPAgent):
-    """Custom agent implementation for any LLM provider."""
-    
-    def __init__(self, model: str = "your-model", **kwargs):
-        super().__init__(**kwargs)
-        self.model = model
-        # Initialize your LLM client here
-        # self.client = YourLLMClient()
-    
-    async def get_system_messages(self) -> list[Any]:
-        """Return system messages for your LLM.
-        
-        This method should return the system prompt and any other
-        initialization messages in your LLM's expected format.
-        """
-        prompt = self.system_prompt or "You are a helpful assistant that uses tools to complete tasks."
-        return [{"role": "system", "content": prompt}]
-    
-    async def get_response(self, messages: list[Any]) -> AgentResponse:
-        """Generate agent response with tool calls.
-        
-        This is where you call your LLM and parse the response into
-        tool calls. Convert available MCP tools to your LLM's format.
-        """
-        # Convert MCP tools to your LLM's tool format
-        tools = [
-            {
-                "name": tool.name,
-                "description": tool.description,
-                "parameters": tool.inputSchema
-            }
-            for tool in self.get_available_tools()  # Use this method instead
-        ]
-        
-        # Call your LLM with tools
-        response = await self.call_llm(messages, tools)
-        
-        # Parse tool calls from response
-        tool_calls = self.parse_tool_calls(response)
-        
-        return AgentResponse(
-            content=response.get("content", ""),
-            tool_calls=tool_calls
-        )
-    
-    async def format_blocks(self, blocks: list[Any]) -> list[Any]:
-        """Format content blocks for your LLM.
-        
-        Convert MCP content blocks (text, images) into your LLM's
-        message format.
-        """
-        messages = []
-        for block in blocks:
-            if block.type == "text":
-                messages.append({"role": "user", "content": block.text})
-            elif block.type == "image":
-                # Handle image blocks if your LLM supports them
-                messages.append({
-                    "role": "user", 
-                    "content": [
-                        {"type": "image", "image": block.data}
-                    ]
-                })
-        return messages
-    
-    async def format_tool_results(
-        self, 
-        tool_calls: list[MCPToolCall], 
-        tool_results: list[MCPToolResult]
-    ) -> list[Any]:
-        """Format tool results for your LLM.
-        
-        Convert tool call results back into your LLM's message format.
-        """
-        messages = []
-        
-        # Add assistant message with tool calls
-        messages.append({
-            "role": "assistant",
-            "tool_calls": [
-                {
-                    "id": call.id,
-                    "name": call.name,
-                    "arguments": call.arguments
-                }
-                for call in tool_calls
-            ]
-        })
-        
-        # Add tool results
-        for call, result in zip(tool_calls, tool_results):
-            content = json.dumps(result.content) if result.content else ""
-            messages.append({
-                "role": "tool",
-                "tool_call_id": call.id,
-                "content": content
-            })
-        
-        return messages
-
-    # Helper methods you'll need to implement
-    async def call_llm(self, messages: list[Any], tools: list[Any]) -> dict:
-        """Call your LLM API and return the response."""
-        # Implement your LLM API call here
-        pass
-    
-    def parse_tool_calls(self, response: dict) -> list[MCPToolCall]:
-        """Parse tool calls from your LLM's response format."""
-        # Implement parsing logic for your LLM's tool call format
-        pass
-```
-
-## Testing Your Agent
-
-Test your agent on a simple task:
-
-```python
 import asyncio
 import hud
 import os
@@ -472,23 +236,16 @@ asyncio.run(test_agent())
 HUD provides built-in agents for common LLM providers:
 
 ```python
-from hud.agents import ClaudeAgent, OpenAIAgent, OperatorAgent
+from hud.agents import ClaudeAgent, OperatorAgent
 
 # Claude (Anthropic)
 claude_agent = ClaudeAgent(
-    model="claude-3-opus-20240229",
+    model="claude-4-sonnet-20241022",
     api_key=os.getenv("ANTHROPIC_API_KEY")
-)
-
-# OpenAI GPT-4
-openai_agent = OpenAIAgent(
-    model="gpt-4-turbo-preview",
-    api_key=os.getenv("OPENAI_API_KEY")
 )
 
 # Operator (OpenAI-based)
 operator_agent = OperatorAgent(
-    model="gpt-4",
     api_key=os.getenv("OPENAI_API_KEY")
 )
 ```
