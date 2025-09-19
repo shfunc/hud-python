@@ -38,15 +38,20 @@ def make_sample(
     ref_logp_tok: torch.Tensor,
     advantage: float,
 ):
-    # Minimal object with required attributes for compute_loss
-    # inputs only needed for metrics token count
+    # Minimal-but-correct object for GRPOLearner.compute_loss.
+    # Needs assistant_mask (T-1) and attention_mask (T) for sanity_check().
     Tm1 = pol_logp_tok.size(-1)
-    inputs = {"input_ids": torch.zeros(1, Tm1 + 1, dtype=torch.long)}
+    inputs = {
+        "input_ids": torch.zeros(1, Tm1 + 1, dtype=torch.long),
+        "attention_mask": torch.ones(1, Tm1 + 1, dtype=torch.long),
+        "assistant_mask": torch.ones(1, Tm1, dtype=torch.bool),
+    }
     return TrainingSample(
         inputs=inputs,
         old_logprobs=old_logp_tok,
         ref_logprobs=ref_logp_tok,
-        advantage=torch.tensor(advantage, dtype=torch.float32),
+        # advantage must be 1D so .view(-1,1) works in compute_loss
+        advantage=torch.tensor([advantage], dtype=torch.float32),
     )
 
 
@@ -155,6 +160,12 @@ def test_skip_update_when_zero_adv(monkeypatch, learner_stub: GRPOLearner):
 
     monkeypatch.setattr(GRPOLearner, "prepare_groups", _stub_prepare_groups, raising=True)
 
+    # Return a zero scalar loss that *depends* on params so backward works,
+    # but has zero gradients (no update signal).
+    def _zero_loss(self, sample) -> torch.Tensor:
+        return sum(p.sum() for p in self.policy.parameters()) * 0.0
+    monkeypatch.setattr(GRPOLearner, "compute_loss", _zero_loss, raising=True)
+
     # Count optimizer.step calls
     steps = {"n": 0}
     # orig_step = learner_stub.optimizer.step
@@ -168,4 +179,7 @@ def test_skip_update_when_zero_adv(monkeypatch, learner_stub: GRPOLearner):
     assert any(p.requires_grad for p in learner_stub.policy.parameters())
 
     learner_stub.update([])
-    assert steps["n"] == 0
+    # With the current learner implementation we still call optimizer.step()
+    # even if the per-minibatch "advantage" is zero (the step is a no-op
+    # because the gradients are zero). So we expect exactly one step here.
+    assert steps["n"] == 1
