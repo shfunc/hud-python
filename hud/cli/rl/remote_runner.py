@@ -281,7 +281,17 @@ def run_remote_training(
             presets=presets,
         )
 
-        config.job_name = f"RL {model_name} on {tasks_file}"
+        # Use a short label for tasks (avoid full absolute paths)
+        try:
+            if tasks_file and Path(tasks_file).exists():
+                tasks_label = Path(tasks_file).name
+            else:
+                # Fallback: last segment of a non-existent path or dataset name
+                tasks_label = str(tasks_file).replace("\\", "/").split("/")[-1]
+        except Exception:
+            tasks_label = str(tasks_file)
+
+        config.job_name = f"RL {model_name} on {tasks_label}"
 
         # Save config for editing
         temp_config_path = Path(f".rl_config_temp_{model_name}.json")
