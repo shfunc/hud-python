@@ -27,9 +27,27 @@ def _is_remote_url(url: str) -> bool:
 
 
 def _validate_tasks(tasks: list[Task]) -> bool:
-    """Validate the tasks file."""
+    """Validate the tasks file: return True if tasks already reference a remote MCP URL.
+
+    A task is considered remote if any "url" field anywhere inside mcp_config
+    is a valid remote URL (e.g., https://mcp.hud.so/v3/mcp).
+    """
+    def _has_remote_url(obj: Any) -> bool:
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                if k == "url" and isinstance(v, str) and _is_remote_url(v):
+                    return True
+                if _has_remote_url(v):
+                    return True
+        elif isinstance(obj, list):
+            for item in obj:
+                if _has_remote_url(item):
+                    return True
+        return False
+
     for task in tasks:
-        if not task.mcp_config or (not _is_remote_url(task.mcp_config.get("url", ""))):
+        cfg = task.mcp_config or {}
+        if not _has_remote_url(cfg):
             return False
     return True
 
@@ -100,7 +118,7 @@ def _ensure_pushed(env_dir: Path, lock_data: dict[str, Any]) -> dict[str, Any]:
         require_docker_running()
 
         # If Docker or login is not configured, the push function will fail and halt.
-        push_environment(str(env_dir))
+        push_environment(str(env_dir), yes=True)
 
         # Reload lock after push
         lock_path = env_dir / "hud.lock.yaml"
@@ -111,7 +129,21 @@ def _ensure_pushed(env_dir: Path, lock_data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _derive_remote_image(lock_data: dict[str, Any]) -> str:
-    """Derive org/name:tag from lock file image field for MCP header."""
+    """Derive org/name:tag from lock file for MCP header.
+
+    Preference order:
+    1) lock_data["push"]["image_with_tag"] if present
+    2) Derive from lock_data["image"] (may be a digest; falls back to latest)
+    """
+    push_info = lock_data.get("push", {}) if isinstance(lock_data, dict) else {}
+
+    # 1) Exact image_with_tag if present
+    pushed_with_tag = str(push_info.get("image_with_tag", "")).strip()
+    if pushed_with_tag:
+        name, tag = extract_name_and_tag(pushed_with_tag)
+        return f"{name}:{tag}"
+
+    # Base name always comes from lock_data.image to preserve org/repo
     image_ref = str(lock_data.get("image", "")).strip()
     if not image_ref:
         raise typer.Exit("Lock file missing image reference")
@@ -157,19 +189,55 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
     # Derive remote image name org/name:tag
     remote_image = _derive_remote_image(lock_data)
 
+    # Helper to strip extra fields from tool calls
+    def _simplify_tool_call(tool: Any) -> Any:
+        def _one(x: Any) -> dict[str, Any]:
+            try:
+                data = x.model_dump() if hasattr(x, "model_dump") else dict(x)
+            except Exception:
+                try:
+                    data = dict(x)
+                except Exception:
+                    return {}
+            # Keep only name and arguments
+            name = data.get("name")
+            arguments = data.get("arguments", {})
+            return {"name": name, "arguments": arguments}
+
+        if tool is None:
+            return None
+        if isinstance(tool, list):
+            return [_one(x) for x in tool]
+        return _one(tool)
+
     # Convert to list[dict]
     tasks_payload: list[dict[str, Any]] = []
     for t in tasks:
-        item = t.model_dump()
-        item["mcp_config"] = {
-            "hud": {
-                "url": "https://mcp.hud.so/v3/mcp",
-                "headers": {
-                    "Authorization": "Bearer ${HUD_API_KEY}",
-                    "Mcp-Image": remote_image,
-                },
-            }
+        item: dict[str, Any] = {
+            "prompt": t.prompt,
+            "mcp_config": {
+                "hud": {
+                    "url": "https://mcp.hud.so/v3/mcp",
+                    "headers": {
+                        "Authorization": "Bearer ${HUD_API_KEY}",
+                        "Mcp-Image": remote_image,
+                    },
+                }
+            },
         }
+
+        # Optional fields, omit Nones
+        if t.setup_tool is not None:
+            item["setup_tool"] = _simplify_tool_call(t.setup_tool)
+        if t.evaluate_tool is not None:
+            item["evaluate_tool"] = _simplify_tool_call(t.evaluate_tool)
+        if t.agent_tools is not None:
+            item["agent_tools"] = t.agent_tools
+        if t.system_prompt is not None:
+            item["system_prompt"] = t.system_prompt
+        if t.metadata:
+            item["metadata"] = t.metadata
+
         tasks_payload.append(item)
 
     # Write new file: remote_<name>.json (always JSON array)
