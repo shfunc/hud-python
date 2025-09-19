@@ -9,8 +9,8 @@ from __future__ import annotations
 import os
 import subprocess
 import time
-from pathlib import Path
 import uuid
+from pathlib import Path
 
 from rich.console import Console
 
@@ -51,9 +51,7 @@ def ensure_vllm_deployed(model_name: str, gpu_type: str = "A100", timeout: int =
     hud_console.info("Waiting for vLLM server to be ready...")
     start_time = time.time()
     with hud_console.progress() as progress:
-        progress.update(
-            "Checking deployment status (see live status on https://app.hud.so/models)"
-        )
+        progress.update("Checking deployment status (see live status on https://app.hud.so/models)")
         while True:
             if time.time() - start_time > timeout:
                 hud_console.error("Timeout waiting for vLLM deployment")
