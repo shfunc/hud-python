@@ -489,7 +489,7 @@ def build_environment(
         hud_console.warning("Could not retrieve image ID for lock file")
 
     # Remove temp image after we're done
-    subprocess.run(["docker", "rmi", temp_tag], capture_output=True)  # noqa: S603, S607
+    subprocess.run(["docker", "rmi", "-f", temp_tag], capture_output=True)  # noqa: S603, S607
 
     # Add to local registry
     if image_id:
