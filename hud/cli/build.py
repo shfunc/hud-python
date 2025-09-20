@@ -224,6 +224,7 @@ def build_docker_image(
     no_cache: bool = False,
     verbose: bool = False,
     build_args: dict[str, str] | None = None,
+    platform: str | None = None,
 ) -> bool:
     """Build a Docker image from a directory."""
     hud_console = HUDConsole()
@@ -236,7 +237,10 @@ def build_docker_image(
         return False
 
     # Build command
-    cmd = ["docker", "build", "-t", tag]
+    cmd = ["docker", "build"]
+    if platform:
+        cmd.extend(["--platform", platform])
+    cmd.extend(["-t", tag])
     if no_cache:
         cmd.append("--no-cache")
 
@@ -264,6 +268,7 @@ def build_environment(
     no_cache: bool = False,
     verbose: bool = False,
     env_vars: dict[str, str] | None = None,
+    platform: str | None = None,
 ) -> None:
     """Build a HUD environment and generate lock file."""
     hud_console = HUDConsole()
@@ -294,9 +299,8 @@ def build_environment(
     except Exception:
         default_image = f"{env_dir.name}:dev"
 
-    # Use provided tag or default
-    if not tag:
-        tag = default_image
+    # Determine final image tag to use
+    image_tag: str = tag if tag else default_image
 
     # Build temporary image first
     temp_tag = f"hud-build-temp:{int(time.time())}"
@@ -304,7 +308,14 @@ def build_environment(
     hud_console.progress_message(f"Building Docker image: {temp_tag}")
 
     # Build the image (env vars are for runtime, not build time)
-    if not build_docker_image(env_dir, temp_tag, no_cache, verbose):
+    if not build_docker_image(
+        env_dir,
+        temp_tag,
+        no_cache,
+        verbose,
+        build_args=None,
+        platform=platform,
+    ):
         hud_console.error("Docker build failed")
         raise typer.Exit(1)
 
@@ -422,21 +433,24 @@ def build_environment(
 
     # Build final image with label (uses cache from first build)
     # Also tag with version
-    base_name = tag.split(":")[0] if tag and ":" in tag else tag
+    base_name = image_tag.split(":")[0] if ":" in image_tag else image_tag
     version_tag = f"{base_name}:{new_version}"
 
-    label_cmd = [
-        "docker",
-        "build",
-        "--label",
-        f"org.hud.manifest.head={lock_hash}:{lock_size}",
-        "--label",
-        f"org.hud.version={new_version}",
-        "-t",
-        tag,
-        "-t",
-        version_tag,
-    ]
+    label_cmd = ["docker", "build"]
+    if platform is not None:
+        label_cmd.extend(["--platform", platform])
+    label_cmd.extend(
+        [
+            "--label",
+            f"org.hud.manifest.head={lock_hash}:{lock_size}",
+            "--label",
+            f"org.hud.version={new_version}",
+            "-t",
+            image_tag,
+            "-t",
+            version_tag,
+        ]
+    )
 
     label_cmd.append(str(env_dir))
 
@@ -457,14 +471,14 @@ def build_environment(
     hud_console.success("Built final image with lock file metadata")
 
     # NOW get the image ID after the final build
-    image_id = get_docker_image_id(tag)  # type: ignore
+    image_id = get_docker_image_id(image_tag)
     if image_id:
         # For local builds, store the image ID
         # Docker IDs come as sha256:hash, we want tag@sha256:hash
         if image_id.startswith("sha256:"):
-            lock_content["image"] = f"{tag}@{image_id}"
+            lock_content["image"] = f"{image_tag}@{image_id}"
         else:
-            lock_content["image"] = f"{tag}@sha256:{image_id}"
+            lock_content["image"] = f"{image_tag}@sha256:{image_id}"
 
         # Update the lock file with the new image reference
         with open(lock_path, "w") as f:
@@ -487,8 +501,8 @@ def build_environment(
 
     # Show the version tag as primary since that's what will be pushed
     hud_console.status_item("Built image", version_tag, primary=True)
-    if tag:
-        hud_console.status_item("Also tagged", tag)
+    if image_tag:
+        hud_console.status_item("Also tagged", image_tag)
     hud_console.status_item("Version", new_version)
     hud_console.status_item("Lock file", "hud.lock.yaml")
     hud_console.status_item("Tools found", str(analysis["toolCount"]))
@@ -500,7 +514,7 @@ def build_environment(
     hud_console.section_title("Next Steps")
     hud_console.info("Test locally:")
     hud_console.command_example("hud dev", "Hot-reload development")
-    hud_console.command_example(f"hud run {tag}", "Run the built image")
+    hud_console.command_example(f"hud run {image_tag}", "Run the built image")
     hud_console.info("")
     hud_console.info("Publish to registry:")
     hud_console.command_example("hud push", f"Push as {version_tag}")
@@ -517,6 +531,7 @@ def build_command(
     no_cache: bool = typer.Option(False, "--no-cache", help="Build without Docker cache"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
     env_vars: dict[str, str] | None = None,
+    platform: str | None = None,
 ) -> None:
     """Build a HUD environment and generate lock file."""
-    build_environment(directory, tag, no_cache, verbose, env_vars)
+    build_environment(directory, tag, no_cache, verbose, env_vars, platform)

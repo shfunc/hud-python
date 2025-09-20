@@ -85,18 +85,19 @@ class Actor:
                     )
                 except TimeoutError:
                     hud_console.warning_log(f"Episode timed out for task {t.id}")
-                    return Trace(isError=True, content="Episode timeout")
+                    # Attach task so buffer grouping has key
+                    return Trace(isError=True, content="Episode timeout", task=t)
 
             results = await asyncio.gather(
                 *[run_with_timeout(t) for t in batch],
                 return_exceptions=True,
             )
 
-            # Normalize exceptions to error traces
-            for res in results:
+            # Normalize exceptions to error traces and ensure task is attached
+            for t, res in zip(batch, results, strict=False):
                 if isinstance(res, Exception):
                     hud_console.warning_log(f"Episode error: {res}")
-                    traces.append(Trace(isError=True, content=str(res)))
+                    traces.append(Trace(isError=True, content=str(res), task=t))
                 else:
                     traces.append(res)
 
@@ -113,7 +114,8 @@ class Actor:
 
         except Exception:
             logger.info("GOT EXCEPTION")
-            return Trace(isError=True)
+            # Preserve task on exception for grouping
+            return Trace(isError=True, task=task)
 
         result.info["tool_spec"] = agent.get_tool_schemas()
 

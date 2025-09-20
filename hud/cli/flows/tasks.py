@@ -100,7 +100,8 @@ def _ensure_built(env_dir: Path) -> dict[str, Any]:
         # Check Docker availability before attempting a build
         require_docker_running()
         # Run build (non-interactive). If Docker isn't running, this will raise and stop the flow.
-        build_environment(str(env_dir))
+        # Force linux/amd64 platform to ensure compatibility during RL flows.
+        build_environment(str(env_dir), platform="linux/amd64")
 
     # Load lock file
     with open(lock_path) as f:

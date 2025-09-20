@@ -585,6 +585,9 @@ def build(
     ),
     no_cache: bool = typer.Option(False, "--no-cache", help="Build without Docker cache"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
+    platform: str | None = typer.Option(
+        None, "--platform", help="Set Docker target platform (e.g., linux/amd64)"
+    ),
 ) -> None:
     """🏗️ Build a HUD environment and generate lock file.
 
@@ -635,7 +638,7 @@ def build(
         else:
             i += 1
 
-    build_command(directory, tag, no_cache, verbose, env_vars)
+    build_command(directory, tag, no_cache, verbose, env_vars, platform)
 
 
 @app.command()
