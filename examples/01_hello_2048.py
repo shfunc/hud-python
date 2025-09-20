@@ -23,15 +23,15 @@ async def main():
     # OPTION 1: Direct Python execution (Not recommended for production use)
     # This is the most basic way to run any MCP server
     # However, it works on your host machine, not in a container
-    # text_2048 = Path(__file__).parent.parent / "environments/text_2048"
-    # mcp_config = {
-    #     "local": {
-    #         "command": sys.executable,
-    #         "args": ["-m", "hud_controller.server"],
-    #         "env": {"PYTHONPATH": str(text_2048 / "src")},
-    #         "cwd": str(text_2048),
-    #     }
-    # }
+    text_2048 = Path(__file__).parent.parent / "environments/text_2048"
+    mcp_config = {
+        "local": {
+            "command": sys.executable,
+            "args": ["-m", "hud_controller.server"],
+            "env": {"PYTHONPATH": str(text_2048 / "src")},
+            "cwd": str(text_2048),
+        }
+    }
 
     # OPTION 2: Needs: docker build -t hudpython/hud-text-2048:latest environments/text_2048
     # OR: docker pull hudpython/hud-text-2048:latest
