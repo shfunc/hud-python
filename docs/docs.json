@@ -64,10 +64,8 @@
           {
             "group": "Train Agents",
             "pages": [
-              "train-agents/index",
-              "train-agents/rl-quickstart",
-              "train-agents/verifiers-gym",
-              "train-agents/datasets"
+              "train-agents/quickstart",
+              "train-agents/tasks"
             ]
           },
           {
