@@ -2,22 +2,24 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Type
 
 try:
     import multiprocessing.connection as _mp_conn
 
     # Pull the exception dynamically; fall back to OSError if missing in stubs/runtime
-    MPAuthenticationError: Type[BaseException] = getattr(_mp_conn, "AuthenticationError", OSError)
+    MPAuthenticationError: type[BaseException] = getattr(_mp_conn, "AuthenticationError", OSError)
 except Exception:  # pragma: no cover
     MPAuthenticationError = OSError
 
-from pathlib import Path
+
+from typing import TYPE_CHECKING
 
 import pytest
 
 from hud.server.context import attach_context, serve_context
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
 pytestmark = pytest.mark.skipif(
     sys.platform == "win32",
@@ -91,9 +93,6 @@ def test_attach_nonexistent_raises(tmp_path: Path) -> None:
         attach_context(sock_path=sock)
 
 
-import asyncio
-
-
 @pytest.mark.asyncio
 async def test_run_context_server_handles_keyboardinterrupt(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -106,7 +105,7 @@ async def test_run_context_server_handles_keyboardinterrupt(
         def shutdown(self) -> None:
             called["shutdown"] = True
 
-    def fake_serve(ctx, sock_path, authkey):  # noqa: ANN001
+    def fake_serve(ctx, sock_path, authkey):
         called["served"] = True
         called["addr"] = sock_path
         return _Mgr()
@@ -116,7 +115,7 @@ async def test_run_context_server_handles_keyboardinterrupt(
     # Make asyncio.Event().wait() raise KeyboardInterrupt immediately
     class _FakeEvent:
         async def wait(self) -> None:
-            raise KeyboardInterrupt()
+            raise KeyboardInterrupt
 
     monkeypatch.setattr("hud.server.context.asyncio.Event", lambda: _FakeEvent())
 

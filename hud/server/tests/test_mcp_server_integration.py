@@ -3,14 +3,14 @@ from __future__ import annotations
 import asyncio
 import socket
 from contextlib import suppress
+from typing import Any, cast
 
 import pytest
-from typing import Any, cast
 
 from hud.clients import MCPClient
 from hud.server import MCPServer
-from hud.server.low_level import LowLevelServerWithInit
 from hud.server import server as server_mod  # for toggling _sigterm_received
+from hud.server.low_level import LowLevelServerWithInit
 
 
 def _free_port() -> int:
@@ -52,7 +52,7 @@ async def test_low_level_injection_happens_when_initialize_used() -> None:
     assert not isinstance(mcp._mcp_server, LowLevelServerWithInit)
 
     @mcp.initialize
-    async def _init(_ctx) -> None:  # noqa: ARG001
+    async def _init(_ctx) -> None:
         return None
 
     assert isinstance(mcp._mcp_server, LowLevelServerWithInit)
@@ -204,7 +204,7 @@ async def test_init_after_tools_preserves_handlers_and_runs_once() -> None:
 
     # Now register initializer (this triggers server replacement)
     @mcp.initialize
-    async def _init(_ctx) -> None:  # noqa: ARG001
+    async def _init(_ctx) -> None:
         state["init_calls"] += 1
 
     server_task = await _start_http_server(mcp, port)
@@ -336,7 +336,7 @@ async def test_initialize_redirects_stdout_to_stderr(capsys) -> None:
     mcp = MCPServer(name="StdoutRedirect")
 
     @mcp.initialize
-    async def _init(_ctx) -> None:  # noqa: ARG001
+    async def _init(_ctx) -> None:
         # This would normally pollute STDOUT; our server redirects to STDERR
         print("INIT_STDOUT_MARKER")  # noqa: T201
 
@@ -398,7 +398,7 @@ async def test_notification_handlers_survive_real_replacement() -> None:
     assert "hud/notify" in mcp._mcp_server.notification_handlers
 
     @mcp.initialize
-    async def _init(_ctx) -> None:  # noqa: ARG001
+    async def _init(_ctx) -> None:
         pass
 
     # After replacement, the handler should still be there

@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-import os
-from contextlib import suppress, asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 import anyio
 import pytest
 
-from hud.server import server as server_mod
 from hud.server import MCPServer
+from hud.server import server as server_mod
 
 
 def test__run_with_sigterm_executes_coro_when_handler_disabled(monkeypatch: pytest.MonkeyPatch):
@@ -17,12 +16,12 @@ def test__run_with_sigterm_executes_coro_when_handler_disabled(monkeypatch: pyte
 
     hit = {"v": False}
 
-    async def work(arg, *, kw=None):  # noqa: ANN001
+    async def work(arg, *, kw=None):
         assert arg == 123 and kw == "ok"
         hit["v"] = True
 
     # Wrapper to exercise kwargs since TaskGroup.start_soon only accepts positional args
-    async def wrapper(arg):  # noqa: ANN001
+    async def wrapper(arg):
         await work(arg, kw="ok")
 
     # Should return cleanly and mark hit

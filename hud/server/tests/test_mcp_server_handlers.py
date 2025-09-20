@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pytest
 from typing import Any, cast
 
 from hud.server import MCPServer
@@ -16,7 +15,7 @@ def test_notification_handlers_preserved_on_replacement():
     cast("dict[Any, Any]", before.notification_handlers)["foo/notify"] = object()
 
     @mcp.initialize
-    async def _init(_ctx) -> None:  # noqa: ARG001
+    async def _init(_ctx) -> None:
         pass
 
     after = mcp._mcp_server
@@ -31,13 +30,13 @@ def test_init_server_replacement_is_idempotent():
     mcp = MCPServer(name="InitIdempotent")
 
     @mcp.initialize
-    async def _a(_ctx) -> None:  # noqa: ARG001
+    async def _a(_ctx) -> None:
         pass
 
     first = mcp._mcp_server
 
     @mcp.initialize
-    async def _b(_ctx) -> None:  # noqa: ARG001
+    async def _b(_ctx) -> None:
         # last initializer should win, but server object should not be replaced again
         pass
 

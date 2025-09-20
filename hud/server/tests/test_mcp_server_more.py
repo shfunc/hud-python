@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import socket
-from contextlib import suppress, asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 import anyio
 import pytest
 
+from hud.clients import MCPClient
 from hud.server import MCPServer
 from hud.server import server as server_mod  # to toggle _sigterm_received
-from hud.clients import MCPClient
 
 
 def _free_port() -> int:
@@ -218,10 +218,11 @@ async def test_run_async_defaults_to_stdio_and_uses_patched_stdio(monkeypatch: p
 
 @pytest.mark.asyncio
 async def test_custom_lifespan_relies_on_run_async_fallback_for_sigterm() -> None:
-    """When a custom lifespan is supplied, run_async's finally path must still call @shutdown on SIGTERM."""
+    """When a custom lifespan is supplied, run_async's finally path must still call
+    @shutdown on SIGTERM."""
 
     @asynccontextmanager
-    async def custom_lifespan(_):  # noqa: ANN001
+    async def custom_lifespan(_):
         # No shutdown call here on purpose
         yield {}
 

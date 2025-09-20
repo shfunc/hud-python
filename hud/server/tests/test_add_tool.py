@@ -12,13 +12,11 @@ def test_add_tool_accepts_base_tool(monkeypatch):
     # Stub hud.tools.base.BaseTool and capture FastMCP.add_tool calls
     mod = types.ModuleType("hud.tools.base")
 
-    class FakeBaseTool:  # noqa: D401
+    class FakeBaseTool:
         """Stub type checked by isinstance() inside add_tool."""
 
-        pass
-
     # Tell the type checker we're mutating a dynamic module
-    mod_any = cast(Any, mod)
+    mod_any = cast("Any", mod)
     mod_any.BaseTool = FakeBaseTool
     monkeypatch.setitem(sys.modules, "hud.tools.base", mod)
 
@@ -47,7 +45,7 @@ def test_add_tool_plain_falls_back_to_super(monkeypatch):
     """Non-BaseTool objects are passed unchanged to FastMCP.add_tool."""
     calls = []
 
-    def fake_super_add(self, obj, **kwargs):  # noqa: ANN001
+    def fake_super_add(self, obj, **kwargs):
         calls.append((obj, kwargs))
 
     monkeypatch.setattr("hud.server.server.FastMCP.add_tool", fake_super_add, raising=True)
