@@ -853,54 +853,21 @@ def eval(
 
     hud_console = HUDConsole()
 
-    # If no source provided, look for task/eval JSON files in current directory
+    # If no source provided, reuse RL helper to find a tasks file interactively
     if source is None:
-        # Search for JSON files with "task" or "eval" in the name (case-insensitive)
-        json_files = []
-        patterns = [
-            "*task*.json",
-            "*eval*.json",
-            "*Task*.json",
-            "*Eval*.json",
-            "*TASK*.json",
-            "*EVAL*.json",
-        ]
+        try:
+            from hud.cli.utils.tasks import find_tasks_file
 
-        # First check current directory
-        for pattern in patterns:
-            json_files.extend(Path(".").glob(pattern))
-
-        # If no files found, search recursively (but limit depth to avoid deep searches)
-        if not json_files:
-            for pattern in patterns:
-                # Search up to 2 levels deep
-                json_files.extend(Path(".").glob(f"*/{pattern}"))
-                json_files.extend(Path(".").glob(f"*/*/{pattern}"))
-
-        # Remove duplicates and sort
-        json_files = sorted(set(json_files))
-
-        if not json_files:
+            source = find_tasks_file(None, msg="Select a tasks file to run")
+            hud_console.success(f"Selected: {source}")
+        except Exception as e:
             hud_console.error(
                 "No source provided and no task/eval JSON files found in current directory"
             )
             hud_console.info(
-                "Usage: hud eval <source> or create a task JSON file "
-                "(e.g., task.json, eval_config.json)"
+                "Usage: hud eval <source> or create a task JSON file (e.g., task.json, tasks.jsonl)"
             )
-            raise typer.Exit(1)
-        elif len(json_files) == 1:
-            source = str(json_files[0])
-            hud_console.info(f"Found task file: {source}")
-        else:
-            # Multiple files found, let user choose
-            hud_console.info("Multiple task files found:")
-            file_choice = hud_console.select(
-                "Select a task file to run:",
-                choices=[str(f) for f in json_files],
-            )
-            source = file_choice
-            hud_console.success(f"Selected: {source}")
+            raise typer.Exit(1) from e
 
     # Import eval_command lazily to avoid importing agent dependencies
     try:
