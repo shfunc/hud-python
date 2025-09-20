@@ -171,6 +171,7 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
 
     if not settings.api_key or not settings.api_key.strip():
         hud_console.error("HUD_API_KEY is not set")
+        hud_console.info("Set it in your environment or run: hud set HUD_API_KEY=your-key-here")
         raise typer.Exit(1)
 
     # Load tasks (supports .json and .jsonl)

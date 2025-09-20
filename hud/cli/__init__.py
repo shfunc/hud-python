@@ -28,6 +28,7 @@ from .init import create_environment
 from .pull import pull_command
 from .push import push_command
 from .remove import remove_command
+from .utils.config import set_env_values
 from .utils.cursor import get_cursor_config_path, list_cursor_servers, parse_cursor_config
 from .utils.logging import CaptureLogger
 
@@ -741,6 +742,12 @@ def remove(
 @app.command()
 def init(
     name: str = typer.Argument(None, help="Environment name (default: current directory name)"),
+    preset: str | None = typer.Option(
+        None,
+        "--preset",
+        "-p",
+        help="Preset to use: blank, deep-research, browser. If omitted, you'll choose interactively.",  # noqa: E501
+    ),
     directory: str = typer.Option(".", "--dir", "-d", help="Target directory"),
     force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing files"),
 ) -> None:
@@ -757,7 +764,7 @@ def init(
         hud init my-env             # Create in ./my-env/
         hud init my-env --dir /tmp  # Create in /tmp/my-env/
     """
-    create_environment(name, directory, force)
+    create_environment(name, directory, force, preset)
 
 
 @app.command()
@@ -1083,6 +1090,42 @@ def rl(
         ddp_gpus=ddp_gpus,
         vllm_gpu=vllm_gpu,
     )
+
+
+@app.command()
+def set(
+    assignments: list[str] = typer.Argument(  # type: ignore[arg-type]  # noqa: B008
+        ..., help="One or more KEY=VALUE pairs to persist in ~/.hud/.env"
+    ),
+) -> None:
+    """Persist API keys or other variables for HUD to use by default.
+
+    Examples:
+        hud set ANTHROPIC_API_KEY=sk-... OPENAI_API_KEY=sk-...
+
+    Values are stored in ~/.hud/.env and are loaded by hud.settings with
+    the lowest precedence (overridden by process env and project .env).
+    """
+    from hud.utils.hud_console import HUDConsole
+
+    hud_console = HUDConsole()
+
+    updates: dict[str, str] = {}
+    for item in assignments:
+        if "=" not in item:
+            hud_console.error(f"Invalid assignment (expected KEY=VALUE): {item}")
+            raise typer.Exit(1)
+        key, value = item.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            hud_console.error(f"Invalid key in assignment: {item}")
+            raise typer.Exit(1)
+        updates[key] = value
+
+    path = set_env_values(updates)
+    hud_console.success("Saved credentials to user config")
+    hud_console.info(f"Location: {path}")
 
 
 def main() -> None:
