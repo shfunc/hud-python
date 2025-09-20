@@ -125,7 +125,7 @@ class MCPServer(FastMCP):
                     # Force flush logs to ensure they're visible
                     sys.stderr.flush()
 
-                    if self._shutdown_fn is not None and _sigterm_received:
+                    if self._shutdown_fn is not None and _sigterm_received and not self._shutdown_has_run:
                         logger.info("SIGTERM detected! Calling @mcp.shutdown handler...")
                         sys.stderr.flush()
                         try:
@@ -135,7 +135,9 @@ class MCPServer(FastMCP):
                         except Exception as e:
                             logger.error("Error during @mcp.shutdown: %s", e)
                             sys.stderr.flush()
-                        _sigterm_received = False
+                        finally:
+                            self._shutdown_has_run = True
+                            _sigterm_received = False
                     elif self._shutdown_fn is not None:
                         logger.info(
                             "No SIGTERM. This is a hot reload (SIGINT) or normal exit. Skipping @mcp.shutdown handler."  # noqa: E501
@@ -151,19 +153,20 @@ class MCPServer(FastMCP):
         self._initializer_fn: Callable | None = None
         self._did_init = False
         self._replaced_server = False
+        self._shutdown_has_run = False  # Guard against double-execution of shutdown hook
 
     def _replace_with_init_server(self) -> None:
         """Replace the low-level server with init version when needed."""
         if self._replaced_server:
             return
 
-        def _run_init(ctx: RequestContext | None = None) -> Any:
+        async def _run_init(ctx: RequestContext | None = None) -> None:
+            """Run the user initializer exactly once, with stdout redirected."""
             if self._initializer_fn is not None and not self._did_init:
                 self._did_init = True
-                # Redirect stdout to stderr during initialization to prevent
-                # any library prints from corrupting the MCP protocol
+                # Prevent stdout from polluting the MCP protocol on stdio/HTTP
                 with contextlib.redirect_stdout(sys.stderr):
-                    return self._initializer_fn(ctx)
+                    await self._initializer_fn(ctx)  # type: ignore[misc]
             return None
 
         # Save the old server's handlers before replacing it
@@ -242,3 +245,36 @@ class MCPServer(FastMCP):
             return
 
         super().add_tool(obj, **kwargs)
+
+    async def run_async(
+        self,
+        transport: Transport | None = None,
+        show_banner: bool = True,
+        **transport_kwargs: Any,
+    ) -> None:
+        """Override to ensure @mcp.shutdown runs for HTTP/async path when SIGTERM received.
+
+        This is a safety net for HTTP/uvicorn paths that may exit without re-entering
+        the custom lifespan's finally block. The per-instance _shutdown_has_run flag
+        ensures exactly-once execution even with custom lifespans.
+        """
+        if transport is None:
+            transport = "stdio"
+        try:
+            await super().run_async(
+                transport=transport,
+                show_banner=show_banner,
+                **transport_kwargs,
+            )
+        finally:
+            # Mirror the lifespan `finally` logic here for cases where the HTTP server
+            # is cancelled/stopped and SIGTERM was requested.
+            global _sigterm_received
+            if self._shutdown_fn is not None and _sigterm_received and not self._shutdown_has_run:
+                try:
+                    await self._shutdown_fn()
+                except Exception as e:  # pragma: no cover (logged, but test asserts effect)
+                    logger.error("Error during @mcp.shutdown (run_async): %s", e)
+                finally:
+                    self._shutdown_has_run = True
+                    _sigterm_received = False
