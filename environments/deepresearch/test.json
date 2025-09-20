@@ -1,0 +1,22 @@
+[
+  {
+    "id": "SQA_00000",
+    "prompt": "Who received the IEEE Frank Rosenblatt Award in 2010?\n\nReturn just the answer, no other text.",
+    "mcp_config": {
+      "test_deepresearch": {
+        "url": "http://localhost:8765/mcp"
+      }
+    },
+    "setup_tool": {
+      "name": "setup",
+      "arguments": {}
+    },
+    "evaluate_tool": {
+      "name": "evaluate",
+      "arguments": {
+        "expected_answer": "Michio Sugeno"
+      }
+    },
+    "system_prompt": "You are an AI research assistant that can search the web and fetch content to answer questions. You must call the answer tool with your final answer when you have finished your research. Call search tool with the exact search query then fetch tool with the most promising URLs. After calling answer, stop generating - your task is complete. Do not call random urls. Call the urls that are returned by search. If you do not do this you will inevitably get the wrong answer. Call tools one by one and do not call them all at a time. Again, you must call the answer tool with your final answer when you have finished your research, or else the task will not be completed and you will not get a reward. Simply printing your final answer is not enough."
+  }
+]
