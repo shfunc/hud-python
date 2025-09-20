@@ -164,6 +164,7 @@ def test_skip_update_when_zero_adv(monkeypatch, learner_stub: GRPOLearner):
     # but has zero gradients (no update signal).
     def _zero_loss(self, sample) -> torch.Tensor:
         return sum(p.sum() for p in self.policy.parameters()) * 0.0
+
     monkeypatch.setattr(GRPOLearner, "compute_loss", _zero_loss, raising=True)
 
     # Count optimizer.step calls
