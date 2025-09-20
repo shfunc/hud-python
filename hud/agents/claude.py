@@ -6,7 +6,7 @@ import copy
 import logging
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
-from anthropic import AsyncAnthropic, BadRequestError
+from anthropic import Anthropic, AsyncAnthropic, BadRequestError
 from anthropic.types.beta import BetaContentBlockParam, BetaImageBlockParam, BetaTextBlockParam
 
 import hud
@@ -54,6 +54,7 @@ class ClaudeAgent(MCPAgent):
         model: str = "claude-sonnet-4-20250514",
         max_tokens: int = 4096,
         use_computer_beta: bool = True,
+        validate_api_key: bool = True,
         **kwargs: Any,
     ) -> None:
         """
@@ -74,6 +75,13 @@ class ClaudeAgent(MCPAgent):
             if not api_key:
                 raise ValueError("Anthropic API key not found. Set ANTHROPIC_API_KEY.")
             model_client = AsyncAnthropic(api_key=api_key)
+
+        # validate api key if requested
+        if validate_api_key:
+            try:
+                Anthropic(api_key=model_client.api_key).models.list()
+            except Exception as e:
+                raise ValueError(f"Anthropic API key is invalid: {e}") from e
 
         self.anthropic_client = model_client
         self.model = model
