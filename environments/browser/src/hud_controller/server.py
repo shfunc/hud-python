@@ -208,8 +208,6 @@ async def get_telemetry_resource() -> str:
 
 
 # === APPLICATION TOOLS ===
-
-
 @mcp.tool()
 async def launch_app(ctx: Context, app_name: str) -> str:
     """Launch a specific application dynamically and navigate to it.
@@ -283,27 +281,6 @@ async def api_request(
             if response.headers.get("content-type", "").startswith("application/json")
             else response.text,
         }
-
-
-@mcp.tool()
-async def query_database(ctx: Context, query: str) -> list[dict]:
-    """Execute a database query (mock implementation).
-
-    Args:
-        query: SQL query to execute
-
-    Returns:
-        Query results as list of dicts
-    """
-    await ctx.warning("This is a mock database query tool")
-
-    # Mock implementation
-    if "users" in query.lower():
-        return [
-            {"id": 1, "name": "Alice", "email": "alice@example.com"},
-            {"id": 2, "name": "Bob", "email": "bob@example.com"},
-        ]
-    return []
 
 
 if __name__ == "__main__":
