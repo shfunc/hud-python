@@ -32,6 +32,10 @@ hud build [DIRECTORY] [OPTIONS]
   Show detailed build output. Short: `-v`
 </ParamField>
 
+<ParamField path="--platform" type="string" default="host">
+  Target platform for Docker build (e.g., `linux/amd64`). If not provided, Docker's default is used.
+</ParamField>
+
 ## What It Does
 
 The build command performs several critical steps:
@@ -123,6 +127,14 @@ Build with specific naming:
 ```bash
 hud build . --tag "prod-$(git rev-parse --short HEAD)"
 # Creates: hud-my-env:prod-abc123f
+```
+
+### Cross-platform Build
+
+Force a Linux AMD64 build on non-Linux hosts:
+
+```bash
+hud build . --platform linux/amd64
 ```
 
 ## Image Naming
