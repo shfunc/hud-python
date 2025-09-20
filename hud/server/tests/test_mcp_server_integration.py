@@ -5,6 +5,7 @@ import socket
 from contextlib import suppress
 
 import pytest
+from typing import Any, cast
 
 from hud.clients import MCPClient
 from hud.server import MCPServer
@@ -40,7 +41,9 @@ def _first_text(result) -> str | None:
     c = getattr(result, "content", None)
     if isinstance(c, list) and c and hasattr(c[0], "text"):
         return c[0].text
-    return c
+    if isinstance(c, str):
+        return c
+    return None
 
 
 @pytest.mark.asyncio
@@ -182,6 +185,7 @@ async def test_initializer_exception_propagates_to_client() -> None:
 
 
 # --- additional tests for MCPServer coverage ---
+
 
 @pytest.mark.asyncio
 async def test_init_after_tools_preserves_handlers_and_runs_once() -> None:
@@ -390,7 +394,7 @@ async def test_notification_handlers_survive_real_replacement() -> None:
     mcp = MCPServer(name="NotifCopy")
 
     # Seed a dummy notification handler before replacement
-    mcp._mcp_server.notification_handlers["hud/notify"] = object()
+    cast("dict[Any, Any]", mcp._mcp_server.notification_handlers)["hud/notify"] = object()
     assert "hud/notify" in mcp._mcp_server.notification_handlers
 
     @mcp.initialize

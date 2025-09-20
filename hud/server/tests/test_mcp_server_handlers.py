@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from typing import Any, cast
 
 from hud.server import MCPServer
 from hud.server.low_level import LowLevelServerWithInit
@@ -12,7 +13,7 @@ def test_notification_handlers_preserved_on_replacement():
 
     # Seed a fake notification handler on the pre-replacement server
     before = mcp._mcp_server
-    before.notification_handlers["foo/notify"] = object()
+    cast("dict[Any, Any]", before.notification_handlers)["foo/notify"] = object()
 
     @mcp.initialize
     async def _init(_ctx) -> None:  # noqa: ARG001

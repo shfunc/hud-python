@@ -2,7 +2,16 @@ from __future__ import annotations
 
 import os
 import sys
-from multiprocessing.connection import AuthenticationError
+from typing import Type
+
+try:
+    import multiprocessing.connection as _mp_conn
+
+    # Pull the exception dynamically; fall back to OSError if missing in stubs/runtime
+    MPAuthenticationError: Type[BaseException] = getattr(_mp_conn, "AuthenticationError", OSError)
+except Exception:  # pragma: no cover
+    MPAuthenticationError = OSError
+
 from pathlib import Path
 
 import pytest
@@ -64,7 +73,9 @@ def test_wrong_authkey_rejected(tmp_path: Path) -> None:
     sock = str(tmp_path / "auth_ctx.sock")
     mgr = serve_context(CounterCtx(), sock_path=sock, authkey=b"correct")
     try:
-        with pytest.raises((AuthenticationError, ConnectionRefusedError, BrokenPipeError, OSError)):
+        with pytest.raises(
+            (MPAuthenticationError, ConnectionRefusedError, BrokenPipeError, OSError)
+        ):
             attach_context(sock_path=sock, authkey=b"wrong")
     finally:
         mgr.shutdown()
@@ -82,8 +93,11 @@ def test_attach_nonexistent_raises(tmp_path: Path) -> None:
 
 import asyncio
 
+
 @pytest.mark.asyncio
-async def test_run_context_server_handles_keyboardinterrupt(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+async def test_run_context_server_handles_keyboardinterrupt(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """run_context_server should call manager.shutdown() when KeyboardInterrupt occurs."""
     # Capture serve_context() and the returned manager
     called = {"served": False, "shutdown": False, "addr": None}

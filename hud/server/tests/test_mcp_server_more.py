@@ -28,8 +28,8 @@ async def _fake_stdio_server():
     can start and idle without touching sys.stdin/sys.stdout.
     """
     # Server reads from recv_in and writes to send_out
-    send_in, recv_in = anyio.create_memory_object_stream(100)   # stdin → server
-    send_out, recv_out = anyio.create_memory_object_stream(100) # server → stdout
+    send_in, recv_in = anyio.create_memory_object_stream(100)  # stdin → server
+    send_out, recv_out = anyio.create_memory_object_stream(100)  # server → stdout
     try:
         yield recv_in, send_out
     finally:
@@ -219,6 +219,7 @@ async def test_run_async_defaults_to_stdio_and_uses_patched_stdio(monkeypatch: p
 @pytest.mark.asyncio
 async def test_custom_lifespan_relies_on_run_async_fallback_for_sigterm() -> None:
     """When a custom lifespan is supplied, run_async's finally path must still call @shutdown on SIGTERM."""
+
     @asynccontextmanager
     async def custom_lifespan(_):  # noqa: ANN001
         # No shutdown call here on purpose

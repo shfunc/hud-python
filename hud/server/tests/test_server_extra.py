@@ -111,6 +111,7 @@ def test__run_with_sigterm_registers_handlers_when_enabled(monkeypatch: pytest.M
     added_signals: list[int] = []
 
     import asyncio as _asyncio
+
     orig_get_running_loop = _asyncio.get_running_loop
 
     def proxy_get_running_loop():
@@ -118,11 +119,14 @@ def test__run_with_sigterm_registers_handlers_when_enabled(monkeypatch: pytest.M
 
         class _LoopProxy:
             __slots__ = ("_inner",)
+
             def __init__(self, inner):
                 self._inner = inner
+
             def add_signal_handler(self, signum, callback, *args):
                 added_signals.append(signum)  # don't actually install
                 # no-op: skip calling inner.add_signal_handler to avoid OS constraints
+
             def __getattr__(self, name):
                 # delegate everything else (create_task, call_soon, etc.)
                 return getattr(self._inner, name)
@@ -136,8 +140,10 @@ def test__run_with_sigterm_registers_handlers_when_enabled(monkeypatch: pytest.M
     class _DummyTG:
         async def __aenter__(self):
             return self
+
         async def __aexit__(self, exc_type, exc, tb):
             return False
+
         def start_soon(self, fn, *args, **kwargs):
             if getattr(fn, "__name__", "") == "_watch":
                 return
@@ -147,6 +153,7 @@ def test__run_with_sigterm_registers_handlers_when_enabled(monkeypatch: pytest.M
 
     # Simple coroutine that should run to completion
     hit = {"v": False}
+
     async def work():
         hit["v"] = True
 
@@ -154,5 +161,6 @@ def test__run_with_sigterm_registers_handlers_when_enabled(monkeypatch: pytest.M
     assert hit["v"] is True
 
     import signal as _signal
+
     assert _signal.SIGTERM in added_signals
     assert _signal.SIGINT in added_signals

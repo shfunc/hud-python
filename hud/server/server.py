@@ -125,7 +125,11 @@ class MCPServer(FastMCP):
                     # Force flush logs to ensure they're visible
                     sys.stderr.flush()
 
-                    if self._shutdown_fn is not None and _sigterm_received and not self._shutdown_has_run:
+                    if (
+                        self._shutdown_fn is not None
+                        and _sigterm_received
+                        and not self._shutdown_has_run
+                    ):
                         logger.info("SIGTERM detected! Calling @mcp.shutdown handler...")
                         sys.stderr.flush()
                         try:
