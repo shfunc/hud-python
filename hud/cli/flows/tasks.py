@@ -32,6 +32,7 @@ def _validate_tasks(tasks: list[Task]) -> bool:
     A task is considered remote if any "url" field anywhere inside mcp_config
     is a valid remote URL (e.g., https://mcp.hud.so/v3/mcp).
     """
+
     def _has_remote_url(obj: Any) -> bool:
         if isinstance(obj, dict):
             for k, v in obj.items():
@@ -99,7 +100,8 @@ def _ensure_built(env_dir: Path) -> dict[str, Any]:
         # Check Docker availability before attempting a build
         require_docker_running()
         # Run build (non-interactive). If Docker isn't running, this will raise and stop the flow.
-        build_environment(str(env_dir))
+        # Force linux/amd64 platform to ensure compatibility during RL flows.
+        build_environment(str(env_dir), platform="linux/amd64")
 
     # Load lock file
     with open(lock_path) as f:
@@ -146,7 +148,7 @@ def _derive_remote_image(lock_data: dict[str, Any]) -> str:
     # Base name always comes from lock_data.image to preserve org/repo
     image_ref = str(lock_data.get("image", "")).strip()
     if not image_ref:
-        raise typer.Exit("Lock file missing image reference")
+        raise typer.Exit(1)
     name, tag = extract_name_and_tag(image_ref)
     return f"{name}:{tag}"
 

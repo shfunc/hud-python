@@ -7,7 +7,7 @@ title: Train Agents — Quickstart
 Install and download a taskset:
 
 ```bash
-uv tool install "hud-python[rl]"
+uv tool install hud-python
 hud get hud-evals/basic-2048
 ```
 
@@ -43,3 +43,18 @@ hud rl basic-2048.jsonl --local
 Training throughput depends on task complexity and parallelism (`max_parallel_episodes`).
 
 
+
+### 3) Build your own environment (hud init)
+
+Create a new MCP environment, develop with hot-reload, and train on a production image:
+
+```bash
+hud init my-env && cd my-env
+hud dev --interactive
+# When ready to run:
+hud rl
+```
+
+Change the tasks.json to include other tasks you want to train on.
+
+See [hud init](/reference/cli/init) for options and details.
