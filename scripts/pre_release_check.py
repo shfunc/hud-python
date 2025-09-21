@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+"""Pre-release evaluation check script.
+
+This script runs the hud-evals/test-diverse taskset with Claude and validates:
+1. All tasks complete without errors
+2. At least one task achieves a non-zero score
+3. Overall success rate meets minimum threshold
+"""
+
+import asyncio
+import logging
+import os
+import re
+import subprocess
+import sys
+from typing import Any
+
+import hud
+from hud.settings import settings
+from hud.agents import ClaudeAgent
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%H:%M:%S"
+)
+logger = logging.getLogger(__name__)
+
+
+class PreReleaseChecker:
+    """Handles pre-release evaluation checks."""
+    
+    def __init__(self, dataset: str = "hud-evals/test-diverse", min_success_rate: float = 50.0):
+        self.dataset = dataset
+        self.min_success_rate = min_success_rate
+        self.results: list[Any] = []
+        
+    async def run_evaluation(self) -> bool:
+        """Run the evaluation and return success status."""
+        logger.info(f"Starting pre-release evaluation on {self.dataset}")
+        
+        # Check required environment variables
+        if not settings.api_key:
+            logger.error("HUD_API_KEY environment variable not set")
+            return False
+            
+        if not settings.anthropic_api_key:
+            logger.error("ANTHROPIC_API_KEY environment variable not set")
+            return False
+        
+        try:
+            # Import required modules
+            from datasets import load_dataset
+            from hud.datasets import Task, run_dataset
+            
+            # Run the evaluation
+            agent_class = ClaudeAgent
+            agent_config = {
+                "model": "claude-sonnet-4-20250514",
+                "allowed_tools": ["anthropic_computer"],
+                "verbose": False
+            }
+            
+            logger.info("Running evaluation...")
+            self.results = await run_dataset(
+                name=f"Pre-release check: {self.dataset}",
+                dataset=self.dataset,
+                agent_class=agent_class,
+                agent_config=agent_config,
+                max_concurrent=25,
+                max_steps=25,
+                auto_respond=False,
+                metadata={
+                    "purpose": "pre-release-check",
+                    "dataset": self.dataset
+                }
+            )
+            
+            return self._validate_results()
+            
+        except Exception as e:
+            logger.error(f"Evaluation failed with error: {e}", exc_info=True)
+            return False
+    
+    def _validate_results(self) -> bool:
+        """Validate the evaluation results."""
+        if not self.results:
+            logger.error("No results returned from evaluation")
+            return False
+        
+        total_tasks = len(self.results)
+        successful_tasks = sum(1 for r in self.results if getattr(r, "reward", 0) > 0)
+        error_tasks = sum(1 for r in self.results if getattr(r, "isError", False))
+        
+        success_rate = (successful_tasks / total_tasks * 100) if total_tasks > 0 else 0
+        
+        # Log summary statistics
+        logger.info("=" * 60)
+        logger.info("EVALUATION SUMMARY")
+        logger.info("=" * 60)
+        logger.info(f"Total tasks: {total_tasks}")
+        logger.info(f"Successful tasks: {successful_tasks}/{total_tasks} ({success_rate:.1f}%)")
+        logger.info(f"Failed tasks: {total_tasks - successful_tasks}")
+        logger.info(f"Error tasks: {error_tasks}")
+        logger.info("=" * 60)
+        
+        # Check validation criteria
+        validation_passed = True
+        
+        # Criterion 1: No tasks should have errors
+        if error_tasks > 0:
+            logger.error(f"❌ {error_tasks} tasks encountered errors")
+            validation_passed = False
+        else:
+            logger.info("✅ No tasks encountered errors")
+        
+        # Criterion 2: At least one task must succeed (non-zero score)
+        if successful_tasks == 0:
+            logger.error("❌ No tasks achieved a non-zero score")
+            validation_passed = False
+        else:
+            logger.info(f"✅ {successful_tasks} tasks achieved non-zero scores")
+        
+        # Criterion 3: Success rate must meet minimum threshold
+        if success_rate < self.min_success_rate:
+            logger.error(f"❌ Success rate {success_rate:.1f}% is below minimum threshold of {self.min_success_rate}%")
+            validation_passed = False
+        else:
+            logger.info(f"✅ Success rate {success_rate:.1f}% meets minimum threshold")
+        
+        # Log individual task results for debugging
+        if not validation_passed:
+            logger.info("\nIndividual task results:")
+            for i, result in enumerate(self.results):
+                reward = getattr(result, "reward", 0)
+                is_error = getattr(result, "isError", False)
+                status = "ERROR" if is_error else f"Reward: {reward}"
+                logger.info(f"  Task {i+1}: {status}")
+        
+        return validation_passed
+
+
+async def main() -> int:
+    """Main entry point."""
+    # Parse command line arguments if needed
+    import argparse
+    parser = argparse.ArgumentParser(description="Run pre-release evaluation checks")
+    parser.add_argument(
+        "--dataset",
+        default="hud-evals/test-diverse",
+        help="Dataset to evaluate (default: hud-evals/test-diverse)"
+    )
+    parser.add_argument(
+        "--min-success-rate",
+        type=float,
+        default=50.0,
+        help="Minimum success rate percentage required (default: 50.0)"
+    )
+    args = parser.parse_args()
+    
+    # Run the checker
+    checker = PreReleaseChecker(dataset=args.dataset, min_success_rate=args.min_success_rate)
+    success = await checker.run_evaluation()
+    
+    if success:
+        logger.info("\n🎉 All pre-release checks passed!")
+        return 0
+    else:
+        logger.error("\n❌ Pre-release checks failed!")
+        return 1
+
+
+if __name__ == "__main__":
+    exit_code = asyncio.run(main())
+    sys.exit(exit_code)
