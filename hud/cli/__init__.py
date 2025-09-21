@@ -960,6 +960,7 @@ def eval(
         "--verbose",
         help="Enable verbose output from the agent",
     ),
+<<<<<<< HEAD
     very_verbose: bool = typer.Option(
         False,
         "--very-verbose",
@@ -975,6 +976,12 @@ def eval(
         1,
         "--group-size",
         help="Number of times to run each task (similar to RL training)",
+=======
+    mock: bool = typer.Option(
+        False,
+        "--mock",
+        help="Run mock_problem tool, where problem is setup, actions are applied, and evaluation is performed, without spinning up an agent",
+>>>>>>> 5c2ee9f (mock single working)
     ),
 ) -> None:
     """🚀 Run evaluation on datasets or individual tasks with agents."""
@@ -997,7 +1004,42 @@ def eval(
             hud_console.info(
                 "Usage: hud eval <source> or create a task JSON file (e.g., task.json, tasks.jsonl)"
             )
+<<<<<<< HEAD
             raise typer.Exit(1) from e
+=======
+            raise typer.Exit(1)
+        elif len(json_files) == 1:
+            source = str(json_files[0])
+            hud_console.info(f"Found task file: {source}")
+        else:
+            # Multiple files found, let user choose
+            hud_console.info("Multiple task files found:")
+            file_choice = hud_console.select(
+                "Select a task file to run:",
+                choices=[str(f) for f in json_files],
+            )
+            source = file_choice
+            hud_console.success(f"Selected: {source}")
+
+    # If --mock, skip agent selection/validation entirely
+    if not mock:
+        # If no agent specified, prompt for selection
+        if agent is None:
+            agent = hud_console.select(
+                "Select an agent to use:",
+                choices=[
+                    {"name": "Claude 4 Sonnet", "value": "claude"},
+                    {"name": "OpenAI Computer Use", "value": "openai"},
+                ],
+                default="Claude 4 Sonnet",
+            )
+
+        # Validate agent choice
+        valid_agents = ["claude", "openai"]
+        if agent not in valid_agents:
+            hud_console.error(f"Invalid agent: {agent}. Must be one of: {', '.join(valid_agents)}")
+            raise typer.Exit(1)
+>>>>>>> 5c2ee9f (mock single working)
 
     # Import eval_command lazily to avoid importing agent dependencies
     try:
@@ -1077,9 +1119,13 @@ def eval(
         max_workers=max_workers,
         max_concurrent_per_worker=max_concurrent_per_worker,
         verbose=verbose,
+<<<<<<< HEAD
         very_verbose=very_verbose,
         vllm_base_url=vllm_base_url,
         group_size=group_size,
+=======
+        mock=mock,
+>>>>>>> 5c2ee9f (mock single working)
     )
 
 

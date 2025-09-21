@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -14,6 +15,10 @@ from hud.cli.utils.env_check import ensure_built, find_environment_dir
 from hud.settings import settings
 from hud.utils.group_eval import display_group_statistics, run_tasks_grouped
 from hud.utils.hud_console import HUDConsole
+from hud.agents.base import MCPAgent
+from hud.datasets import run_dataset
+
+from hud.types import Trace
 
 if TYPE_CHECKING:
     from hud.types import Task
@@ -192,6 +197,7 @@ async def run_single_task(
     verbose: bool = False,
     vllm_base_url: str | None = None,
     group_size: int = 1,
+    mock: bool = False,
 ) -> None:
     """Load one task and execute it, or detect if JSON contains a list and run as dataset."""
 
@@ -205,26 +211,155 @@ async def run_single_task(
         )
         raise typer.Exit(1) from e
 
-    # Check if it's a file
+    # Check if it's a JSON or YAML file
     path = Path(source)
-    if path.exists() and (path.suffix in [".json", ".jsonl"]):
+    if path.exists() and path.suffix in {".json", ".yaml", ".yml"}:
         hud_console.info("📊 Loading task file…")
+        # Load JSON or YAML depending on extension
+        if path.suffix in {".yaml", ".yml"}:
+            try:
+                import yaml  # type: ignore
+            except Exception as e:  # pragma: no cover - optional dependency
+                hud_console.error(
+                    "YAML support is not installed. Please install with: pip install 'pyyaml'"
+                )
+                raise typer.Exit(1) from e
+
+            with open(path) as f:  # noqa: ASYNC230
+                json_data = yaml.safe_load(f)
+        else:
+            with open(path) as f:  # noqa: ASYNC230
+                json_data = json.load(f)
+
+        # If --mock, run a single mock tool call directly (no agent)
+        if mock:
+            # Build single task object
+            if isinstance(json_data, list):
+                if len(json_data) != 1:
+                    hud_console.error("--mock requires a single task file (or a single-item list)")
+                    raise typer.Exit(1)
+                task_data = json_data[0]
+            elif isinstance(json_data, dict):
+                task_data = json_data
+            else:
+                hud_console.error("Unsupported file format for --mock. Provide a task object or single-item list.")
+                raise typer.Exit(1)
+
+            task = Task(**task_data)
+
+            # Wrap in hud.trace so the platform prints the trace link automatically
+            task_prompt = task.prompt[:50] + "..." if len(task.prompt) > 50 else task.prompt
+            with hud.trace(name=task_prompt):
+                hud_console.info("🧪 --mock: calling tool directly (no agent)")
+
+                # Create MCP client from task.mcp_config
+                try:
+                    from hud.clients import MCPClient
+                except ImportError as e:
+                    hud_console.error("MCP client dependencies are not installed.")
+                    raise typer.Exit(1) from e
+
+                client = MCPClient(mcp_config=task.mcp_config, verbose=verbose)  # type: ignore[call-arg]
+                await client.initialize()
+
+                # Enforce ONLY mock_tool in --mock mode
+                if not task.mock_tool:
+                    await client.shutdown()
+                    hud_console.error("--mock requires mock_tool")
+                    raise typer.Exit(1)
+                if task.setup_tool or task.evaluate_tool:
+                    await client.shutdown()
+                    hud_console.error("--mock requires only mock_tool; remove setup_tool/evaluate_tool")
+                    raise typer.Exit(1)
+
+                # Execute the single mock tool call (e.g., hub "mock_problem").
+                # The MCP tool result can be returned in two shapes:
+                # 1) structuredContent (preferred): a structured JSON payload
+                # 2) content[0].text: a JSON string we need to parse
+                res = await client.call_tool(task.mock_tool)
+                payload: dict[str, Any] | None = None
+                # Prefer structuredContent.result if available (most robust shape)
+                sc = getattr(res, "structuredContent", None)
+                try:
+                    if sc and isinstance(sc, dict) and "result" in sc:
+                        payload = sc["result"]  # type: ignore[index]
+                    elif res.content and len(res.content) > 0:
+                        text = getattr(res.content[0], "text", None)
+                        if isinstance(text, str):
+                            import json as _json
+
+                            payload = _json.loads(text)
+                except Exception:
+                    payload = None
+
+                await client.shutdown()
+
+                # Extract a numeric score. Support top-level reward and nested evaluation.reward
+                reward = 0.0
+                if isinstance(payload, dict):
+                    if isinstance(payload.get("reward"), (int, float)):
+                        reward = float(payload.get("reward", 0.0))
+                    elif isinstance(payload.get("evaluation"), dict):
+                        reward = float(payload.get("evaluation", {}).get("reward", 0.0))
+
+                hud_console.success(f"Reward: {reward}")
+                return
 
         # Use unified loader for both JSON and JSONL
         tasks: list[Task] = load_tasks(str(path))  # type: ignore[assignment]
 
-        # If tasks reference a local environment (nearby), ensure it's built/up-to-date.
-        try:
-            env_dir = find_environment_dir(path)
-            if env_dir is not None:
-                # Non-interactive for eval; warn but don't block
-                ensure_built(env_dir, interactive=True)
-        except Exception as e:
-            hud_console.debug(f"Eval preflight env check skipped: {e}")
+        # Build agent class and config for run_dataset
+        if agent_type == "openai":
+            try:
+                from hud.agents import OperatorAgent
 
-        # Single task - use the first (and only) task
-        task = tasks[0]
-        hud_console.info("Found 1 task, running as single task…")
+                agent_class = OperatorAgent
+            except ImportError as e:
+                hud_console.error(
+                    "OpenAI agent dependencies are not installed. "
+                    "Please install with: pip install 'hud-python\u27e6agent\u27e7'"
+                )
+                raise typer.Exit(1) from e
+
+            agent_config: dict[str, Any] = {"verbose": verbose}
+            if allowed_tools:
+                agent_config["allowed_tools"] = allowed_tools
+
+        else:
+            try:
+                from hud.agents import ClaudeAgent
+
+                agent_class = ClaudeAgent
+            except ImportError as e:
+                hud_console.error(
+                    "Claude agent dependencies are not installed. "
+                    "Please install with: pip install 'hud-python[agent]'"
+                )
+                raise typer.Exit(1) from e
+
+            agent_config = {
+                "model": model or "claude-sonnet-4-20250514",
+                "verbose": verbose,
+            }
+            if allowed_tools:
+                agent_config["allowed_tools"] = allowed_tools
+
+        # Run as dataset with single-task concurrency to maintain debug behavior
+        results = await run_dataset(
+            name=f"Dataset: {path.name}",
+            dataset=json_data,  # Pass the list directly
+            agent_class=agent_class,
+            agent_config=agent_config,
+            max_concurrent=1,  # Run sequentially for debug mode
+            metadata={"source": str(path)},
+            max_steps=max_steps,
+        )
+
+        # Display summary
+        successful = sum(1 for r in results if getattr(r, "reward", 0) > 0)
+        hud_console.success(f"Completed {len(results)} tasks: {successful} successful")
+        return
+
     else:
         # Load from HuggingFace dataset or non-file source
         hud_console.info(f"📊 Loading tasks from: {source}…")
@@ -372,7 +507,29 @@ async def run_full_dataset(
     path = Path(source)
     dataset_name = f"Dataset: {path.name}" if path.exists() else source.split("/")[-1]
 
-    hud_console.info(f"Found {len(tasks)} tasks")
+    if path.exists() and path.suffix in {".json", ".yaml", ".yml"}:
+        if path.suffix in {".yaml", ".yml"}:
+            try:
+                import yaml  # type: ignore
+            except Exception as e:  # pragma: no cover - optional dependency
+                hud_console.error(
+                    "YAML support is not installed. Please install with: pip install 'pyyaml'"
+                )
+                raise typer.Exit(1) from e
+
+            with open(path) as f:  # noqa: ASYNC230
+                json_data = yaml.safe_load(f)
+        else:
+            with open(path) as f:  # noqa: ASYNC230
+                json_data = json.load(f)
+
+        if isinstance(json_data, list):
+            dataset_or_tasks = json_data
+            dataset_name = f"Dataset: {path.name}"
+            hud_console.info(f"Found {len(json_data)} tasks in file: {path.name}")
+        else:
+            hud_console.error("File must contain a list of tasks when using --full flag")
+            raise typer.Exit(1)
 
     # Build agent class + config for run_dataset
     if agent_type == "vllm":
@@ -618,6 +775,11 @@ def eval_command(
         "--group-size",
         help="Number of times to run each task (similar to RL training)",
     ),
+    mock: bool = typer.Option(
+        False,
+        "--mock",
+        help="Run mock_problem tool, where problem is setup, actions are applied, and evaluation is performed, without spinning up an agent",
+    ),
 ) -> None:
     """🚀 Run evaluation on datasets or individual tasks with agents.
 
@@ -737,5 +899,6 @@ def eval_command(
                 verbose=very_verbose or verbose,
                 vllm_base_url=vllm_base_url,
                 group_size=group_size,
+                mock=mock,
             )
         )

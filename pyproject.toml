@@ -51,9 +51,9 @@ classifiers = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/hud-evals/hud-python"
+Homepage = "https://github.com/hud-evals/hud-python"
 "Bug Tracker" = "https://github.com/hud-evals/hud-python/issues"
-"Documentation" = "https://docs.hud.so"
+Documentation = "https://docs.hud.so"
 
 [project.scripts]
 hud = "hud.cli:main"
@@ -169,88 +169,65 @@ agents = ["hud-python[agent]"]
 [tool.ruff]
 target-version = "py311"
 line-length = 100
-lint.extend-select = [
-    "I",       # isort
-    "F",       # pyflakes
-    "ANN",     # flake8-annotations
-    "Q",       # flake8-quotes
-    "ASYNC",   # flake8-async
-    "TID",     # flake8-tidy
-    "RSE",     # flake8-raise
-    "G",       # flake8-logging-format
-    "B",       # flake8-bugbear
-    "E",       # pycodestyle errors
-    "W",       # pycodestyle warnings
-    "PIE",     # flake8-pie
-    "S",       # flake8-bandit
-    "PERF",    # Perflint
-    "PLC",     # Pylint
-    "UP",      # pyupgrade
-    "SIM",     # flake8-simplify
-    "INP",     # flake8-no-pep420
-    "T20",     # flake8-print
-    "PYI",     # flake8-pyi
-    "TCH",     # Flake-8 TCH
-    "T10",     # flake-8 debugger
-    "RUF",     # Ruff-specific
-]
-lint.ignore = [
-    "ANN401", # Allow Any.
-    "W293",   # Ignore blank line contains whitespace
-    "PLC0415", # Allow function-local imports.
-]
-
-[tool.ruff.lint.extend-per-file-ignores]
-"**/tests/**/*.py" = ["PYI", "B", "S", "ANN"]
-"*.ipynb" = ["ALL"] # Disables all rules for Jupyter.
-"**/examples/**/*.py" = ["ALL"]
-"**/environments/**/*.py" = ["ALL"]
-
-
-[tool.ruff.format]
-docstring-code-format = true
-
-[tool.ruff.lint.isort]
-required-imports = ["from __future__ import annotations"]
-
-[tool.ruff.lint.flake8-type-checking]
-runtime-evaluated-base-classes = ["pydantic.BaseModel"]
 
 [tool.pyright]
-include = ["hud"]
-exclude = [
-    "**/node_modules",
-    "**/__pycache__",
-    "**/venv",
-    "hud/misc/claude_plays_pokemon.py",
-]
+include = [ "hud",]
+exclude = [ "**/node_modules", "**/__pycache__", "**/venv", "hud/misc/claude_plays_pokemon.py",]
 pythonVersion = "3.11"
 typeCheckingMode = "basic"
 reportMissingImports = "warning"
 
+[tool.hatch.build]
+exclude = [ "environments/", "docs/", "examples/", "/rl/",]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hud.clone]
+title = "🚀 Welcome to HUD SDK!"
+message = "[bold cyan]Thanks for using the hud SDK![/bold cyan]\n\n[yellow]Quick Start:[/yellow]\n• Install in development mode: [green]pip install -e .[/green]\n• Try the CLI: [green]hud --help[/green]\n• Analyze an MCP server: [green]hud analyze hud-text-2048:latest[/green]\n• Read the docs: [green]docs/[/green]\n\n[dim]For more examples, check out the [cyan]examples/[/cyan] directory.[/dim]\n\n[bold]Happy coding! 🎉[/bold]"
+style = "blue"
+
+[tool.ruff.lint]
+extend-select = [ "I", "F", "ANN", "Q", "ASYNC", "TID", "RSE", "G", "B", "E", "W", "PIE", "S", "PERF", "PLC", "UP", "SIM", "INP", "T20", "PYI", "TCH", "T10", "RUF",]
+ignore = [ "ANN401", "W293", "PLC0415",]
+
+[tool.ruff.format]
+docstring-code-format = true
+
 [tool.coverage.run]
-source = ["hud"]
-omit = ["*/tests/*", "*/examples/*"]
+source = [ "hud",]
+omit = [ "*/tests/*", "*/examples/*",]
 
 [tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "pass",
-    "pytest.mark.skip",
-    "@(typing\\.)?overload",
-    "if TYPE_CHECKING:",
-    "if typing.TYPE_CHECKING:",
-    "class .*\bProtocol\\):",
-    "@(abc\\.)?abstractmethod",
-]
+exclude_lines = [ "pragma: no cover", "raise AssertionError", "raise NotImplementedError", "pass", "pytest.mark.skip", "@(typing\\.)?overload", "if TYPE_CHECKING:", "if typing.TYPE_CHECKING:", "class .*x08Protocol\\):", "@(abc\\.)?abstractmethod",]
 show_missing = true
 fail_under = 58
-omit = ["*/tests/*", "*/examples/*"]
+omit = [ "*/tests/*", "*/examples/*",]
 
 [tool.pytest.ini_options]
 asyncio_default_fixture_loop_scope = "function"
-testpaths = ["hud", "examples"]
-# Ignore the dev folder and other non-test directories
+testpaths = [ "hud", "examples",]
 addopts = "--ignore=dev --ignore=ref --ignore=test_env --ignore=environments"
+
+[tool.ruff.lint.extend-per-file-ignores]
+"**/tests/**/*.py" = [ "PYI", "B", "S", "ANN",]
+"*.ipynb" = [ "ALL",]
+"**/examples/**/*.py" = [ "ALL",]
+"**/environments/**/*.py" = [ "ALL",]
+
+[tool.ruff.lint.isort]
+required-imports = [ "from __future__ import annotations",]
+
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = [ "pydantic.BaseModel",]
+
+[tool.hatch.build.targets.sdist]
+include = [ "hud/**", "README.md", "LICENSE", "pyproject.toml",]
+exclude = [ "*/tests/", "*/__pycache__/", "*.pyc", "*.pyo", "*~", ".DS_Store",]
+
+[tool.hatch.build.targets.wheel]
+packages = [ "hud",]
+
+[tool.hatch.build.targets.wheel.force-include]
+"hud/py.typed" = "hud/py.typed"
