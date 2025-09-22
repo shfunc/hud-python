@@ -127,10 +127,7 @@ async def run_package_as_mcp(
     else:
         # Run as external command using shared proxy utility
         # Parse command if string
-        if isinstance(command, str):
-            cmd_list = shlex.split(command)
-        else:
-            cmd_list = command
+        cmd_list = shlex.split(command) if isinstance(command, str) else command
 
         # Replace 'python' with the current interpreter to preserve venv
         if cmd_list[0] == "python":
@@ -179,7 +176,6 @@ def run_with_reload(
     except ImportError:
         logger.error("watchfiles is required for --reload. Install with: pip install watchfiles")
         sys.exit(1)
-
 
     # Resolve watch paths
     resolved_paths = []
@@ -230,21 +226,25 @@ def run_with_reload(
             if verbose:
                 logger.info("Starting process: %s", " ".join(cmd))
 
-            process = subprocess.Popen(cmd, env=os.environ)
+            process = subprocess.Popen(cmd, env=os.environ)  # noqa: S603
 
             # Watch for changes
             try:
                 # Use a proper threading.Event for stop_event as required by watchfiles
                 stop_event = threading.Event()
 
-                def _wait_and_set() -> None:
+                def _wait_and_set(
+                    stop_event: threading.Event, process: subprocess.Popen[bytes]
+                ) -> None:
                     try:
                         if process is not None:
                             process.wait()
                     finally:
                         stop_event.set()
 
-                threading.Thread(target=_wait_and_set, daemon=True).start()
+                threading.Thread(
+                    target=_wait_and_set, args=(stop_event, process), daemon=True
+                ).start()
 
                 for changes in watchfiles.watch(*resolved_paths, stop_event=stop_event):
                     logger.info("Raw changes detected: %s", changes)

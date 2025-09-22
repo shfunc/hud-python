@@ -75,15 +75,14 @@ class MCPUseHUDClient(BaseHUDClient):
         try:
             hud_mcp_host = urlparse(settings.hud_mcp_url).netloc
             if mcp_config and settings.api_key and hud_mcp_host:
-                for _server_name, server_cfg in mcp_config.items():
+                for server_cfg in mcp_config.values():
                     server_url = server_cfg.get("url")
                     if not server_url:
                         continue
                     if urlparse(server_url).netloc == hud_mcp_host and not server_cfg.get("auth"):
                         server_cfg["auth"] = settings.api_key
         except Exception:
-            # Non-fatal: fall back to provided config without mutation
-            pass
+            logger.warning("Failed to parse HUD MCP URL")
 
         config = {"mcpServers": mcp_config}
         if MCPUseClient is None:

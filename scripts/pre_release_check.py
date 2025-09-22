@@ -6,6 +6,7 @@ This script runs the hud-evals/test-diverse taskset with Claude and validates:
 2. At least one task achieves a non-zero score
 3. Overall success rate meets minimum threshold
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -28,14 +29,16 @@ logger = logging.getLogger(__name__)
 class PreReleaseChecker:
     """Handles pre-release evaluation checks."""
 
-    def __init__(self, dataset: str = "hud-evals/test-diverse", min_success_rate: float = 25.0):
+    def __init__(
+        self, dataset: str = "hud-evals/test-diverse", min_success_rate: float = 25.0
+    ) -> None:
         self.dataset = dataset
         self.min_success_rate = min_success_rate
         self.results: list[Any] = []
 
     async def run_evaluation(self) -> bool:
         """Run the evaluation and return success status."""
-        logger.info(f"Starting pre-release evaluation on {self.dataset}")
+        logger.info("Starting pre-release evaluation on %s", self.dataset)
 
         # Check required environment variables
         if not settings.api_key:
@@ -73,7 +76,7 @@ class PreReleaseChecker:
             return self._validate_results()
 
         except Exception as e:
-            logger.error(f"Evaluation failed with error: {e}", exc_info=True)
+            logger.exception("Evaluation failed with error: %s", e)
             return False
 
     def _validate_results(self) -> bool:
@@ -92,10 +95,10 @@ class PreReleaseChecker:
         logger.info("=" * 60)
         logger.info("EVALUATION SUMMARY")
         logger.info("=" * 60)
-        logger.info(f"Total tasks: {total_tasks}")
-        logger.info(f"Successful tasks: {successful_tasks}/{total_tasks} ({success_rate:.1f}%)")
-        logger.info(f"Failed tasks: {total_tasks - successful_tasks}")
-        logger.info(f"Error tasks: {error_tasks}")
+        logger.info("Total tasks: %s", total_tasks)
+        logger.info("Successful tasks: %s/%s (%.1f%%)", successful_tasks, total_tasks, success_rate)
+        logger.info("Failed tasks: %s", total_tasks - successful_tasks)
+        logger.info("Error tasks: %s", error_tasks)
         logger.info("=" * 60)
 
         # Check validation criteria
@@ -103,7 +106,7 @@ class PreReleaseChecker:
 
         # Criterion 1: No tasks should have errors
         if error_tasks > 0:
-            logger.error(f"❌ {error_tasks} tasks encountered errors")
+            logger.error("❌ %s tasks encountered errors", error_tasks)
             validation_passed = False
         else:
             logger.info("✅ No tasks encountered errors")
@@ -113,16 +116,18 @@ class PreReleaseChecker:
             logger.error("❌ No tasks achieved a non-zero score")
             validation_passed = False
         else:
-            logger.info(f"✅ {successful_tasks} tasks achieved non-zero scores")
+            logger.info("✅ %s tasks achieved non-zero scores", successful_tasks)
 
         # Criterion 3: Success rate must meet minimum threshold
         if success_rate < self.min_success_rate:
             logger.error(
-                f"❌ Success rate {success_rate:.1f}% is below minimum threshold of {self.min_success_rate}%"
+                "❌ Success rate %.1f%% is below minimum threshold of %.1f%%",
+                success_rate,
+                self.min_success_rate,
             )
             validation_passed = False
         else:
-            logger.info(f"✅ Success rate {success_rate:.1f}% meets minimum threshold")
+            logger.info("✅ Success rate %.1f%% meets minimum threshold", success_rate)
 
         # Log individual task results for debugging
         if not validation_passed:
@@ -131,7 +136,7 @@ class PreReleaseChecker:
                 reward = getattr(result, "reward", 0)
                 is_error = getattr(result, "isError", False)
                 status = "ERROR" if is_error else f"Reward: {reward}"
-                logger.info(f"  Task {i + 1}: {status}")
+                logger.info("  Task %s: %s", i + 1, status)
 
         return validation_passed
 

@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Any
 
 import anyio
 from fastmcp.server.server import FastMCP, Transport
-from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from hud.server.low_level import LowLevelServerWithInit
@@ -22,6 +21,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable
 
     from mcp.shared.context import RequestContext
+    from starlette.requests import Request
 
 __all__ = ["MCPServer"]
 
@@ -271,7 +271,7 @@ class MCPServer(FastMCP):
         super().add_tool(obj, **kwargs)
 
     # Override to keep original callables when used as a decorator
-    def tool(self, name_or_fn: Any = None, **kwargs: Any):  # type: ignore[override]
+    def tool(self, name_or_fn: Any = None, **kwargs: Any) -> Any:  # type: ignore[override]
         """Register a tool but return the original function in decorator form.
 
         - Decorator usage (@mcp.tool, @mcp.tool("name"), @mcp.tool(name="name"))
@@ -305,7 +305,7 @@ class MCPServer(FastMCP):
         # Decorator form: get FastMCP's decorator, register, then return original fn
         base_decorator = super().tool(name_or_fn, **kwargs)
 
-        def _wrapper(fn: Any):
+        def _wrapper(fn: Any) -> Any:
             base_decorator(fn)
             return fn
 
@@ -395,6 +395,6 @@ class MCPServer(FastMCP):
                         "resources": f"{base_url}/hud/resources",
                         "prompts": f"{base_url}/hud/prompts",
                     },
-                    "description": "These endpoints help you inspect your MCP server during development.",
+                    "description": "These endpoints help you inspect your MCP server during development.",  # noqa: E501
                 }
             )

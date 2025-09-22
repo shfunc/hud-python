@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import signal
 import subprocess
@@ -65,13 +66,11 @@ async def run_with_reload(
             return False
         if "__pycache__" in path_obj.parts:
             return False
-        if path_obj.suffix in {".py", ".json", ".toml", ".yaml", ".yml"}:
-            return True
-        return False
+        return path_obj.suffix in {".py", ".json", ".toml", ".yaml", ".yml"}
 
     process = None
 
-    async def run_server():
+    async def run_server() -> None:
         """Run the server process."""
         nonlocal process
 
@@ -99,7 +98,7 @@ async def run_with_reload(
 
         return await process.wait()
 
-    async def stop_server():
+    async def stop_server() -> None:
         """Stop the server process gracefully."""
         if process and process.returncode is None:
             if sys.platform == "win32":
@@ -159,10 +158,8 @@ async def run_with_reload(
         # Ensure server is stopped
         if server_task and not server_task.done():
             server_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await server_task
-            except asyncio.CancelledError:
-                pass
 
 
 def run_local_server(
@@ -200,7 +197,7 @@ def run_local_server(
             cmd.extend(extra_args)
 
         try:
-            result = subprocess.run(cmd)
+            result = subprocess.run(cmd)  # noqa: S603
             sys.exit(result.returncode)
         except KeyboardInterrupt:
             hud_console.info("\n👋 Shutting down...")
