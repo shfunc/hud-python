@@ -22,7 +22,7 @@ def _to_call_dict(obj: Any) -> Any:
     - If obj is a dict with {name, arguments}: return {name, arguments: recurse(arguments)}
     - Else if obj is a single-key dict {k: v} where v looks call-like: return {name: k, arguments: recurse(v)}
     - Else: return obj unchanged (leaf arguments/value)
-    """ # noqa: E501
+    """  # noqa: E501
     if isinstance(obj, dict):
         if "name" in obj and "arguments" in obj:
             args = obj.get("arguments")

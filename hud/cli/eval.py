@@ -295,7 +295,7 @@ async def run_full_dataset(
     agent_type: Literal["claude", "openai", "vllm"] = "claude",
     model: str | None = None,
     allowed_tools: list[str] | None = None,
-    max_concurrent: int = 50,
+    max_concurrent: int = 30,
     max_steps: int = 10,
     parallel: bool = False,
     max_workers: int | None = None,

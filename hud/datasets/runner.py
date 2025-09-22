@@ -22,7 +22,7 @@ async def run_dataset(
     dataset: str | Dataset | list[dict[str, Any]],
     agent_class: type[MCPAgent],
     agent_config: dict[str, Any] | None = None,
-    max_concurrent: int = 50,
+    max_concurrent: int = 30,
     metadata: dict[str, Any] | None = None,
     max_steps: int = 10,
     split: str = "train",
