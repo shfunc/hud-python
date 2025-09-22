@@ -11,6 +11,7 @@ from mcp import Implementation, types
 from mcp.shared.exceptions import McpError
 from mcp_use.client import MCPClient as MCPUseClient
 from mcp_use.session import MCPSession as MCPUseSession
+from mcp_use.types.http import HttpOptions
 from pydantic import AnyUrl
 
 from hud.settings import settings
@@ -59,10 +60,10 @@ class MCPUseHUDClient(BaseHUDClient):
         self._client: Any | None = None  # Will be MCPUseClient when available
         # Transport options for MCP-use (disable_sse_fallback, httpx_client_factory, etc.)
         # Default to retry-enabled HTTPX client if factory not provided
-        self._http_options: dict[str, Any] = {
-            "httpx_client_factory": create_retry_httpx_client,
-            "disable_sse_fallback": True,
-        }
+        self._http_options: HttpOptions = HttpOptions(
+            httpx_client_factory=create_retry_httpx_client,
+            disable_sse_fallback=True,
+        )
 
     async def _connect(self, mcp_config: dict[str, dict[str, Any]]) -> None:
         """Create all sessions for MCP-use client."""

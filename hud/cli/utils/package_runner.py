@@ -152,7 +152,7 @@ async def run_package_as_mcp(
 
         # Run the proxy
         await proxy.run_async(
-            transport=transport,
+            transport=transport if transport == "http" or transport == "stdio" else None,
             port=port if transport == "http" else None,
             show_banner=False,
             **extra_kwargs,

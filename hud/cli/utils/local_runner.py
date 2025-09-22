@@ -70,7 +70,7 @@ async def run_with_reload(
 
     process = None
 
-    async def run_server() -> None:
+    async def run_server() -> int:
         """Run the server process."""
         nonlocal process
 
