@@ -47,10 +47,10 @@ anthropic_computer = AnthropicComputerTool()
 openai_computer = OpenAIComputerTool()
 
 # Register them with MCP
-mcp.tool(playwright, name="playwright")
-mcp.tool(computer, name="computer")
-mcp.tool(anthropic_computer, name="anthropic_computer")
-mcp.tool(openai_computer, name="openai_computer")
+mcp.tool(playwright)
+mcp.tool(computer)
+mcp.tool(anthropic_computer)
+mcp.tool(openai_computer)
 
 
 @mcp.tool

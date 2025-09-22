@@ -57,5 +57,5 @@ EXPOSE 8000 8080 3000-3200 5000-5200
 CMD ["sh", "-c", "\
     cd /app/environment && ./start.sh >&2 & \
     sleep 5 && \
-    cd /app && exec hud controller:mcp --reload\
+    cd /app && exec hud run controller --reload\
 "] 
