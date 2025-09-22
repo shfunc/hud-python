@@ -14,7 +14,7 @@ from fastmcp import FastMCP
 
 from hud.utils.hud_console import HUDConsole
 
-from .utils.docker import get_docker_cmd, inject_supervisor
+from .utils.docker import get_docker_cmd
 from .utils.environment import (
     build_environment,
     get_image_name,
@@ -42,7 +42,7 @@ def create_proxy_server(
     interactive: bool = False,
 ) -> FastMCP:
     """Create an HTTP proxy server that forwards to Docker container with hot-reload."""
-    src_path = Path(directory) / "src"
+    project_path = Path(directory)
 
     # Get the original CMD from the image
     original_cmd = get_docker_cmd(image_name)
@@ -66,14 +66,21 @@ def create_proxy_server(
         "--name",
         container_name,
         "-v",
-        f"{src_path.absolute()}:/app/src:rw",
+        f"{project_path.absolute()}:/app:rw",
         "-e",
-        "PYTHONPATH=/app/src",
+        "PYTHONPATH=/app",
+        "-e",
+        "PYTHONUNBUFFERED=1",  # Ensure Python output is not buffered
     ]
 
     # Add user-provided Docker arguments
     if docker_args:
         docker_cmd.extend(docker_args)
+
+    # Append the image name and CMD
+    docker_cmd.append(image_name)
+    if original_cmd:
+        docker_cmd.extend(original_cmd)
 
     # Disable hot-reload if interactive mode is enabled
     if interactive:
@@ -83,17 +90,6 @@ def create_proxy_server(
     if no_reload and full_reload:
         hud_console.warning("Cannot use --full-reload with --no-reload, ignoring --full-reload")
         full_reload = False
-
-    if not no_reload and not full_reload:
-        # Standard hot-reload: inject supervisor for server restart within container
-        modified_cmd = inject_supervisor(original_cmd)
-        docker_cmd.extend(["--entrypoint", modified_cmd[0]])
-        docker_cmd.append(image_name)
-        docker_cmd.extend(modified_cmd[1:])
-    else:
-        # No reload or full reload: use original CMD without supervisor
-        # Note: Full reload logic (container restart) would be implemented here in the future
-        docker_cmd.append(image_name)
 
     # Create configuration following MCPConfig schema
     config = {
@@ -108,17 +104,12 @@ def create_proxy_server(
 
     # Debug output - only if verbose
     if verbose:
-        if not no_reload and not full_reload:
-            hud_console.info("Mode: Hot-reload (server restart within container)")
-            hud_console.info("Watching: /app/src for changes")
-        elif full_reload:
+        if full_reload:
             hud_console.info("Mode: Full reload (container restart on file changes)")
-            hud_console.info(
-                "Note: Full container restart not yet implemented, using no-reload mode"
-            )
+            hud_console.info("Note: Full container restart not yet implemented")
         else:
-            hud_console.info("Mode: No reload")
-            hud_console.info("Container will run without hot-reload")
+            hud_console.info("Mode: Container manages its own reload")
+            hud_console.info("The container's CMD determines reload behavior")
         hud_console.command_example(f"docker logs -f {container_name}", "View container logs")
 
         # Show the full Docker command if there are environment variables
@@ -227,10 +218,10 @@ async def start_mcp_proxy(
         stderr_handler = logging.StreamHandler(sys.stderr)
         root_logger.addHandler(stderr_handler)
 
-    # Now check for src directory
-    src_path = Path(directory) / "src"
-    if not src_path.exists():
-        hud_console.error(f"Source directory not found: {src_path}")
+    # Validate project directory exists
+    project_path = Path(directory)
+    if not project_path.exists():
+        hud_console.error(f"Project directory not found: {project_path}")
         raise click.Abort
 
     # Extract container name from the proxy configuration (must match create_proxy_server naming)
@@ -774,16 +765,6 @@ def run_mcp_dev_server(
         elif not interactive:
             hud_console.progress_message("🧪 Run with --interactive for interactive testing mode")
 
-    # Disable logs and hot-reload if interactive mode is enabled
-    if interactive and not no_logs:
-        hud_console.warning("Docker logs disabled in interactive mode for better UI experience")
-        no_logs = True
-        # if not no_reload:
-        #     hud_console.warning(
-        #         "Hot-reload disabled in interactive mode to prevent output interference"
-        #     )
-        #     no_reload = True
-
     # Show configuration as JSON (just the server config, not wrapped)
     full_config = {}
     full_config[server_name] = server_config
@@ -796,9 +777,9 @@ def run_mcp_dev_server(
         "Connect to Cursor (be careful with multiple windows as that may interfere with the proxy)"
     )
     hud_console.link(deeplink)
+
     hud_console.info("")  # Empty line
 
-    # Start the proxy (pass original port, start_mcp_proxy will find actual port again)
     try:
         asyncio.run(
             start_mcp_proxy(

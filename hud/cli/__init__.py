@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import sys
 from pathlib import Path
@@ -28,6 +29,7 @@ from .init import create_environment
 from .pull import pull_command
 from .push import push_command
 from .remove import remove_command
+from .utils.config import set_env_values
 from .utils.cursor import get_cursor_config_path, list_cursor_servers, parse_cursor_config
 from .utils.logging import CaptureLogger
 
@@ -116,7 +118,9 @@ def analyze(
         image, *docker_args = params
         if live or docker_args:  # If docker args provided, assume live mode
             # Build Docker command from image and args
-            docker_cmd = ["docker", "run", "--rm", "-i", *docker_args, image]
+            from .utils.docker import build_run_command
+
+            docker_cmd = build_run_command(image, docker_args)
             asyncio.run(analyze_environment(docker_cmd, output_format, verbose))
         else:
             # Fast mode - analyze from metadata
@@ -239,11 +243,15 @@ def debug(
                     raise typer.Exit(1)
 
             # Build Docker command
-            command = ["docker", "run", "--rm", "-i", *docker_args, image_name]
+            from .utils.docker import build_run_command
+
+            command = build_run_command(image_name, docker_args)
         else:
             # Assume it's an image name
             image = first_param
-            command = ["docker", "run", "--rm", "-i", *docker_args, image]
+            from .utils.docker import build_run_command
+
+            command = build_run_command(image, docker_args)
     else:
         console.print(
             "[red]Error: Must specify a directory, Docker image, --config, or --cursor[/red]"
@@ -370,12 +378,10 @@ def dev(
         False, "--interactive", help="Launch interactive testing mode (HTTP mode only)"
     ),
 ) -> None:
-    """🔥 Development mode with hot-reload.
+    """🔥 Development mode - interactive MCP environment.
 
-    Runs your MCP environment in Docker with automatic restart on file changes.
-
-    The container's last command (typically the MCP server) will be wrapped
-    with watchfiles for hot-reload functionality.
+    Runs your MCP environment in Docker with mounted source for development.
+    The container's CMD determines reload behavior.
 
     Examples:
         hud dev                      # Auto-detect in current directory
@@ -388,13 +394,12 @@ def dev(
         hud dev . --inspector        # Launch MCP Inspector (HTTP mode only)
         hud dev . --interactive      # Launch interactive testing mode (HTTP mode only)
         hud dev . --no-logs          # Disable Docker log streaming
-        hud dev . --full-reload      # Restart entire container on file changes (instead of just server)
 
         # With Docker arguments (after all options):
         hud dev . -e BROWSER_PROVIDER=anchorbrowser -e ANCHOR_API_KEY=xxx
         hud dev . -e API_KEY=secret -v /tmp/data:/data --network host
         hud dev . --build -e DEBUG=true --memory 2g
-    """  # noqa: E501
+    """
     # Parse directory and Docker arguments
     if params:
         directory = params[0]
@@ -424,7 +429,7 @@ def dev(
 def run(
     params: list[str] = typer.Argument(  # type: ignore[arg-type]  # noqa: B008
         None,
-        help="Docker image followed by optional arguments (e.g., 'hud-image:latest -e KEY=value')",
+        help="Python file/module/package or Docker image followed by optional arguments",
     ),
     local: bool = typer.Option(
         False,
@@ -474,32 +479,152 @@ def run(
         "--interactive",
         help="Launch interactive testing mode (HTTP transport only)",
     ),
+    reload: bool = typer.Option(
+        False,
+        "--reload",
+        help="Enable auto-reload on file changes (local Python files only)",
+    ),
+    watch: list[str] = typer.Option(  # noqa: B008
+        None,
+        "--watch",
+        help="Directories to watch for changes (can be used multiple times). Defaults to current directory.",  # noqa: E501
+    ),
+    cmd: str | None = typer.Option(
+        None,
+        "--cmd",
+        help="Command to run as MCP server (e.g., 'python -m controller')",
+    ),
 ) -> None:
-    """🚀 Run MCP server locally or remotely.
+    """🚀 Run MCP server.
 
-    By default, runs remotely via mcp.hud.so. Use --local for Docker.
+    Modes:
+    - Python (decorator-based): pass a dotted module path. Example: hud run controller
+      The module is imported, decorators register implicitly, and the server runs.
+      Use --reload to watch the module/package directory.
 
-    Remote Examples:
-        hud run hud-text-2048:latest
-        hud run my-server:v1 -e API_KEY=xxx -h Run-Id:abc123
-        hud run my-server:v1 --transport http --port 9000
+    - Command: use --cmd to run any command as an MCP server. Example: hud run --cmd "python -m controller"
+      Works with Docker, binaries, or any executable. Supports --reload.
 
-    Local Examples:
-        hud run --local hud-text-2048:latest
-        hud run --local my-server:v1 -e API_KEY=xxx
-        hud run --local my-server:v1 --transport http
-
-    Interactive Testing (local only):
-        hud run --local --interactive --transport http hud-text-2048:latest
-        hud run --local --interactive --transport http --port 9000 my-server:v1
-    """
-    if not params:
-        typer.echo("❌ Docker image is required")
+    - Docker image: pass a Docker image name (optionally with --local to run locally).
+    """  # noqa: E501
+    if not params and not cmd:
+        typer.echo("❌ Dotted module path, Docker image, or --cmd is required")
         raise typer.Exit(1)
 
-    # Parse image and args
-    image = params[0]
-    docker_args = params[1:] if len(params) > 1 else []
+    # Handle --cmd mode
+    if cmd:
+        import asyncio
+
+        from .utils.package_runner import run_package_as_mcp
+
+        asyncio.run(
+            run_package_as_mcp(
+                cmd,  # Pass command string
+                transport=transport,
+                port=port,
+                verbose=verbose,
+                reload=reload,
+                watch_paths=watch if watch else None,
+            )
+        )
+        return
+
+    first_param = params[0]
+    extra_args = params[1:] if len(params) > 1 else []
+
+    # Guard: strip accidental nested 'run' token from positional args,
+    # which can happen with nested invocations or reload wrappers.
+    if first_param == "run" and extra_args:
+        first_param, extra_args = extra_args[0], extra_args[1:]
+
+    # Try to interpret first_param as module[:attr] or file[:attr]
+    target = first_param
+    server_attr = "mcp"
+    if ":" in target:
+        target, server_attr = target.split(":", 1)
+
+    # Only allow dotted import paths or python files for Python mode
+    import importlib.util as _importlib_util
+
+    # Ensure current working directory is importable for local packages like 'controller'
+    try:
+        import sys as _sys
+        from pathlib import Path as _Path
+
+        cwd_str = str(_Path.cwd())
+        if cwd_str not in _sys.path:
+            _sys.path.insert(0, cwd_str)
+    except Exception:  # noqa: S110
+        pass
+    try:
+        # If given a file path, detect and import via file spec
+        from pathlib import Path as _Path
+
+        if target.endswith(".py") and _Path(target).exists():
+            spec = _importlib_util.spec_from_file_location("_hud_module", target)
+        else:
+            spec = _importlib_util.find_spec(target)
+    except Exception:
+        spec = None
+
+    # Fallback: treat a local package directory (e.g. 'controller') as a module target
+    from pathlib import Path as _Path
+
+    pkg_dir = _Path(target)
+    is_pkg_dir = pkg_dir.is_dir() and (pkg_dir / "__init__.py").exists()
+
+    is_python_target = (spec is not None) or is_pkg_dir
+
+    if is_python_target and not (local or remote):
+        # Python file/package mode - use implicit MCP server
+        import asyncio
+
+        from .utils.package_runner import run_package_as_mcp, run_with_reload
+
+        if reload:
+            # Run with watchfiles reload
+            # Use user-provided watch paths or compute from module
+            if watch:
+                watch_paths = watch
+            else:
+                # Compute a watch path that works for dotted modules as well
+                watch_paths = [target]
+                if spec is not None:
+                    origin = getattr(spec, "origin", None)
+                    sublocs = getattr(spec, "submodule_search_locations", None)
+                    if origin:
+                        p = _Path(origin)
+                        # If package __init__.py, watch the package directory
+                        watch_paths = [str(p.parent if p.name == "__init__.py" else p)]
+                    elif sublocs:
+                        with contextlib.suppress(Exception):
+                            watch_paths = [next(iter(sublocs))]
+
+            # Always run as subprocess when using reload to enable proper file watching
+            # This ensures the parent process can watch files while the child runs the server
+            run_with_reload(
+                None,  # This forces subprocess mode for both stdio and http
+                watch_paths,
+                verbose=verbose,
+            )
+        else:
+            # Run normally (but still pass reload=False for consistency)
+            asyncio.run(
+                run_package_as_mcp(
+                    target,
+                    transport=transport,
+                    port=port,
+                    verbose=verbose,
+                    server_attr=server_attr,
+                    reload=False,  # Explicitly pass reload state
+                    watch_paths=None,
+                )
+            )
+        return
+
+    # Docker image mode
+    image = first_param
+    docker_args = extra_args
 
     # Handle conflicting flags
     if local and remote:
@@ -741,6 +866,12 @@ def remove(
 @app.command()
 def init(
     name: str = typer.Argument(None, help="Environment name (default: current directory name)"),
+    preset: str | None = typer.Option(
+        None,
+        "--preset",
+        "-p",
+        help="Preset to use: blank, deep-research, browser. If omitted, you'll choose interactively.",  # noqa: E501
+    ),
     directory: str = typer.Option(".", "--dir", "-d", help="Target directory"),
     force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing files"),
 ) -> None:
@@ -757,7 +888,7 @@ def init(
         hud init my-env             # Create in ./my-env/
         hud init my-env --dir /tmp  # Create in /tmp/my-env/
     """
-    create_environment(name, directory, force)
+    create_environment(name, directory, force, preset)
 
 
 @app.command()
@@ -774,7 +905,7 @@ def eval(
     source: str | None = typer.Argument(
         None,
         help=(
-            "HuggingFace dataset identifier (e.g. 'hud-evals/SheetBench-50') or task JSON file. "
+            "HuggingFace dataset (e.g. 'hud-evals/SheetBench-50') or task JSON file. "
             "If not provided, looks for task.json in current directory."
         ),
     ),
@@ -846,54 +977,21 @@ def eval(
 
     hud_console = HUDConsole()
 
-    # If no source provided, look for task/eval JSON files in current directory
+    # If no source provided, reuse RL helper to find a tasks file interactively
     if source is None:
-        # Search for JSON files with "task" or "eval" in the name (case-insensitive)
-        json_files = []
-        patterns = [
-            "*task*.json",
-            "*eval*.json",
-            "*Task*.json",
-            "*Eval*.json",
-            "*TASK*.json",
-            "*EVAL*.json",
-        ]
+        try:
+            from hud.cli.utils.tasks import find_tasks_file
 
-        # First check current directory
-        for pattern in patterns:
-            json_files.extend(Path(".").glob(pattern))
-
-        # If no files found, search recursively (but limit depth to avoid deep searches)
-        if not json_files:
-            for pattern in patterns:
-                # Search up to 2 levels deep
-                json_files.extend(Path(".").glob(f"*/{pattern}"))
-                json_files.extend(Path(".").glob(f"*/*/{pattern}"))
-
-        # Remove duplicates and sort
-        json_files = sorted(set(json_files))
-
-        if not json_files:
+            source = find_tasks_file(None, msg="Select a tasks file to run")
+            hud_console.success(f"Selected: {source}")
+        except Exception as e:
             hud_console.error(
                 "No source provided and no task/eval JSON files found in current directory"
             )
             hud_console.info(
-                "Usage: hud eval <source> or create a task JSON file "
-                "(e.g., task.json, eval_config.json)"
+                "Usage: hud eval <source> or create a task JSON file (e.g., task.json, tasks.jsonl)"
             )
-            raise typer.Exit(1)
-        elif len(json_files) == 1:
-            source = str(json_files[0])
-            hud_console.info(f"Found task file: {source}")
-        else:
-            # Multiple files found, let user choose
-            hud_console.info("Multiple task files found:")
-            file_choice = hud_console.select(
-                "Select a task file to run:",
-                choices=[str(f) for f in json_files],
-            )
-            source = file_choice
-            hud_console.success(f"Selected: {source}")
+            raise typer.Exit(1) from e
 
     # Import eval_command lazily to avoid importing agent dependencies
     try:
@@ -1083,6 +1181,42 @@ def rl(
         ddp_gpus=ddp_gpus,
         vllm_gpu=vllm_gpu,
     )
+
+
+@app.command()
+def set(
+    assignments: list[str] = typer.Argument(  # type: ignore[arg-type]  # noqa: B008
+        ..., help="One or more KEY=VALUE pairs to persist in ~/.hud/.env"
+    ),
+) -> None:
+    """Persist API keys or other variables for HUD to use by default.
+
+    Examples:
+        hud set ANTHROPIC_API_KEY=sk-... OPENAI_API_KEY=sk-...
+
+    Values are stored in ~/.hud/.env and are loaded by hud.settings with
+    the lowest precedence (overridden by process env and project .env).
+    """
+    from hud.utils.hud_console import HUDConsole
+
+    hud_console = HUDConsole()
+
+    updates: dict[str, str] = {}
+    for item in assignments:
+        if "=" not in item:
+            hud_console.error(f"Invalid assignment (expected KEY=VALUE): {item}")
+            raise typer.Exit(1)
+        key, value = item.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            hud_console.error(f"Invalid key in assignment: {item}")
+            raise typer.Exit(1)
+        updates[key] = value
+
+    path = set_env_values(updates)
+    hud_console.success("Saved credentials to user config")
+    hud_console.info(f"Location: {path}")
 
 
 def main() -> None:
