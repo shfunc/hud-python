@@ -235,7 +235,7 @@ class TestAnalyzeMcpEnvironment:
         # Setup mock client to fail
         mock_client = mock.AsyncMock()
         mock_client_class.return_value = mock_client
-        mock_client.initialize.side_effect = Exception("Connection failed")
+        mock_client.initialize.side_effect = ConnectionError("Connection failed")
 
         with pytest.raises(ConnectionError):
             await analyze_mcp_environment("test:latest")

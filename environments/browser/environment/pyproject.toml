@@ -4,11 +4,12 @@ version = "0.1.0"
 description = "Browser environment server for managing X11, VNC, and applications"
 requires-python = ">=3.11"
 dependencies = [
-    "fastapi==0.104.1",
-    "uvicorn[standard]==0.24.0",
-    "httpx==0.25.2",
-    "pydantic==2.5.0",
-    "python-multipart==0.0.6",
+    "fastapi>=0.104.1",
+    "uvicorn[standard]>=0.24.0",
+    "httpx>=0.25.2",
+    "pydantic>=2.6,<3",
+    "pydantic-settings>=2.2,<3",
+    "python-multipart>=0.0.6",
 ]
 
 [build-system]
