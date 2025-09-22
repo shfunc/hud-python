@@ -11,8 +11,8 @@ license = { file = "LICENSE" }
 dependencies = [
     # Core dependencies - minimal for MCP servers and CLI
     "httpx>=0.23.0,<1",
-    "pydantic>=2,<3",
-    "pydantic-settings>=2,<3",
+    "pydantic>=2.6,<3",
+    "pydantic-settings>=2.2,<3",
     # MCP dependencies
     "hud-mcp-python-sdk>=3.13.2",
     "hud-fastmcp-python-sdk>=0.1.2",
