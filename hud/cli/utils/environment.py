@@ -33,12 +33,14 @@ def get_image_name(directory: str | Path, image_override: str | None = None) -> 
         except Exception:
             hud_console.error("Error loading pyproject.toml")
 
-    # Auto-generate with :dev tag (no prefix, no underscore replacement)
+    # Auto-generate with :dev tag (replace underscores with hyphens)
     dir_path = Path(directory).resolve()  # Get absolute path first
     dir_name = dir_path.name
     if not dir_name or dir_name == ".":
         # If we're in root or have empty name, use parent directory
         dir_name = dir_path.parent.name
+    # Replace underscores with hyphens for Docker image names
+    dir_name = dir_name.replace("_", "-")
     return f"{dir_name}:dev", "auto"
 
 

@@ -44,7 +44,10 @@ class TestOperatorAgent:
         """Test agent initialization."""
         mock_model_client = MagicMock()
         agent = OperatorAgent(
-            mcp_client=mock_mcp_client, model_client=mock_model_client, model="gpt-4"
+            mcp_client=mock_mcp_client,
+            model_client=mock_model_client,
+            model="gpt-4",
+            validate_api_key=False,  # Skip validation in tests
         )
 
         assert agent.model_name == "openai-gpt-4"
@@ -55,7 +58,11 @@ class TestOperatorAgent:
     async def test_format_blocks(self, mock_mcp_client):
         """Test formatting content blocks."""
         mock_model_client = MagicMock()
-        agent = OperatorAgent(mcp_client=mock_mcp_client, model_client=mock_model_client)
+        agent = OperatorAgent(
+            mcp_client=mock_mcp_client,
+            model_client=mock_model_client,
+            validate_api_key=False,  # Skip validation in tests
+        )
 
         # Test with text blocks
         blocks: list[types.ContentBlock] = [
@@ -85,7 +92,11 @@ class TestOperatorAgent:
     @pytest.mark.asyncio
     async def test_format_tool_results(self, mock_mcp_client, mock_openai):
         """Test formatting tool results."""
-        agent = OperatorAgent(mcp_client=mock_mcp_client, model_client=mock_openai)
+        agent = OperatorAgent(
+            mcp_client=mock_mcp_client,
+            model_client=mock_openai,
+            validate_api_key=False,  # Skip validation in tests
+        )
 
         tool_calls = [
             MCPToolCall(name="test_tool", arguments={}, id="call_123"),  # type: ignore
@@ -111,7 +122,11 @@ class TestOperatorAgent:
     @pytest.mark.asyncio
     async def test_format_tool_results_with_error(self, mock_mcp_client, mock_openai):
         """Test formatting tool results with errors."""
-        agent = OperatorAgent(mcp_client=mock_mcp_client, model_client=mock_openai)
+        agent = OperatorAgent(
+            mcp_client=mock_mcp_client,
+            model_client=mock_openai,
+            validate_api_key=False,  # Skip validation in tests
+        )
 
         tool_calls = [
             MCPToolCall(name="failing_tool", arguments={}, id="call_error"),  # type: ignore
@@ -131,7 +146,11 @@ class TestOperatorAgent:
     @pytest.mark.asyncio
     async def test_get_model_response(self, mock_mcp_client, mock_openai):
         """Test getting model response from OpenAI API."""
-        agent = OperatorAgent(mcp_client=mock_mcp_client, model_client=mock_openai)
+        agent = OperatorAgent(
+            mcp_client=mock_mcp_client,
+            model_client=mock_openai,
+            validate_api_key=False,  # Skip validation in tests
+        )
 
         # Set up available tools so agent doesn't return "No computer use tools available"
         agent._available_tools = [
@@ -162,7 +181,11 @@ class TestOperatorAgent:
     @pytest.mark.asyncio
     async def test_handle_empty_response(self, mock_mcp_client, mock_openai):
         """Test handling empty response from API."""
-        agent = OperatorAgent(mcp_client=mock_mcp_client, model_client=mock_openai)
+        agent = OperatorAgent(
+            mcp_client=mock_mcp_client,
+            model_client=mock_openai,
+            validate_api_key=False,  # Skip validation in tests
+        )
 
         # Set up available tools
         agent._available_tools = [
