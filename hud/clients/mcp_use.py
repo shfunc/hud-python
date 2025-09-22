@@ -5,18 +5,18 @@ from __future__ import annotations
 import logging
 import traceback
 from typing import Any
+from urllib.parse import urlparse
 
 from mcp import Implementation, types
 from mcp.shared.exceptions import McpError
 from mcp_use.client import MCPClient as MCPUseClient
 from mcp_use.session import MCPSession as MCPUseSession
 from pydantic import AnyUrl
-from urllib.parse import urlparse
 
+from hud.settings import settings
 from hud.types import MCPToolCall, MCPToolResult
 from hud.utils.hud_console import HUDConsole
 from hud.version import __version__ as hud_version
-from hud.settings import settings
 
 from .base import BaseHUDClient
 from .utils.retry_transport import create_retry_httpx_client
@@ -62,7 +62,7 @@ class MCPUseHUDClient(BaseHUDClient):
         self._http_options: dict[str, Any] = {
             "httpx_client_factory": create_retry_httpx_client,
             "disable_sse_fallback": True,
-            }
+        }
 
     async def _connect(self, mcp_config: dict[str, dict[str, Any]]) -> None:
         """Create all sessions for MCP-use client."""

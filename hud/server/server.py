@@ -167,6 +167,7 @@ class MCPServer(FastMCP):
                 with contextlib.redirect_stdout(sys.stderr):
                     # Check if function accepts ctx parameter
                     import inspect
+
                     sig = inspect.signature(self._initializer_fn)
                     if "ctx" in sig.parameters:
                         return self._initializer_fn(ctx)
@@ -241,7 +242,7 @@ class MCPServer(FastMCP):
             await self.run_async(transport=transport, show_banner=show_banner, **transport_kwargs)  # type: ignore[arg-type]
 
         _run_with_sigterm(_bootstrap)
-    
+
     async def run_async(
         self,
         transport: Transport | None = None,
@@ -251,12 +252,12 @@ class MCPServer(FastMCP):
         """Run the server with HUD enhancements."""
         if transport is None:
             transport = "stdio"
-            
+
         # Register HTTP helpers for HTTP transport
         if transport in ("http", "sse"):
             self._register_hud_helpers()
             logger.info("Registered HUD helper endpoints at /hud/*")
-            
+
         await super().run_async(transport=transport, show_banner=show_banner, **transport_kwargs)
 
     # Tool registration helper -- appends BaseTool to FastMCP
@@ -309,16 +310,17 @@ class MCPServer(FastMCP):
             return fn
 
         return _wrapper
-    
+
     def _register_hud_helpers(self) -> None:
         """Register HUD helper HTTP routes.
-        
+
         This adds:
         - GET /hud - Overview of available endpoints
         - GET /hud/tools - List all registered tools with their schemas
         - GET /hud/resources - List all registered resources
         - GET /hud/prompts - List all registered prompts
         """
+
         @self.custom_route("/hud/tools", methods=["GET"])
         async def list_tools(request: Request) -> Response:
             """List all registered tools with their names, descriptions, and schemas."""
@@ -331,9 +333,9 @@ class MCPServer(FastMCP):
                     mcp_tool = tool.to_mcp_tool()
                     tool_data["description"] = getattr(mcp_tool, "description", "")
                     if hasattr(mcp_tool, "inputSchema") and mcp_tool.inputSchema:
-                        tool_data["input_schema"] = mcp_tool.inputSchema # type: ignore[assignment]
+                        tool_data["input_schema"] = mcp_tool.inputSchema  # type: ignore[assignment]
                     if hasattr(mcp_tool, "outputSchema") and mcp_tool.outputSchema:
-                        tool_data["output_schema"] = mcp_tool.outputSchema # type: ignore[assignment]
+                        tool_data["output_schema"] = mcp_tool.outputSchema  # type: ignore[assignment]
                 except Exception:
                     # Fallback to direct attributes on FunctionTool
                     tool_data["description"] = getattr(tool, "description", "")
@@ -341,13 +343,9 @@ class MCPServer(FastMCP):
                     if params:
                         tool_data["input_schema"] = params
                 tools.append(tool_data)
-            
-            return JSONResponse({
-                "server": self.name,
-                "tools": tools,
-                "count": len(tools)
-            })
-        
+
+            return JSONResponse({"server": self.name, "tools": tools, "count": len(tools)})
+
         @self.custom_route("/hud/resources", methods=["GET"])
         async def list_resources(request: Request) -> Response:
             """List all registered resources."""
@@ -360,14 +358,12 @@ class MCPServer(FastMCP):
                     "mimeType": resource.mime_type,
                 }
                 resources.append(resource_data)
-            
-            return JSONResponse({
-                "server": self.name,
-                "resources": resources,
-                "count": len(resources)
-            })
-        
-        @self.custom_route("/hud/prompts", methods=["GET"])  
+
+            return JSONResponse(
+                {"server": self.name, "resources": resources, "count": len(resources)}
+            )
+
+        @self.custom_route("/hud/prompts", methods=["GET"])
         async def list_prompts(request: Request) -> Response:
             """List all registered prompts."""
             prompts = []
@@ -383,24 +379,22 @@ class MCPServer(FastMCP):
                         for arg in prompt.arguments
                     ]
                 prompts.append(prompt_data)
-            
-            return JSONResponse({
-                "server": self.name,
-                "prompts": prompts,
-                "count": len(prompts)
-            })
-        
+
+            return JSONResponse({"server": self.name, "prompts": prompts, "count": len(prompts)})
+
         @self.custom_route("/hud", methods=["GET"])
         async def hud_info(request: Request) -> Response:
             """Show available HUD helper endpoints."""
             base_url = str(request.base_url).rstrip("/")
-            return JSONResponse({
-                "name": "HUD MCP Development Helpers",
-                "server": self.name,
-                "endpoints": {
-                    "tools": f"{base_url}/hud/tools",
-                    "resources": f"{base_url}/hud/resources", 
-                    "prompts": f"{base_url}/hud/prompts",
-                },
-                "description": "These endpoints help you inspect your MCP server during development."
-            })
+            return JSONResponse(
+                {
+                    "name": "HUD MCP Development Helpers",
+                    "server": self.name,
+                    "endpoints": {
+                        "tools": f"{base_url}/hud/tools",
+                        "resources": f"{base_url}/hud/resources",
+                        "prompts": f"{base_url}/hud/prompts",
+                    },
+                    "description": "These endpoints help you inspect your MCP server during development.",
+                }
+            )

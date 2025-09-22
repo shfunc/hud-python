@@ -52,7 +52,6 @@ class TestDockerUtils:
             assert cmd is None
 
 
-
 class TestImageResolution:
     """Test image name resolution."""
 

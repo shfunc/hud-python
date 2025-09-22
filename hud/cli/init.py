@@ -39,35 +39,34 @@ PLACEHOLDER_FILES = {
 
 def _replace_placeholders(target_dir: Path, env_name: str) -> list[str]:
     """Replace placeholders in template files with the actual environment name.
-    
+
     Args:
         target_dir: Directory containing the downloaded template files
         env_name: The environment name to replace placeholders with
-        
+
     Returns:
         List of files that were modified
     """
     modified_files = []
     placeholder = "test_test"
-    
+
     # Normalize environment name for use in code/configs
     # Replace spaces and special chars with underscores for Python identifiers
     normalized_name = env_name.replace("-", "_").replace(" ", "_")
     normalized_name = "".join(c if c.isalnum() or c == "_" else "_" for c in normalized_name)
-    
+
     for root, dirs, files in os.walk(target_dir):
         # Skip directories we don't want to process
         dirs[:] = [d for d in dirs if d not in SKIP_DIR_NAMES]
-        
+
         for file in files:
             file_path = Path(root) / file
-            
+
             # Check if this file should have placeholders replaced
-            should_replace = (
-                file in PLACEHOLDER_FILES or
-                any(file_path.relative_to(target_dir).as_posix().endswith(f) for f in PLACEHOLDER_FILES)
+            should_replace = file in PLACEHOLDER_FILES or any(
+                file_path.relative_to(target_dir).as_posix().endswith(f) for f in PLACEHOLDER_FILES
             )
-            
+
             if should_replace:
                 try:
                     content = file_path.read_text(encoding="utf-8")
@@ -78,7 +77,7 @@ def _replace_placeholders(target_dir: Path, env_name: str) -> list[str]:
                 except Exception:
                     # Skip files that can't be read as text
                     pass
-                    
+
     return modified_files
 
 

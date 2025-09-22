@@ -8,7 +8,6 @@ import signal
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
 
 from hud.utils.hud_console import HUDConsole
 
@@ -26,7 +25,9 @@ async def run_with_reload(
     try:
         import watchfiles
     except ImportError:
-        hud_console.error("watchfiles is required for --reload. Install with: pip install watchfiles")
+        hud_console.error(
+            "watchfiles is required for --reload. Install with: pip install watchfiles"
+        )
         sys.exit(1)
 
     # Parse server file path
@@ -34,15 +35,15 @@ async def run_with_reload(
         file_path, _ = server_file.split(":", 1)
     else:
         file_path = server_file
-    
+
     file_path = Path(file_path).resolve()
     if not file_path.exists():
         hud_console.error(f"Server file not found: {file_path}")
         sys.exit(1)
-    
+
     # Watch the directory containing the server file (like uvicorn)
     watch_dir = file_path.parent
-    
+
     # Build command
     cmd = [sys.executable, "-m", "fastmcp.cli", "run", server_file]
     if transport:
@@ -55,31 +56,31 @@ async def run_with_reload(
     if extra_args:
         cmd.append("--")
         cmd.extend(extra_args)
-    
+
     # Filter for Python files and important config files
     def should_reload(change: watchfiles.Change, path: str) -> bool:
         path_obj = Path(path)
         # Ignore common non-code files
-        if any(part.startswith('.') for part in path_obj.parts):
+        if any(part.startswith(".") for part in path_obj.parts):
             return False
-        if '__pycache__' in path_obj.parts:
+        if "__pycache__" in path_obj.parts:
             return False
-        if path_obj.suffix in {'.py', '.json', '.toml', '.yaml', '.yml'}:
+        if path_obj.suffix in {".py", ".json", ".toml", ".yaml", ".yml"}:
             return True
         return False
-    
+
     process = None
-    
+
     async def run_server():
         """Run the server process."""
         nonlocal process
-        
+
         # For stdio transport, we need special handling to preserve stdout
         if transport == "stdio":
             # All server logs must go to stderr
             env = os.environ.copy()
             env["PYTHONUNBUFFERED"] = "1"
-            
+
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdin=sys.stdin,
@@ -95,9 +96,9 @@ async def run_with_reload(
                 stdout=sys.stdout,
                 stderr=sys.stderr,
             )
-        
+
         return await process.wait()
-    
+
     async def stop_server():
         """Stop the server process gracefully."""
         if process and process.returncode is None:
@@ -107,43 +108,45 @@ async def run_with_reload(
             else:
                 # Unix: send SIGINT for hot reload
                 process.send_signal(signal.SIGINT)
-            
+
             # Wait for graceful shutdown
             try:
                 await asyncio.wait_for(process.wait(), timeout=5.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Force kill if not responding
                 if verbose:
                     hud_console.warning("Server didn't stop gracefully, forcing shutdown...")
                 process.kill()
                 await process.wait()
-    
+
     # Initial server start
     server_task = asyncio.create_task(run_server())
-    
+
     try:
         # Watch for file changes
         async for changes in watchfiles.awatch(watch_dir):
             # Check if any change should trigger reload
             if any(should_reload(change, path) for change, path in changes):
-                changed_files = [path for _, path in changes if should_reload(watchfiles.Change.modified, path)]
+                changed_files = [
+                    path for _, path in changes if should_reload(watchfiles.Change.modified, path)
+                ]
                 if verbose:
                     for file in changed_files[:3]:  # Show first 3 files
                         hud_console.info(f"File changed: {Path(file).relative_to(watch_dir)}")
                     if len(changed_files) > 3:
                         hud_console.info(f"... and {len(changed_files) - 3} more files")
-                
+
                 hud_console.info("🔄 Reloading server...")
-                
+
                 # Stop current server
                 await stop_server()
-                
+
                 # Small delay to ensure clean restart
                 await asyncio.sleep(0.1)
-                
+
                 # Start new server
                 server_task = asyncio.create_task(run_server())
-    
+
     except KeyboardInterrupt:
         hud_console.info("\n👋 Shutting down...")
         await stop_server()
@@ -173,13 +176,15 @@ def run_local_server(
     """Run a local Python file as an MCP server."""
     if reload:
         # Run with reload support
-        asyncio.run(run_with_reload(
-            server_file,
-            transport=transport,
-            port=port,
-            verbose=verbose,
-            extra_args=extra_args,
-        ))
+        asyncio.run(
+            run_with_reload(
+                server_file,
+                transport=transport,
+                port=port,
+                verbose=verbose,
+                extra_args=extra_args,
+            )
+        )
     else:
         # Run directly without reload
         cmd = [sys.executable, "-m", "fastmcp.cli", "run", server_file]
@@ -193,7 +198,7 @@ def run_local_server(
         if extra_args:
             cmd.append("--")
             cmd.extend(extra_args)
-        
+
         try:
             result = subprocess.run(cmd)
             sys.exit(result.returncode)

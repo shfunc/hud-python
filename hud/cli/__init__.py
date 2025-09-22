@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import logging
-logging.basicConfig(level=logging.INFO)
-
 import asyncio
 import json
 import sys
@@ -401,7 +398,7 @@ def dev(
         hud dev . -e BROWSER_PROVIDER=anchorbrowser -e ANCHOR_API_KEY=xxx
         hud dev . -e API_KEY=secret -v /tmp/data:/data --network host
         hud dev . --build -e DEBUG=true --memory 2g
-    """  # noqa: E501
+    """
     # Parse directory and Docker arguments
     if params:
         directory = params[0]
@@ -515,17 +512,20 @@ def run(
 
     # Handle --cmd mode
     if cmd:
-        from .utils.package_runner import run_package_as_mcp
         import asyncio
-        
-        asyncio.run(run_package_as_mcp(
-            cmd,  # Pass command string
-            transport=transport,
-            port=port,
-            verbose=verbose,
-            reload=reload,
-            watch_paths=watch if watch else None,
-        ))
+
+        from .utils.package_runner import run_package_as_mcp
+
+        asyncio.run(
+            run_package_as_mcp(
+                cmd,  # Pass command string
+                transport=transport,
+                port=port,
+                verbose=verbose,
+                reload=reload,
+                watch_paths=watch if watch else None,
+            )
+        )
         return
 
     first_param = params[0]
@@ -535,19 +535,21 @@ def run(
     # which can happen with nested invocations or reload wrappers.
     if first_param == "run" and extra_args:
         first_param, extra_args = extra_args[0], extra_args[1:]
-    
+
     # Try to interpret first_param as module[:attr] or file[:attr]
     target = first_param
     server_attr = "mcp"
     if ":" in target:
         target, server_attr = target.split(":", 1)
-    
+
     # Only allow dotted import paths or python files for Python mode
     import importlib.util as _importlib_util
+
     # Ensure current working directory is importable for local packages like 'controller'
     try:
         import sys as _sys
         from pathlib import Path as _Path
+
         cwd_str = str(_Path.cwd())
         if cwd_str not in _sys.path:
             _sys.path.insert(0, cwd_str)
@@ -556,6 +558,7 @@ def run(
     try:
         # If given a file path, detect and import via file spec
         from pathlib import Path as _Path
+
         if target.endswith(".py") and _Path(target).exists():
             spec = _importlib_util.spec_from_file_location("_hud_module", target)
         else:
@@ -565,25 +568,18 @@ def run(
 
     # Fallback: treat a local package directory (e.g. 'controller') as a module target
     from pathlib import Path as _Path
+
     pkg_dir = _Path(target)
     is_pkg_dir = pkg_dir.is_dir() and (pkg_dir / "__init__.py").exists()
 
     is_python_target = (spec is not None) or is_pkg_dir
-    
-    # Debug logging before the condition
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info("Before condition: is_python_target=%s, local=%s, remote=%s, reload=%s", 
-                is_python_target, local, remote, reload)
-    
+
     if is_python_target and not (local or remote):
         # Python file/package mode - use implicit MCP server
-        from .utils.package_runner import run_package_as_mcp, run_with_reload
         import asyncio
-        
-        # Debug: log reload state
-        logger.info("Inside python target block: reload=%s, watch=%s", reload, watch)
-        
+
+        from .utils.package_runner import run_package_as_mcp, run_with_reload
+
         if reload:
             # Run with watchfiles reload
             # Use user-provided watch paths or compute from module
@@ -615,17 +611,19 @@ def run(
             )
         else:
             # Run normally (but still pass reload=False for consistency)
-            asyncio.run(run_package_as_mcp(
-                target,
-                transport=transport,
-                port=port,
-                verbose=verbose,
-                server_attr=server_attr,
-                reload=False,  # Explicitly pass reload state
-                watch_paths=None,
-            ))
+            asyncio.run(
+                run_package_as_mcp(
+                    target,
+                    transport=transport,
+                    port=port,
+                    verbose=verbose,
+                    server_attr=server_attr,
+                    reload=False,  # Explicitly pass reload state
+                    watch_paths=None,
+                )
+            )
         return
-    
+
     # Docker image mode
     image = first_param
     docker_args = extra_args
@@ -1234,7 +1232,7 @@ def main() -> None:
         except ImportError:
             console.print("HUD CLI version: [cyan]unknown[/cyan]")
         return
-    
+
     try:
         # Show header for main help
         if len(sys.argv) == 1 or (len(sys.argv) == 2 and sys.argv[1] in ["--help", "-h"]):

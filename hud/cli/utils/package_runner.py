@@ -10,7 +10,6 @@ For Docker container execution, see hud dev command.
 
 from __future__ import annotations
 
-import asyncio
 import importlib
 import logging
 import os
@@ -21,7 +20,7 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from fastmcp import FastMCP
 
@@ -60,17 +59,11 @@ async def run_package_as_mcp(
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
-    
-    # Debug output to see if reload is being passed
-    logger.info("run_package_as_mcp called with reload=%s, watch_paths=%s", reload, watch_paths)
-    
+
     # Handle reload mode
     if reload:
         if watch_paths is None:
-            watch_paths = ['.']
-        
-        # Log watch paths early so we can see them
-        logger.info("Auto-reload enabled, will watch paths: %s", watch_paths)
+            watch_paths = ["."]
 
         # Detect external command vs module reliably.
         # If command is a string and contains spaces (e.g., "uv run python -m controller")
@@ -80,9 +73,10 @@ async def run_package_as_mcp(
             is_external_cmd = True
         elif isinstance(command, str):
             stripped = command.strip()
-            if " " in stripped:
-                is_external_cmd = True
-            elif any(stripped.startswith(x) for x in ["python", "uv ", "docker", "./", "/", ".\\", "C:\\"]):
+            if " " in stripped or any(
+                stripped.startswith(x)
+                for x in ["python", "uv ", "docker", "./", "/", ".\\", "C:\\"]
+            ):
                 is_external_cmd = True
 
         if is_external_cmd:
@@ -93,34 +87,40 @@ async def run_package_as_mcp(
             # Python module - use sys.argv approach
             run_with_reload(None, watch_paths, verbose)
         return
-    
+
     # Determine if it's a module import or a command
-    if isinstance(command, str) and not any(command.startswith(x) for x in ["python", "docker", "./", "/", ".\\", "C:\\"]):
+    if isinstance(command, str) and not any(
+        command.startswith(x) for x in ["python", "docker", "./", "/", ".\\", "C:\\"]
+    ):
         # Treat as Python module for backwards compatibility
         logger.info("Importing module: %s", command)
         module = importlib.import_module(command)
-        
+
         # Look for server attribute in the module
         if not hasattr(module, server_attr):
-            logger.error("Module '%s' does not have an '%s' attribute (MCPServer instance)", command, server_attr)
+            logger.error(
+                "Module '%s' does not have an '%s' attribute (MCPServer instance)",
+                command,
+                server_attr,
+            )
             sys.exit(1)
-        
+
         server = getattr(module, server_attr)
-        
+
         # Configure server options
         run_kwargs = {
             "transport": transport,
             "show_banner": False,
         }
-        
+
         if transport == "http":
             # FastMCP expects port/path directly
             run_kwargs["port"] = port
             run_kwargs["path"] = "/mcp"
-        
+
         # Merge any extra kwargs
         run_kwargs.update(extra_kwargs)
-        
+
         # Run the server
         logger.info("Running %s on %s transport", server.name, transport)
         await server.run_async(**run_kwargs)
@@ -131,14 +131,14 @@ async def run_package_as_mcp(
             cmd_list = shlex.split(command)
         else:
             cmd_list = command
-        
+
         # Replace 'python' with the current interpreter to preserve venv
         if cmd_list[0] == "python":
             cmd_list[0] = sys.executable
             logger.info("Replaced 'python' with: %s", sys.executable)
-        
-        logger.info("Running command: %s", ' '.join(cmd_list))
-        
+
+        logger.info("Running command: %s", " ".join(cmd_list))
+
         # Create MCP config for the command
         config = {
             "mcpServers": {
@@ -149,16 +149,16 @@ async def run_package_as_mcp(
                 }
             }
         }
-        
+
         # Create proxy server
         proxy = FastMCP.as_proxy(config, name=f"HUD Run - {cmd_list[0]}")
-        
+
         # Run the proxy
         await proxy.run_async(
             transport=transport,
             port=port if transport == "http" else None,
             show_banner=False,
-            **extra_kwargs
+            **extra_kwargs,
         )
 
 
@@ -168,7 +168,7 @@ def run_with_reload(
     verbose: bool = False,
 ) -> None:
     """Run a function or command with file watching and auto-reload.
-    
+
     Args:
         target_func: Function to run (sync) or command list
         watch_paths: Paths to watch for changes
@@ -179,42 +179,34 @@ def run_with_reload(
     except ImportError:
         logger.error("watchfiles is required for --reload. Install with: pip install watchfiles")
         sys.exit(1)
-    
-    from pathlib import Path
-    
+
+
     # Resolve watch paths
     resolved_paths = []
     for path_str in watch_paths:
         path = Path(path_str).resolve()
         if path.is_file():
             # Watch the directory containing the file
-            logger.info("Watch path '%s' is a file, watching parent directory", path_str)
             resolved_paths.append(str(path.parent))
         else:
-            logger.info("Watch path '%s' resolved to: %s", path_str, path)
             resolved_paths.append(str(path))
-    
-    logger.info("Starting with auto-reload, watching: %s", resolved_paths)
-    
+
     def run_and_restart() -> None:
         """Run the target function in a loop, restarting on file changes."""
-        import subprocess
-        import signal
-        import threading
-        
+
         process = None
-        
+
         def handle_signal(signum: int, frame: Any) -> None:
             """Handle signals by terminating the subprocess."""
             if process:
                 process.terminate()
             sys.exit(0)
-        
+
         signal.signal(signal.SIGTERM, handle_signal)
         signal.signal(signal.SIGINT, handle_signal)
-        
+
         stop_event = threading.Event()  # Define stop_event at the start
-        
+
         while True:
             # Run the target function or command
             if target_func is None:
@@ -232,15 +224,14 @@ def run_with_reload(
                 # It's a callable - run it directly
                 target_func()
                 # Wait for file changes before restarting
-                logger.info("Waiting for file changes...")
                 stop_event.wait()
                 continue
-            
+
             if verbose:
                 logger.info("Starting process: %s", " ".join(cmd))
-            
+
             process = subprocess.Popen(cmd, env=os.environ)
-            
+
             # Watch for changes
             try:
                 # Use a proper threading.Event for stop_event as required by watchfiles
@@ -255,23 +246,23 @@ def run_with_reload(
 
                 threading.Thread(target=_wait_and_set, daemon=True).start()
 
-                logger.info("Watchfiles started, watching for changes...")
                 for changes in watchfiles.watch(*resolved_paths, stop_event=stop_event):
                     logger.info("Raw changes detected: %s", changes)
                     # Filter for relevant file types
                     relevant_changes = [
-                        (change_type, path) for change_type, path in changes
+                        (change_type, path)
+                        for change_type, path in changes
                         if any(path.endswith(ext) for ext in [".py", ".json", ".toml", ".yaml"])
                         and "__pycache__" not in path
                         and not Path(path).name.startswith(".")
                     ]
-                    
+
                     if relevant_changes:
                         logger.info("File changes detected, restarting server...")
                         if verbose:
                             for change_type, path in relevant_changes:
                                 logger.debug("  %s: %s", change_type, path)
-                        
+
                         # Terminate the process
                         if process is not None:
                             process.terminate()
@@ -282,20 +273,20 @@ def run_with_reload(
                             if process is not None:
                                 process.kill()
                                 process.wait()
-                        
+
                         # Brief pause before restart
                         time.sleep(0.1)
                         break
                     else:
-                        logger.info("Changes detected but filtered out: %s", changes)
+                        logger.debug("Changes detected but filtered out: %s", changes)
             except KeyboardInterrupt:
                 # Handle Ctrl+C gracefully
                 if process:
                     process.terminate()
                     process.wait()
                 break
-    
+
     # Always act as the parent. The child is launched without --reload,
     # so it won't re-enter this function.
-    import time
+
     run_and_restart()

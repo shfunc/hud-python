@@ -76,7 +76,7 @@ def create_proxy_server(
     # Add user-provided Docker arguments
     if docker_args:
         docker_cmd.extend(docker_args)
-    
+
     # Append the image name and CMD
     docker_cmd.append(image_name)
     if original_cmd:
@@ -106,9 +106,7 @@ def create_proxy_server(
     if verbose:
         if full_reload:
             hud_console.info("Mode: Full reload (container restart on file changes)")
-            hud_console.info(
-                "Note: Full container restart not yet implemented"
-            )
+            hud_console.info("Note: Full container restart not yet implemented")
         else:
             hud_console.info("Mode: Container manages its own reload")
             hud_console.info("The container's CMD determines reload behavior")
@@ -779,7 +777,7 @@ def run_mcp_dev_server(
         "Connect to Cursor (be careful with multiple windows as that may interfere with the proxy)"
     )
     hud_console.link(deeplink)
-    
+
     hud_console.info("")  # Empty line
 
     try:
