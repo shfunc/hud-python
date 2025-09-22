@@ -117,7 +117,9 @@ def analyze(
         image, *docker_args = params
         if live or docker_args:  # If docker args provided, assume live mode
             # Build Docker command from image and args
-            docker_cmd = ["docker", "run", "--rm", "-i", *docker_args, image]
+            from .utils.docker import build_run_command
+
+            docker_cmd = build_run_command(image, docker_args)
             asyncio.run(analyze_environment(docker_cmd, output_format, verbose))
         else:
             # Fast mode - analyze from metadata
@@ -240,11 +242,15 @@ def debug(
                     raise typer.Exit(1)
 
             # Build Docker command
-            command = ["docker", "run", "--rm", "-i", *docker_args, image_name]
+            from .utils.docker import build_run_command
+
+            command = build_run_command(image_name, docker_args)
         else:
             # Assume it's an image name
             image = first_param
-            command = ["docker", "run", "--rm", "-i", *docker_args, image]
+            from .utils.docker import build_run_command
+
+            command = build_run_command(image, docker_args)
     else:
         console.print(
             "[red]Error: Must specify a directory, Docker image, --config, or --cursor[/red]"
@@ -371,12 +377,10 @@ def dev(
         False, "--interactive", help="Launch interactive testing mode (HTTP mode only)"
     ),
 ) -> None:
-    """🔥 Development mode with hot-reload.
+    """🔥 Development mode - interactive MCP environment.
 
-    Runs your MCP environment in Docker with automatic restart on file changes.
-
-    The container's last command (typically the MCP server) will be wrapped
-    with watchfiles for hot-reload functionality.
+    Runs your MCP environment in Docker with mounted source for development.
+    The container's CMD determines reload behavior.
 
     Examples:
         hud dev                      # Auto-detect in current directory
@@ -389,7 +393,6 @@ def dev(
         hud dev . --inspector        # Launch MCP Inspector (HTTP mode only)
         hud dev . --interactive      # Launch interactive testing mode (HTTP mode only)
         hud dev . --no-logs          # Disable Docker log streaming
-        hud dev . --full-reload      # Restart entire container on file changes (instead of just server)
 
         # With Docker arguments (after all options):
         hud dev . -e BROWSER_PROVIDER=anchorbrowser -e ANCHOR_API_KEY=xxx
@@ -425,7 +428,7 @@ def dev(
 def run(
     params: list[str] = typer.Argument(  # type: ignore[arg-type]  # noqa: B008
         None,
-        help="Docker image followed by optional arguments (e.g., 'hud-image:latest -e KEY=value')",
+        help="Python file/module/package or Docker image followed by optional arguments",
     ),
     local: bool = typer.Option(
         False,
@@ -475,32 +478,151 @@ def run(
         "--interactive",
         help="Launch interactive testing mode (HTTP transport only)",
     ),
+    reload: bool = typer.Option(
+        False,
+        "--reload",
+        help="Enable auto-reload on file changes (local Python files only)",
+    ),
+    watch: list[str] = typer.Option(
+        None,
+        "--watch",
+        help="Directories to watch for changes (can be used multiple times). Defaults to current directory.",
+    ),
+    cmd: str | None = typer.Option(
+        None,
+        "--cmd",
+        help="Command to run as MCP server (e.g., 'python -m controller')",
+    ),
 ) -> None:
-    """🚀 Run MCP server locally or remotely.
+    """🚀 Run MCP server.
 
-    By default, runs remotely via mcp.hud.so. Use --local for Docker.
+    Modes:
+    - Python (decorator-based): pass a dotted module path. Example: hud run controller
+      The module is imported, decorators register implicitly, and the server runs.
+      Use --reload to watch the module/package directory.
 
-    Remote Examples:
-        hud run hud-text-2048:latest
-        hud run my-server:v1 -e API_KEY=xxx -h Run-Id:abc123
-        hud run my-server:v1 --transport http --port 9000
+    - Command: use --cmd to run any command as an MCP server. Example: hud run --cmd "python -m controller"
+      Works with Docker, binaries, or any executable. Supports --reload.
 
-    Local Examples:
-        hud run --local hud-text-2048:latest
-        hud run --local my-server:v1 -e API_KEY=xxx
-        hud run --local my-server:v1 --transport http
-
-    Interactive Testing (local only):
-        hud run --local --interactive --transport http hud-text-2048:latest
-        hud run --local --interactive --transport http --port 9000 my-server:v1
+    - Docker image: pass a Docker image name (optionally with --local to run locally).
     """
-    if not params:
-        typer.echo("❌ Docker image is required")
+    if not params and not cmd:
+        typer.echo("❌ Dotted module path, Docker image, or --cmd is required")
         raise typer.Exit(1)
 
-    # Parse image and args
-    image = params[0]
-    docker_args = params[1:] if len(params) > 1 else []
+    # Handle --cmd mode
+    if cmd:
+        from .utils.package_runner import run_package_as_mcp
+        import asyncio
+        
+        asyncio.run(run_package_as_mcp(
+            cmd,  # Pass command string
+            transport=transport,
+            port=port,
+            verbose=verbose,
+            reload=reload,
+            watch_paths=watch if watch else None,
+        ))
+        return
+
+    first_param = params[0]
+    extra_args = params[1:] if len(params) > 1 else []
+
+    # Guard: strip accidental nested 'run' token from positional args,
+    # which can happen with nested invocations or reload wrappers.
+    if first_param == "run" and extra_args:
+        first_param, extra_args = extra_args[0], extra_args[1:]
+    
+    # Try to interpret first_param as module[:attr] or file[:attr]
+    target = first_param
+    server_attr = "mcp"
+    if ":" in target:
+        target, server_attr = target.split(":", 1)
+    
+    # Only allow dotted import paths or python files for Python mode
+    import importlib.util as _importlib_util
+    # Ensure current working directory is importable for local packages like 'controller'
+    try:
+        import sys as _sys
+        from pathlib import Path as _Path
+        cwd_str = str(_Path.cwd())
+        if cwd_str not in _sys.path:
+            _sys.path.insert(0, cwd_str)
+    except Exception:
+        pass
+    try:
+        # If given a file path, detect and import via file spec
+        from pathlib import Path as _Path
+        if target.endswith(".py") and _Path(target).exists():
+            spec = _importlib_util.spec_from_file_location("_hud_module", target)
+        else:
+            spec = _importlib_util.find_spec(target)
+    except Exception:
+        spec = None
+
+    # Fallback: treat a local package directory (e.g. 'controller') as a module target
+    from pathlib import Path as _Path
+    pkg_dir = _Path(target)
+    is_pkg_dir = pkg_dir.is_dir() and (pkg_dir / "__init__.py").exists()
+
+    is_python_target = (spec is not None) or is_pkg_dir
+    
+    if is_python_target and not (local or remote):
+        # Python file/package mode - use implicit MCP server
+        from .utils.package_runner import run_package_as_mcp, run_with_reload
+        import asyncio
+        
+        if reload:
+            # Run with watchfiles reload
+            # Use user-provided watch paths or compute from module
+            if watch:
+                watch_paths = watch
+            else:
+                # Compute a watch path that works for dotted modules as well
+                watch_paths = [target]
+                if spec is not None:
+                    origin = getattr(spec, "origin", None)
+                    sublocs = getattr(spec, "submodule_search_locations", None)
+                    if origin:
+                        p = _Path(origin)
+                        # If package __init__.py, watch the package directory
+                        watch_paths = [str(p.parent if p.name == "__init__.py" else p)]
+                    elif sublocs:
+                        try:
+                            # Namespace package: watch first location
+                            watch_paths = [str(list(sublocs)[0])]
+                        except Exception:
+                            pass
+
+            run_with_reload(
+                lambda: asyncio.run(
+                    run_package_as_mcp(
+                        target,
+                        transport=transport,
+                        port=port,
+                        verbose=verbose,
+                        no_banner=no_banner,
+                        server_attr=server_attr,
+                    )
+                ),
+                watch_paths,
+                verbose=verbose,
+            )
+        else:
+            # Run normally
+            asyncio.run(run_package_as_mcp(
+                target,
+                transport=transport,
+                port=port,
+                verbose=verbose,
+                no_banner=no_banner,
+                server_attr=server_attr,
+            ))
+        return
+    
+    # Docker image mode
+    image = first_param
+    docker_args = extra_args
 
     # Handle conflicting flags
     if local and remote:
@@ -781,7 +903,7 @@ def eval(
     source: str | None = typer.Argument(
         None,
         help=(
-            "HuggingFace dataset identifier (e.g. 'hud-evals/SheetBench-50') or task JSON file. "
+            "HuggingFace dataset (e.g. 'hud-evals/SheetBench-50') or task JSON file. "
             "If not provided, looks for task.json in current directory."
         ),
     ),
@@ -1106,6 +1228,27 @@ def main() -> None:
         except ImportError:
             console.print("HUD CLI version: [cyan]unknown[/cyan]")
         return
+    
+    # Handle implicit 'run' command injection
+    if len(sys.argv) > 1:
+        first_arg = sys.argv[1]
+        
+        # Known commands that aren't 'run'
+        known_commands = {
+            "eval", "init", "build", "push", "pull", "list", 
+            "analyze", "debug", "dev", "clone", "quickstart", "remove",
+            "get", "hf", "rl", "set"
+        }
+        
+        # If first arg is not a flag and not a known command, assume 'run'
+        if not first_arg.startswith("-") and first_arg not in known_commands:
+            # Check if it looks like a file/directory/module
+            if (first_arg.endswith('.py') or 
+                first_arg == '.' or 
+                '/' in first_arg or 
+                '\\' in first_arg  # Likely a module/path
+                ):
+                sys.argv.insert(1, "run")
 
     try:
         # Show header for main help

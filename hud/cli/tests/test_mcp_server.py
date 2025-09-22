@@ -11,7 +11,6 @@ from hud.cli.dev import (
     create_proxy_server,
     get_docker_cmd,
     get_image_name,
-    inject_supervisor,
     run_mcp_dev_server,
     update_pyproject_toml,
 )
@@ -52,15 +51,6 @@ class TestDockerUtils:
             cmd = get_docker_cmd("test-image:latest")
             assert cmd is None
 
-    def test_inject_supervisor(self) -> None:
-        """Test supervisor injection into Docker CMD."""
-        original_cmd = ["python", "-m", "server"]
-        modified = inject_supervisor(original_cmd)
-
-        assert modified[0] == "sh"
-        assert modified[1] == "-c"
-        assert "watchfiles" in modified[2]
-        assert "python -m server" in modified[2]
 
 
 class TestImageResolution:
