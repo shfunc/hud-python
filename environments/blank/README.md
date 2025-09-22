@@ -1,16 +1,24 @@
 # test-test
 
-A minimal HUD environment demonstrating the Task pattern with a simple counter.
+Minimal example of the hud environment design pattern:
+- Controller: MCP tools; thin interaction layer; minimal state
+- Environment: Server; holds persistent state and business logic
 
-## Quick Start
+## What each side does
+- Controller (Think of this as a frontend in web development)
+  - Creates the UX and manages the lifecycle of an app (in this case for an agent)
+  - Define `mcp = MCPServer()` and register `@mcp.tool` as tools the agent can interact with
+- Environment (Think of this as a backend in web development)
+  - Owns all long‑lived states of the environment and exposes the environment data structure
+  - Expose simple HTTP endpoints (`/health`, `/act`, `/reset`, `/state`)
 
 ### Interactive Development
 ```bash
 # 1. Configure your API keys (optional - only needed for evaluation)
 # Edit .env file to add your HUD_API_KEY and ANTHROPIC_API_KEY
 
-# 2. Start the environment (optional: with inspector)
-hud dev --build --inspector
+# 2. Start the environment (optional: with --inspector or --interactive)
+hud dev --build --interactive
 
 # 3. Choose your preferred way to test:
 
@@ -25,16 +33,18 @@ pip install hud-python[agents]
 python test_task.py
 ```
 
-## How HUD Environments Work
+## Layout
+```
+controller/
+  __init__.py   # mcp + shared HTTP client
+  __main__.py   # python -m controller → mcp.run()
+  hooks.py      # @mcp.initialize / @mcp.shutdown
+  tools.py      # @mcp.tool act / setup / evaluate
 
-The environment is split into two components:
-
-- **`env.py`** - Stateful logic that persists across reloads
-- **`server.py`** - MCP server with tools (reloads on file changes)
-
-This separation is crucial for `hud dev` - it allows you to modify the MCP tools and see changes immediately without losing the environment state. The environment runs as a separate process and communicates via socket, while the server can be restarted freely.
-
-If you are ever seeing issues with the environment itself, running `hud dev --full-reload` will reload both the environment and the server.
+./environment
+  ├── __init__.py
+  └── server.py       # FastAPI app: /health, /act, /reset, /state
+```
 
 ## Publishing Your Environment
 
@@ -81,3 +91,4 @@ hud eval "your-org/your-dataset" --agent claude
 **Note**: Only public HuggingFace datasets appear as leaderboards!
 
 📚 Learn more: [Creating Benchmarks](https://docs.hud.so/evaluate-agents/create-benchmarks) | [Leaderboards](https://docs.hud.so/evaluate-agents/leaderboards)
+

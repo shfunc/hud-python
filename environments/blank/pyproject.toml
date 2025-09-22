@@ -5,6 +5,9 @@ description = "A minimal HUD environment"
 requires-python = ">=3.11"
 dependencies = [
     "hud-python",
+    "fastapi",
+    "uvicorn[standard]",
+    "httpx>=0.28.1",
 ]
 
 [build-system]
@@ -18,4 +21,4 @@ image = "test_test:dev"
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/controller"]
+packages = ["controller", "environment"]

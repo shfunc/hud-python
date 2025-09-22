@@ -6,6 +6,7 @@
         "url": "http://localhost:8765/mcp"
       }
     },
+    "agent_tools": ["act"],
     "setup_tool": {
       "name": "setup",
       "arguments": {}
