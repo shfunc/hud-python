@@ -15,4 +15,4 @@ ENV ENV_SERVER_PORT=8005
 
 # Start context server in background, then run controller with hot-reload
 # Disable access logs to prevent stdout corruption
-CMD ["sh", "-c", "uvicorn environment.server:app --host 0.0.0.0 --port $ENV_SERVER_PORT --reload --log-level warning & sleep 0.5 && exec hud run controller --reload"]
+CMD ["sh", "-c", "uvicorn environment.server:app --host 0.0.0.0 --port $ENV_SERVER_PORT --reload --log-level warning --reload-dir environment & sleep 0.5 && exec hud run controller --reload"]

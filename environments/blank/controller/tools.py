@@ -10,7 +10,7 @@ async def act() -> str:
         raise RuntimeError("HTTP client not initialized")
     resp = await http_client.post("/act")
     data = resp.json()
-    return f"Action #{data.get('count', 0)} performed. Current c count: {data.get('count', 0)}"
+    return f"Action #{data.get('count', 0)} performed. Current count: {data.get('count', 0)}"
 
 
 @mcp.tool
