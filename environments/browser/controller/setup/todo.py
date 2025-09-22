@@ -21,14 +21,11 @@ async def todo_seed(num_items: int = 5):
     """
     try:
         # Launch the todo app first
-        response = await http_client.post(
-            "/apps/launch",
-            json={"app_name": "todo"}
-        )
-        
+        response = await http_client.post("/apps/launch", json={"app_name": "todo"})
+
         if response.status_code != 200:
             return {"error": f"Failed to launch todo: {response.text}"}
-            
+
         app_info = response.json()
         backend_port = app_info.get("backend_port", 5000)
 
@@ -43,6 +40,7 @@ async def todo_seed(num_items: int = 5):
             await playwright(action="navigate", url=app_info["url"])
             # Small delay to ensure navigation completes
             import asyncio
+
             await asyncio.sleep(0.5)
         except Exception:
             pass
@@ -50,7 +48,7 @@ async def todo_seed(num_items: int = 5):
         return {
             "status": "success",
             "message": f"Seeded database with {result.get('items_created', num_items)} test items",
-            "app_url": app_info["url"]
+            "app_url": app_info["url"],
         }
     except Exception as e:
         logger.error(f"todo_seed failed: {e}")
@@ -69,7 +67,7 @@ async def todo_reset():
         app_response = await http_client.get("/apps/todo")
         if app_response.status_code != 200:
             return {"error": "Todo app not running"}
-            
+
         app_data = app_response.json()
         backend_port = app_data.get("backend_port", 5000)
 
@@ -77,11 +75,8 @@ async def todo_reset():
         url = f"http://localhost:{backend_port}/api/eval/reset"
         reset_response = await http_client.delete(url)
         reset_response.raise_for_status()
-        
-        return {
-            "status": "success",
-            "message": "Database reset to empty state"
-        }
+
+        return {"status": "success", "message": "Database reset to empty state"}
     except Exception as e:
         logger.error(f"todo_reset failed: {e}")
         return {"error": f"Failed to reset database: {str(e)}"}
@@ -109,14 +104,11 @@ async def todo_custom_seed(items: List[Dict[str, Any]]):
             formatted_items.append(formatted_item)
 
         # Launch app if needed
-        response = await http_client.post(
-            "/apps/launch",
-            json={"app_name": "todo"}
-        )
-        
+        response = await http_client.post("/apps/launch", json={"app_name": "todo"})
+
         if response.status_code != 200:
             return {"error": f"Failed to launch todo: {response.text}"}
-            
+
         app_info = response.json()
         backend_port = app_info.get("backend_port", 5000)
 
@@ -128,7 +120,7 @@ async def todo_custom_seed(items: List[Dict[str, Any]]):
         return {
             "status": "success",
             "message": f"Seeded database with {len(items)} custom items",
-            "app_url": app_info["url"]
+            "app_url": app_info["url"],
         }
     except Exception as e:
         logger.error(f"todo_custom_seed failed: {e}")

@@ -104,9 +104,17 @@ async def search(req: SearchRequest) -> List[Dict[str, str]]:
 
             if not results:
                 autoprompt = data.get("autopromptString", req.query)
-                return [{"message": "No results found", "query": req.query, "autopromptString": autoprompt}]
+                return [
+                    {
+                        "message": "No results found",
+                        "query": req.query,
+                        "autopromptString": autoprompt,
+                    }
+                ]
 
-    except httpx.HTTPStatusError as e:  # pragma: no cover - network errors are environment dependent
+    except (
+        httpx.HTTPStatusError
+    ) as e:  # pragma: no cover - network errors are environment dependent
         status_code = e.response.status_code
         if status_code == 401:
             raise HTTPException(status_code=401, detail="Invalid EXA_API_KEY")
@@ -222,6 +230,5 @@ async def evaluate(req: EvaluateRequest) -> Dict[str, Any]:
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-

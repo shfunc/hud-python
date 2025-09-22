@@ -28,7 +28,7 @@ async def game_2048_max_number(target: int):
         app_response = await http_client.get("/apps/2048")
         if app_response.status_code != 200:
             return {"error": "2048 app not running", "reward": 0.0, "done": False}
-            
+
         app_data = app_response.json()
         backend_port = app_data.get("backend_port", 5001)
 
@@ -64,7 +64,7 @@ async def game_2048_max_number(target: int):
             "reward": 0.0,
             "done": False,
             "content": f"Failed to evaluate max number: {str(e)}",
-            "isError": True
+            "isError": True,
         }
 
 
@@ -86,7 +86,7 @@ async def game_2048_efficiency(min_ratio: float):
         app_response = await http_client.get("/apps/2048")
         if app_response.status_code != 200:
             return {"error": "2048 app not running", "reward": 0.0, "done": False}
-            
+
         app_data = app_response.json()
         backend_port = app_data.get("backend_port", 5001)
 
@@ -95,7 +95,7 @@ async def game_2048_efficiency(min_ratio: float):
         response = await http_client.get(url)
         response.raise_for_status()
         game_state = response.json()
-        
+
         score = game_state.get("score", 0)
         moves = game_state.get("moves", 0)
 
@@ -118,7 +118,7 @@ async def game_2048_efficiency(min_ratio: float):
             "reward": 0.0,
             "done": False,
             "content": f"Failed to evaluate efficiency: {str(e)}",
-            "isError": True
+            "isError": True,
         }
 
 
@@ -140,7 +140,7 @@ async def game_2048_score_reached(target_score: int):
         app_response = await http_client.get("/apps/2048")
         if app_response.status_code != 200:
             return {"error": "2048 app not running", "reward": 0.0, "done": False}
-            
+
         app_data = app_response.json()
         backend_port = app_data.get("backend_port", 5001)
 
@@ -167,7 +167,7 @@ async def game_2048_score_reached(target_score: int):
             "reward": 0.0,
             "done": False,
             "content": f"Failed to evaluate score: {str(e)}",
-            "isError": True
+            "isError": True,
         }
 
 
@@ -186,7 +186,7 @@ async def game_2048_game_won():
         app_response = await http_client.get("/apps/2048")
         if app_response.status_code != 200:
             return {"error": "2048 app not running", "reward": 0.0, "done": False}
-            
+
         app_data = app_response.json()
         backend_port = app_data.get("backend_port", 5001)
 
@@ -195,7 +195,7 @@ async def game_2048_game_won():
         response = await http_client.get(url)
         response.raise_for_status()
         game_state = response.json()
-        
+
         won = game_state.get("won", False)
         highest_tile = game_state.get("highest_tile", 0)
         target_tile = game_state.get("target_tile", 2048)
@@ -212,5 +212,5 @@ async def game_2048_game_won():
             "reward": 0.0,
             "done": False,
             "content": f"Failed to check win status: {str(e)}",
-            "isError": True
+            "isError": True,
         }

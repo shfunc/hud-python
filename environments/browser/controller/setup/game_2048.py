@@ -21,14 +21,11 @@ async def game_2048_board(board_size: int = 4, target_tile: int = 2048):
     """
     try:
         # Launch the 2048 app first
-        response = await http_client.post(
-            "/apps/launch",
-            json={"app_name": "2048"}
-        )
-        
+        response = await http_client.post("/apps/launch", json={"app_name": "2048"})
+
         if response.status_code != 200:
             return {"error": f"Failed to launch 2048: {response.text}"}
-            
+
         app_info = response.json()
         backend_port = app_info.get("backend_port", 5001)
 
@@ -42,7 +39,7 @@ async def game_2048_board(board_size: int = 4, target_tile: int = 2048):
         return {
             "status": "success",
             "message": f"{board_size}x{board_size} game initialized with target {target_tile}",
-            "app_url": app_info["url"]
+            "app_url": app_info["url"],
         }
     except Exception as e:
         logger.error(f"game_2048_board failed: {e}")
@@ -66,7 +63,7 @@ async def game_2048_set_board(board: List[List[int]], score: int = 0, moves: int
         app_response = await http_client.get("/apps/2048")
         if app_response.status_code != 200:
             return {"error": "2048 app not running"}
-            
+
         app_data = app_response.json()
         backend_port = app_data.get("backend_port", 5001)
 
@@ -83,7 +80,7 @@ async def game_2048_set_board(board: List[List[int]], score: int = 0, moves: int
         return {
             "status": "success",
             "message": f"Board set successfully (highest tile: {highest_tile})",
-            "highest_tile": highest_tile
+            "highest_tile": highest_tile,
         }
     except Exception as e:
         logger.error(f"game_2048_set_board failed: {e}")
@@ -124,10 +121,10 @@ async def game_2048_near_win(target_tile: int = 2048):
         moves = 150
 
         result = await game_2048_set_board(board=board, score=score, moves=moves)
-        
+
         if "error" not in result:
             result["message"] = f"Board set near winning state for target {target_tile}"
-            
+
         return result
     except Exception as e:
         logger.error(f"game_2048_near_win failed: {e}")

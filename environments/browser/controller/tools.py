@@ -64,18 +64,15 @@ async def launch_app(app_name: str) -> str:
         Success message with app URL
     """
     # http_client is imported from controller module
-    
+
     # Call environment server to launch app
-    response = await http_client.post(
-        "/apps/launch",
-        json={"app_name": app_name}
-    )
-    
+    response = await http_client.post("/apps/launch", json={"app_name": app_name})
+
     if response.status_code == 404:
         return f"App '{app_name}' not found"
     elif response.status_code != 200:
         return f"Failed to launch app: {response.text}"
-    
+
     app_info = response.json()
     app_url = app_info["url"]
 
@@ -114,4 +111,3 @@ async def api_request(url: str, method: str = "GET", data: dict | None = None) -
             if response.headers.get("content-type", "").startswith("application/json")
             else response.text,
         }
-

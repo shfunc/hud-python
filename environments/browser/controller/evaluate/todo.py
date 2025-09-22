@@ -22,7 +22,7 @@ async def todo_completed(expected_count: int):
         app_response = await http_client.get("/apps/todo")
         if app_response.status_code != 200:
             return {"error": "Todo app not running", "reward": 0.0, "done": True}
-            
+
         app_data = app_response.json()
         backend_port = app_data.get("backend_port", 5000)
 
@@ -31,7 +31,7 @@ async def todo_completed(expected_count: int):
         response = await http_client.get(url)
         response.raise_for_status()
         stats = response.json()
-        
+
         completed_count = stats.get("completed_items", 0)
         total_count = stats.get("total_items", 0)
 
@@ -79,7 +79,7 @@ async def todo_exists(title: str):
         app_response = await http_client.get("/apps/todo")
         if app_response.status_code != 200:
             return {"error": "Todo app not running", "reward": 0.0, "done": True}
-            
+
         app_data = app_response.json()
         backend_port = app_data.get("backend_port", 5000)
 
@@ -130,7 +130,7 @@ async def todo_completion_rate(target_rate: float = 0.5):
         app_response = await http_client.get("/apps/todo")
         if app_response.status_code != 200:
             return {"error": "Todo app not running", "reward": 0.0, "done": True}
-            
+
         app_data = app_response.json()
         backend_port = app_data.get("backend_port", 5000)
 
@@ -139,7 +139,7 @@ async def todo_completion_rate(target_rate: float = 0.5):
         response = await http_client.get(url)
         response.raise_for_status()
         stats = response.json()
-        
+
         total_count = stats.get("total_items", 0)
         completed_count = stats.get("completed_items", 0)
 
@@ -192,7 +192,7 @@ async def todo_total_count(min_count: int = 1):
         app_response = await http_client.get("/apps/todo")
         if app_response.status_code != 200:
             return {"error": "Todo app not running", "reward": 0.0, "done": True}
-            
+
         app_data = app_response.json()
         backend_port = app_data.get("backend_port", 5000)
 

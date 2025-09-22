@@ -3,6 +3,7 @@
 from controller import mcp, http_client
 from hud.tools.types import EvaluationResult
 
+
 @mcp.tool
 async def act() -> str:
     """Perform one action step in the environment (increment the counter)."""
@@ -30,8 +31,8 @@ async def evaluate(target: int = 10) -> EvaluationResult:
     resp = await http_client.get("/state")
     current_count = resp.json().get("count", 0)
     delta = target - current_count
-    reward = max(1 - abs(delta) / target, 0.0) if target > 0 else current_count 
+    reward = max(1 - abs(delta) / target, 0.0) if target > 0 else current_count
     done = current_count >= target
-    return EvaluationResult(reward=reward, done=done, content=f"Counter at {current_count}/{target}")
-
-
+    return EvaluationResult(
+        reward=reward, done=done, content=f"Counter at {current_count}/{target}"
+    )

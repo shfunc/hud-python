@@ -18,14 +18,14 @@ from pydantic import BaseModel
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s"
+    level=logging.INFO, format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 
 class AppInfo(BaseModel):
     """Information about a launched app."""
+
     name: str
     frontend_port: int
     backend_port: int
@@ -35,6 +35,7 @@ class AppInfo(BaseModel):
 
 class ServiceStatus(BaseModel):
     """Status of environment services."""
+
     x11: bool
     vnc: bool
     websockify: bool
@@ -43,11 +44,13 @@ class ServiceStatus(BaseModel):
 
 class LaunchAppRequest(BaseModel):
     """Request to launch an app."""
+
     app_name: str
 
 
 class LaunchAppResponse(BaseModel):
     """Response after launching an app."""
+
     name: str
     url: str
     frontend_port: int
@@ -64,6 +67,8 @@ class ServiceManager:
         self.chrome_proc: Optional[subprocess.Popen] = None
         self.cdp_port: Optional[int] = None
         self._launched_apps: Dict[str, AppInfo] = {}
+        self._playwright = None
+        self._browser = None
         self._app_processes: Dict[str, subprocess.Popen] = {}
         self._allocated_ports: Set[int] = set()
 
@@ -81,10 +86,10 @@ class ServiceManager:
                 stderr=subprocess.PIPE,
             )
             logger.info("Started Xvfb on display :1")
-            
+
         # Wait for X11
         await self._wait_for_x11()
-        
+
         # Start VNC and websockify
         await self._start_vnc_services()
 
@@ -121,32 +126,42 @@ class ServiceManager:
 
         # Wait for both services
         await asyncio.gather(
-            self._wait_for_port(5900, "VNC"),
-            self._wait_for_port(8080, "websockify")
+            self._wait_for_port(5900, "VNC"), self._wait_for_port(8080, "websockify")
         )
         logger.info("noVNC available at: http://localhost:8080/vnc.html")
 
-        # Start headless Chromium with remote debugging (CDP)
-        self.cdp_port = self._get_next_port()
-        chrome_cmd = [
-            "chromium-browser",
-            "--headless=new",
-            f"--remote-debugging-port={self.cdp_port}",
-            "--no-sandbox",
-            "--disable-gpu",
-        ]
-        # Try fallback binary name if needed
-        if not shutil.which("chromium-browser") and shutil.which("chrome"):
-            chrome_cmd[0] = "chrome"
-        self.chrome_proc = subprocess.Popen(
-            chrome_cmd,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-            env={**os.environ, "DISPLAY": ":1"},
-        )
-        logger.info(f"Started headless Chromium (CDP) on port {self.cdp_port}")
-        await self._wait_for_port(self.cdp_port, "CDP", timeout=30)
+        # Start Playwright's Chromium browser
+        logger.info("Starting Playwright's Chromium browser")
+        try:
+            from playwright.async_api import async_playwright
+
+            self._playwright = await async_playwright().start()
+            # Get a free port for CDP
+            self.cdp_port = self._get_next_port()
+
+            self._browser = await self._playwright.chromium.launch(
+                headless=True,
+                args=[
+                    f"--remote-debugging-port={self.cdp_port}",
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--disable-web-security",
+                    "--disable-features=IsolateOrigins,site-per-process",
+                ],
+            )
+
+            logger.info(f"Started Playwright Chromium with CDP on port {self.cdp_port}")
+
+            # Wait for CDP to be ready
+            await self._wait_for_port(self.cdp_port, "CDP", timeout=30)
+
+        except ImportError:
+            logger.error("Playwright not installed")
+            raise RuntimeError("Playwright is required. The Docker image should have installed it.")
+        except Exception as e:
+            logger.error(f"Failed to start Playwright browser: {e}")
+            raise
 
     async def launch_app(self, app_name: str) -> LaunchAppResponse:
         """Launch a specific app dynamically."""
@@ -158,7 +173,7 @@ class ServiceManager:
                     name=app_info.name,
                     url=app_info.url,
                     frontend_port=app_info.frontend_port,
-                    backend_port=app_info.backend_port
+                    backend_port=app_info.backend_port,
                 )
 
         app_path = Path(f"/app/environment/{app_name}")
@@ -210,7 +225,7 @@ class ServiceManager:
                 frontend_port=frontend_port,
                 backend_port=backend_port,
                 url=f"http://localhost:{frontend_port}",
-                status="running"
+                status="running",
             )
             self._launched_apps[app_name] = app_info
 
@@ -218,7 +233,7 @@ class ServiceManager:
                 name=app_name,
                 url=app_info.url,
                 frontend_port=frontend_port,
-                backend_port=backend_port
+                backend_port=backend_port,
             )
 
         except TimeoutError:
@@ -249,7 +264,7 @@ class ServiceManager:
             websockify=self.websockify_proc is not None and self.websockify_proc.poll() is None
             if self.websockify_proc
             else self._is_port_open(8080),
-            apps=list(self._launched_apps.values())
+            apps=list(self._launched_apps.values()),
         )
 
     def get_app_info(self, app_name: str) -> AppInfo:
@@ -274,9 +289,23 @@ class ServiceManager:
         self._launched_apps.clear()
         self._allocated_ports.clear()
 
+        # Close Playwright browser
+        if self._browser:
+            try:
+                await self._browser.close()
+                logger.info("Closed Playwright browser")
+            except Exception as e:
+                logger.error(f"Error closing browser: {e}")
+
+        if self._playwright:
+            try:
+                await self._playwright.stop()
+                logger.info("Stopped Playwright")
+            except Exception as e:
+                logger.error(f"Error stopping playwright: {e}")
+
         # Stop services in reverse order
         for proc, name in [
-            (self.chrome_proc, "chromium"),
             (self.websockify_proc, "websockify"),
             (self.vnc_proc, "x11vnc"),
             (self.x11_proc, "Xvfb"),
@@ -330,9 +359,9 @@ async def lifespan(app: FastAPI):
     logger.info("Starting browser environment server...")
     await service_manager.start_core_services()
     logger.info("Browser environment server ready")
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down browser environment server...")
     await service_manager.shutdown()
@@ -343,7 +372,7 @@ app = FastAPI(
     title="Browser Environment API",
     description="API for managing browser environment services and applications",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 
@@ -390,7 +419,7 @@ async def get_display():
     """Get the X11 display information."""
     return {
         "display": os.environ.get("DISPLAY", ":1"),
-        "x11_running": Path("/tmp/.X11-unix/X1").exists()
+        "x11_running": Path("/tmp/.X11-unix/X1").exists(),
     }
 
 
@@ -418,4 +447,5 @@ async def shutdown_env():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

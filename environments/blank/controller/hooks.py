@@ -1,5 +1,7 @@
 """Controller lifecycle hooks."""
+
 from controller import mcp, http_client
+
 
 @mcp.initialize
 async def init():
@@ -15,4 +17,3 @@ async def cleanup():
     """Close the HTTP client"""
     if http_client:
         await http_client.aclose()
-

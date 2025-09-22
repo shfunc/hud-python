@@ -50,5 +50,3 @@ async def on_shutdown() -> None:
             await http_client.aclose()
         except Exception as exc:  # noqa: BLE001
             logger.warning("HTTP client close failed: %s", exc)
-
-

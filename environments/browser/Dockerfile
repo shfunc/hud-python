@@ -11,6 +11,9 @@ COPY pyproject.toml .
 COPY controller/ ./controller/
 RUN uv pip install --system --break-system-packages -e .
 
+# Install Playwright browsers
+RUN playwright install chromium --with-deps
+
 # Layer 2: Install environment server dependencies
 COPY environment/pyproject.toml ./environment/
 RUN cd environment && uv pip install --system --break-system-packages -e .

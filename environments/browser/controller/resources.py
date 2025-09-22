@@ -6,6 +6,7 @@ from datetime import datetime
 
 from controller import mcp
 
+
 @mcp.resource("telemetry://live")
 async def get_telemetry() -> str:
     """MCP resource containing telemetry data including VNC live_url."""
