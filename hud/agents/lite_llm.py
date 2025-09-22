@@ -85,7 +85,7 @@ class LiteAgent(MCPAgent):
 
         try:
             resp = cast(
-                Any,
+                "Any",
                 await litellm.acompletion(
                     model=self.model_name,
                     messages=messages,
