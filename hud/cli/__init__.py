@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import sys
 from pathlib import Path
@@ -483,10 +484,10 @@ def run(
         "--reload",
         help="Enable auto-reload on file changes (local Python files only)",
     ),
-    watch: list[str] = typer.Option(
+    watch: list[str] = typer.Option(  # noqa: B008
         None,
         "--watch",
-        help="Directories to watch for changes (can be used multiple times). Defaults to current directory.",
+        help="Directories to watch for changes (can be used multiple times). Defaults to current directory.",  # noqa: E501
     ),
     cmd: str | None = typer.Option(
         None,
@@ -505,7 +506,7 @@ def run(
       Works with Docker, binaries, or any executable. Supports --reload.
 
     - Docker image: pass a Docker image name (optionally with --local to run locally).
-    """
+    """  # noqa: E501
     if not params and not cmd:
         typer.echo("❌ Dotted module path, Docker image, or --cmd is required")
         raise typer.Exit(1)
@@ -553,7 +554,7 @@ def run(
         cwd_str = str(_Path.cwd())
         if cwd_str not in _sys.path:
             _sys.path.insert(0, cwd_str)
-    except Exception:
+    except Exception:  # noqa: S110
         pass
     try:
         # If given a file path, detect and import via file spec
@@ -596,11 +597,8 @@ def run(
                         # If package __init__.py, watch the package directory
                         watch_paths = [str(p.parent if p.name == "__init__.py" else p)]
                     elif sublocs:
-                        try:
-                            # Namespace package: watch first location
-                            watch_paths = [str(list(sublocs)[0])]
-                        except Exception:
-                            pass
+                        with contextlib.suppress(Exception):
+                            watch_paths = [next(iter(sublocs))]
 
             # Always run as subprocess when using reload to enable proper file watching
             # This ensures the parent process can watch files while the child runs the server

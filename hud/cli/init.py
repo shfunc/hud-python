@@ -74,7 +74,7 @@ def _replace_placeholders(target_dir: Path, env_name: str) -> list[str]:
                         new_content = content.replace(placeholder, normalized_name)
                         file_path.write_text(new_content, encoding="utf-8")
                         modified_files.append(str(file_path.relative_to(target_dir)))
-                except Exception:
+                except Exception:  # noqa: S110
                     # Skip files that can't be read as text
                     pass
 
