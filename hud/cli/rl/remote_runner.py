@@ -76,7 +76,9 @@ def run_remote_training(
 
     if not settings.api_key:
         hud_console.error("API key not found")
-        console.print("[yellow]Please set HUD_API_KEY environment variable[/yellow]")
+        console.print(
+            "[yellow]Set it in your environment or run: hud set HUD_API_KEY=your-key-here[/yellow]"
+        )
         raise ValueError("API key not found")
 
     # Step 1: CONFIRMATION - Load tasks and show example

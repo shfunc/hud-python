@@ -32,8 +32,8 @@ hud build [DIRECTORY] [OPTIONS]
   Show detailed build output. Short: `-v`
 </ParamField>
 
-<ParamField path="--platform" type="string" default="host">
-  Target platform for Docker build (e.g., `linux/amd64`). If not provided, Docker's default is used.
+<ParamField path="--platform" type="string" default="linux/amd64">
+  Target platform for Docker build. Defaults to RL-compatible `linux/amd64` when not provided.
 </ParamField>
 
 ## What It Does
@@ -100,7 +100,7 @@ Build with auto-generated tag:
 
 ```bash
 hud build
-# Creates: hud-my-env:latest
+# Creates: my-env:dev
 ```
 
 ### Custom Tag
@@ -142,12 +142,12 @@ hud build . --platform linux/amd64
 If no tag is specified via `--tag`, the command:
 
 1. Checks `pyproject.toml` for `[tool.hud.image]`
-2. Auto-generates: `hud-{directory-name}:latest`
-3. Converts underscores to hyphens for Docker compatibility
+2. Auto-generates: `{directory-name}:dev`
+3. Uses the directory name as-is (no `hud-` prefix added)
 
 Examples:
-- Directory `my_tool` → Image `hud-my-tool:latest`
-- Directory `browser-env` → Image `hud-browser-env:latest`
+- Directory `my_tool` → Image `my_tool:dev`
+- Directory `browser-env` → Image `browser-env:dev`
 
 ## Build Process
 
@@ -180,13 +180,7 @@ ENV DEBUG=false
 ENV LOG_LEVEL=info
 ```
 
-### Build Arguments
-
-Passes through Docker build arguments:
-
-```bash
-hud build . --build-arg API_VERSION=v2
-```
+<!-- Build arguments are not currently exposed via CLI flags -->
 
 ## Lock File Usage
 

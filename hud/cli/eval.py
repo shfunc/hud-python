@@ -295,7 +295,7 @@ async def run_full_dataset(
     agent_type: Literal["claude", "openai", "vllm"] = "claude",
     model: str | None = None,
     allowed_tools: list[str] | None = None,
-    max_concurrent: int = 50,
+    max_concurrent: int = 30,
     max_steps: int = 10,
     parallel: bool = False,
     max_workers: int | None = None,
@@ -600,12 +600,12 @@ def eval_command(
         if not settings.anthropic_api_key:
             hud_console.error("ANTHROPIC_API_KEY is required for Claude agent")
             hud_console.info(
-                "Set it in your environment or .env file: ANTHROPIC_API_KEY=your-key-here"
+                "Set it in your environment or run: hud set ANTHROPIC_API_KEY=your-key-here"
             )
             raise typer.Exit(1)
     elif agent == "openai" and not settings.openai_api_key:
         hud_console.error("OPENAI_API_KEY is required for OpenAI agent")
-        hud_console.info("Set it in your environment or .env file: OPENAI_API_KEY=your-key-here")
+        hud_console.info("Set it in your environment or run: hud set OPENAI_API_KEY=your-key-here")
         raise typer.Exit(1)
     elif agent == "vllm":
         if model:
@@ -618,6 +618,7 @@ def eval_command(
     if not settings.api_key:
         hud_console.warning("HUD_API_KEY not set. Some features may be limited.")
         hud_console.info("Get your API key at: https://app.hud.so")
+        hud_console.info("Set it in your environment or run: hud set HUD_API_KEY=your-key-here")
 
     # Parse allowed tools
     allowed_tools_list = (

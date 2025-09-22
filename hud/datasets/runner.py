@@ -22,7 +22,7 @@ async def run_dataset(
     dataset: str | Dataset | list[dict[str, Any]],
     agent_class: type[MCPAgent],
     agent_config: dict[str, Any] | None = None,
-    max_concurrent: int = 50,
+    max_concurrent: int = 30,
     metadata: dict[str, Any] | None = None,
     max_steps: int = 10,
     split: str = "train",
@@ -104,7 +104,10 @@ async def run_dataset(
                 task_name = task_dict.get("prompt") or f"Task {index}"
                 if custom_system_prompt and "system_prompt" not in task_dict:
                     task_dict["system_prompt"] = custom_system_prompt
-                with hud.trace(task_name, job_id=job_obj.id, task_id=task_dict.get("id")):
+                # Ensure task_id is a string for baggage propagation
+                raw_task_id = task_dict.get("id")
+                safe_task_id = str(raw_task_id) if raw_task_id is not None else None
+                with hud.trace(task_name, job_id=job_obj.id, task_id=safe_task_id):
                     # Convert dict to Task here, at trace level
                     task = Task(**task_dict)
 

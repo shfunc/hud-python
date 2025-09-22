@@ -155,6 +155,9 @@ class DatasetBuffer(Buffer[Task]):
                 f"This is because the number of training steps ({self.training_steps}) is not a multiple of the dataset size ({self.dataset_size})"  # noqa: E501
             )
 
+        if config.verbose:
+            hud_console.info(f"Sample task: {tasks[0]}")
+
         self.add_fill(tasks, self.number_of_tasks, config.training.shuffle_dataset)
 
     def _validate_tasks(self, tasks: list[Task]) -> list[Task]:

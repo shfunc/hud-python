@@ -22,7 +22,6 @@ uv.lock
 
 # Test files
 /*.ipynb
-test.json
 TODO.md
 
 .coverage
