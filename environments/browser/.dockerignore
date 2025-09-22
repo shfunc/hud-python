@@ -11,6 +11,15 @@ apps/*/frontend/node_modules
 apps/*/frontend/.next
 apps/*/frontend/build
 apps/*/frontend/dist
+# General Node/Next artifacts anywhere in this environment
+node_modules
+**/node_modules
+environment/**/frontend/node_modules
+environment/**/frontend/.next
+environment/**/frontend/build
+environment/**/frontend/dist
+environment/**/frontend/.turbo
+environment/**/frontend/.vercel
 *.log
 
 # Python
@@ -49,4 +58,12 @@ Thumbs.db
 # Documentation
 *.md
 !app/README.md
-!launch/README.md 
+!launch/README.md
+
+# Unix sockets, locks, pids (can break Docker context on Windows)
+**/*.sock
+**/*.socket
+**/*.pipe
+**/*.pid
+**/*.lock
+**/*.ipc

@@ -1,16 +1,14 @@
 # test-test
 
-Minimal example of the hud environment design pattern:
-- Controller: MCP tools; thin interaction layer; minimal state
-- Environment: Server; holds persistent state and business logic
-
-## What each side does
+## Environment design pattern
 - Controller (Think of this as a frontend in web development)
   - Creates the UX and manages the lifecycle of an app (in this case for an agent)
   - Define `mcp = MCPServer()` and register `@mcp.tool` as tools the agent can interact with
 - Environment (Think of this as a backend in web development)
   - Owns all long‑lived states of the environment and exposes the environment data structure
   - Expose simple HTTP endpoints (`/health`, `/act`, `/reset`, `/state`)
+
+IMPORTANT: Make sure all logs are going to stderr instead of stdio, which is reserved for MCP communication
 
 ### Interactive Development
 ```bash

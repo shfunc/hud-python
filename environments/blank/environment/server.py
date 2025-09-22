@@ -2,6 +2,14 @@
 
 from fastapi import FastAPI
 
+import logging
+import sys
+logging.basicConfig(
+    stream=sys.stderr,
+    level=logging.INFO,
+    format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
+)
+
 app = FastAPI(title="Blank Environment API")
 
 _count = 0

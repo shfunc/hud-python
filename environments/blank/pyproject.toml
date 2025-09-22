@@ -3,15 +3,10 @@ name = "test_test"
 version = "0.1.0"
 description = "A minimal HUD environment"
 requires-python = ">=3.11"
-dependencies = [
-    "hud-python",
-    "fastapi",
-    "uvicorn[standard]",
-    "httpx>=0.28.1",
-]
+dependencies = [ "hud-python@git+https://github.com/hud-evals/hud-python@env-cli-improvements", "fastapi", "uvicorn[standard]", "httpx>=0.28.1",]
 
 [build-system]
-requires = ["hatchling"]
+requires = [ "hatchling",]
 build-backend = "hatchling.build"
 
 [tool.hud]
@@ -21,4 +16,4 @@ image = "test_test:dev"
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["controller", "environment"]
+packages = [ "controller", "environment",]

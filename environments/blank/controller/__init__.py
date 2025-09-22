@@ -10,7 +10,14 @@ logging.basicConfig(
     stream=sys.stderr,
     level=logging.INFO,
     format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
+    force=True,  # Force all loggers to use stderr
 )
+
+# Suppress httpx INFO logs to avoid cluttering MCP protocol
+httpx_logger = logging.getLogger("httpx")
+httpx_logger.setLevel(logging.WARNING)  # Only show warnings and errors
+httpcore_logger = logging.getLogger("httpcore")
+httpcore_logger.setLevel(logging.WARNING)  # Only show warnings and errors
 
 mcp = MCPServer()
 

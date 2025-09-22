@@ -1,12 +1,17 @@
 [project]
 name = "deepresearch"
 version = "0.1.0"
-description = "A minimal HUD environment for web research"
+description = "DeepResearch HUD environment with HTTP backend (EXA on server)"
 requires-python = ">=3.11"
-dependencies = [ "hud-python", "httpx>=0.24.0", "lxml>=4.9.0",]
+dependencies = [
+  "hud-python",
+  "fastapi>=0.104.1",
+  "uvicorn[standard]>=0.24.0",
+  "httpx>=0.24.0",
+]
 
 [build-system]
-requires = [ "hatchling",]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hud]
@@ -16,4 +21,4 @@ image = "deepresearch:dev"
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = [ "src/hud_controller",]
+packages = ["controller", "environment"]
