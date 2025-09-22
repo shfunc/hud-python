@@ -70,11 +70,18 @@ def create_proxy_server(
         f"{project_path.absolute()}:/app:rw",
         "-e",
         "PYTHONPATH=/app",
+        "-e",
+        "PYTHONUNBUFFERED=1",  # Ensure Python output is not buffered
     ]
 
     # Add user-provided Docker arguments
     if docker_args:
         docker_cmd.extend(docker_args)
+    
+    # Append the image name and CMD
+    docker_cmd.append(image_name)
+    if original_cmd:
+        docker_cmd.extend(original_cmd)
 
     # Disable hot-reload if interactive mode is enabled
     if interactive:
