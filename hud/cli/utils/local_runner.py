@@ -20,7 +20,6 @@ async def run_with_reload(
     transport: str = "stdio",
     port: int | None = None,
     verbose: bool = False,
-    no_banner: bool = False,
     extra_args: list[str] | None = None,
 ) -> None:
     """Run Python server with auto-reload functionality."""
@@ -50,8 +49,7 @@ async def run_with_reload(
         cmd.extend(["--transport", transport])
     if port and transport == "http":
         cmd.extend(["--port", str(port)])
-    if no_banner:
-        cmd.append("--no-banner")
+    cmd.append("--no-banner")
     if verbose:
         cmd.extend(["--log-level", "DEBUG"])
     if extra_args:
@@ -69,9 +67,6 @@ async def run_with_reload(
         if path_obj.suffix in {'.py', '.json', '.toml', '.yaml', '.yml'}:
             return True
         return False
-    
-    if not no_banner:
-        hud_console.info(f"Starting server with auto-reload, watching: {watch_dir}")
     
     process = None
     
@@ -173,7 +168,6 @@ def run_local_server(
     port: int | None = None,
     verbose: bool = False,
     reload: bool = False,
-    no_banner: bool = False,
     extra_args: list[str] | None = None,
 ) -> None:
     """Run a local Python file as an MCP server."""
@@ -184,7 +178,6 @@ def run_local_server(
             transport=transport,
             port=port,
             verbose=verbose,
-            no_banner=no_banner,
             extra_args=extra_args,
         ))
     else:
@@ -194,8 +187,7 @@ def run_local_server(
             cmd.extend(["--transport", transport])
         if port and transport == "http":
             cmd.extend(["--port", str(port)])
-        if no_banner:
-            cmd.append("--no-banner")
+        cmd.append("--no-banner")
         if verbose:
             cmd.extend(["--log-level", "DEBUG"])
         if extra_args:
@@ -206,6 +198,5 @@ def run_local_server(
             result = subprocess.run(cmd)
             sys.exit(result.returncode)
         except KeyboardInterrupt:
-            if not no_banner:
-                hud_console.info("\n👋 Shutting down...")
+            hud_console.info("\n👋 Shutting down...")
             sys.exit(0)

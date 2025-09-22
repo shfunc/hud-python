@@ -601,7 +601,6 @@ def run(
                         transport=transport,
                         port=port,
                         verbose=verbose,
-                        no_banner=no_banner,
                         server_attr=server_attr,
                     )
                 ),
@@ -615,7 +614,6 @@ def run(
                 transport=transport,
                 port=port,
                 verbose=verbose,
-                no_banner=no_banner,
                 server_attr=server_attr,
             ))
         return
@@ -1229,27 +1227,6 @@ def main() -> None:
             console.print("HUD CLI version: [cyan]unknown[/cyan]")
         return
     
-    # Handle implicit 'run' command injection
-    if len(sys.argv) > 1:
-        first_arg = sys.argv[1]
-        
-        # Known commands that aren't 'run'
-        known_commands = {
-            "eval", "init", "build", "push", "pull", "list", 
-            "analyze", "debug", "dev", "clone", "quickstart", "remove",
-            "get", "hf", "rl", "set"
-        }
-        
-        # If first arg is not a flag and not a known command, assume 'run'
-        if not first_arg.startswith("-") and first_arg not in known_commands:
-            # Check if it looks like a file/directory/module
-            if (first_arg.endswith('.py') or 
-                first_arg == '.' or 
-                '/' in first_arg or 
-                '\\' in first_arg  # Likely a module/path
-                ):
-                sys.argv.insert(1, "run")
-
     try:
         # Show header for main help
         if len(sys.argv) == 1 or (len(sys.argv) == 2 and sys.argv[1] in ["--help", "-h"]):

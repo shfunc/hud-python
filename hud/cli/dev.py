@@ -11,6 +11,7 @@ from typing import Any
 
 import click
 from fastmcp import FastMCP
+from hud.server.server import MCPServer
 
 from hud.utils.hud_console import HUDConsole
 
@@ -42,7 +43,7 @@ def create_proxy_server(
     interactive: bool = False,
 ) -> FastMCP:
     """Create an HTTP proxy server that forwards to Docker container with hot-reload."""
-    src_path = Path(directory) / "src"
+    project_path = Path(directory)
 
     # Get the original CMD from the image
     original_cmd = get_docker_cmd(image_name)
@@ -66,9 +67,9 @@ def create_proxy_server(
         "--name",
         container_name,
         "-v",
-        f"{src_path.absolute()}:/app/src:rw",
+        f"{project_path.absolute()}:/app:rw",
         "-e",
-        "PYTHONPATH=/app/src",
+        "PYTHONPATH=/app",
     ]
 
     # Add user-provided Docker arguments
@@ -116,6 +117,9 @@ def create_proxy_server(
     # Create the HTTP proxy server using config
     try:
         proxy = FastMCP.as_proxy(config, name=f"HUD Dev Proxy - {image_name}")
+        # Wrap proxy in HUD MCPServer so HTTP mode also serves helper endpoints at /hud/*
+        wrapper = MCPServer(name=f"HUD Dev Server - {image_name}")
+        wrapper.mount(proxy)
     except Exception as e:
         hud_console.error(f"Failed to create proxy server: {e}")
         hud_console.info("")
@@ -123,7 +127,7 @@ def create_proxy_server(
         hud_console.info(f"   hud debug {image_name}")
         raise
 
-    return proxy
+    return wrapper
 
 
 async def start_mcp_proxy(
@@ -213,10 +217,10 @@ async def start_mcp_proxy(
         stderr_handler = logging.StreamHandler(sys.stderr)
         root_logger.addHandler(stderr_handler)
 
-    # Now check for src directory
-    src_path = Path(directory) / "src"
-    if not src_path.exists():
-        hud_console.error(f"Source directory not found: {src_path}")
+    # Validate project directory exists
+    project_path = Path(directory)
+    if not project_path.exists():
+        hud_console.error(f"Project directory not found: {project_path}")
         raise click.Abort
 
     # Extract container name from the proxy configuration (must match create_proxy_server naming)
