@@ -271,8 +271,6 @@ def run_with_reload(
                         if verbose:
                             for change_type, path in relevant_changes:
                                 logger.debug("  %s: %s", change_type, path)
-                    else:
-                        logger.info("Changes detected but filtered out: %s", changes)
                         
                         # Terminate the process
                         if process is not None:
@@ -288,6 +286,8 @@ def run_with_reload(
                         # Brief pause before restart
                         time.sleep(0.1)
                         break
+                    else:
+                        logger.info("Changes detected but filtered out: %s", changes)
             except KeyboardInterrupt:
                 # Handle Ctrl+C gracefully
                 if process:

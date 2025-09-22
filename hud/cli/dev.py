@@ -767,16 +767,6 @@ def run_mcp_dev_server(
         elif not interactive:
             hud_console.progress_message("🧪 Run with --interactive for interactive testing mode")
 
-    # Disable logs and hot-reload if interactive mode is enabled
-    if interactive and not no_logs:
-        hud_console.warning("Docker logs disabled in interactive mode for better UI experience")
-        no_logs = True
-        # if not no_reload:
-        #     hud_console.warning(
-        #         "Hot-reload disabled in interactive mode to prevent output interference"
-        #     )
-        #     no_reload = True
-
     # Show configuration as JSON (just the server config, not wrapped)
     full_config = {}
     full_config[server_name] = server_config
