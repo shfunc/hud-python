@@ -236,10 +236,13 @@ def build_docker_image(
         hud_console.error(f"No Dockerfile found in {directory}")
         return False
 
+    # Default platform to match RL pipeline unless explicitly overridden
+    effective_platform = platform if platform is not None else "linux/amd64"
+
     # Build command
     cmd = ["docker", "build"]
-    if platform:
-        cmd.extend(["--platform", platform])
+    if effective_platform:
+        cmd.extend(["--platform", effective_platform])
     cmd.extend(["-t", tag])
     if no_cache:
         cmd.append("--no-cache")
@@ -437,8 +440,10 @@ def build_environment(
     version_tag = f"{base_name}:{new_version}"
 
     label_cmd = ["docker", "build"]
-    if platform is not None:
-        label_cmd.extend(["--platform", platform])
+    # Use same defaulting for the second build step
+    label_platform = platform if platform is not None else "linux/amd64"
+    if label_platform:
+        label_cmd.extend(["--platform", label_platform])
     label_cmd.extend(
         [
             "--label",
