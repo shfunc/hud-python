@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+logging.basicConfig(level=logging.INFO)
+
 import asyncio
 import json
 import sys
@@ -567,10 +570,19 @@ def run(
 
     is_python_target = (spec is not None) or is_pkg_dir
     
+    # Debug logging before the condition
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("Before condition: is_python_target=%s, local=%s, remote=%s, reload=%s", 
+                is_python_target, local, remote, reload)
+    
     if is_python_target and not (local or remote):
         # Python file/package mode - use implicit MCP server
         from .utils.package_runner import run_package_as_mcp, run_with_reload
         import asyncio
+        
+        # Debug: log reload state
+        logger.info("Inside python target block: reload=%s, watch=%s", reload, watch)
         
         if reload:
             # Run with watchfiles reload
@@ -594,27 +606,39 @@ def run(
                         except Exception:
                             pass
 
-            run_with_reload(
-                lambda: asyncio.run(
-                    run_package_as_mcp(
-                        target,
-                        transport=transport,
-                        port=port,
-                        verbose=verbose,
-                        server_attr=server_attr,
-                    )
-                ),
-                watch_paths,
-                verbose=verbose,
-            )
+            # For HTTP transport, always run as subprocess to enable proper reload
+            if transport == "http":
+                # Use subprocess approach for HTTP servers to allow restart
+                run_with_reload(
+                    None,  # This forces subprocess mode
+                    watch_paths,
+                    verbose=verbose,
+                )
+            else:
+                # For stdio, can run in-process
+                run_with_reload(
+                    lambda: asyncio.run(
+                        run_package_as_mcp(
+                            target,
+                            transport=transport,
+                            port=port,
+                            verbose=verbose,
+                            server_attr=server_attr,
+                        )
+                    ),
+                    watch_paths,
+                    verbose=verbose,
+                )
         else:
-            # Run normally
+            # Run normally (but still pass reload=False for consistency)
             asyncio.run(run_package_as_mcp(
                 target,
                 transport=transport,
                 port=port,
                 verbose=verbose,
                 server_attr=server_attr,
+                reload=False,  # Explicitly pass reload state
+                watch_paths=None,
             ))
         return
     

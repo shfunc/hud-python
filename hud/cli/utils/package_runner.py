@@ -61,10 +61,16 @@ async def run_package_as_mcp(
     else:
         logging.basicConfig(level=logging.INFO)
     
+    # Debug output to see if reload is being passed
+    logger.info("run_package_as_mcp called with reload=%s, watch_paths=%s", reload, watch_paths)
+    
     # Handle reload mode
     if reload:
         if watch_paths is None:
             watch_paths = ['.']
+        
+        # Log watch paths early so we can see them
+        logger.info("Auto-reload enabled, will watch paths: %s", watch_paths)
 
         # Detect external command vs module reliably.
         # If command is a string and contains spaces (e.g., "uv run python -m controller")
@@ -182,8 +188,10 @@ def run_with_reload(
         path = Path(path_str).resolve()
         if path.is_file():
             # Watch the directory containing the file
+            logger.info("Watch path '%s' is a file, watching parent directory", path_str)
             resolved_paths.append(str(path.parent))
         else:
+            logger.info("Watch path '%s' resolved to: %s", path_str, path)
             resolved_paths.append(str(path))
     
     logger.info("Starting with auto-reload, watching: %s", resolved_paths)
@@ -247,7 +255,9 @@ def run_with_reload(
 
                 threading.Thread(target=_wait_and_set, daemon=True).start()
 
+                logger.info("Watchfiles started, watching for changes...")
                 for changes in watchfiles.watch(*resolved_paths, stop_event=stop_event):
+                    logger.info("Raw changes detected: %s", changes)
                     # Filter for relevant file types
                     relevant_changes = [
                         (change_type, path) for change_type, path in changes
@@ -261,6 +271,8 @@ def run_with_reload(
                         if verbose:
                             for change_type, path in relevant_changes:
                                 logger.debug("  %s: %s", change_type, path)
+                    else:
+                        logger.info("Changes detected but filtered out: %s", changes)
                         
                         # Terminate the process
                         if process is not None:
