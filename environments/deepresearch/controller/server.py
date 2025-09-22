@@ -7,7 +7,7 @@ from hud.tools.types import EvaluationResult
 
 
 @mcp.initialize
-async def init(_: dict):
+async def init():
     # Ensure environment server is reachable
     await http_client.get("/health")
 

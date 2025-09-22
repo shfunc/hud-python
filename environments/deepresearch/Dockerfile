@@ -19,4 +19,4 @@ ENV ENV_SERVER_URL=http://localhost:8000
 # EXA_API_KEY should be provided at runtime: -e EXA_API_KEY=...
 
 # Start environment HTTP server, then run controller with hot-reload
-CMD ["sh", "-c", "uvicorn environment.server:app --host 0.0.0.0 --port 8000 --reload & sleep 0.5 && exec hud controller --reload"]
+CMD ["sh", "-c", "uvicorn environment.server:app --host 0.0.0.0 --port 8000 --reload --reload-dir environment & sleep 0.5 && exec hud run controller --reload"]

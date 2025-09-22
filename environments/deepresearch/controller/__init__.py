@@ -11,6 +11,7 @@ logging.basicConfig(
     stream=sys.stderr,
     level=logging.INFO,
     format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
+    force=True,  # Force all loggers to use stderr
 )
 
 # MCP server (frontend/controller)
