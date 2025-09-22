@@ -79,7 +79,7 @@ image = "my-project:latest"
         test_dir.mkdir()
 
         name, source = get_image_name(str(test_dir))
-        assert name == "hud-my-test-project:dev"
+        assert name == "my-test-project:dev"
         assert source == "auto"
 
     def test_update_pyproject_toml(self, tmp_path: Path) -> None:
