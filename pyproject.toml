@@ -16,7 +16,7 @@ dependencies = [
     # MCP dependencies
     "hud-mcp-python-sdk>=3.13.2",
     "hud-fastmcp-python-sdk>=0.1.2",
-    "hud-mcp-use-python-sdk==2.3.18",
+    "hud-mcp-use-python-sdk==2.3.19",
     "pathspec>=0.12.1",
     "wrapt>=1.14.0",
     # CLI dependencies
@@ -116,25 +116,8 @@ packages = ["hud"]
 [tool.hatch.build.targets.wheel.force-include]
 "hud/py.typed" = "hud/py.typed"
 
-
 [project.optional-dependencies]
-# Agent dependencies - AI capabilities + telemetry + datasets
-agent = [
-    "langchain",
-    "langchain-openai",
-    "langchain-anthropic",
-    # Jupyter support
-    "ipykernel",
-    "ipython <9",
-    "jupyter_client",
-    "jupyter_core",
-    "dotenv>=0.9.9",
-]
-
-agents = ["hud-python[agent]"]
-
 rl = [
-    "hud-python[agent]",
     "peft>=0.17.1",
     "vllm==0.10.1.1",
     "bitsandbytes>=0.41.0 ; sys_platform == 'linux'",  # For 8-bit optimizers (Linux only)
@@ -146,7 +129,15 @@ rl = [
 # Development dependencies - includes testing, linting, and automation tools
 dev = [
     # Include agent dependencies
-    "hud-python[agent]",
+    "langchain",
+    "langchain-openai",
+    "langchain-anthropic",
+    # Jupyter support
+    "ipykernel",
+    "ipython <9",
+    "jupyter_client",
+    "jupyter_core",
+    "dotenv>=0.9.9",
     # Testing and linting
     "ruff >=0.11.8",
     "pytest >=8.1.1,<9",
@@ -165,6 +156,12 @@ dev = [
     "aiodocker>=0.24.0",
     "setuptools",
 ]
+
+# Agent dependencies extend dev
+agent = ["hud-python[dev]"]
+
+agents = ["hud-python[agent]"]
+
 
 [tool.ruff]
 target-version = "py311"
