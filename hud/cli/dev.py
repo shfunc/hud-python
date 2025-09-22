@@ -11,7 +11,6 @@ from typing import Any
 
 import click
 from fastmcp import FastMCP
-from hud.server.server import MCPServer
 
 from hud.utils.hud_console import HUDConsole
 
@@ -124,9 +123,6 @@ def create_proxy_server(
     # Create the HTTP proxy server using config
     try:
         proxy = FastMCP.as_proxy(config, name=f"HUD Dev Proxy - {image_name}")
-        # Wrap proxy in HUD MCPServer so HTTP mode also serves helper endpoints at /hud/*
-        wrapper = MCPServer(name=f"HUD Dev Server - {image_name}")
-        wrapper.mount(proxy)
     except Exception as e:
         hud_console.error(f"Failed to create proxy server: {e}")
         hud_console.info("")
@@ -134,7 +130,7 @@ def create_proxy_server(
         hud_console.info(f"   hud debug {image_name}")
         raise
 
-    return wrapper
+    return proxy
 
 
 async def start_mcp_proxy(
@@ -793,14 +789,6 @@ def run_mcp_dev_server(
         "Connect to Cursor (be careful with multiple windows as that may interfere with the proxy)"
     )
     hud_console.link(deeplink)
-    
-    # Show HUD helper endpoints
-    if transport == "http":
-        hud_console.section_title("HUD Helper Endpoints")
-        hud_console.info(f"🔍 Tools: http://localhost:{actual_port}/hud/tools")
-        hud_console.info(f"📚 Resources: http://localhost:{actual_port}/hud/resources")
-        hud_console.info(f"💬 Prompts: http://localhost:{actual_port}/hud/prompts")
-        hud_console.info(f"ℹ️  Overview: http://localhost:{actual_port}/hud")
     
     hud_console.info("")  # Empty line
 
