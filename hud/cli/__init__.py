@@ -606,29 +606,13 @@ def run(
                         except Exception:
                             pass
 
-            # For HTTP transport, always run as subprocess to enable proper reload
-            if transport == "http":
-                # Use subprocess approach for HTTP servers to allow restart
-                run_with_reload(
-                    None,  # This forces subprocess mode
-                    watch_paths,
-                    verbose=verbose,
-                )
-            else:
-                # For stdio, can run in-process
-                run_with_reload(
-                    lambda: asyncio.run(
-                        run_package_as_mcp(
-                            target,
-                            transport=transport,
-                            port=port,
-                            verbose=verbose,
-                            server_attr=server_attr,
-                        )
-                    ),
-                    watch_paths,
-                    verbose=verbose,
-                )
+            # Always run as subprocess when using reload to enable proper file watching
+            # This ensures the parent process can watch files while the child runs the server
+            run_with_reload(
+                None,  # This forces subprocess mode for both stdio and http
+                watch_paths,
+                verbose=verbose,
+            )
         else:
             # Run normally (but still pass reload=False for consistency)
             asyncio.run(run_package_as_mcp(
