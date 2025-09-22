@@ -14,7 +14,7 @@ from fastmcp import FastMCP
 
 from hud.utils.hud_console import HUDConsole
 
-from .utils.docker import get_docker_cmd, inject_supervisor
+from .utils.docker import get_docker_cmd
 from .utils.environment import (
     build_environment,
     get_image_name,
@@ -84,17 +84,6 @@ def create_proxy_server(
         hud_console.warning("Cannot use --full-reload with --no-reload, ignoring --full-reload")
         full_reload = False
 
-    if not no_reload and not full_reload:
-        # Standard hot-reload: inject supervisor for server restart within container
-        modified_cmd = inject_supervisor(original_cmd)
-        docker_cmd.extend(["--entrypoint", modified_cmd[0]])
-        docker_cmd.append(image_name)
-        docker_cmd.extend(modified_cmd[1:])
-    else:
-        # No reload or full reload: use original CMD without supervisor
-        # Note: Full reload logic (container restart) would be implemented here in the future
-        docker_cmd.append(image_name)
-
     # Create configuration following MCPConfig schema
     config = {
         "mcpServers": {
@@ -108,17 +97,14 @@ def create_proxy_server(
 
     # Debug output - only if verbose
     if verbose:
-        if not no_reload and not full_reload:
-            hud_console.info("Mode: Hot-reload (server restart within container)")
-            hud_console.info("Watching: /app/src for changes")
-        elif full_reload:
+        if full_reload:
             hud_console.info("Mode: Full reload (container restart on file changes)")
             hud_console.info(
-                "Note: Full container restart not yet implemented, using no-reload mode"
+                "Note: Full container restart not yet implemented"
             )
         else:
-            hud_console.info("Mode: No reload")
-            hud_console.info("Container will run without hot-reload")
+            hud_console.info("Mode: Container manages its own reload")
+            hud_console.info("The container's CMD determines reload behavior")
         hud_console.command_example(f"docker logs -f {container_name}", "View container logs")
 
         # Show the full Docker command if there are environment variables
@@ -796,9 +782,17 @@ def run_mcp_dev_server(
         "Connect to Cursor (be careful with multiple windows as that may interfere with the proxy)"
     )
     hud_console.link(deeplink)
+    
+    # Show HUD helper endpoints
+    if transport == "http":
+        hud_console.section_title("HUD Helper Endpoints")
+        hud_console.info(f"🔍 Tools: http://localhost:{actual_port}/hud/tools")
+        hud_console.info(f"📚 Resources: http://localhost:{actual_port}/hud/resources")
+        hud_console.info(f"💬 Prompts: http://localhost:{actual_port}/hud/prompts")
+        hud_console.info(f"ℹ️  Overview: http://localhost:{actual_port}/hud")
+    
     hud_console.info("")  # Empty line
 
-    # Start the proxy (pass original port, start_mcp_proxy will find actual port again)
     try:
         asyncio.run(
             start_mcp_proxy(
