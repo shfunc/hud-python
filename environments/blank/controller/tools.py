@@ -10,7 +10,7 @@ async def act() -> str:
         raise RuntimeError("HTTP client not initialized")
     resp = await http_client.post("/act")
     data = resp.json()
-    return f"Action #{data.get('count', 0)} performed. Current count: {data.get('count', 0)}"
+    return f"Action #{data.get('count', 0)} performed. Current c count: {data.get('count', 0)}"
 
 
 @mcp.tool
@@ -29,7 +29,8 @@ async def evaluate(target: int = 10) -> EvaluationResult:
         raise RuntimeError("HTTP client not initialized")
     resp = await http_client.get("/state")
     current_count = resp.json().get("count", 0)
-    reward = min(current_count / target, 1.0) if target > 0 else 0.0
+    delta = target - current_count
+    reward = max(1 - abs(delta) / target, 0.0) if target > 0 else current_count 
     done = current_count >= target
     return EvaluationResult(reward=reward, done=done, content=f"Counter at {current_count}/{target}")
 
