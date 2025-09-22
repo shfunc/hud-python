@@ -64,15 +64,15 @@ async def launch_app(app_name: str) -> str:
         Success message with app URL
     """
     # http_client is imported from controller module
-    
+
     try:
         # Call environment server to launch app with timeout
         response = await http_client.post(
-            "/apps/launch", 
+            "/apps/launch",
             json={"app_name": app_name},
-            timeout=60.0  # 60 second timeout
+            timeout=60.0,  # 60 second timeout
         )
-        
+
         if response.status_code == 404:
             return f"App '{app_name}' not found"
         elif response.status_code != 200:
@@ -80,7 +80,9 @@ async def launch_app(app_name: str) -> str:
     except httpx.ReadTimeout:
         return f"Timeout launching app '{app_name}'. The environment server may still be starting up. Try again in a few seconds."
     except httpx.ConnectError:
-        return f"Could not connect to environment server. Make sure it's running at {ENV_SERVER_URL}"
+        return (
+            f"Could not connect to environment server. Make sure it's running at {ENV_SERVER_URL}"
+        )
     except Exception as e:
         return f"Error launching app '{app_name}': {str(e)}"
 
