@@ -20,7 +20,6 @@ from hud.server.low_level import LowLevelServerWithInit
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable
 
-    from mcp.shared.context import RequestContext
     from starlette.requests import Request
 
 __all__ = ["MCPServer"]
@@ -166,21 +165,29 @@ class MCPServer(FastMCP):
         if self._replaced_server:
             return
 
-        async def _run_init(ctx: RequestContext | None = None) -> None:
+        async def _run_init(ctx: object | None = None) -> None:
             """Run the user initializer exactly once, with stdout redirected."""
             if self._initializer_fn is not None and not self._did_init:
                 self._did_init = True
                 # Prevent stdout from polluting the MCP protocol on stdio/HTTP
                 with contextlib.redirect_stdout(sys.stderr):
-                    # Check if function accepts ctx parameter
                     import inspect
 
-                    sig = inspect.signature(self._initializer_fn)
-                    if "ctx" in sig.parameters:
-                        return self._initializer_fn(ctx)
-                    else:
-                        # Call without ctx for simpler usage
-                        return self._initializer_fn()
+                    fn = self._initializer_fn
+                    sig = inspect.signature(fn)
+                    needs_arg = any(
+                        p.kind
+                        in (
+                            inspect.Parameter.POSITIONAL_ONLY,
+                            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                            inspect.Parameter.VAR_POSITIONAL,
+                        )
+                        for p in sig.parameters.values()
+                    )
+                    result = fn(ctx) if needs_arg else fn()
+                    if inspect.isawaitable(result):
+                        await result
+                    return None
             return None
 
         # Save the old server's handlers before replacing it
@@ -265,7 +272,22 @@ class MCPServer(FastMCP):
             self._register_hud_helpers()
             logger.info("Registered HUD helper endpoints at /hud/*")
 
-        await super().run_async(transport=transport, show_banner=show_banner, **transport_kwargs)
+        try:
+            await super().run_async(
+                transport=transport, show_banner=show_banner, **transport_kwargs
+            )
+        finally:
+            # Fallback: ensure SIGTERM-triggered shutdown runs even when a custom
+            # lifespan bypasses our default fastmcp shutdown path.
+            global _sigterm_received
+            if self._shutdown_fn is not None and _sigterm_received and not self._shutdown_has_run:
+                try:
+                    await self._shutdown_fn()
+                except Exception as e:  # pragma: no cover - defensive logging
+                    logger.error("Error during @mcp.shutdown (fallback): %s", e)
+                finally:
+                    self._shutdown_has_run = True
+                    _sigterm_received = False
 
     # Tool registration helper -- appends BaseTool to FastMCP
     def add_tool(self, obj: Any, **kwargs: Any) -> None:
