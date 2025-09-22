@@ -9,8 +9,8 @@ The `hud debug` command validates MCP environments through 5 progressive phases.
 ## Synopsis
 
 ```bash
-hud debug [OPTIONS] IMAGE [DOCKER_ARGS...]
-hud debug --command COMMAND [ARGS...]
+hud debug [IMAGE|DIRECTORY] [OPTIONS] [DOCKER_ARGS...]
+hud debug --config PATH
 hud debug --cursor SERVER_NAME
 ```
 
@@ -18,11 +18,10 @@ hud debug --cursor SERVER_NAME
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--max-phase` | Stop at specified phase (1-5) | 5 |
-| `--command` | Debug a command instead of Docker | - |
+| `--config`, `-c` | JSON config file with MCP configuration | - |
 | `--cursor` | Debug a Cursor MCP server | - |
-| `--timeout` | Timeout per phase in seconds | 30 |
-| `-e, --env` | Set environment variables | - |
+| `--build`, `-b` | Build image before debugging (directory mode) | false |
+| `--max-phase`, `-p` | Maximum debug phase (1-5) | 5 |
 
 ## Debug Phases
 

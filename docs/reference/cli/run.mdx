@@ -9,7 +9,7 @@ The `hud run` command executes MCP environments either locally via Docker or rem
 ## Usage
 
 ```bash
-hud run <TARGET> [OPTIONS] [-- DOCKER_ARGS...]
+hud run <TARGET> [OPTIONS] [DOCKER_ARGS...]
 ```
 
 ## Arguments
@@ -19,14 +19,12 @@ hud run <TARGET> [OPTIONS] [-- DOCKER_ARGS...]
 </ParamField>
 
 <ParamField path="docker_args" type="array">
-  Additional Docker arguments after `--` (e.g., `-e KEY=value`)
+  Additional Docker arguments (accepted after the image)
 </ParamField>
 
-<Warning>
-Always use `--` before Docker arguments to avoid conflicts with HUD options:
-- ✅ `hud run image:tag -- -e KEY=value`
-- ❌ `hud run image:tag -e KEY=value`
-</Warning>
+<Note>
+Docker arguments are passed positionally after the image in this command form.
+</Note>
 
 ## Options
 
@@ -34,8 +32,8 @@ Always use `--` before Docker arguments to avoid conflicts with HUD options:
   Run locally with Docker instead of remote execution
 </ParamField>
 
-<ParamField path="--remote" type="boolean" default="true">
-  Explicitly run remotely (default behavior)
+<ParamField path="--remote" type="boolean" default="false">
+  Explicitly run remotely (default behavior if neither --local nor --remote is set)
 </ParamField>
 
 <ParamField path="--transport" type="string" default="stdio">
@@ -60,6 +58,10 @@ Always use `--` before Docker arguments to avoid conflicts with HUD options:
 
 <ParamField path="--verbose" type="boolean" default="false">
   Show detailed output. Short: `-v`
+</ParamField>
+
+<ParamField path="--interactive" type="boolean" default="false">
+  Launch interactive testing mode (HTTP transport only)
 </ParamField>
 
 ## Remote Execution (Default)

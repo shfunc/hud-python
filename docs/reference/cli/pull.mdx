@@ -21,7 +21,8 @@ hud pull <TARGET> [OPTIONS]
 ## Options
 
 <ParamField path="--lock" type="string">
-  Path to save lock file (if target is image ref). Short: `-l`
+  Path to a lock file to read (alternative to using the image ref). Short: `-l`
+  When provided, the command reads metadata from the specified lock file instead of the registry.
 </ParamField>
 
 <ParamField path="--yes" type="boolean" default="false">
@@ -132,12 +133,12 @@ Pull using a shared lock file:
 hud pull ./shared-env.lock.yaml
 ```
 
-### Custom Lock Location
+### From Lock File
 
-Save lock file to specific path:
+Use an existing lock file to pull an environment:
 
 ```bash
-hud pull myorg/myenv:latest --lock ~/.hud/locks/myenv.yaml
+hud pull ./env.lock.yaml
 ```
 
 ## Metadata Sources

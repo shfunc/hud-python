@@ -14,8 +14,8 @@ hud analyze <TARGET> [OPTIONS]
 
 ## Arguments
 
-<ParamField path="target" type="string" required>
-  Docker image, lock file path, or command to analyze
+<ParamField path="target" type="string">
+  Docker image to analyze (optional if using --config or --cursor)
 </ParamField>
 
 ## Options
@@ -40,14 +40,6 @@ hud analyze <TARGET> [OPTIONS]
   Analyze a server from Cursor config
 </ParamField>
 
-<ParamField path="--command" type="string">
-  Analyze a local command instead of Docker image
-</ParamField>
-
-<ParamField path="--timeout" type="integer" default="30">
-  Timeout in seconds for live analysis
-</ParamField>
-
 ## Analysis Modes
 
 ### Fast Mode (Default)
@@ -61,8 +53,8 @@ Uses cached metadata from:
 # Instant results from metadata
 hud analyze hudpython/text-analyzer:latest
 
-# From lock file
-hud analyze ./my-env.lock.yaml
+# From registry/local cache
+hud analyze hudpython/text-2048:latest
 ```
 
 <Note>
@@ -230,12 +222,9 @@ hud analyze my-env:latest --live -e API_KEY=test -e DEBUG=true
 hud analyze heavy-env:latest --live --timeout 60
 ```
 
-### Local Development
+### Cursor and Config
 
 ```bash
-# Analyze local command
-hud analyze --command "python my_server.py" --live
-
 # Cursor integration
 hud analyze --cursor my-dev-server --live
 

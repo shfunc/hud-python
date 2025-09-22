@@ -27,6 +27,60 @@ PRESET_MAP: dict[str, str | None] = {
 
 SKIP_DIR_NAMES = {"node_modules", "__pycache__", "dist", "build", ".next", ".git"}
 
+# Files that need placeholder replacement
+PLACEHOLDER_FILES = {
+    "pyproject.toml",
+    "tasks.json",
+    "src/controller/server.py",
+    "test_env.ipynb",
+    "README.md",
+}
+
+
+def _replace_placeholders(target_dir: Path, env_name: str) -> list[str]:
+    """Replace placeholders in template files with the actual environment name.
+    
+    Args:
+        target_dir: Directory containing the downloaded template files
+        env_name: The environment name to replace placeholders with
+        
+    Returns:
+        List of files that were modified
+    """
+    modified_files = []
+    placeholder = "test_test"
+    
+    # Normalize environment name for use in code/configs
+    # Replace spaces and special chars with underscores for Python identifiers
+    normalized_name = env_name.replace("-", "_").replace(" ", "_")
+    normalized_name = "".join(c if c.isalnum() or c == "_" else "_" for c in normalized_name)
+    
+    for root, dirs, files in os.walk(target_dir):
+        # Skip directories we don't want to process
+        dirs[:] = [d for d in dirs if d not in SKIP_DIR_NAMES]
+        
+        for file in files:
+            file_path = Path(root) / file
+            
+            # Check if this file should have placeholders replaced
+            should_replace = (
+                file in PLACEHOLDER_FILES or
+                any(file_path.relative_to(target_dir).as_posix().endswith(f) for f in PLACEHOLDER_FILES)
+            )
+            
+            if should_replace:
+                try:
+                    content = file_path.read_text(encoding="utf-8")
+                    if placeholder in content:
+                        new_content = content.replace(placeholder, normalized_name)
+                        file_path.write_text(new_content, encoding="utf-8")
+                        modified_files.append(str(file_path.relative_to(target_dir)))
+                except Exception:
+                    # Skip files that can't be read as text
+                    pass
+                    
+    return modified_files
+
 
 def _prompt_for_preset() -> str:
     """Ask the user to choose a preset when not provided."""
@@ -186,6 +240,18 @@ def create_environment(
     hud_console.success(
         f"Downloaded {len(files_created_dl)} files in {duration_ms} ms into {target_dir}"
     )
+
+    # Replace placeholders in template files
+    hud_console.section_title("Customizing template files")
+    modified_files = _replace_placeholders(target_dir, name)
+    if modified_files:
+        hud_console.success(f"Replaced placeholders in {len(modified_files)} files:")
+        for file in modified_files[:5]:  # Show first 5 files
+            hud_console.status_item(file, "updated")
+        if len(modified_files) > 5:
+            hud_console.info(f"... and {len(modified_files) - 5} more files")
+    else:
+        hud_console.info("No placeholder replacements needed")
 
     hud_console.section_title("Top-level files and folders")
     for entry in sorted(os.listdir(target_dir)):
