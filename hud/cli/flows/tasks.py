@@ -153,14 +153,40 @@ def _derive_remote_image(lock_data: dict[str, Any]) -> str:
     return f"{name}:{tag}"
 
 
+def _extract_existing_images(tasks: list[Task]) -> set[str]:
+    """Extract all Mcp-Image references from tasks."""
+    images = set()
+    
+    def _extract_from_obj(obj: Any) -> None:
+        if isinstance(obj, dict):
+            # Check for Mcp-Image in headers
+            if "headers" in obj and isinstance(obj["headers"], dict):
+                mcp_image = obj["headers"].get("Mcp-Image")
+                if mcp_image:
+                    images.add(mcp_image)
+            # Recursively check nested objects
+            for v in obj.values():
+                _extract_from_obj(v)
+        elif isinstance(obj, list):
+            for item in obj:
+                _extract_from_obj(item)
+    
+    for task in tasks:
+        if task.mcp_config:
+            _extract_from_obj(task.mcp_config)
+    
+    return images
+
+
 def convert_tasks_to_remote(tasks_file: str) -> str:
     """Convert a local tasks file to remote MCP tasks and return new filename.
 
     Steps:
     1) Find env dir; ensure built (hud.lock.yaml), otherwise build
     2) Ensure pushed to registry, otherwise push
-    3) Create remote_[tasks].json with mcp_config pointing to mcp.hud.so and Mcp-Image
-    4) Return the new tasks file path
+    3) Check for outdated images in existing task configurations
+    4) Create remote_[tasks].json with mcp_config pointing to mcp.hud.so and Mcp-Image
+    5) Return the new tasks file path
     """
     tasks_path = Path(tasks_file).resolve()
 
@@ -174,8 +200,15 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
         hud_console.info("Set it in your environment or run: hud set HUD_API_KEY=your-key-here")
         raise typer.Exit(1)
 
+    # Check if tasks already have remote URLs
+    already_remote = _validate_tasks(tasks)
+    
+    # Extract existing images from tasks
+    existing_images = _extract_existing_images(tasks)
+    
     # Load tasks (supports .json and .jsonl)
-    if _validate_tasks(tasks):
+    if already_remote and not existing_images:
+        # Tasks are remote but have no image references - just return as-is
         return str(tasks_path)
 
     # Locate environment
@@ -191,6 +224,68 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
 
     # Derive remote image name org/name:tag
     remote_image = _derive_remote_image(lock_data)
+    
+    # Check if existing images are outdated
+    needs_update = False
+    should_update_image = False
+    if existing_images:
+        # Check if any existing image differs from the latest
+        for existing_img in existing_images:
+            if existing_img != remote_image:
+                hud_console.warning(f"Detected outdated image reference: {existing_img}")
+                hud_console.info(f"Latest pushed image: {remote_image}")
+                needs_update = True
+                break
+        
+        if needs_update:
+            if hud_console.confirm("Update task configuration with the latest image?", default=True):
+                hud_console.info("Updating task configuration with latest image...")
+                should_update_image = True
+            else:
+                # If user doesn't want to update, just return the original file
+                if already_remote:
+                    return str(tasks_path)
+                # Otherwise, continue with conversion but keep old images
+                remote_image = list(existing_images)[0]  # Use the first existing image
+                
+    # If tasks are already remote and we just need to update the image
+    if already_remote and should_update_image:
+        # Update image references in-place
+        def _update_image_refs(obj: Any) -> Any:
+            if isinstance(obj, dict):
+                new_obj = {}
+                for k, v in obj.items():
+                    if k == "Mcp-Image" and isinstance(v, str) and v in existing_images:
+                        new_obj[k] = remote_image
+                    else:
+                        new_obj[k] = _update_image_refs(v)
+                return new_obj
+            elif isinstance(obj, list):
+                return [_update_image_refs(item) for item in obj]
+            else:
+                return obj
+        
+        # Update tasks with new image
+        updated_tasks = []
+        for task in tasks:
+            task_dict = task.model_dump() if hasattr(task, "model_dump") else dict(task)
+            if "mcp_config" in task_dict:
+                task_dict["mcp_config"] = _update_image_refs(task_dict["mcp_config"])
+            updated_tasks.append(task_dict)
+        
+        # Write updated file (preserve original format - check if it's .jsonl)
+        if tasks_path.suffix == ".jsonl":
+            with open(tasks_path, "w", encoding="utf-8") as f:
+                for task in updated_tasks:
+                    json.dump(task, f, ensure_ascii=False)
+                    f.write("\n")
+        else:
+            with open(tasks_path, "w", encoding="utf-8") as f:
+                json.dump(updated_tasks, f, ensure_ascii=False, indent=2)
+                f.write("\n")
+        
+        hud_console.success(f"Updated {tasks_path.name} with latest image: {remote_image}")
+        return str(tasks_path)
 
     # Helper to strip extra fields from tool calls
     def _simplify_tool_call(tool: Any) -> Any:
