@@ -110,7 +110,7 @@ from datasets import load_dataset
 from hud.datasets import run_dataset_parallel
 
 # Load and run SheetBench-50 (parallel execution)
-dataset = load_dataset("hud-evals/sheetbench-50", split="train")
+dataset = load_dataset("hud-evals/SheetBench-50", split="train")
 results = await run_dataset_parallel(
     "My SheetBench Run",
     dataset,
@@ -207,12 +207,12 @@ After running evaluations, view results on the leaderboard:
 ```python
 # Run evaluation (parallel)
 results = await run_dataset_parallel(
-    "Claude-4 Sonnet SheetBench",
-    dataset="hud-evals/sheetbench-50",
+    "Claude Sonnet SheetBench",
+    dataset="hud-evals/SheetBench-50",
     agent_class=ClaudeAgent
 )
 
-# Then visit: hud.so/leaderboards/hud-evals/sheetbench-50
+# Then visit: hud.so/leaderboards/hud-evals/SheetBench-50
 # Click "My Jobs" to see your runs and create scorecards
 ```
 
@@ -238,4 +238,8 @@ results = await run_dataset_parallel(
   Build custom evaluation datasets
 </Card>
 </CardGroup>
+
+## See Also
+
+- [`hud eval`](/reference/cli/eval) - CLI for running agents on tasks/datasets
 

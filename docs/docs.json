@@ -61,10 +61,8 @@
           {
             "group": "Agents",
             "pages": [
-              "evaluate-agents/index",
               "evaluate-agents/create-agents",
-              "evaluate-agents/leaderboards",
-              "evaluate-agents/create-benchmarks"
+              "evaluate-agents/benchmarks"
             ]
           },
           {

@@ -362,7 +362,7 @@ from hud.datasets import Task, run_dataset
 from hud.agents import ClaudeAgent
 
 # Load existing benchmark
-dataset = load_dataset("hud-evals/sheetbench-50", split="train")
+dataset = load_dataset("hud-evals/SheetBench-50", split="train")
 tasks = [Task(**task_dict) for task_dict in dataset]
 
 # Filter tasks
@@ -419,7 +419,7 @@ from hud.datasets import run_dataset
 with job("Nightly Benchmark Run", metadata={"version": "v2.1"}):
     results = await run_dataset_parallel(
         name="SheetBench Evaluation",
-        dataset="hud-evals/sheetbench-50",
+        dataset="hud-evals/SheetBench-50",
         agent_class=ClaudeAgent,
         agent_config={"model": "claude-3-5-sonnet-20241022"},
         max_concurrent=20
@@ -490,12 +490,12 @@ for i, result in enumerate(results):
 ## Next Steps
 
 <CardGroup cols={2}>
-<Card title="Create Tasks" icon="wrench" href="/evaluate-agents/custom-tasks">
-  Build custom evaluation scenarios
+<Card title="Benchmarks" icon="flask" href="/evaluate-agents/benchmarks">
+  Create, run, and publish evaluations
 </Card>
 
-<Card title="Training Datasets" icon="database" href="/train-agents/datasets">
-  Create datasets for RL training
+<Card title="Create Agents" icon="robot" href="/evaluate-agents/create-agents">
+  Build your own MCP-compatible agent
 </Card>
 </CardGroup>
 
