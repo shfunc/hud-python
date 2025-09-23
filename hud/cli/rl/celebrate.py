@@ -132,7 +132,9 @@ def show_confetti(console: Console, seconds: float = 2.5) -> None:
         seconds: Duration to show confetti
     """
     # Show celebratory message first
-    console.print("[bold green]🎉 Starting training! See your model on https://hud.so/models[/bold green]") # noqa: E501
+    console.print(
+        "[bold green]🎉 Starting training! See your model on https://hud.so/models[/bold green]"
+    )
     time.sleep(0.3)  # Brief pause to see the message
 
     width = min(console.size.width, 120)  # Cap width for performance

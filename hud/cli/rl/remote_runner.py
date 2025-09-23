@@ -58,7 +58,7 @@ def ensure_vllm_deployed(model_name: str, gpu_type: str = "A100", timeout: int =
                 hud_console.error("Timeout waiting for vLLM deployment")
                 raise ValueError("vLLM deployment timeout")
             info = rl_api.get_model(model_name)
-            if (info.vllm_url and info.status == "training") or info.status == "ready":
+            if info.status == "ready":
                 hud_console.success(
                     f"vLLM server ready at http://rl.hud.so/v1/models/{model_name}/vllm"
                 )
@@ -98,7 +98,7 @@ def run_remote_training(
             resolved_tasks.append(resolved)
 
         # Preview resolved task
-        if resolved_tasks:
+        if resolved_tasks and not yes:
             try:
                 show_json_interactive(resolved_tasks[0], title="Task Preview")
             except Exception as e:
@@ -159,10 +159,10 @@ def run_remote_training(
             choices.append({"name": "Create new model", "value": "__new__"})
 
             if not model:
-                if yes and active_models:
-                    # In yes mode, select the most recent model
-                    selected = active_models[0].name
-                    hud_console.info(f"Auto-selecting most recent model: {selected} (--yes mode)")
+                if yes:
+                    # In yes mode, always create a new model to avoid conflicts
+                    selected = "__new__"
+                    hud_console.info("Auto-creating new model (--yes mode)")
                 elif choices:
                     selected = hud_console.select("Select a model:", choices=choices)
                 else:

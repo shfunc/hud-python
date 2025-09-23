@@ -1119,7 +1119,7 @@ def rl(
     ),
     model: str | None = typer.Argument(
         None,
-        help="Model to train (default: interactive selection)",
+        help="Model to train from https://hud.so/models (default: interactive selection)",
     ),
     config_file: Path | None = typer.Option(  # noqa: B008
         None,

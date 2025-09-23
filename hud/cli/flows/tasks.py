@@ -195,7 +195,11 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
     """
     tasks_path = Path(tasks_file).resolve()
 
-    tasks = load_tasks(str(tasks_path))
+    # Load validated tasks for decision-making (may resolve env vars)
+    tasks: list[Task] = load_tasks(str(tasks_path))  # type: ignore[assignment]
+
+    # Load raw tasks to preserve placeholders when writing back to disk
+    raw_tasks: list[dict[str, Any]] = load_tasks(str(tasks_path), raw=True)  # type: ignore[assignment]
 
     # Ensure HUD_API_KEY is available: prefer process env, else load from env_dir/.env
     from hud.settings import settings
@@ -260,38 +264,37 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
 
     # If tasks are already remote and we just need to update the image
     if already_remote and should_update_image:
-        # Update image references in-place
-        def _update_image_refs(obj: Any) -> Any:
+        # Update image references in-place on RAW tasks (preserve placeholders)
+        def _update_image_refs_raw(obj: Any) -> Any:
             if isinstance(obj, dict):
                 new_obj = {}
                 for k, v in obj.items():
                     if k == "Mcp-Image" and isinstance(v, str) and v in existing_images:
                         new_obj[k] = remote_image
                     else:
-                        new_obj[k] = _update_image_refs(v)
+                        new_obj[k] = _update_image_refs_raw(v)
                 return new_obj
             elif isinstance(obj, list):
-                return [_update_image_refs(item) for item in obj]
+                return [_update_image_refs_raw(item) for item in obj]
             else:
                 return obj
 
-        # Update tasks with new image
-        updated_tasks = []
-        for task in tasks:
-            task_dict = task.model_dump() if hasattr(task, "model_dump") else dict(task)
-            if "mcp_config" in task_dict:
-                task_dict["mcp_config"] = _update_image_refs(task_dict["mcp_config"])
-            updated_tasks.append(task_dict)
+        updated_raw_tasks: list[dict[str, Any]] = []
+        for t in raw_tasks:
+            td = dict(t)
+            if "mcp_config" in td:
+                td["mcp_config"] = _update_image_refs_raw(td["mcp_config"])
+            updated_raw_tasks.append(td)
 
         # Write updated file (preserve original format - check if it's .jsonl)
         if tasks_path.suffix == ".jsonl":
             with open(tasks_path, "w", encoding="utf-8") as f:
-                for task in updated_tasks:
+                for task in updated_raw_tasks:
                     json.dump(task, f, ensure_ascii=False)
                     f.write("\n")
         else:
             with open(tasks_path, "w", encoding="utf-8") as f:
-                json.dump(updated_tasks, f, ensure_ascii=False, indent=2)
+                json.dump(updated_raw_tasks, f, ensure_ascii=False, indent=2)
                 f.write("\n")
 
         hud_console.success(f"Updated {tasks_path.name} with latest image: {remote_image}")
