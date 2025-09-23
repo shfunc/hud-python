@@ -38,7 +38,7 @@ HUD_API_KEY_MISSING = Hint(
     message="Missing or invalid HUD_API_KEY.",
     tips=[
         "Set HUD_API_KEY in your environment or run: hud set HUD_API_KEY=your-key-here",
-        "Get a key at https://app.hud.so",
+        "Get a key at https://hud.so",
         "Check for whitespace or truncation",
     ],
     docs_url=None,

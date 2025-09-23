@@ -5,6 +5,7 @@ import logging
 import uuid
 from collections import defaultdict
 from string import Template
+import contextlib
 from typing import Any, Literal
 
 import mcp.types as types
@@ -107,7 +108,13 @@ class Task(BaseModel):
 
         # Start with current environment variables
         mapping = dict(os.environ)
-        mapping.update(settings.model_dump())
+        # Include settings (from process env, project .env, and user .env)
+        settings_dict = settings.model_dump()
+        mapping.update(settings_dict)
+        # Add UPPERCASE aliases for settings keys
+        for _key, _val in settings_dict.items():
+            with contextlib.suppress(Exception):
+                mapping[_key.upper()] = _val
 
         if settings.api_key:
             mapping["HUD_API_KEY"] = settings.api_key
@@ -208,7 +215,7 @@ class AgentResponse(BaseModel):
     tool_calls: list[MCPToolCall] = Field(default_factory=list)
     done: bool = Field(default=False)
 
-    # --- TELEMETRY [app.hud.so] ---
+    # --- TELEMETRY [hud.so] ---
     # Responses
     content: str | None = Field(default=None)
     reasoning: str | None = Field(default=None)

@@ -99,7 +99,7 @@ save_tasks(tasks, repo_id="your-org/your-dataset")
 hud eval "your-org/your-dataset" --agent claude
 
 # View results at:
-# app.hud.so/leaderboards/your-org/your-dataset
+# hud.so/leaderboards/your-org/your-dataset
 ```
 
 **Note**: Only public HuggingFace datasets appear as leaderboards!

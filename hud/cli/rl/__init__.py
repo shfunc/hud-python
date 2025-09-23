@@ -136,7 +136,10 @@ def rl_command(
             from .remote_runner import run_remote_training
 
             run_remote_training(
-                tasks_file=tasks_file, model=model, config_file=config_file, output_dir=output_dir
+                tasks_file=tasks_file,
+                model=model,
+                config_file=config_file,
+                output_dir=output_dir,
             )
             return
         except Exception as e:
