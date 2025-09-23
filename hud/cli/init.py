@@ -21,7 +21,7 @@ GITHUB_BRANCH = "main"
 
 PRESET_MAP: dict[str, str | None] = {
     "blank": "blank",
-    "deep-research": "remote_browser",
+    "deep-research": "deepresearch",
     "browser": "browser",
 }
 
