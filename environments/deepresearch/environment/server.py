@@ -231,4 +231,7 @@ async def evaluate(req: EvaluateRequest) -> Dict[str, Any]:
 if __name__ == "__main__":
     import uvicorn
 
+    if not os.getenv("EXA_API_KEY"):
+        raise ValueError("EXA_API_KEY is not set")
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
