@@ -175,16 +175,33 @@ class MCPServer(FastMCP):
 
                     fn = self._initializer_fn
                     sig = inspect.signature(fn)
-                    needs_arg = any(
-                        p.kind
-                        in (
-                            inspect.Parameter.POSITIONAL_ONLY,
-                            inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                            inspect.Parameter.VAR_POSITIONAL,
-                        )
-                        for p in sig.parameters.values()
-                    )
-                    result = fn(ctx) if needs_arg else fn()
+                    params = sig.parameters
+
+                    ctx_param = params.get("ctx") or params.get("_ctx")
+                    if ctx_param is not None:
+                        if ctx_param.kind == inspect.Parameter.KEYWORD_ONLY:
+                            result = fn(**{ctx_param.name: ctx})
+                        else:
+                            result = fn(ctx)
+                    else:
+                        required_params = [
+                            p
+                            for p in params.values()
+                            if p.default is inspect._empty
+                            and p.kind
+                            in (
+                                inspect.Parameter.POSITIONAL_ONLY,
+                                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                                inspect.Parameter.KEYWORD_ONLY,
+                            )
+                        ]
+                        if required_params:
+                            param_list = ", ".join(p.name for p in required_params)
+                            raise TypeError(
+                                "Initializer must accept no args or a single `ctx` argument; "
+                                f"received required parameters: {param_list}"
+                            )
+                        result = fn()
                     if inspect.isawaitable(result):
                         await result
                     return None
