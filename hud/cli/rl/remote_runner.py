@@ -81,39 +81,63 @@ def run_remote_training(
         )
         raise ValueError("API key not found")
 
-    # Step 1: CONFIRMATION - Load tasks and show example
+    # Step 1: CONFIRMATION - Load tasks
     if tasks_file:
         tasks = load_tasks(tasks_file)
+        # Resolve tasks immediately after loading (validate + fill defaults)
+        from hud.types import Task
+
+        resolved_tasks: list[dict] = []
+        for t in tasks:
+            try:
+                resolved = Task(**t.model_dump()).model_dump()
+            except Exception:
+                resolved = t.model_dump()
+            resolved_tasks.append(resolved)
+
+        # Preview resolved task
+        if resolved_tasks:
+            try:
+                import importlib
+
+                viewer_mod = importlib.import_module("hud.cli.rl.viewer")
+                show_json_interactive = viewer_mod.show_json_interactive  # type: ignore[attr-defined]
+                show_json_interactive(resolved_tasks[0], title="Task Preview")
+            except Exception as e:
+                hud_console.warning(f"Interactive viewer failed: {e}")
     else:
         raise ValueError("Tasks file not found")
 
     # Show example task for confirmation
-    hud_console.section_title("Example Task from Dataset")
+    # hud_console.section_title("Example Task from Dataset")
 
-    if tasks:
-        # Display task with truncated values
-        task_data = tasks[0].model_dump()
-        truncated_data = {}
-        max_value_length = 120  # Maximum characters to show per line
+    # if tasks:
+    #     # Display task with truncated values
+    #     try:
+    #         task_data = resolved_tasks[0]
+    #     except Exception:
+    #         task_data = tasks[0].model_dump()
+    #     truncated_data = {}
+    #     max_value_length = 120  # Maximum characters to show per line
 
-        for key, value in task_data.items():
-            value_str = str(value)
-            if len(value_str) > max_value_length:
-                truncated_data[key] = value_str[:max_value_length] + "..."
-            else:
-                truncated_data[key] = value_str
+    #     for key, value in task_data.items():
+    #         value_str = str(value)
+    #         if len(value_str) > max_value_length:
+    #             truncated_data[key] = value_str[:max_value_length] + "..."
+    #         else:
+    #             truncated_data[key] = value_str
 
-        hud_console.key_value_table(truncated_data)
+    #     hud_console.key_value_table(truncated_data)
 
-        if not hud_console.confirm("Proceed with training on this dataset?", default=True):
-            hud_console.error("Training cancelled")
-            return
+    #     if not hud_console.confirm("Proceed with training on this dataset?", default=True):
+    #         hud_console.error("Training cancelled")
+    #         return
 
     # Step 2: MODEL SELECTION
     hud_console.section_title("Model Selection")
 
     # Fetch existing models
-    hud_console.info("Fetching your models from https://app.hud.so/models")
+    hud_console.info("Fetching your models from https://hud.so/models")
 
     try:
         models = rl_api.list_models()
@@ -325,6 +349,18 @@ def run_remote_training(
             ],
         )
 
+        try:
+            import importlib
+
+            viewer_mod = importlib.import_module("hud.cli.rl.viewer")
+            show_json_interactive = viewer_mod.show_json_interactive  # type: ignore[attr-defined]
+            show_json_interactive(
+                config.to_dict() if hasattr(config, "to_dict") else {},
+                title="RL Config Preview",
+            )
+        except Exception as e:
+            hud_console.warning(f"Interactive viewer failed: {e}")
+
         if edit_choice == "cancel":
             hud_console.error("Training cancelled")
             return
@@ -353,17 +389,18 @@ def run_remote_training(
 
     # Launch training
     try:
+
         rl_api.launch_training(
             model_name=model_name,
             config=config_dict,
-            tasks=[task.model_dump() for task in tasks],
+            tasks=resolved_tasks,
             gpu_type=gpu_choice,
             gpu_count=int(num_gpus),
         )
 
         hud_console.success("Training Started Successfully!")
 
-        hud_console.info(f"See your model {model_name} training on https://app.hud.so/models")
+        hud_console.info(f"See your model {model_name} training on https://hud.so/models")
         hud_console.hint("Launch another training run via: hud rl <tasks_file>")
         hud_console.hint("Or evaluate the model via: hud eval <tasks_file>")
 

@@ -152,6 +152,35 @@ def _extract_api_key_vars(lock_data: dict[str, Any]) -> set[str]:
     return provided_keys
 
 
+def _extract_dotenv_api_key_vars(env_dir: Path) -> set[str]:
+    """Parse .env for API-like variables to suggest as headers.
+
+    We intentionally include only keys that look like secrets to avoid noise:
+    any key containing one of: api, key, token, secret, password (case-insensitive).
+    """
+    dotenv_path = env_dir / ".env"
+    detected: set[str] = set()
+    if not dotenv_path.exists():
+        return detected
+    try:
+        for line in dotenv_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                continue
+            name, _ = line.split("=", 1)
+            name = name.strip()
+            lowered = name.lower()
+            if any(s in lowered for s in ("api", "key", "token", "secret", "password")):
+                detected.add(name)
+    except Exception:
+        # Best-effort only
+        return detected
+    detected.discard("HUD_API_KEY")
+    return detected
+
+
 def convert_tasks_to_remote(tasks_file: str) -> str:
     """Convert a local tasks file to remote MCP tasks and return new filename.
 
@@ -266,6 +295,28 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
         hud_console.success(f"Updated {tasks_path.name} with latest image: {remote_image}")
         return str(tasks_path)
 
+    # Extract additional API key headers from lock and suggest from .env
+    provided_keys = _extract_api_key_vars(lock_data)
+    dotenv_keys = _extract_dotenv_api_key_vars(env_dir)
+
+    # If .env contains API-like vars not in lock, offer to include them
+    missing = sorted(dotenv_keys - provided_keys)
+    if missing:
+        names_preview = ", ".join(missing)
+        prompt = (
+            f"Detected env vars in .env that look like API keys: {names_preview}.\n"
+            "Include them as remote headers (values will be ${VAR} placeholders)?"
+        )
+        if hud_console.confirm(prompt, default=True):
+            provided_keys.update(missing)
+
+    extra_api_key_headers: dict[str, str] = {}
+    for var_name in provided_keys:
+        if str(var_name).upper() == "HUD_API_KEY":
+            continue
+        header_key = _env_var_to_header_key(var_name)
+        extra_api_key_headers[header_key] = f"${{{var_name}}}"
+
     # Helper to strip extra fields from tool calls
     def _simplify_tool_call(tool: Any) -> Any:
         def _one(x: Any) -> dict[str, Any]:
@@ -286,17 +337,6 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
         if isinstance(tool, list):
             return [_one(x) for x in tool]
         return _one(tool)
-
-    # Extract additional API key headers from lock to include as placeholders
-    extra_api_key_headers: dict[str, str] = {}
-    for var_name in _extract_api_key_vars(lock_data):
-        header_key = _env_var_to_header_key(var_name)
-        # Use placeholder so we never write secrets to disk
-        value_placeholder = f"${{{var_name}}}"
-        # If the var is HUD_API_KEY, prefer Authorization header, skip explicit Env- header
-        if var_name.upper() == "HUD_API_KEY":
-            continue
-        extra_api_key_headers[header_key] = value_placeholder
 
     # Convert to list[dict]
     tasks_payload: list[dict[str, Any]] = []
@@ -331,7 +371,6 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
 
         tasks_payload.append(item)
 
-    # Write new file: remote_<name>.json (always JSON array)
     remote_name = f"remote_{tasks_path.stem}.json"
     remote_path = tasks_path.parent / remote_name
     with open(remote_path, "w", encoding="utf-8") as f:
