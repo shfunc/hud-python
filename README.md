@@ -117,8 +117,8 @@ This is a Qwen‑2.5‑VL‑3B agent training a policy on the 2048-basic browser
 Train with the new interactive `hud rl` flow:
 
 ```bash
-# Install CLI with RL extras
-uv tool install "hud-python[rl]"
+# Install CLI
+uv tool install hud-python
 
 # Option A: Run directly from a HuggingFace dataset
 hud rl hud-evals/basic-2048

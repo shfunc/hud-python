@@ -85,9 +85,9 @@ def _prompt_for_preset() -> str:
     """Ask the user to choose a preset when not provided."""
     try:
         choices = [
-            {"name": "blank", "message": "blank │ minimal template"},
-            {"name": "deep-research", "message": "deep-research │ remote browser preset"},
-            {"name": "browser", "message": "browser │ local browser preset"},
+            {"name": "blank", "message": "blank"},
+            {"name": "deep-research", "message": "deep-research"},
+            {"name": "browser", "message": "browser"},
         ]
         display_choices = [c["message"] for c in choices]
         selected = questionary.select(
