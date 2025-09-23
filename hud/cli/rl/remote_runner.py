@@ -85,7 +85,7 @@ def run_remote_training(
 
     # Step 1: CONFIRMATION - Load tasks
     if tasks_file:
-        tasks = load_tasks(tasks_file)
+        tasks: list[Task] = load_tasks(tasks_file)  # type: ignore[assignment]
         # Resolve tasks immediately after loading (validate + fill defaults)
         from hud.types import Task
 

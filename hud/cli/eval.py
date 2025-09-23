@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import typer
 
@@ -15,6 +15,8 @@ from hud.settings import settings
 from hud.utils.group_eval import display_group_statistics, run_tasks_grouped
 from hud.utils.hud_console import HUDConsole
 
+if TYPE_CHECKING:
+    from hud.types import Task
 logger = logging.getLogger(__name__)
 hud_console = HUDConsole()
 
@@ -193,7 +195,7 @@ async def run_single_task(
         hud_console.info("📊 Loading task file…")
 
         # Use unified loader for both JSON and JSONL
-        tasks = load_tasks(str(path))
+        tasks: list[Task] = load_tasks(str(path))  # type: ignore[assignment]
 
         # If tasks reference a local environment (nearby), ensure it's built/up-to-date.
         try:
@@ -210,7 +212,7 @@ async def run_single_task(
     else:
         # Load from HuggingFace dataset or non-file source
         hud_console.info(f"📊 Loading tasks from: {source}…")
-        tasks = load_tasks(source)
+        tasks: list[Task] = load_tasks(source)  # type: ignore[assignment]
 
         if not tasks:
             hud_console.error(f"No tasks found in: {source}")
@@ -332,7 +334,7 @@ async def run_full_dataset(
 
     # Load tasks using unified loader
     hud_console.info(f"📊 Loading tasks from: {source}…")
-    tasks = load_tasks(source)
+    tasks: list[Task] = load_tasks(source)  # type: ignore[assignment]
 
     if not tasks:
         hud_console.error(f"No tasks found in: {source}")
