@@ -36,7 +36,6 @@ def load_tasks(tasks_input: str | list[dict]) -> list[Task]:
         # Check if it's a file path
         if Path(tasks_input).exists():
             file_path = Path(tasks_input)
-            hud_console.info(f"Loading tasks from file: {tasks_input}")
 
             with open(file_path) as f:
                 # Handle JSON files (array of tasks)

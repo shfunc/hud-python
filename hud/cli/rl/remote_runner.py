@@ -58,7 +58,7 @@ def ensure_vllm_deployed(model_name: str, gpu_type: str = "A100", timeout: int =
                 hud_console.error("Timeout waiting for vLLM deployment")
                 raise ValueError("vLLM deployment timeout")
             info = rl_api.get_model(model_name)
-            if info.vllm_url or info.status == "ready":
+            if (info.vllm_url and info.status == "training") or info.status == "ready":
                 hud_console.success(
                     f"vLLM server ready at http://rl.hud.so/v1/models/{model_name}/vllm"
                 )
@@ -440,7 +440,7 @@ def run_remote_training(
             gpu_count=int(num_gpus),
         )
 
-        hud_console.info(f"See your model {model_name} training on https://hud.so/models")
+        hud_console.info(f"Your model {model_name} has started training")
         hud_console.hint("Launch another training run via: hud rl <tasks_file>")
         hud_console.hint("Or evaluate the model via: hud eval <tasks_file>")
 
