@@ -11,8 +11,8 @@ import requests
 import typer
 import yaml
 
-from hud.utils.hud_console import HUDConsole
 from hud.cli.utils.env_check import ensure_built
+from hud.utils.hud_console import HUDConsole
 
 
 def _get_response_text(response: requests.Response) -> str:

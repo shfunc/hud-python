@@ -35,7 +35,7 @@ def _run_with_sigterm(coro_fn: Callable[..., Any], *args: Any, **kwargs: Any) ->
     global _sigterm_received
 
     sys.stderr.flush()
-    
+
     # Check if we're already in an event loop
     try:
         loop = asyncio.get_running_loop()
@@ -44,19 +44,20 @@ def _run_with_sigterm(coro_fn: Callable[..., Any], *args: Any, **kwargs: Any) ->
             "SIGTERM handling may be limited. "
             "Consider using await hub.run_async() instead of hub.run() in async contexts."
         )
-        
+
         task = loop.create_task(coro_fn(*args, **kwargs))
-        
+
         # Try to handle SIGTERM if possible
         if sys.platform != "win32":
+
             def handle_sigterm(signum: Any, frame: Any) -> None:
                 logger.info("SIGTERM received in async context, cancelling task...")
                 loop.call_soon_threadsafe(task.cancel)
-            
+
             signal.signal(signal.SIGTERM, handle_sigterm)
-            
+
         return
-        
+
     except RuntimeError:
         pass
 

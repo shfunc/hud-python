@@ -14,7 +14,10 @@ from __future__ import annotations
 import hashlib
 import os
 from pathlib import Path
-from collections.abc import Iterable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 EXCLUDE_DIRS = {
     ".git",
@@ -103,5 +106,3 @@ def compute_source_hash(directory: str | Path) -> str:
                 hasher.update(chunk)
 
     return hasher.hexdigest()
-
-

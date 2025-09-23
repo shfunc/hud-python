@@ -6,14 +6,15 @@ This module implements the new interactive flow for RL training.
 
 from __future__ import annotations
 
-import os
-import subprocess
 import time
 import uuid
 from pathlib import Path
 
 from rich.console import Console
 
+from hud.cli.rl.celebrate import show_confetti_async
+from hud.cli.rl.viewer import show_json_interactive
+from hud.cli.rl.wait_utils import wait_for_enter_cancel_or_change
 from hud.utils.hud_console import hud_console
 from hud.utils.tasks import load_tasks
 
@@ -70,6 +71,7 @@ def run_remote_training(
     model: str | None,
     config_file: Path | None,
     output_dir: str,
+    yes: bool = False,
 ) -> None:
     """Run RL training remotely via the API server following the new interactive flow."""
     from hud.settings import settings
@@ -98,10 +100,6 @@ def run_remote_training(
         # Preview resolved task
         if resolved_tasks:
             try:
-                import importlib
-
-                viewer_mod = importlib.import_module("hud.cli.rl.viewer")
-                show_json_interactive = viewer_mod.show_json_interactive  # type: ignore[attr-defined]
                 show_json_interactive(resolved_tasks[0], title="Task Preview")
             except Exception as e:
                 hud_console.warning(f"Interactive viewer failed: {e}")
@@ -161,7 +159,11 @@ def run_remote_training(
             choices.append({"name": "Create new model", "value": "__new__"})
 
             if not model:
-                if choices:
+                if yes and active_models:
+                    # In yes mode, select the most recent model
+                    selected = active_models[0].name
+                    hud_console.info(f"Auto-selecting most recent model: {selected} (--yes mode)")
+                elif choices:
                     selected = hud_console.select("Select a model:", choices=choices)
                 else:
                     selected = "__new__"
@@ -179,14 +181,18 @@ def run_remote_training(
             hud_console.info("Creating new model...")
 
             # Ask for model type
-            model_type = hud_console.select(
-                "Select base model type:",
-                choices=[
-                    {"name": "Qwen2.5-VL-3B-Instruct", "value": "Qwen/Qwen2.5-VL-3B-Instruct"},
-                    # {"name": "Qwen2.5-VL-7B-Instruct", "value": "Qwen/Qwen2.5-VL-7B-Instruct"},
-                ],
-                default=0,
-            )
+            if yes:
+                model_type = "Qwen/Qwen2.5-VL-3B-Instruct"  # Default model in yes mode
+                hud_console.info(f"Auto-selecting base model: {model_type} (--yes mode)")
+            else:
+                model_type = hud_console.select(
+                    "Select base model type:",
+                    choices=[
+                        {"name": "Qwen2.5-VL-3B-Instruct", "value": "Qwen/Qwen2.5-VL-3B-Instruct"},
+                        # {"name": "Qwen2.5-VL-7B-Instruct", "value": "Qwen/Qwen2.5-VL-7B-Instruct"}, # noqa: E501
+                    ],
+                    default=0,
+                )
             from rich.prompt import Prompt
 
             # Ask for model name
@@ -198,9 +204,13 @@ def run_remote_training(
                 default_name = f"{base_default}-{suffix}"
                 suffix += 1
 
-            hud_console.info(f"Enter model name (default: {default_name}):")
-            model_name = Prompt.ask("Model name", default=default_name)
-            model_name = model_name.replace("/", "-").lower()
+            if yes:
+                model_name = default_name
+                hud_console.info(f"Auto-using model name: {model_name} (--yes mode)")
+            else:
+                hud_console.info(f"Enter model name (default: {default_name}):")
+                model_name = Prompt.ask("Model name", default=default_name)
+                model_name = model_name.replace("/", "-").lower()
 
             # Create the model with retry on name conflict
             hud_console.info(f"Creating model: {model_name}")
@@ -227,7 +237,11 @@ def run_remote_training(
                     try:
                         from rich.prompt import Prompt as _Prompt
 
-                        chosen = _Prompt.ask("Use different name", default=alt_name)
+                        if yes:
+                            chosen = alt_name
+                            hud_console.info(f"Auto-using suggested name: {chosen} (--yes mode)")
+                        else:
+                            chosen = _Prompt.ask("Use different name", default=alt_name)
                         chosen = chosen.replace("/", "-").lower()
                         rl_api.create_model(chosen, model_type)
                         hud_console.success(f"Created model: {chosen}")
@@ -247,7 +261,11 @@ def run_remote_training(
 
             # Check if model is in training
             if model_info.status == "training":
-                if hud_console.confirm(
+                if yes:
+                    # In yes mode, skip training if model is already training
+                    hud_console.warning(f"{model_name} is already training, skipping (--yes mode)")
+                    return
+                elif hud_console.confirm(
                     f"{model_name} is currently training. Stop current training?", default=False
                 ):
                     hud_console.info(f"Stopping training for {model_name}...")
@@ -290,25 +308,33 @@ def run_remote_training(
 
         # console.print(gpu_table)
 
-        gpu_choice = hud_console.select(
-            "Select GPU type:",
-            choices=[
-                {"name": "A100 80GB", "value": "A100"},
-                {"name": "H100 80GB", "value": "H100"},
-            ],
-            default=0,
-        )
+        if yes:
+            gpu_choice = "A100"  # Default GPU in yes mode
+            hud_console.info(f"Auto-selecting GPU: {gpu_choice} 80GB (--yes mode)")
+        else:
+            gpu_choice = hud_console.select(
+                "Select GPU type:",
+                choices=[
+                    {"name": "A100 80GB", "value": "A100"},
+                    {"name": "H100 80GB", "value": "H100"},
+                ],
+                default=0,
+            )
 
-        num_gpus = hud_console.select(
-            "Number of GPUs:",
-            choices=[
-                {"name": "1 GPU", "value": 1},
-                {"name": "2 GPUs", "value": 2},
-                {"name": "4 GPUs", "value": 4},
-                {"name": "8 GPUs", "value": 8},
-            ],
-            default=1,
-        )
+        if yes:
+            num_gpus = 1  # Default to 1 GPU in yes mode
+            hud_console.info(f"Auto-selecting {num_gpus} GPU(s) (--yes mode)")
+        else:
+            num_gpus = hud_console.select(
+                "Number of GPUs:",
+                choices=[
+                    {"name": "1 GPU", "value": 1},
+                    {"name": "2 GPUs", "value": 2},
+                    {"name": "4 GPUs", "value": 4},
+                    {"name": "8 GPUs", "value": 8},
+                ],
+                default=1,
+            )
 
         # Generate config with presets
         hud_console.info("Generating training configuration...")
@@ -318,6 +344,7 @@ def run_remote_training(
         config, _ = generate_config_interactive(
             model_name=model_info.base_model,
             presets=presets,
+            yes=yes,
         )
 
         # Use a short label for tasks (avoid full absolute paths)
@@ -332,51 +359,61 @@ def run_remote_training(
 
         config.job_name = f"RL {model_name} on {tasks_label}"
 
-        # Save config for editing
+        # Save config so user can review/edit externally
         temp_config_path = Path(f".rl_config_temp_{model_name}.json")
         save_config(config, temp_config_path)
 
-        # Ask to edit config
+        # Interactive review loop: show preview, allow external edits, press Enter to start
         hud_console.info(
             f"Using training configuration from [underline cyan]{temp_config_path.absolute()}[/underline cyan]"  # noqa: E501
         )
-        edit_choice = hud_console.select(
-            "Would you like to start training?",
-            choices=[
-                {"name": "🚀 Start training!", "value": "start"},
-                {"name": "✏️  Review configuration", "value": "edit"},
-                {"name": "❌ Cancel", "value": "cancel"},
-            ],
-        )
 
-        try:
-            import importlib
-
-            viewer_mod = importlib.import_module("hud.cli.rl.viewer")
-            show_json_interactive = viewer_mod.show_json_interactive  # type: ignore[attr-defined]
-            show_json_interactive(
-                config.to_dict() if hasattr(config, "to_dict") else {},
-                title="RL Config Preview",
-            )
-        except Exception as e:
-            hud_console.warning(f"Interactive viewer failed: {e}")
-
-        if edit_choice == "cancel":
-            hud_console.error("Training cancelled")
-            return
-        elif edit_choice == "edit":
-            # Open editor
-            editor = os.environ.get("EDITOR", "nano")
-            hud_console.info(f"Opening {editor} to edit configuration...")
-
+        if yes:
+            # In yes mode, skip the interactive review loop
+            hud_console.info("Auto-accepting config (--yes mode)")
+            # Still show the config briefly
             try:
-                subprocess.run([editor, str(temp_config_path)], check=True)  # noqa: S603
-                # Reload config
-                config = load_config(temp_config_path)
-                hud_console.success("Configuration updated")
+                show_json_interactive(
+                    config.to_dict() if hasattr(config, "to_dict") else {},
+                    title="RL Config Preview",
+                    prompt=False,
+                )
             except Exception as e:
-                hud_console.error(f"Failed to edit config: {e}")
-                return
+                hud_console.warning(f"Interactive viewer failed: {e}")
+        else:
+            while True:
+                # Reload latest config from file each cycle
+                try:
+                    config = load_config(temp_config_path)
+                except Exception as e:
+                    hud_console.warning(f"Failed to load config from disk, using in-memory: {e}")
+
+                # Preview current config (no extra prompt here; main loop handles start/cancel)
+                try:
+                    show_json_interactive(
+                        config.to_dict() if hasattr(config, "to_dict") else {},
+                        title="RL Config Preview",
+                        prompt=False,
+                    )
+                except Exception as e:
+                    hud_console.warning(f"Interactive viewer failed: {e}")
+
+                console.print(
+                    "\n[dim]Edit the config file above if needed, then save.[/dim]\n"
+                    "[bold]Press Enter to start training[/bold], or press 'q' to cancel."
+                )
+
+                start_training, cancelled, changed = wait_for_enter_cancel_or_change(
+                    temp_config_path
+                )
+
+                if cancelled:
+                    hud_console.error("Training cancelled")
+                    return
+                if start_training:
+                    break  # proceed
+                if changed:
+                    hud_console.info("Detected configuration changes. Reloading preview...")
 
         config_dict = config.to_dict()
     else:
@@ -389,6 +426,11 @@ def run_remote_training(
 
     # Launch training
     try:
+        # Little celebration before launching
+        try:
+            show_confetti_async(console)
+        except Exception:
+            hud_console.info("Launching training...")
 
         rl_api.launch_training(
             model_name=model_name,
@@ -397,8 +439,6 @@ def run_remote_training(
             gpu_type=gpu_choice,
             gpu_count=int(num_gpus),
         )
-
-        hud_console.success("Training Started Successfully!")
 
         hud_console.info(f"See your model {model_name} training on https://hud.so/models")
         hud_console.hint("Launch another training run via: hud rl <tasks_file>")

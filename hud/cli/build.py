@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import subprocess
 import time
@@ -13,10 +14,10 @@ from typing import Any
 import typer
 import yaml
 
+from hud.cli.utils.source_hash import compute_source_hash, list_source_files
 from hud.clients import MCPClient
 from hud.utils.hud_console import HUDConsole
 from hud.version import __version__ as hud_version
-from hud.cli.utils.source_hash import compute_source_hash, list_source_files
 
 from .utils.registry import save_to_registry
 
@@ -429,7 +430,7 @@ def build_environment(
         yaml.dump(lock_content, f, default_flow_style=False, sort_keys=False)
 
     # Also write the file list we hashed for transparency (non-essential)
-    try:
+    with contextlib.suppress(Exception):
         files = [
             str(p.resolve().relative_to(env_dir)).replace("\\", "/")
             for p in list_source_files(env_dir)
@@ -437,9 +438,6 @@ def build_environment(
         lock_content["build"]["sourceFiles"] = files
         with open(lock_path, "w") as f:
             yaml.dump(lock_content, f, default_flow_style=False, sort_keys=False)
-    except Exception:
-        # Best-effort; do not fail the build if listing fails
-        pass
 
     hud_console.success("Created lock file: hud.lock.yaml")
 

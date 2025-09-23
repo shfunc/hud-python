@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
 def _is_remote_url(url: str) -> bool:
     """Match the remote url."""
     # See if a url is a remote url
@@ -53,6 +54,7 @@ def _validate_tasks(tasks: list[Task]) -> bool:
         if not _has_remote_url(cfg):
             return False
     return True
+
 
 def _ensure_pushed(env_dir: Path, lock_data: dict[str, Any]) -> dict[str, Any]:
     """Ensure the environment is pushed to a registry; return updated lock data."""
@@ -101,7 +103,7 @@ def _derive_remote_image(lock_data: dict[str, Any]) -> str:
 def _extract_existing_images(tasks: list[Task]) -> set[str]:
     """Extract all Mcp-Image references from tasks."""
     images = set()
-    
+
     def _extract_from_obj(obj: Any) -> None:
         if isinstance(obj, dict):
             # Check for Mcp-Image in headers
@@ -115,11 +117,11 @@ def _extract_existing_images(tasks: list[Task]) -> set[str]:
         elif isinstance(obj, list):
             for item in obj:
                 _extract_from_obj(item)
-    
+
     for task in tasks:
         if task.mcp_config:
             _extract_from_obj(task.mcp_config)
-    
+
     return images
 
 
@@ -205,10 +207,10 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
 
     # Check if tasks already have remote URLs
     already_remote = _validate_tasks(tasks)
-    
+
     # Extract existing images from tasks
     existing_images = _extract_existing_images(tasks)
-    
+
     # Load tasks (supports .json and .jsonl)
     if already_remote and not existing_images:
         # Tasks are remote but have no image references - just return as-is
@@ -227,7 +229,7 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
 
     # Derive remote image name org/name:tag
     remote_image = _derive_remote_image(lock_data)
-    
+
     # Check if existing images are outdated
     needs_update = False
     should_update_image = False
@@ -239,7 +241,7 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
                 hud_console.info(f"Latest pushed image: {remote_image}")
                 needs_update = True
                 break
-        
+
         if needs_update:
             confirm_msg = "Update task configuration with the latest image?"
             if hud_console.confirm(confirm_msg, default=True):
@@ -255,7 +257,7 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
     # If tasks are already remote and up-to-date (no update needed), return original file
     if already_remote and not needs_update:
         return str(tasks_path)
-                
+
     # If tasks are already remote and we just need to update the image
     if already_remote and should_update_image:
         # Update image references in-place
@@ -272,7 +274,7 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
                 return [_update_image_refs(item) for item in obj]
             else:
                 return obj
-        
+
         # Update tasks with new image
         updated_tasks = []
         for task in tasks:
@@ -280,7 +282,7 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
             if "mcp_config" in task_dict:
                 task_dict["mcp_config"] = _update_image_refs(task_dict["mcp_config"])
             updated_tasks.append(task_dict)
-        
+
         # Write updated file (preserve original format - check if it's .jsonl)
         if tasks_path.suffix == ".jsonl":
             with open(tasks_path, "w", encoding="utf-8") as f:
@@ -291,7 +293,7 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
             with open(tasks_path, "w", encoding="utf-8") as f:
                 json.dump(updated_tasks, f, ensure_ascii=False, indent=2)
                 f.write("\n")
-        
+
         hud_console.success(f"Updated {tasks_path.name} with latest image: {remote_image}")
         return str(tasks_path)
 

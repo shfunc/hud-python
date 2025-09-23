@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import uuid
 from collections import defaultdict
 from string import Template
-import contextlib
 from typing import Any, Literal
 
 import mcp.types as types

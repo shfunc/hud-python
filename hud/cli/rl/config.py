@@ -21,22 +21,29 @@ console = Console()
 def generate_config_interactive(
     model_name: str,
     presets: list[dict[str, Any]],
+    yes: bool = False,
 ) -> tuple[Config, float]:
     """Generate RL training configuration interactively."""
     # Validate model is a VL model
     validate_vl_model(model_name)
 
     # Display preset options
-    display_preset_table(presets, 80.0)  # Assuming A100 80GB
+    if not yes:
+        display_preset_table(presets, 80.0)  # Assuming A100 80GB
 
     # Let user select preset
-    preset_choice = hud_console.select(
-        "Select a training configuration preset:",
-        choices=[{"name": p["name"], "value": i} for i, p in enumerate(presets)],
-        default=1 if len(presets) > 1 else 0,  # Default to "Balanced" if available
-    )
-
-    selected_preset = presets[preset_choice]  # type: ignore
+    if yes:
+        # Use default preset (Balanced if available, otherwise first)
+        preset_choice = 1 if len(presets) > 1 else 0
+        selected_preset = presets[preset_choice]
+        hud_console.info(f"Auto-selecting preset: {selected_preset['name']} (--yes mode)")
+    else:
+        preset_choice = hud_console.select(
+            "Select a training configuration preset:",
+            choices=[{"name": p["name"], "value": i} for i, p in enumerate(presets)],
+            default=1 if len(presets) > 1 else 0,  # Default to "Balanced" if available
+        )
+        selected_preset = presets[preset_choice]  # type: ignore
 
     # Use preset values directly
     max_steps_per_episode = selected_preset["max_steps_per_episode"]

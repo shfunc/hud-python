@@ -56,77 +56,86 @@ def _truncate_value(value: Any, max_len: int = 60) -> str:
 
 
 def show_json_interactive(
-    data: Any, *, title: str | None = None, max_string_len: int = 60
+    data: Any,
+    *,
+    title: str | None = None,
+    max_string_len: int = 60,
+    prompt: bool = True,
+    initial_expanded: bool = False,
 ) -> None:
-    """Display JSON inline with keyboard-based expand/collapse.
-    
-    This uses an inline approach that works within the normal terminal flow,
-    avoiding fullscreen mode. Mouse clicks are not supported in inline mode
-    due to terminal limitations - we cannot determine absolute screen positions
-    for click detection without controlling the entire screen.
-    """
+    """Display JSON inline with keyboard-based expand/collapse."""
     console = Console()
     safe_data = _mask_secrets(data)
-    
+
     # Create preview table
     table = Table(show_header=False, box=None, padding=(0, 1))
     table.add_column("Key", style="cyan", no_wrap=True)
     table.add_column("Value", style="green")
-    
+
     if title:
         console.print(f"\n[bold cyan]{title}[/bold cyan]")
-    
+
     # Show preview
     if isinstance(safe_data, dict):
         items = list(safe_data.items())
-        for i, (key, value) in enumerate(items[:5]):
+        for _, (key, value) in enumerate(items[:5]):
             truncated = _truncate_value(value, max_string_len)
             table.add_row(key + ":", truncated)
-        
+
         if len(items) > 5:
             table.add_row("", f"[dim]... and {len(items) - 5} more items[/dim]")
     else:
         table.add_row("", _truncate_value(safe_data, max_string_len))
-    
+
     # Display with border
-    console.print(Panel(table, expand=False, border_style="dim"))
-    
-    # Prompt for expansion
+    if not initial_expanded:
+        console.print(Panel(table, expand=False, border_style="dim"))
+    else:
+        # Expanded view
+        if title:
+            console.rule(f"[bold cyan]{title} (expanded)[/bold cyan]")
+        try:
+            console.print(RichJSON.from_data(safe_data))
+        except Exception:
+            console.print(json.dumps(safe_data, indent=2))
+
+    if not prompt:
+        console.print()
+        return
+
+    # Prompt for expansion (interactive mode)
     console.print("[dim]Press 'e' to expand, Enter to continue[/dim] ", end="")
-    
+
     try:
         term = Terminal()
         with term.cbreak():
             key = term.inkey(timeout=30)  # 30 second timeout
-            if key and key.lower() == 'e':
-                # Show expanded view
+            if key and key.lower() == "e":
                 console.print()  # New line
                 if title:
                     console.rule(f"[bold cyan]{title} (expanded)[/bold cyan]")
-                
+
                 try:
                     console.print(RichJSON.from_data(safe_data))
                 except Exception:
-                    # Fallback to plain JSON
                     console.print(json.dumps(safe_data, indent=2))
-                
+
                 console.print("\n[dim]Press Enter to continue...[/dim]")
                 term.inkey()
     except Exception:
         console.print()  # Ensure we're on a new line
         choice = input().strip().lower()
-        
-        if choice == 'e':
+
+        if choice == "e":
             if title:
                 console.rule(f"[bold cyan]{title} (expanded)[/bold cyan]")
-            
+
             try:
                 console.print(RichJSON.from_data(safe_data))
             except Exception:
                 console.print(json.dumps(safe_data, indent=2))
-            
+
             console.print("\n[dim]Press Enter to continue...[/dim]")
             input()
-    
-    # Always end with a blank line for spacing
+
     console.print()

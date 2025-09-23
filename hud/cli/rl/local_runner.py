@@ -30,6 +30,7 @@ def run_local_training(
     model: str | None,
     config_file: Path | None,
     output_dir: str,
+    yes: bool,
     restart: bool,
     verbose: bool,
     no_ddp: bool,
@@ -63,8 +64,11 @@ def run_local_training(
         try:
             import typer
 
-            if not typer.confirm("\nDo you want to continue anyway?", default=False):
-                raise typer.Exit(1)
+            if not yes:
+                if not typer.confirm("\nDo you want to continue anyway?", default=False):
+                    raise typer.Exit(1)
+            else:
+                hud_console.warning("Auto-continuing despite Python 3.13+ (--yes mode)")
         except Exception as e:
             hud_console.warning(f"Failed to confirm: {e}")
             return
@@ -113,7 +117,13 @@ def run_local_training(
         try:
             import typer
 
-            continue_training = typer.confirm("\nContinue with healthy GPUs only?", default=True)
+            if yes:
+                continue_training = True
+                hud_console.info("Auto-continuing with healthy GPUs only (--yes mode)")
+            else:
+                continue_training = typer.confirm(
+                    "\nContinue with healthy GPUs only?", default=True
+                )
         except Exception:
             continue_training = True
 
@@ -200,21 +210,25 @@ def run_local_training(
 
     # Step 3: Model selection (if not provided)
     if model is None and not config_file:
-        model = hud_console.select(
-            "Select a model for RL training:",
-            choices=[
-                {
-                    "name": "Qwen 2.5 VL 3B (Recommended - Vision-Language)",
-                    "value": "Qwen/Qwen2.5-VL-3B-Instruct",
-                },
-                {"name": "Custom model", "value": "custom"},
-            ],
-            default=0,
-        )
+        if yes:
+            model = "Qwen/Qwen2.5-VL-3B-Instruct"  # Default model in yes mode
+            hud_console.info(f"Auto-selecting model: {model} (--yes mode)")
+        else:
+            model = hud_console.select(
+                "Select a model for RL training:",
+                choices=[
+                    {
+                        "name": "Qwen 2.5 VL 3B (Recommended - Vision-Language)",
+                        "value": "Qwen/Qwen2.5-VL-3B-Instruct",
+                    },
+                    {"name": "Custom model", "value": "custom"},
+                ],
+                default=0,
+            )
 
-        if model == "custom":
-            console.print("Enter the model name (HuggingFace ID):")
-            model = input().strip()
+            if model == "custom":
+                console.print("Enter the model name (HuggingFace ID):")
+                model = input().strip()
 
     # Validate model is a VL model (whether provided via CLI or selected)
     if model:
@@ -277,6 +291,7 @@ def run_local_training(
         config, estimated_memory = generate_config_interactive(
             model_name=model,
             presets=presets,
+            yes=yes,
         )
 
     # Step 5: Save temporary config and display summary
@@ -288,8 +303,8 @@ def run_local_training(
     # Display configuration summary
     display_config_summary(config, len(tasks), gpu_info, estimated_memory)
 
-    # Step 6: Ask for confirmation (skip if config was provided)
-    if not config_file:
+    # Step 6: Ask for confirmation (skip if config was provided or in yes mode)
+    if not config_file and not yes:
         console.print("\n[bold yellow]Options:[/bold yellow]")
         console.print("  • Type [green]'start'[/green] to begin training")
         console.print("  • Type [cyan]'edit'[/cyan] to open config in your editor")
@@ -346,7 +361,12 @@ def run_local_training(
                 try:
                     import typer
 
-                    if typer.confirm("Save this configuration for later?", default=True):
+                    if yes:
+                        # Always save in yes mode
+                        config_path = Path("rl_config.json")
+                        save_config(config, config_path)
+                        hud_console.info("Auto-saved configuration (--yes mode)")
+                    elif typer.confirm("Save this configuration for later?", default=True):
                         config_path = Path("rl_config.json")
                         save_config(config, config_path)
                 except Exception as e:
@@ -367,6 +387,10 @@ def run_local_training(
                 console.print(
                     "[red]Invalid choice. Type 'start', 'edit', or 'cancel':[/red] ", end=""
                 )
+    elif yes:
+        # In yes mode, auto-start training
+        hud_console.info("Auto-starting training (--yes mode)")
+        config = load_config(temp_config_path)
     else:
         console.print("\n[dim]Using provided configuration file...[/dim]")
         config = load_config(temp_config_path)

@@ -72,6 +72,12 @@ def rl_command(
         "--local",
         help="Run training locally instead of using remote API server",
     ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        help="Auto-accept all prompts and use defaults (lazy mode)",
+    ),
     # Internal flag
     skip_vllm_startup: bool = typer.Option(
         False,
@@ -140,6 +146,7 @@ def rl_command(
                 model=model,
                 config_file=config_file,
                 output_dir=output_dir,
+                yes=yes,
             )
             return
         except Exception as e:
@@ -154,6 +161,7 @@ def rl_command(
         model=model,
         config_file=config_file,
         output_dir=output_dir,
+        yes=yes,
         restart=restart,
         verbose=verbose,
         no_ddp=no_ddp,

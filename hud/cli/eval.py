@@ -10,10 +10,10 @@ from typing import Any, Literal
 import typer
 
 import hud
+from hud.cli.utils.env_check import ensure_built, find_environment_dir
 from hud.settings import settings
 from hud.utils.group_eval import display_group_statistics, run_tasks_grouped
 from hud.utils.hud_console import HUDConsole
-from hud.cli.utils.env_check import ensure_built, find_environment_dir
 
 logger = logging.getLogger(__name__)
 hud_console = HUDConsole()

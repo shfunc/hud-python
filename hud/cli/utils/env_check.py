@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Environment build checks and discovery helpers.
 
 Shared utilities to:
@@ -7,9 +5,12 @@ Shared utilities to:
 - ensure the environment is built and up-to-date via source hash comparison
 """
 
+from __future__ import annotations
+
+import contextlib
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from datetime import datetime, timezone
 
 import typer
 import yaml
@@ -33,7 +34,7 @@ def _parse_generated_at(lock_data: dict[str, Any]) -> float | None:
         iso = generated_at.replace("Z", "+00:00")
         dt = datetime.fromisoformat(iso)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return dt.timestamp()
     except Exception:
         return None
@@ -55,9 +56,7 @@ def _collect_source_diffs(env_dir: Path, lock_data: dict[str, Any]) -> dict[str,
 
     current_paths = list_source_files(env_dir)
     # Normalize to POSIX-style relative strings
-    current_list = [
-        str(p.resolve().relative_to(env_dir)).replace("\\", "/") for p in current_paths
-    ]
+    current_list = [str(p.resolve().relative_to(env_dir)).replace("\\", "/") for p in current_paths]
     current_set = set(current_list)
 
     added = sorted(current_set - stored_set)
@@ -68,13 +67,10 @@ def _collect_source_diffs(env_dir: Path, lock_data: dict[str, Any]) -> dict[str,
     built_ts = _parse_generated_at(lock_data)
     if built_ts is not None:
         for rel in sorted(current_set & (stored_set or current_set)):
-            try:
+            with contextlib.suppress(Exception):
                 p = env_dir / rel
                 if p.exists() and p.stat().st_mtime > built_ts:
                     modified.append(rel)
-            except Exception:
-                # Best-effort; skip unreadable files
-                continue
 
     return {"added": added, "removed": removed, "modified": modified}
 
@@ -130,9 +126,7 @@ def ensure_built(env_dir: Path, *, interactive: bool = True) -> dict[str, Any]:
     if not lock_path.exists():
         if interactive:
             hud_console.warning("No hud.lock.yaml found. The environment hasn't been built.")
-            ok = hud_console.confirm(
-                "Build the environment now (runs 'hud build')?", default=True
-            )
+            ok = hud_console.confirm("Build the environment now (runs 'hud build')?", default=True)
             if not ok:
                 raise typer.Exit(1)
             require_docker_running()
@@ -164,6 +158,7 @@ def ensure_built(env_dir: Path, *, interactive: bool = True) -> dict[str, Any]:
 
             # Show a brief diff summary to help users understand changes
             diffs = _collect_source_diffs(env_dir, lock_data)
+
             def _print_section(name: str, items: list[str]) -> None:
                 if not items:
                     return
@@ -187,9 +182,7 @@ def ensure_built(env_dir: Path, *, interactive: bool = True) -> dict[str, Any]:
                     with open(lock_path) as f:
                         lock_data = yaml.safe_load(f) or {}
                 else:
-                    hud_console.hint(
-                        "Continuing without rebuild; this may use an outdated image."
-                    )
+                    hud_console.hint("Continuing without rebuild; this may use an outdated image.")
             else:
                 hud_console.hint("Run 'hud build' to update the image before proceeding.")
         elif not stored_hash:
@@ -201,5 +194,3 @@ def ensure_built(env_dir: Path, *, interactive: bool = True) -> dict[str, Any]:
         hud_console.debug(f"Source hash check skipped: {e}")
 
     return lock_data
-
-
