@@ -332,7 +332,7 @@ from hud import trace
 async def run_with_telemetry(agent: MCPAgent, task: Task):
     async with trace(task.id or "evaluation"):
         result = await agent.run(task)
-        print(f"View at: https://app.hud.so/traces/{result.trace_id}")
+        print(f"View at: https://hud.so/traces/{result.trace_id}")
         return result
 ```
 
