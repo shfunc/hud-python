@@ -245,63 +245,6 @@ claude_agent = ClaudeAgent(
 operator_agent = OperatorAgent()
 ```
 
-These handle all the formatting details for you, but creating your own gives you full control.
-
-## Common Pitfalls & Solutions
-
-### 1. Using Wrong Tool List
-```python
-# ❌ Wrong - uses all tools including lifecycle ones
-for tool in self._available_tools:
-    ...
-
-# ✅ Correct - uses filtered tools
-for tool in self.get_available_tools():
-    ...
-```
-
-### 2. Not Handling Tool IDs
-```python
-# ❌ Wrong - missing tool call ID
-MCPToolCall(name="click", arguments={...})
-
-# ✅ Correct - includes ID for correlation
-MCPToolCall(
-    name="click",
-    arguments={...},
-    id=tc.id  # From your LLM's response
-)
-```
-
-### 3. Incorrect Content Extraction
-```python
-# ❌ Wrong - assumes result.content is a string
-content = result.content
-
-# ✅ Correct - extracts from content blocks
-content = ""
-if result.content:
-    for block in result.content:
-        if hasattr(block, 'text'):
-            content += block.text
-```
-
-### 4. Missing Error Handling
-```python
-# ✅ Good practice - check for errors
-if result.isError:
-    # Handle error case
-    content = f"Tool error: {result.content}"
-```
-
-### 5. Environment-Specific Behavior
-
-Different MCP servers behave differently:
-
-- **Browser environments**: May include screenshots in setup output
-- **CLI environments**: Text-only responses
-- **Response tools**: Some servers auto-detect them, others need explicit handling
-
 Always test your agent with the actual MCP servers you'll use in production.
 
 ## Next Steps
