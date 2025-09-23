@@ -331,25 +331,8 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
 
         tasks_payload.append(item)
 
-    # Write new file: avoid duplicating 'remote_' prefix and avoid overwriting existing files
-    def _compute_remote_filename(p: Path) -> str:
-        stem = p.stem
-        if stem.startswith("remote_"):
-            stem = stem[len("remote_") :]
-        base = f"remote_{stem}.json"
-        # If this equals the source name, add a suffixi
-        if base == p.name:
-            base = f"remote_{stem}_converted.json"
-        # Ensure uniqueness if a file already exists
-        candidate = base
-        counter = 2
-        while (p.parent / candidate).exists():
-            # insert numeric suffix before .json
-            candidate = base[:-5] + f"_{counter}.json"
-            counter += 1
-        return candidate
-
-    remote_name = _compute_remote_filename(tasks_path)
+    # Write new file: remote_<name>.json (always JSON array)
+    remote_name = f"remote_{tasks_path.stem}.json"
     remote_path = tasks_path.parent / remote_name
     with open(remote_path, "w", encoding="utf-8") as f:
         json.dump(tasks_payload, f, ensure_ascii=False, indent=2)
