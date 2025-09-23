@@ -66,7 +66,7 @@ def get_available_models() -> list[dict[str, str | None]]:
 
 
 def build_agent(
-    agent_type: Literal["claude", "openai", "vllm"],
+    agent_type: Literal["claude", "openai", "vllm", "litellm"],
     *,
     model: str | None = None,
     allowed_tools: list[str] | None = None,
@@ -138,6 +138,22 @@ def build_agent(
         else:
             return OperatorAgent(verbose=verbose)
 
+    elif agent_type == "litellm":
+        try:
+            from hud.agents.lite_llm import LiteAgent
+        except ImportError as e:
+            hud_console.error(
+                "LiteLLM agent dependencies are not installed. "
+                "Please install with: pip install 'hud-python[agent]'"
+            )
+            raise typer.Exit(1) from e
+
+        return LiteAgent(
+            model_name=model or "gpt-4o-mini",
+            allowed_tools=allowed_tools,
+            verbose=verbose,
+        )
+
     # Fallback Claude agent (Anthropic)
     try:
         from hud.agents import ClaudeAgent
@@ -166,7 +182,7 @@ def build_agent(
 async def run_single_task(
     source: str,
     *,
-    agent_type: Literal["claude", "openai", "vllm"] = "claude",
+    agent_type: Literal["claude", "openai", "vllm", "litellm"] = "claude",
     model: str | None = None,
     allowed_tools: list[str] | None = None,
     max_steps: int = 10,
@@ -248,6 +264,16 @@ async def run_single_task(
             agent_config = {"verbose": verbose}
             if allowed_tools:
                 agent_config["allowed_tools"] = allowed_tools
+        elif agent_type == "litellm":
+            from hud.agents.lite_llm import LiteAgent
+
+            agent_class = LiteAgent
+            agent_config = {
+                "model_name": model or "gpt-4o-mini",
+                "verbose": verbose,
+            }
+            if allowed_tools:
+                agent_config["allowed_tools"] = allowed_tools
         else:
             from hud.agents import ClaudeAgent
 
@@ -292,7 +318,7 @@ async def run_single_task(
 async def run_full_dataset(
     source: str,
     *,
-    agent_type: Literal["claude", "openai", "vllm"] = "claude",
+    agent_type: Literal["claude", "openai", "vllm", "litellm"] = "claude",
     model: str | None = None,
     allowed_tools: list[str] | None = None,
     max_concurrent: int = 30,
@@ -382,6 +408,25 @@ async def run_full_dataset(
             raise typer.Exit(1) from e
 
         agent_config = {"verbose": verbose}
+        if allowed_tools:
+            agent_config["allowed_tools"] = allowed_tools
+
+    elif agent_type == "litellm":
+        try:
+            from hud.agents.lite_llm import LiteAgent
+
+            agent_class = LiteAgent
+        except ImportError as e:
+            hud_console.error(
+                "LiteLLM agent dependencies are not installed. "
+                "Please install with: pip install 'hud-python[agent]'"
+            )
+            raise typer.Exit(1) from e
+
+        agent_config = {
+            "model_name": model or "gpt-4o-mini",
+            "verbose": verbose,
+        }
         if allowed_tools:
             agent_config["allowed_tools"] = allowed_tools
 
@@ -501,10 +546,10 @@ def eval_command(
         "--full",
         help="Run the entire dataset (omit for single-task debug mode)",
     ),
-    agent: Literal["claude", "openai", "vllm"] = typer.Option(
+    agent: Literal["claude", "openai", "vllm", "litellm"] = typer.Option(
         "claude",
         "--agent",
-        help="Agent backend to use (claude, openai, or vllm for local server)",
+        help="Agent backend to use (claude, openai, vllm for local server, or litellm)",
     ),
     model: str | None = typer.Option(
         None,
@@ -545,6 +590,12 @@ def eval_command(
         False,
         "--verbose",
         help="Enable verbose output from the agent",
+    ),
+    very_verbose: bool = typer.Option(
+        False,
+        "--very-verbose",
+        "-vv",
+        help="Enable debug-level logs for maximum visibility",
     ),
     vllm_base_url: str | None = typer.Option(
         None,
@@ -595,6 +646,23 @@ def eval_command(
     """
     from hud.settings import settings
 
+    if very_verbose:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="%(asctime)s - %(name)s - %(message)s",
+            datefmt="%H:%M:%S",
+        )
+        logging.getLogger("hud.agents").setLevel(logging.DEBUG)
+        logging.getLogger("hud.agents.base").setLevel(logging.DEBUG)
+    elif verbose:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s - %(name)s - %(message)s",
+            datefmt="%H:%M:%S",
+        )
+        logging.getLogger("hud.agents").setLevel(logging.INFO)
+        logging.getLogger("hud.agents.base").setLevel(logging.INFO)
+
     # Check for required API keys
     if agent == "claude":
         if not settings.anthropic_api_key:
@@ -642,7 +710,7 @@ def eval_command(
                 parallel=parallel,
                 max_workers=max_workers,
                 max_concurrent_per_worker=max_concurrent_per_worker,
-                verbose=verbose,
+                verbose=very_verbose or verbose,
                 vllm_base_url=vllm_base_url,
                 group_size=group_size,
             )
@@ -655,7 +723,7 @@ def eval_command(
                 model=model,
                 allowed_tools=allowed_tools_list,
                 max_steps=max_steps,
-                verbose=verbose,
+                verbose=very_verbose or verbose,
                 vllm_base_url=vllm_base_url,
                 group_size=group_size,
             )
