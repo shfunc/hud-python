@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -8,10 +9,9 @@ from typing import TYPE_CHECKING, Any
 import typer
 import yaml
 
-from hud.cli.build import build_environment
 from hud.cli.push import push_environment
 from hud.cli.utils.docker import require_docker_running
-from hud.cli.utils.environment import is_environment_directory
+from hud.cli.utils.env_check import ensure_built, find_environment_dir
 from hud.cli.utils.registry import extract_name_and_tag
 from hud.utils.hud_console import hud_console
 from hud.utils.tasks import load_tasks
@@ -19,6 +19,8 @@ from hud.utils.tasks import load_tasks
 if TYPE_CHECKING:
     from hud.types import Task
 
+
+logger = logging.getLogger(__name__)
 
 def _is_remote_url(url: str) -> bool:
     """Match the remote url."""
@@ -51,63 +53,6 @@ def _validate_tasks(tasks: list[Task]) -> bool:
         if not _has_remote_url(cfg):
             return False
     return True
-
-
-def _find_environment_dir(tasks_path: Path) -> Path | None:
-    """Find the environment directory related to a tasks file.
-
-    Strategy:
-    - Prefer a directory containing hud.lock.yaml
-    - Fallback to a directory that looks like an environment (Dockerfile + pyproject.toml)
-    - Search the tasks file directory, CWD, and a couple of parents
-    """
-    candidates: list[Path] = []
-    cwd = Path.cwd()
-    candidates.extend([tasks_path.parent, cwd])
-
-    # Add parents (up to 2 levels for each)
-    for base in list(candidates):
-        p = base
-        for _ in range(2):
-            p = p.parent
-            if p not in candidates:
-                candidates.append(p)
-
-    # Prefer those with hud.lock.yaml
-    for d in candidates:
-        if (d / "hud.lock.yaml").exists():
-            return d
-
-    # Otherwise, find a plausible environment dir
-    for d in candidates:
-        try:
-            if is_environment_directory(d):
-                return d
-        except Exception as e:
-            hud_console.debug(f"Skipping path {d}: {e}")
-            continue
-
-    return None
-
-
-def _ensure_built(env_dir: Path) -> dict[str, Any]:
-    """Ensure the environment is built and a lock file exists; return lock data."""
-    lock_path = env_dir / "hud.lock.yaml"
-    if not lock_path.exists():
-        hud_console.warning("No hud.lock.yaml found. The environment hasn't been built.")
-        if not hud_console.confirm("Build the environment now (runs 'hud build')?", default=True):
-            raise typer.Exit(1)
-        # Check Docker availability before attempting a build
-        require_docker_running()
-        # Run build (non-interactive). If Docker isn't running, this will raise and stop the flow.
-        # Force linux/amd64 platform to ensure compatibility during RL flows.
-        build_environment(str(env_dir), platform="linux/amd64")
-
-    # Load lock file
-    with open(lock_path) as f:
-        lock_data = yaml.safe_load(f) or {}
-    return lock_data
-
 
 def _ensure_pushed(env_dir: Path, lock_data: dict[str, Any]) -> dict[str, Any]:
     """Ensure the environment is pushed to a registry; return updated lock data."""
@@ -178,6 +123,35 @@ def _extract_existing_images(tasks: list[Task]) -> set[str]:
     return images
 
 
+def _env_var_to_header_key(var_name: str) -> str:
+    """Convert ENV_VAR style to Env-Env-Var header style.
+
+    Example: OPENAI_API_KEY -> Env-Openai-Api-Key
+    """
+    parts = str(var_name).split("_")
+    return f"Env-{'-'.join(part.capitalize() for part in parts)}"
+
+
+def _extract_api_key_vars(lock_data: dict[str, Any]) -> set[str]:
+    """Extract env var names from lock file's provided section (authoritative source).
+
+    We only use keys listed under environment.variables.provided, and exclude HUD_API_KEY
+    because Authorization already carries it.
+    """
+    provided_keys: set[str] = set()
+    if not isinstance(lock_data, dict):
+        return provided_keys
+    try:
+        env_section = (lock_data.get("environment") or {}).get("variables") or {}
+        provided = env_section.get("provided") or {}
+        for name in provided:
+            provided_keys.add(str(name))
+    except Exception as e:
+        logger.debug("Failed to parse provided env vars from lock data: %s", e)
+    provided_keys.discard("HUD_API_KEY")
+    return provided_keys
+
+
 def convert_tasks_to_remote(tasks_file: str) -> str:
     """Convert a local tasks file to remote MCP tasks and return new filename.
 
@@ -212,14 +186,14 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
         return str(tasks_path)
 
     # Locate environment
-    env_dir = _find_environment_dir(tasks_path)
+    env_dir = find_environment_dir(tasks_path)
     if not env_dir:
         hud_console.error("Could not locate an environment directory (Dockerfile + pyproject.toml)")
         hud_console.hint("Ensure you're in or near your environment folder before running 'hud rl'")
         raise typer.Exit(1)
 
     # Ensure built and pushed
-    lock_data = _ensure_built(env_dir)
+    lock_data = ensure_built(env_dir, interactive=True)
     lock_data = _ensure_pushed(env_dir, lock_data)
 
     # Derive remote image name org/name:tag
@@ -238,7 +212,8 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
                 break
         
         if needs_update:
-            if hud_console.confirm("Update task configuration with the latest image?", default=True):
+            confirm_msg = "Update task configuration with the latest image?"
+            if hud_console.confirm(confirm_msg, default=True):
                 hud_console.info("Updating task configuration with latest image...")
                 should_update_image = True
             else:
@@ -246,7 +221,11 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
                 if already_remote:
                     return str(tasks_path)
                 # Otherwise, continue with conversion but keep old images
-                remote_image = list(existing_images)[0]  # Use the first existing image
+                remote_image = next(iter(existing_images))  # Use the first existing image
+
+    # If tasks are already remote and up-to-date (no update needed), return original file
+    if already_remote and not needs_update:
+        return str(tasks_path)
                 
     # If tasks are already remote and we just need to update the image
     if already_remote and should_update_image:
@@ -308,6 +287,17 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
             return [_one(x) for x in tool]
         return _one(tool)
 
+    # Extract additional API key headers from lock to include as placeholders
+    extra_api_key_headers: dict[str, str] = {}
+    for var_name in _extract_api_key_vars(lock_data):
+        header_key = _env_var_to_header_key(var_name)
+        # Use placeholder so we never write secrets to disk
+        value_placeholder = f"${{{var_name}}}"
+        # If the var is HUD_API_KEY, prefer Authorization header, skip explicit Env- header
+        if var_name.upper() == "HUD_API_KEY":
+            continue
+        extra_api_key_headers[header_key] = value_placeholder
+
     # Convert to list[dict]
     tasks_payload: list[dict[str, Any]] = []
     for t in tasks:
@@ -324,6 +314,9 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
             },
         }
 
+        # Merge additional API key headers
+        item["mcp_config"]["hud"]["headers"].update(extra_api_key_headers)
+
         # Optional fields, omit Nones
         if t.setup_tool is not None:
             item["setup_tool"] = _simplify_tool_call(t.setup_tool)
@@ -338,8 +331,25 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
 
         tasks_payload.append(item)
 
-    # Write new file: remote_<name>.json (always JSON array)
-    remote_name = f"remote_{tasks_path.stem}.json"
+    # Write new file: avoid duplicating 'remote_' prefix and avoid overwriting existing files
+    def _compute_remote_filename(p: Path) -> str:
+        stem = p.stem
+        if stem.startswith("remote_"):
+            stem = stem[len("remote_") :]
+        base = f"remote_{stem}.json"
+        # If this equals the source name, add a suffixi
+        if base == p.name:
+            base = f"remote_{stem}_converted.json"
+        # Ensure uniqueness if a file already exists
+        candidate = base
+        counter = 2
+        while (p.parent / candidate).exists():
+            # insert numeric suffix before .json
+            candidate = base[:-5] + f"_{counter}.json"
+            counter += 1
+        return candidate
+
+    remote_name = _compute_remote_filename(tasks_path)
     remote_path = tasks_path.parent / remote_name
     with open(remote_path, "w", encoding="utf-8") as f:
         json.dump(tasks_payload, f, ensure_ascii=False, indent=2)

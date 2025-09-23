@@ -115,5 +115,4 @@ def load_tasks(tasks_input: str | list[dict]) -> list[Task]:
     else:
         raise TypeError(f"tasks_input must be str or list, got {type(tasks_input)}")
 
-    hud_console.info(f"Loaded {len(tasks)} tasks")
     return tasks

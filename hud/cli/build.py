@@ -16,6 +16,7 @@ import yaml
 from hud.clients import MCPClient
 from hud.utils.hud_console import HUDConsole
 from hud.version import __version__ as hud_version
+from hud.cli.utils.source_hash import compute_source_hash, list_source_files
 
 from .utils.registry import save_to_registry
 
@@ -341,10 +342,11 @@ def build_environment(
     required_env, optional_env = extract_env_vars_from_dockerfile(dockerfile_path)
 
     # Merge user-provided env vars with detected ones
-    provided_env_vars = {}
+    provided_env_vars: dict[str, str] = {}
     missing_required = []
     if env_vars:
-        provided_env_vars = env_vars.copy()
+        # Use placeholders in lock file for any provided values to avoid storing secrets
+        provided_env_vars = {k: f"${{{k}}}" for k in env_vars}
         # Track which required vars are still missing
         missing_required = [e for e in required_env if e not in env_vars]
 
@@ -384,6 +386,8 @@ def build_environment(
             "hudVersion": hud_version,
             "directory": str(env_dir.name),
             "version": new_version,  # Internal environment version
+            # Fast source fingerprint for change detection
+            "sourceHash": compute_source_hash(env_dir),
         },
         "environment": {
             "initializeMs": analysis["initializeMs"],
@@ -423,6 +427,19 @@ def build_environment(
     lock_path = env_dir / "hud.lock.yaml"
     with open(lock_path, "w") as f:
         yaml.dump(lock_content, f, default_flow_style=False, sort_keys=False)
+
+    # Also write the file list we hashed for transparency (non-essential)
+    try:
+        files = [
+            str(p.resolve().relative_to(env_dir)).replace("\\", "/")
+            for p in list_source_files(env_dir)
+        ]
+        lock_content["build"]["sourceFiles"] = files
+        with open(lock_path, "w") as f:
+            yaml.dump(lock_content, f, default_flow_style=False, sort_keys=False)
+    except Exception:
+        # Best-effort; do not fail the build if listing fails
+        pass
 
     hud_console.success("Created lock file: hud.lock.yaml")
 

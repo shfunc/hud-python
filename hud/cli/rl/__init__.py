@@ -122,8 +122,7 @@ def rl_command(
         try:
             from hud.cli.flows.tasks import convert_tasks_to_remote
 
-            console.print("\n[cyan]Preparing remote training tasks...[/cyan]")
-            console.print("[cyan](build/push if needed)[/cyan]")
+            console.print("[cyan]Preparing remote training tasks...[/cyan]")
             tasks_file = convert_tasks_to_remote(tasks_file)
         except typer.Exit:
             raise

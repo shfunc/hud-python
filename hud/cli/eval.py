@@ -13,6 +13,7 @@ import hud
 from hud.settings import settings
 from hud.utils.group_eval import display_group_statistics, run_tasks_grouped
 from hud.utils.hud_console import HUDConsole
+from hud.cli.utils.env_check import ensure_built, find_environment_dir
 
 logger = logging.getLogger(__name__)
 hud_console = HUDConsole()
@@ -193,6 +194,15 @@ async def run_single_task(
 
         # Use unified loader for both JSON and JSONL
         tasks = load_tasks(str(path))
+
+        # If tasks reference a local environment (nearby), ensure it's built/up-to-date.
+        try:
+            env_dir = find_environment_dir(path)
+            if env_dir is not None:
+                # Non-interactive for eval; warn but don't block
+                ensure_built(env_dir, interactive=True)
+        except Exception as e:
+            hud_console.debug(f"Eval preflight env check skipped: {e}")
 
         # Single task - use the first (and only) task
         task = tasks[0]
