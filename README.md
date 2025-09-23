@@ -23,8 +23,8 @@ OSS RL environment + evals toolkit. Wrap software as environments, run benchmark
 ## Highlights
 
 - 🚀 **[MCP environment skeleton](https://docs.hud.so/core-concepts/mcp-protocol)** – any agent can call any environment.
-- ⚡️ **[Live telemetry](https://app.hud.so)** – inspect every tool call, observation, and reward in real time.
-- 🗂️ **[Public benchmarks](https://app.hud.so/leaderboards)** – OSWorld-Verified, SheetBench-50, and more.
+- ⚡️ **[Live telemetry](https://hud.so)** – inspect every tool call, observation, and reward in real time.
+- 🗂️ **[Public benchmarks](https://hud.so/leaderboards)** – OSWorld-Verified, SheetBench-50, and more.
 - 🌱 **[Reinforcement learning built-in](rl/)** – Verifiers gym pipelines for GRPO on any environment.
 - 🌐 **[Cloud browsers](environments/remote_browser/)** – AnchorBrowser, Steel, BrowserBase integrations for browser automation.
 - 🛠️ **[Hot-reload dev loop](environments/README.md#phase-5-hot-reload-development-with-cursor-agent)** – `hud dev` for iterating on environments without rebuilds.
@@ -70,14 +70,14 @@ from hud.agents import ClaudeAgent
 from hud.datasets import Task  # See docs: https://docs.hud.so/reference/tasks
 
 async def main() -> None:
-    with hud.trace("Quick Start 2048"): # All telemetry works for any MCP-based agent (see https://app.hud.so)
+    with hud.trace("Quick Start 2048"): # All telemetry works for any MCP-based agent (see https://hud.so)
         task = {
             "prompt": "Reach 64 in 2048.",
             "mcp_config": {
                 "hud": {
                     "url": "https://mcp.hud.so/v3/mcp",  # HUD's cloud MCP server (see https://docs.hud.so/core-concepts/architecture)
                     "headers": {
-                        "Authorization": f"Bearer {settings.api_key}",  # Get your key at https://app.hud.so
+                        "Authorization": f"Bearer {settings.api_key}",  # Get your key at https://hud.so
                         "Mcp-Image": "hudpython/hud-text-2048:v1.2"  # Docker image from https://hub.docker.com/u/hudpython
                     }
                 }
@@ -104,7 +104,7 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-The above example let's the agent play 2048 ([See replay](https://app.hud.so/trace/6feed7bd-5f67-4d66-b77f-eb1e3164604f))
+The above example let's the agent play 2048 ([See replay](https://hud.so/trace/6feed7bd-5f67-4d66-b77f-eb1e3164604f))
 
 ![Agent playing 2048](https://raw.githubusercontent.com/hud-evals/hud-python/main/docs/src/images/2048_1.gif)
 
@@ -135,7 +135,7 @@ Supports multi‑turn RL for both:
 - Language‑only models (e.g., `Qwen/Qwen2.5-7B-Instruct`)
 - Vision‑Language models (e.g., `Qwen/Qwen2.5-VL-3B-Instruct`)
 
-By default, `hud rl` provisions a persistant server and trainer in the cloud, streams telemetry to `app.hud.so`, and lets you monitor/manage models at `app.hud.so/models`. Use `--local` to run entirely on your machines (typically 2+ GPUs: one for vLLM, the rest for training).
+By default, `hud rl` provisions a persistant server and trainer in the cloud, streams telemetry to `hud.so`, and lets you monitor/manage models at `hud.so/models`. Use `--local` to run entirely on your machines (typically 2+ GPUs: one for vLLM, the rest for training).
 
 Any HUD MCP environment and evaluation works with our RL pipeline (including remote configurations). See the guided docs: `https://docs.hud.so/train-agents/quickstart`.
 
@@ -145,7 +145,7 @@ This is Claude Computer Use running on our proprietary financial analyst benchma
 
 ![Trace screenshot](https://raw.githubusercontent.com/hud-evals/hud-python/main/docs/src/images/trace_sheet.gif)
 
-> [See this trace on _app.hud.so_](https://app.hud.so/trace/9e212e9e-3627-4f1f-9eb5-c6d03c59070a)
+> [See this trace on _hud.so_](https://hud.so/trace/9e212e9e-3627-4f1f-9eb5-c6d03c59070a)
 
 This example runs the full dataset (only takes ~20 minutes) using [run_evaluation.py](examples/run_evaluation.py):
 
@@ -171,7 +171,7 @@ results = await run_dataset(
 print(f"Average reward: {sum(r.reward for r in results) / len(results):.2f}")
 ```
 
-> Running a dataset creates a job and streams results to the [app.hud.so](https://app.hud.so) platform for analysis and [leaderboard submission](https://docs.hud.so/evaluate-agents/leaderboards).
+> Running a dataset creates a job and streams results to the [hud.so](https://hud.so) platform for analysis and [leaderboard submission](https://docs.hud.so/evaluate-agents/leaderboards).
 
 ## Building Environments (MCP)
 
@@ -262,7 +262,7 @@ Tools
 hud push # needs docker login, hud api key
 ```
 
-5. Now you can use `mcp.hud.so` to launch 100s of instances of this environment in parallel with any agent, and see everything live on [app.hud.so](https://app.hud.so):
+5. Now you can use `mcp.hud.so` to launch 100s of instances of this environment in parallel with any agent, and see everything live on [hud.so](https://hud.so):
 
 ```python
 from hud.agents import ClaudeAgent
@@ -293,7 +293,7 @@ result = await ClaudeAgent().run({  # See all agents: https://docs.hud.so/refere
 
 ## Leaderboards & benchmarks
 
-All leaderboards are publicly available on [app.hud.so/leaderboards](https://app.hud.so/leaderboards) (see [docs](https://docs.hud.so/evaluate-agents/leaderboards))
+All leaderboards are publicly available on [hud.so/leaderboards](https://hud.so/leaderboards) (see [docs](https://docs.hud.so/evaluate-agents/leaderboards))
 
 ![Leaderboard](https://raw.githubusercontent.com/hud-evals/hud-python/main/docs/src/images/leaderboards_3.png)
 
@@ -307,7 +307,7 @@ Using the [`run_dataset`](https://docs.hud.so/reference/tasks#run_dataset) funct
 %%{init: {"theme": "neutral", "themeVariables": {"fontSize": "14px"}} }%%
 graph LR
     subgraph "Platform"
-        Dashboard["📊 app.hud.so"]
+        Dashboard["📊 hud.so"]
         API["🔌 mcp.hud.so"]
     end
   
