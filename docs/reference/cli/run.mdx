@@ -4,18 +4,26 @@ description: "Execute MCP environments locally or remotely for production use"
 icon: "play"
 ---
 
-The `hud run` command executes MCP environments either locally via Docker or remotely via the HUD platform. Unlike `hud dev` which is for development, `hud run` is optimized for production execution.
+The `hud run` command executes MCP servers in three ways: (1) Python module/file (decorator‑based), (2) arbitrary command, or (3) Docker image (local/remote). Unlike `hud dev`, `hud run` is optimized for execution, not hot‑reload.
 
 ## Usage
 
 ```bash
-hud run <TARGET> [OPTIONS] [DOCKER_ARGS...]
+# Python module or file (decorator-based)
+hud run controller[:attr] [OPTIONS]
+hud run path/to/server.py[:attr] [OPTIONS]
+
+# Arbitrary command
+hud run --cmd "python -m controller" [OPTIONS]
+
+# Docker image (supports Docker args after --)
+hud run <IMAGE> [OPTIONS] [-- DOCKER_ARGS...]
 ```
 
 ## Arguments
 
 <ParamField path="target" type="string" required>
-  Docker image reference (e.g., `myorg/env:latest`)
+  Python module/file (e.g., `controller` or `controller:server`) or a Docker image (e.g., `myorg/env:latest`)
 </ParamField>
 
 <ParamField path="docker_args" type="array">
@@ -61,10 +69,40 @@ Docker arguments are passed positionally after the image in this command form.
 </ParamField>
 
 <ParamField path="--interactive" type="boolean" default="false">
-  Launch interactive testing mode (HTTP transport only)
+  Launch interactive testing mode (HTTP transport only; local Docker only)
 </ParamField>
 
-## Remote Execution (Default)
+<ParamField path="--reload" type="boolean" default="false">
+  Auto-reload when files change (Python mode only)
+</ParamField>
+
+<ParamField path="--watch" type="array">
+  Directories to watch when using `--reload` (Python mode)
+</ParamField>
+
+<ParamField path="--cmd" type="string">
+  Run an arbitrary command as an MCP server (e.g., `python -m controller`)
+</ParamField>
+
+## Python Mode (Decorator-based)
+
+Run a Python module, package, or file containing an MCP server (default attribute `mcp`; override with `module:attr`).
+
+```bash
+# Run module or file (stdio by default)
+hud run controller
+hud run controller:mcp
+hud run server.py:mcp
+
+# Auto-reload on changes (watches module/package)
+hud run controller --reload
+hud run controller --reload --watch controller tools
+
+# HTTP transport
+hud run controller -t http -p 8765
+```
+
+## Remote Execution (Default for Docker)
 
 By default, `hud run` executes your Docker image on the HUD platform's remote infrastructure. This provides:
 

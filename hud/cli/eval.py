@@ -5,15 +5,18 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import typer
 
 import hud
+from hud.cli.utils.env_check import ensure_built, find_environment_dir
 from hud.settings import settings
 from hud.utils.group_eval import display_group_statistics, run_tasks_grouped
 from hud.utils.hud_console import HUDConsole
 
+if TYPE_CHECKING:
+    from hud.types import Task
 logger = logging.getLogger(__name__)
 hud_console = HUDConsole()
 
@@ -27,7 +30,7 @@ def get_available_models() -> list[dict[str, str | None]]:
     try:
         from hud.cli.rl import rl_api
 
-        hud_console.info("Fetching your models from https://app.hud.so/models")
+        hud_console.info("Fetching your models from https://hud.so/models")
         models = rl_api.list_models()
 
         # Filter for ready models only and sort by recency
@@ -208,7 +211,16 @@ async def run_single_task(
         hud_console.info("📊 Loading task file…")
 
         # Use unified loader for both JSON and JSONL
-        tasks = load_tasks(str(path))
+        tasks: list[Task] = load_tasks(str(path))  # type: ignore[assignment]
+
+        # If tasks reference a local environment (nearby), ensure it's built/up-to-date.
+        try:
+            env_dir = find_environment_dir(path)
+            if env_dir is not None:
+                # Non-interactive for eval; warn but don't block
+                ensure_built(env_dir, interactive=True)
+        except Exception as e:
+            hud_console.debug(f"Eval preflight env check skipped: {e}")
 
         # Single task - use the first (and only) task
         task = tasks[0]
@@ -216,7 +228,7 @@ async def run_single_task(
     else:
         # Load from HuggingFace dataset or non-file source
         hud_console.info(f"📊 Loading tasks from: {source}…")
-        tasks = load_tasks(source)
+        tasks: list[Task] = load_tasks(source)  # type: ignore[assignment]
 
         if not tasks:
             hud_console.error(f"No tasks found in: {source}")
@@ -348,7 +360,7 @@ async def run_full_dataset(
 
     # Load tasks using unified loader
     hud_console.info(f"📊 Loading tasks from: {source}…")
-    tasks = load_tasks(source)
+    tasks: list[Task] = load_tasks(source)  # type: ignore[assignment]
 
     if not tasks:
         hud_console.error(f"No tasks found in: {source}")
@@ -685,7 +697,7 @@ def eval_command(
     # Check for HUD_API_KEY if using HUD services
     if not settings.api_key:
         hud_console.warning("HUD_API_KEY not set. Some features may be limited.")
-        hud_console.info("Get your API key at: https://app.hud.so")
+        hud_console.info("Get your API key at: https://hud.so")
         hud_console.info("Set it in your environment or run: hud set HUD_API_KEY=your-key-here")
 
     # Parse allowed tools

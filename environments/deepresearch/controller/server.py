@@ -20,7 +20,7 @@ async def cleanup():
 @mcp.tool()
 async def setup() -> str:
     await http_client.post("/setup")
-    return ""
+    return "Environment setup"
 
 
 @mcp.tool()

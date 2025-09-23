@@ -11,6 +11,7 @@ import requests
 import typer
 import yaml
 
+from hud.cli.utils.env_check import ensure_built
 from hud.utils.hud_console import HUDConsole
 
 
@@ -131,6 +132,14 @@ def push_environment(
 
     # Find hud.lock.yaml in specified directory
     env_dir = Path(directory)
+
+    # Ensure environment is built and up-to-date (hash-based); interactive prompt
+    try:
+        ensure_built(env_dir, interactive=True)
+    except typer.Exit:
+        raise
+    except Exception as e:
+        HUDConsole().debug(f"Skipping pre-push build check: {e}")
     lock_path = env_dir / "hud.lock.yaml"
 
     if not lock_path.exists():

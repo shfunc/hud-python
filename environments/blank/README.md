@@ -10,7 +10,7 @@
 
 IMPORTANT: Make sure all logs are going to stderr instead of stdio, which is reserved for MCP communication
 
-### Interactive Development
+### Testing your environment
 ```bash
 # 1. Configure your API keys (optional - only needed for evaluation)
 # Edit .env file to add your HUD_API_KEY and ANTHROPIC_API_KEY
@@ -24,12 +24,28 @@ hud dev --build --interactive
 hud eval tasks.json --agent claude
 
 # Option B: Interactive notebook test_env.ipynb (great for learning!)
-# Requires installation:
-pip install hud-python[agents]
 
 # Option C: Simple Python script (runs all tasks from tasks.json)
 python test_task.py
 ```
+
+## Iterating on your environment
+This is usually the process for making any environment better:
+```bash
+# 1. Start the environment and interact with it directly (or give MCP server to an agent):
+hud dev --build --interactive
+
+# 2. If the environment cannot start or fails inexplicably:
+hud debug test_env:dev # Or your env name that appears when you run hud dev
+# After fixing the error, go back to 1.
+
+# 3. When the environment is in a stable state:
+hud build
+hud push # Requires docker login
+
+# 4. As soon as it's pushed to the newest version, make sure tasks have it updated and run:
+hud rl
+# This is a good test to see if your environment and tasks are high quality!
 
 ## Layout
 ```
@@ -83,7 +99,7 @@ save_tasks(tasks, repo_id="your-org/your-dataset")
 hud eval "your-org/your-dataset" --agent claude
 
 # View results at:
-# app.hud.so/leaderboards/your-org/your-dataset
+# hud.so/leaderboards/your-org/your-dataset
 ```
 
 **Note**: Only public HuggingFace datasets appear as leaderboards!

@@ -24,48 +24,45 @@
   ],
   "topbarCtaButton": {
     "name": "Dashboard",
-    "url": "https://app.hud.so"
+    "url": "https://hud.so"
   },
   "navigation": {
     "versions": [
       {
-        "version": "0.4.36",
+        "version": "0.4.37",
         "groups": [
           {
             "group": "Get Started",
             "pages": ["index", "quickstart", "llm-quickstart"]
           },
           {
-            "group": "Core Concepts",
+            "group": "Ideas",
             "pages": [
               "core-concepts/mcp-protocol",
               "core-concepts/architecture", 
-              "core-concepts/task-system"
+              "core-concepts/task-system",
+              "core-concepts/tricks"
             ]
           },
           {
-            "group": "Evaluate Agents",
-            "pages": [
-              "evaluate-agents/index",
-              "evaluate-agents/create-agents",
-              "evaluate-agents/leaderboards",
-              "evaluate-agents/create-benchmarks"
-            ]
-          },
-          {
-            "group": "Build Environments",
+            "group": "Environments",
             "pages": [
               "build-environments/index",
-              "build-environments/quickstart-todo",
-              "build-environments/docker-to-mcp",
-              "build-environments/registry"
+              "build-environments/spec"
             ]
           },
           {
-            "group": "Train Agents",
+            "group": "RL",
             "pages": [
               "train-agents/quickstart",
               "train-agents/tasks"
+            ]
+          },
+          {
+            "group": "Agents",
+            "pages": [
+              "evaluate-agents/create-agents",
+              "evaluate-agents/benchmarks"
             ]
           },
           {
@@ -76,10 +73,12 @@
               "reference/cli/dev",
               "reference/cli/build",
               "reference/cli/push",
-              "reference/cli/pull",
               "reference/cli/analyze",
               "reference/cli/debug",
-              "reference/cli/run"
+              "reference/cli/run",
+              "reference/cli/eval",
+              "reference/cli/rl",
+              "reference/cli/misc"
             ]
           },
           {

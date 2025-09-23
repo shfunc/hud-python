@@ -1127,7 +1127,7 @@ def rl(
     ),
     model: str | None = typer.Argument(
         None,
-        help="Model to train (default: interactive selection)",
+        help="Model to train from https://hud.so/models (default: interactive selection)",
     ),
     config_file: Path | None = typer.Option(  # noqa: B008
         None,
@@ -1167,6 +1167,12 @@ def rl(
         "--ddp-gpus",
         help="Specific GPUs for DDP (e.g., '0,1,2,3')",
     ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        help="Auto-accept all prompts and use defaults (lazy mode)",
+    ),
     vllm_gpu: int | None = typer.Option(
         None,
         "--vllm-gpu",
@@ -1188,6 +1194,7 @@ def rl(
         no_ddp=no_ddp,
         ddp_gpus=ddp_gpus,
         vllm_gpu=vllm_gpu,
+        yes=yes,
     )
 
 

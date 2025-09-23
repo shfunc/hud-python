@@ -530,7 +530,7 @@ async def start_mcp_proxy(
                     stderr=asyncio.subprocess.DEVNULL,
                 )
                 await stop_result.communicate()
-                hud_console.success("✅ Container stopped successfully")
+                hud_console.success("Container stopped successfully")
                 container_stopped = True
         except Exception as e:
             hud_console.warning(f"Failed to stop container: {e}")

@@ -1,6 +1,6 @@
 ---
-title: RL Quickstart
-icon: graduation-cap
+title: "RL Quickstart"
+icon: "graduation-cap"
 ---
 
 ## Quickstart
@@ -18,7 +18,7 @@ hud get hud-evals/basic-2048
 hud rl basic-2048.json
 ```
 
-This launches training remotely and automatically provisions a vLLM server and a trainer for you. You can monitor progress on https://app.hud.so. The server persists between runs, so you can rerun training or evaluate against the same endpoint.
+This launches training remotely and automatically provisions a vLLM server and a trainer for you. You can monitor progress on https://hud.so. The server persists between runs, so you can rerun training or evaluate against the same endpoint.
 
 Optional baseline first (Claude or Operator):
 
@@ -32,7 +32,7 @@ Use any provider with at least 2 GPUs (one for inference, one for training). Run
 
 ```bash
 uv tool install hud-python
-hud get basic-2048
+hud get hud-evals/basic-2048
 hud rl basic-2048.json --local
 ```
 
@@ -42,8 +42,6 @@ hud rl basic-2048.json --local
 - 8× A100: higher throughput for larger tasksets
 
 Training throughput depends on task complexity and parallelism (`max_parallel_episodes`).
-
-
 
 ### 3) Build your own environment (hud init)
 
@@ -59,3 +57,17 @@ hud rl
 Change the tasks.json to include other tasks you want to train on.
 
 See [hud init](/reference/cli/init) for options and details.
+
+---
+
+### Learn more
+
+<CardGroup cols={2}>
+<Card title="Environment Quickstart" icon="cube" href="/build-environments">
+  Complete guide to building environments from scratch
+</Card>
+
+<Card title="RL CLI Reference" icon="terminal" href="/reference/cli/rl">
+  Full `hud rl` command options and usage
+</Card>
+</CardGroup>

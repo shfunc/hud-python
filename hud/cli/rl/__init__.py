@@ -25,7 +25,7 @@ def rl_command(
     ),
     model: str | None = typer.Argument(
         None,
-        help="Model to train (default: interactive selection)",
+        help="Model to train from https://hud.so/models (default: interactive selection)",
     ),
     config_file: Path | None = typer.Option(  # noqa: B008
         None,
@@ -71,6 +71,12 @@ def rl_command(
         False,
         "--local",
         help="Run training locally instead of using remote API server",
+    ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        help="Auto-accept all prompts and use defaults (lazy mode)",
     ),
     # Internal flag
     skip_vllm_startup: bool = typer.Option(
@@ -122,8 +128,7 @@ def rl_command(
         try:
             from hud.cli.flows.tasks import convert_tasks_to_remote
 
-            console.print("\n[cyan]Preparing remote training tasks...[/cyan]")
-            console.print("[cyan](build/push if needed)[/cyan]")
+            console.print("[cyan]Preparing remote training tasks...[/cyan]")
             tasks_file = convert_tasks_to_remote(tasks_file)
         except typer.Exit:
             raise
@@ -137,7 +142,11 @@ def rl_command(
             from .remote_runner import run_remote_training
 
             run_remote_training(
-                tasks_file=tasks_file, model=model, config_file=config_file, output_dir=output_dir
+                tasks_file=tasks_file,
+                model=model,
+                config_file=config_file,
+                output_dir=output_dir,
+                yes=yes,
             )
             return
         except Exception as e:
@@ -152,6 +161,7 @@ def rl_command(
         model=model,
         config_file=config_file,
         output_dir=output_dir,
+        yes=yes,
         restart=restart,
         verbose=verbose,
         no_ddp=no_ddp,

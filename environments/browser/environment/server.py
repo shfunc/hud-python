@@ -140,7 +140,7 @@ class ServiceManager:
             self.cdp_port = self._get_next_port()
 
             self._browser = await self._playwright.chromium.launch(
-                headless=True,
+                headless=False,
                 args=[
                     f"--remote-debugging-port={self.cdp_port}",
                     "--no-sandbox",
@@ -148,13 +148,21 @@ class ServiceManager:
                     "--disable-gpu",
                     "--disable-web-security",
                     "--disable-features=IsolateOrigins,site-per-process",
+                    "--display=:1",
                 ],
+                env={**os.environ, "DISPLAY": ":1"},
             )
 
             logger.info(f"Started Playwright Chromium with CDP on port {self.cdp_port}")
 
             # Wait for CDP to be ready
             await self._wait_for_port(self.cdp_port, "CDP", timeout=30)
+
+            # Open a default page so the browser window is visible
+            default_context = await self._browser.new_context()
+            default_page = await default_context.new_page()
+            await default_page.goto("about:blank")
+            logger.info("Opened default browser page")
 
         except ImportError:
             logger.error("Playwright not installed")
