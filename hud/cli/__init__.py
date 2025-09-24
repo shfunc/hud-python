@@ -961,6 +961,22 @@ def eval(
         "--verbose",
         help="Enable verbose output from the agent",
     ),
+    very_verbose: bool = typer.Option(
+        False,
+            "--very-verbose",
+        "-vv",
+        help="Enable debug-level logs for maximum visibility",
+    ),
+    vllm_base_url: str | None = typer.Option(
+        None,
+        "--vllm-base-url",
+        help="Base URL for vLLM server (when using --agent vllm)",
+    ),
+    group_size: int = typer.Option(
+        1,
+        "--group-size",
+        help="Number of times to run each task (similar to RL training)",
+    ),
     integration_test: bool = typer.Option(
         False,
         "--integration-test",
@@ -988,25 +1004,6 @@ def eval(
                 "Usage: hud eval <source> or create a task JSON file (e.g., task.json, tasks.jsonl)"
             )
             raise typer.Exit(1) from e
-
-    # If --integration-test, skip agent selection/validation entirely
-    if not integration_test:
-        # If no agent specified, prompt for selection
-        if agent is None:
-            agent = hud_console.select(
-                "Select an agent to use:",
-                choices=[
-                    {"name": "Claude 4 Sonnet", "value": "claude"},
-                    {"name": "OpenAI Computer Use", "value": "openai"},
-                ],
-                default="Claude 4 Sonnet",
-            )
-
-        # Validate agent choice
-        valid_agents = ["claude", "openai"]
-        if agent not in valid_agents:
-            hud_console.error(f"Invalid agent: {agent}. Must be one of: {', '.join(valid_agents)}")
-            raise typer.Exit(1)
 
     # Import eval_command lazily to avoid importing agent dependencies
     try:
@@ -1086,6 +1083,9 @@ def eval(
         max_workers=max_workers,
         max_concurrent_per_worker=max_concurrent_per_worker,
         verbose=verbose,
+        very_verbose=very_verbose,
+        vllm_base_url=vllm_base_url,
+        group_size=group_size,
         integration_test=integration_test,
     )
 
