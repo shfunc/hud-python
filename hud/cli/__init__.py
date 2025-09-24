@@ -963,7 +963,7 @@ def eval(
     ),
     very_verbose: bool = typer.Option(
         False,
-            "--very-verbose",
+        "--very-verbose",
         "-vv",
         help="Enable debug-level logs for maximum visibility",
     ),

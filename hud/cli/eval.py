@@ -15,12 +15,7 @@ from hud.cli.utils.env_check import ensure_built, find_environment_dir
 from hud.settings import settings
 from hud.utils.group_eval import display_group_statistics, run_tasks_grouped
 from hud.utils.hud_console import HUDConsole
-from hud.agents.base import MCPAgent
-from hud.datasets import run_dataset
 
-from hud.agents.base import MCPAgent, find_reward
-from hud.types import Trace
-import yaml
 
 if TYPE_CHECKING:
     from hud.types import Task
@@ -212,13 +207,9 @@ async def run_single_task(
         )
         raise typer.Exit(1) from e
 
-    # Check if it's a JSON or YAML file
     path = Path(source)
-    if path.exists() and path.suffix in [".json", ".jsonl"]:
+    if path.exists() and (path.suffix in [".json", ".jsonl"]):
         hud_console.info("📊 Loading task file…")
-        # --integration-test mode
-        
-        # Use unified loader for both JSON and JSONL
         tasks: list[Task] = load_tasks(str(path))  # type: ignore[assignment]
 
         # If tasks reference a local environment (nearby), ensure it's built/up-to-date.
