@@ -20,7 +20,6 @@ from hud.datasets import run_dataset
 
 from hud.agents.base import MCPAgent, find_reward
 from hud.types import Trace
-from hud.agents.integration_test_agent import IntegrationTestRunner
 import yaml
 
 if TYPE_CHECKING:
@@ -193,14 +192,13 @@ def build_agent(
 async def run_single_task(
     source: str,
     *,
-    agent_type: Literal["claude", "openai", "vllm", "litellm"] = "claude",
+    agent_type: Literal["claude", "openai", "vllm", "litellm", "integration_test"] = "claude",
     model: str | None = None,
     allowed_tools: list[str] | None = None,
     max_steps: int = 10,
     verbose: bool = False,
     vllm_base_url: str | None = None,
     group_size: int = 1,
-    integration_test: bool = False,
 ) -> None:
     """Load one task and execute it, or detect if JSON contains a list and run as dataset."""
 
@@ -216,91 +214,25 @@ async def run_single_task(
 
     # Check if it's a JSON or YAML file
     path = Path(source)
-    if path.exists() and path.suffix in {".json", ".yaml", ".yml"}:
+    if path.exists() and path.suffix in [".json", ".jsonl"]:
         hud_console.info("📊 Loading task file…")
-        # Load JSON or YAML depending on extension
-        if path.suffix in {".yaml", ".yml"}:
-            with open(path) as f:
-                json_data = yaml.safe_load(f)
-        else:
-            with open(path) as f:
-                json_data = json.load(f)
-
         # --integration-test mode
-        if integration_test:
-            # Build single task object (or forward to full runner if multiple)
-            if isinstance(json_data, list):
-                if len(json_data) > 1:
-                    raise ValueError("Multiple tasks in --integration-test mode not supported yet")
-                task_data = json_data[0]
-            elif isinstance(json_data, dict):
-                task_data = json_data
-            else:
-                hud_console.error("Unsupported file format for --integration-test. Provide a task object or single-item list.")
-                raise typer.Exit(1)
-
-            hud_console.info('Prompt: ' + task_data.get("prompt", "[No prompt provided]"))
-            hud_console.info("🧪 --integration-test: setting up problem, taking actions, evaluating.")
-            
-            task = Task(**task_data)
-            agent = IntegrationTestRunner(verbose=verbose)
-            result = await agent.run(task, max_steps=max_steps)
-            return
-
+        
         # Use unified loader for both JSON and JSONL
         tasks: list[Task] = load_tasks(str(path))  # type: ignore[assignment]
 
-        # Build agent class and config for run_dataset
-        if agent_type == "openai":
-            try:
-                from hud.agents import OperatorAgent
+        # If tasks reference a local environment (nearby), ensure it's built/up-to-date.
+        try:
+            env_dir = find_environment_dir(path)
+            if env_dir is not None:
+                # Non-interactive for eval; warn but don't block
+                ensure_built(env_dir, interactive=True)
+        except Exception as e:
+            hud_console.debug(f"Eval preflight env check skipped: {e}")
 
-                agent_class = OperatorAgent
-            except ImportError as e:
-                hud_console.error(
-                    "OpenAI agent dependencies are not installed. "
-                    "Please install with: pip install 'hud-python\u27e6agent\u27e7'"
-                )
-                raise typer.Exit(1) from e
-
-            agent_config: dict[str, Any] = {"verbose": verbose}
-            if allowed_tools:
-                agent_config["allowed_tools"] = allowed_tools
-
-        else:
-            try:
-                from hud.agents import ClaudeAgent
-
-                agent_class = ClaudeAgent
-            except ImportError as e:
-                hud_console.error(
-                    "Claude agent dependencies are not installed. "
-                    "Please install with: pip install 'hud-python[agent]'"
-                )
-                raise typer.Exit(1) from e
-
-            agent_config = {
-                "model": model or "claude-sonnet-4-20250514",
-                "verbose": verbose,
-            }
-            if allowed_tools:
-                agent_config["allowed_tools"] = allowed_tools
-
-        # Run as dataset with single-task concurrency to maintain debug behavior
-        results = await run_dataset(
-            name=f"Dataset: {path.name}",
-            dataset=json_data,  # Pass the list directly
-            agent_class=agent_class,
-            agent_config=agent_config,
-            max_concurrent=1,  # Run sequentially for debug mode
-            metadata={"source": str(path)},
-            max_steps=max_steps,
-        )
-
-        # Display summary
-        successful = sum(1 for r in results if getattr(r, "reward", 0) > 0)
-        hud_console.success(f"Completed {len(results)} tasks: {successful} successful")
-        return
+        # Single task - use the first (and only) task
+        task = tasks[0]
+        hud_console.info("Found 1 task, running as single task…")
 
     else:
         # Load from HuggingFace dataset or non-file source
@@ -320,60 +252,64 @@ async def run_single_task(
     task_prompt = task.prompt[:50] + "..." if len(task.prompt) > 50 else task.prompt
 
     # Use grouped evaluation if group_size > 1
+    agent_config: dict[str, Any] = {}
+    if agent_type == "integration_test":
+        from hud.agents.integration_test_agent import IntegrationTestRunner
+        agent_class = IntegrationTestRunner
+    if agent_type == "vllm":
+        # Special handling for vLLM
+        sample_agent = build_agent(
+            agent_type,
+            model=model,
+            allowed_tools=allowed_tools,
+            verbose=verbose,
+            vllm_base_url=vllm_base_url,
+        )
+        agent_config = {
+            "openai_client": sample_agent.oai,
+            "model_name": sample_agent.model_name,
+            "verbose": verbose,
+            "completion_kwargs": sample_agent.completion_kwargs,
+        }
+        if allowed_tools:
+            agent_config["allowed_tools"] = allowed_tools
+
+        from hud.agents.openai_chat_generic import GenericOpenAIChatAgent
+
+        agent_class = GenericOpenAIChatAgent
+    elif agent_type == "openai":
+        from hud.agents import OperatorAgent
+
+        agent_class = OperatorAgent
+        agent_config = {"verbose": verbose}
+        if allowed_tools:
+            agent_config["allowed_tools"] = allowed_tools
+    elif agent_type == "litellm":
+        from hud.agents.lite_llm import LiteAgent
+
+        agent_class = LiteAgent
+        agent_config = {
+            "model_name": model or "gpt-4o-mini",
+            "verbose": verbose,
+        }
+        if allowed_tools:
+            agent_config["allowed_tools"] = allowed_tools
+    elif agent_type == "claude":
+        from hud.agents import ClaudeAgent
+
+        agent_class = ClaudeAgent
+        agent_config = {
+            "model": model or "claude-sonnet-4-20250514",
+            "verbose": verbose,
+        }
+        if allowed_tools:
+            agent_config["allowed_tools"] = allowed_tools
+    else:
+        raise ValueError(f"Invalid agent type: {agent_type}")
+
+
     if group_size > 1:
         hud_console.info(f"🔄 Running task with group_size={group_size}")
-        agent_config: dict[str, Any] = {}
-
-        # Build agent configuration
-        if agent_type == "vllm":
-            # Special handling for vLLM
-            sample_agent = build_agent(
-                agent_type,
-                model=model,
-                allowed_tools=allowed_tools,
-                verbose=verbose,
-                vllm_base_url=vllm_base_url,
-            )
-            agent_config = {
-                "openai_client": sample_agent.oai,
-                "model_name": sample_agent.model_name,
-                "verbose": verbose,
-                "completion_kwargs": sample_agent.completion_kwargs,
-            }
-            if allowed_tools:
-                agent_config["allowed_tools"] = allowed_tools
-
-            from hud.agents.openai_chat_generic import GenericOpenAIChatAgent
-
-            agent_class = GenericOpenAIChatAgent
-        elif agent_type == "openai":
-            from hud.agents import OperatorAgent
-
-            agent_class = OperatorAgent
-            agent_config = {"verbose": verbose}
-            if allowed_tools:
-                agent_config["allowed_tools"] = allowed_tools
-        elif agent_type == "litellm":
-            from hud.agents.lite_llm import LiteAgent
-
-            agent_class = LiteAgent
-            agent_config = {
-                "model_name": model or "gpt-4o-mini",
-                "verbose": verbose,
-            }
-            if allowed_tools:
-                agent_config["allowed_tools"] = allowed_tools
-        else:
-            from hud.agents import ClaudeAgent
-
-            agent_class = ClaudeAgent
-            agent_config = {
-                "model": model or "claude-sonnet-4-20250514",
-                "verbose": verbose,
-            }
-            if allowed_tools:
-                agent_config["allowed_tools"] = allowed_tools
-
         # Run with grouping
         stats = await run_tasks_grouped(
             tasks=[task],
@@ -384,10 +320,7 @@ async def run_single_task(
             max_steps=max_steps,
             verbose=verbose,
         )
-
-        # Display results
         display_group_statistics(stats, show_details=True)
-
     else:
         # Original single-run logic
         with hud.trace(name=task_prompt):
@@ -406,7 +339,7 @@ async def run_single_task(
 async def run_full_dataset(
     source: str,
     *,
-    agent_type: Literal["claude", "openai", "vllm", "litellm"] = "claude",
+    agent_type: Literal["claude", "openai", "vllm", "litellm", "integration_test"] = "claude",
     model: str | None = None,
     allowed_tools: list[str] | None = None,
     max_concurrent: int = 30,
@@ -417,7 +350,6 @@ async def run_full_dataset(
     verbose: bool = False,
     vllm_base_url: str | None = None,
     group_size: int = 1,
-    integration_test: bool = False,
 ) -> list[Any]:
     """Run evaluation across the entire dataset.
 
@@ -451,13 +383,13 @@ async def run_full_dataset(
     dataset_name = f"Dataset: {path.name}" if path.exists() else source.split("/")[-1]
 
     # Check if source is a JSON/YAML file with list of tasks
-    if path.exists() and path.suffix in {".json", ".yaml", ".yml"}:
-        if path.suffix in {".yaml", ".yml"}:
-            with open(path) as f:
-                json_data = yaml.safe_load(f)
-        else:
+    if path.exists() and path.suffix in {".json", ".jsonl"}:
+        if path.suffix == ".json":
             with open(path) as f:
                 json_data = json.load(f)
+        elif path.suffix == ".jsonl":
+            with open(path) as f:
+                json_data = [json.loads(line) for line in f]
 
         if isinstance(json_data, list):
             dataset_or_tasks = json_data
@@ -469,8 +401,9 @@ async def run_full_dataset(
 
 
     # Build agent class + config for run_dataset
-    if integration_test: # --integration-test mode
-        agent_class = IntegrationTestRunner  # type: ignore[assignment]
+    if agent_type == "integration_test": # --integration-test mode
+        from hud.agents.integration_test_agent import IntegrationTestRunner
+        agent_class = IntegrationTestRunner
         agent_config = {"verbose": verbose}
     elif agent_type == "vllm":
         try:
@@ -775,6 +708,10 @@ def eval_command(
         logging.getLogger("hud.agents").setLevel(logging.INFO)
         logging.getLogger("hud.agents.base").setLevel(logging.INFO)
 
+    # We pass integration_test as the agent_type
+    if integration_test:
+        agent_type = "integration_test"
+
     # Check for required API keys
     if agent == "claude":
         if not settings.anthropic_api_key:
@@ -825,7 +762,6 @@ def eval_command(
                 verbose=very_verbose or verbose,
                 vllm_base_url=vllm_base_url,
                 group_size=group_size,
-                integration_test=integration_test,
             )
         )
     else:
@@ -839,6 +775,5 @@ def eval_command(
                 verbose=very_verbose or verbose,
                 vllm_base_url=vllm_base_url,
                 group_size=group_size,
-                integration_test=integration_test,
             )
         )

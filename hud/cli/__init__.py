@@ -12,6 +12,7 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+from typing import Optional
 
 from . import list_func as list_module
 from .analyze import (
@@ -144,7 +145,7 @@ def debug(
         None,
         help="Docker image, environment directory, or config file followed by optional Docker arguments",  # noqa: E501
     ),
-    config: Path = typer.Option(  # noqa: B008
+    config: Optional[Path] = typer.Option(  # noqa: B008
         None,
         "--config",
         "-c",
@@ -986,7 +987,7 @@ def eval(
             hud_console.info(
                 "Usage: hud eval <source> or create a task JSON file (e.g., task.json, tasks.jsonl)"
             )
-            raise typer.Exit(1)
+            raise typer.Exit(1) from e
 
     # If --integration-test, skip agent selection/validation entirely
     if not integration_test:
@@ -1086,6 +1087,38 @@ def eval(
         max_concurrent_per_worker=max_concurrent_per_worker,
         verbose=verbose,
         integration_test=integration_test,
+    )
+
+@app.command()
+def get(
+    dataset_name: str = typer.Argument(
+        ..., help="HuggingFace dataset name (e.g., 'hud-evals/browser-2048-tasks')"
+    ),
+    split: str = typer.Option(
+        "train", "--split", "-s", help="Dataset split to download (train/test/validation)"
+    ),
+    output: Path | None = typer.Option(  # noqa: B008
+        None, "--output", "-o", help="Output filename (defaults to dataset_name.jsonl)"
+    ),
+    limit: int | None = typer.Option(
+        None, "--limit", "-l", help="Limit number of examples to download"
+    ),
+    format: str = typer.Option(
+        "json",
+        "--format",
+        "-f",
+        help="Output format: json (list) or jsonl (one task per line)",
+    ),
+) -> None:
+    """📥 Download a HuggingFace dataset and save it as JSONL."""
+    from hud.cli.get import get_command
+
+    get_command(
+        dataset_name=dataset_name,
+        split=split,
+        output=output,
+        limit=limit,
+        format=format,
     )
 
 
