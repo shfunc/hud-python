@@ -61,6 +61,9 @@ class ModelConfig:
 @dataclass
 class TrainingConfig:
     """Training hyperparameters."""
+    # GPU parameters
+    gpu_type: str = "A100"
+    num_gpus: int = 2
 
     # Training parameters
     training_steps: int = 100

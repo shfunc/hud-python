@@ -253,6 +253,8 @@ def adjust_config_for_ddp(config: Config, num_gpus: int) -> Config:
     # Update max_parallel_episodes to match
     config.actor.max_parallel_episodes = config.training.batch_size
 
+    config.training.num_gpus = num_gpus
+
     # Log the adjustment
     from rich.console import Console
 

@@ -310,7 +310,7 @@ def run_remote_training(
         # console.print(gpu_table)
 
         if yes:
-            gpu_choice = "A100"  # Default GPU in yes mode
+            gpu_choice = "A100"
             hud_console.info(f"Auto-selecting GPU: {gpu_choice} 80GB (--yes mode)")
         else:
             gpu_choice = hud_console.select(
@@ -323,7 +323,7 @@ def run_remote_training(
             )
 
         if yes:
-            num_gpus = 1  # Default to 1 GPU in yes mode
+            num_gpus = 2 # Default to 2 GPUs in yes mode
             hud_console.info(f"Auto-selecting {num_gpus} GPU(s) (--yes mode)")
         else:
             num_gpus = hud_console.select(
@@ -349,6 +349,8 @@ def run_remote_training(
         )
 
         config = adjust_config_for_ddp(config, int(num_gpus))
+
+        config.training.gpu_type = gpu_choice
 
         # Use a short label for tasks (avoid full absolute paths)
         try:
@@ -424,8 +426,8 @@ def run_remote_training(
         hud_console.info(f"Loading configuration from: {config_file}")
         config = load_config(config_file)
         config_dict = config.to_dict()
-        gpu_choice = "A100"  # Default
-        num_gpus = 1  # Default for non-interactive mode
+        gpu_choice = config.training.gpu_type
+        num_gpus = config.training.num_gpus
 
     # Launch training
     try:
