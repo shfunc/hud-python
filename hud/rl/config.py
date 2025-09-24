@@ -42,7 +42,7 @@ class ModelConfig:
     base_model: str = "Qwen/Qwen2.5-VL-3B-Instruct"
     lora_r: int = 16
     lora_alpha: int = 32
-    lora_dropout: float = 0.05
+    lora_dropout: float = 0.1
     target_modules: tuple[str, ...] = (
         "q_proj",
         "k_proj",
@@ -73,9 +73,9 @@ class TrainingConfig:
     save_every_batches: int = 1
 
     # Batching parameters
-    epochs: int = 2
-    batch_size: int = 12
-    group_size: int = 6
+    epochs: int = 1
+    batch_size: int = 16
+    group_size: int = 8
     mini_batch_size: int = 1
     update_after_group: bool = True  # Whether to update the policy after each task group
     accumulate_over_minibatches: bool = False  # Whether to accumulate over minibatches
@@ -86,7 +86,7 @@ class TrainingConfig:
     leave_one_out: bool = True
 
     # Replay buffer parameters
-    buffer_steps: int = 4
+    buffer_steps: int = 8
     select_strategy: Literal["recent", "variance", "random"] = "variance"
 
     # Aggregation parameters
@@ -95,7 +95,7 @@ class TrainingConfig:
 
     # Regularization parameters
     kl_beta: float = 0.001
-    entropy_beta: float = 0.0
+    entropy_beta: float = 0.001
     top_eps: float = 0.2
     bottom_eps: float = 0.1
 
