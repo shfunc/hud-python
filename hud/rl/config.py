@@ -40,8 +40,8 @@ class ModelConfig:
     """Model and LoRA configuration."""
 
     base_model: str = "Qwen/Qwen2.5-VL-3B-Instruct"
-    lora_r: int = 8
-    lora_alpha: int = 16
+    lora_r: int = 16
+    lora_alpha: int = 32
     lora_dropout: float = 0.05
     target_modules: tuple[str, ...] = (
         "q_proj",
@@ -62,6 +62,7 @@ class ModelConfig:
 @dataclass
 class TrainingConfig:
     """Training hyperparameters."""
+
     # GPU parameters
     gpu_type: str = "A100"
     num_gpus: int = 2
@@ -73,8 +74,8 @@ class TrainingConfig:
 
     # Batching parameters
     epochs: int = 2
-    batch_size: int = 24
-    group_size: int = 4
+    batch_size: int = 12
+    group_size: int = 6
     mini_batch_size: int = 1
     update_after_group: bool = True  # Whether to update the policy after each task group
     accumulate_over_minibatches: bool = False  # Whether to accumulate over minibatches
@@ -93,7 +94,7 @@ class TrainingConfig:
     token_agg: Literal["mean", "sum"] = "mean"  # noqa: S105
 
     # Regularization parameters
-    kl_beta: float = 0.0
+    kl_beta: float = 0.001
     entropy_beta: float = 0.0
     top_eps: float = 0.2
     bottom_eps: float = 0.1

@@ -1178,6 +1178,11 @@ def rl(
         "--vllm-gpu",
         help="Specific GPU for vLLM server",
     ),
+    vllm_gpu_count: int = typer.Option(
+        1,
+        "--vllm-gpu-count",
+        help="Number of GPUs for vLLM server",
+    ),
     skip_vllm_startup: bool = typer.Option(
         False,
         "--skip-vllm-startup",
@@ -1199,6 +1204,7 @@ def rl(
         no_ddp=no_ddp,
         ddp_gpus=ddp_gpus,
         vllm_gpu=vllm_gpu,
+        vllm_gpu_count=vllm_gpu_count,
         yes=yes,
         skip_vllm_startup=skip_vllm_startup,
     )

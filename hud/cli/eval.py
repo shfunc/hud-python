@@ -298,16 +298,15 @@ async def run_single_task(
                 agent_config["allowed_tools"] = allowed_tools
 
         # Run with grouping
-        with hud.trace(name=f"{task_prompt} (group_size={group_size})"):
-            stats = await run_tasks_grouped(
-                tasks=[task],
-                agent_class=agent_class,
-                agent_config=agent_config,
-                group_size=group_size,
-                max_parallel_episodes=48,  # Same as RL default
-                max_steps=max_steps,
-                verbose=verbose,
-            )
+        stats = await run_tasks_grouped(
+            tasks=[task],
+            agent_class=agent_class,
+            agent_config=agent_config,
+            group_size=group_size,
+            max_parallel_episodes=48,  # Same as RL default
+            max_steps=max_steps,
+            verbose=verbose,
+        )
 
         # Display results
         display_group_statistics(stats, show_details=True)
@@ -499,7 +498,7 @@ async def run_full_dataset(
             )
 
         # Display results
-        display_group_statistics(stats, show_details=len(stats) <= 20)
+        display_group_statistics(stats, show_details=len(stats) <= 50)
 
         # Return stats for consistency with other modes
         return stats
