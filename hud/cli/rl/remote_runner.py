@@ -13,6 +13,7 @@ from pathlib import Path
 from rich.console import Console
 
 from hud.cli.rl.celebrate import show_confetti_async
+from hud.cli.rl.gpu_utils import adjust_config_for_ddp
 from hud.cli.rl.viewer import show_json_interactive
 from hud.cli.rl.wait_utils import wait_for_enter_cancel_or_change
 from hud.utils.hud_console import hud_console
@@ -346,6 +347,8 @@ def run_remote_training(
             presets=presets,
             yes=yes,
         )
+
+        config = adjust_config_for_ddp(config, int(num_gpus))
 
         # Use a short label for tasks (avoid full absolute paths)
         try:
