@@ -360,7 +360,7 @@ def run_remote_training(
         except Exception:
             tasks_label = str(tasks_file)
 
-        config.job_name = f"RL {model_name} on {tasks_label}"
+        config.job_name = f"RL {tasks_label} | {model_name}"
 
         # Save config so user can review/edit externally
         temp_config_path = Path(f".rl_config_temp_{model_name}.json")
