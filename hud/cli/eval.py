@@ -70,7 +70,7 @@ def get_available_models() -> list[dict[str, str | None]]:
 
 
 def build_agent(
-    agent_type: Literal["claude", "openai", "vllm", "litellm"],
+    agent_type: Literal["claude", "openai", "vllm", "litellm", "integration_test"],
     *,
     model: str | None = None,
     allowed_tools: list[str] | None = None,
@@ -80,7 +80,10 @@ def build_agent(
     """Create and return the requested agent type."""
 
     # Import agents lazily to avoid dependency issues
-    if agent_type == "vllm":
+    if agent_type == "integration_test":
+        from hud.agents.integration_test_agent import IntegrationTestRunner
+        return IntegrationTestRunner(verbose=verbose)
+    elif agent_type == "vllm":
         # Create a generic OpenAI agent for vLLM server
         try:
             from openai import AsyncOpenAI
@@ -246,7 +249,10 @@ async def run_single_task(
     if agent_type == "integration_test":
         from hud.agents.integration_test_agent import IntegrationTestRunner
         agent_class = IntegrationTestRunner
-    if agent_type == "vllm":
+        agent_config = {"verbose": verbose}
+        if allowed_tools:
+            agent_config["allowed_tools"] = allowed_tools
+    elif agent_type == "vllm":
         # Special handling for vLLM
         sample_agent = build_agent(
             agent_type,
@@ -296,7 +302,6 @@ async def run_single_task(
             agent_config["allowed_tools"] = allowed_tools
     else:
         raise ValueError(f"Invalid agent type: {agent_type}")
-
 
     if group_size > 1:
         hud_console.info(f"🔄 Running task with group_size={group_size}")

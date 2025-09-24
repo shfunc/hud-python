@@ -1,5 +1,5 @@
 from hud.agents.base import MCPAgent, find_reward
-from hud.types import Trace
+from hud.types import Task, Trace
 from typing import Any
 
 
@@ -9,7 +9,7 @@ class IntegrationTestRunner(MCPAgent):
         super().__init__(**kwargs)
         self.metadata = {}
 
-    async def run(self, task: Any, max_steps: int = 10) -> Trace:  # noqa: ARG002
+    async def run(self, task: Task, max_steps: int = 10) -> Trace:  # noqa: ARG002
         try:
             # Initialize using base to set up client and telemetry correctly
             await self.initialize(task)
@@ -17,12 +17,15 @@ class IntegrationTestRunner(MCPAgent):
             # Validate task shape
             if not getattr(task, "integration_test_tool", None):
                 raise ValueError("--integration-test requires task.integration_test_tool (single call)")
-            if getattr(task, "setup_tool", None) or getattr(task, "evaluate_tool", None):
-                raise ValueError("--integration-test requires only integration_test_tool; remove setup_tool/evaluate_tool")
+            
+            if task.setup_tool:
+                _ = await self.call_tools(task.setup_tool)
 
-            # Execute the tool via base helper (gets MCPToolResult list)
-            results = await self.call_tools(task.integration_test_tool)
-            reward = float(find_reward(results[0])) if results else 0.0
+            _ = await self.call_tools(task.integration_test_tool)
+            if task.evaluate_tool:
+                evaluate_result = await self.call_tools(task.evaluate_tool)
+
+            reward = float(find_reward(evaluate_result[0])) if evaluate_result else 0.0
 
             return Trace(done=True, reward=reward, info={})
         finally:

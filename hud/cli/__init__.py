@@ -989,6 +989,9 @@ def eval(
 
     hud_console = HUDConsole()
 
+    if integration_test:
+        agent = "integration_test"
+
     # If no source provided, reuse RL helper to find a tasks file interactively
     if source is None:
         try:
@@ -1044,7 +1047,7 @@ def eval(
         agent = hud_console.select("Select an agent to use:", choices=choices, default=0)
 
     # Handle HUD model selection
-    if agent and agent not in ["claude", "openai", "vllm", "litellm"]:
+    if agent and agent not in ["claude", "openai", "vllm", "litellm", "integration_test"]:
         # Find remote model name
         model = agent
         if not vllm_base_url:
@@ -1065,7 +1068,7 @@ def eval(
         hud_console.info(f"Using HUD model: {model} (trained on {base_model})")
 
     # Validate agent choice
-    valid_agents = ["claude", "openai", "vllm", "litellm"]
+    valid_agents = ["claude", "openai", "vllm", "litellm", "integration_test"]
     if agent not in valid_agents:
         hud_console.error(f"Invalid agent: {agent}. Must be one of: {', '.join(valid_agents)}")
         raise typer.Exit(1)
