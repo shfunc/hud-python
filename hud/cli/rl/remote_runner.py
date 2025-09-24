@@ -183,14 +183,18 @@ def run_remote_training(
 
             # Ask for model type
             if yes:
-                model_type = "Qwen/Qwen2.5-VL-3B-Instruct"  # Default model in yes mode
+                if config_file:
+                    config = load_config(config_file)
+                    model_type = config.model.base_model
+                else:
+                    model_type = "Qwen/Qwen2.5-VL-3B-Instruct"
                 hud_console.info(f"Auto-selecting base model: {model_type} (--yes mode)")
             else:
                 model_type = hud_console.select(
                     "Select base model type:",
                     choices=[
                         {"name": "Qwen2.5-VL-3B-Instruct", "value": "Qwen/Qwen2.5-VL-3B-Instruct"},
-                        # {"name": "Qwen2.5-VL-7B-Instruct", "value": "Qwen/Qwen2.5-VL-7B-Instruct"}, # noqa: E501
+                        {"name": "Qwen2.5-3B-Instruct", "value": "Qwen/Qwen2.5-3B-Instruct"},
                     ],
                     default=0,
                 )
@@ -425,9 +429,11 @@ def run_remote_training(
         # Load provided config
         hud_console.info(f"Loading configuration from: {config_file}")
         config = load_config(config_file)
-        config_dict = config.to_dict()
         gpu_choice = config.training.gpu_type
         num_gpus = config.training.num_gpus
+
+        config = adjust_config_for_ddp(config, int(num_gpus))
+        config_dict = config.to_dict()
 
     # Launch training
     try:

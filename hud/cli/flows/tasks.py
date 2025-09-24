@@ -212,17 +212,14 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
     # Check if tasks already have remote URLs
     already_remote = _validate_tasks(tasks)
 
-    # If tasks already reference a remote MCP URL, do not require a local environment
-    # or attempt any image updates. Use the dataset as-is.
-    if already_remote:
-        return str(tasks_path)
-
     # Extract existing images from tasks
     existing_images = _extract_existing_images(tasks)
 
     # Locate environment
     env_dir = find_environment_dir(tasks_path)
     if not env_dir:
+        if already_remote:
+            return str(tasks_path)
         hud_console.error("Could not locate an environment directory (Dockerfile + pyproject.toml)")
         hud_console.hint("Ensure you're in or near your environment folder before running 'hud rl'")
         raise typer.Exit(1)
