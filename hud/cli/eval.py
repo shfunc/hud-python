@@ -382,24 +382,6 @@ async def run_full_dataset(
     path = Path(source)
     dataset_name = f"Dataset: {path.name}" if path.exists() else source.split("/")[-1]
 
-    # Check if source is a JSON/YAML file with list of tasks
-    if path.exists() and path.suffix in {".json", ".jsonl"}:
-        if path.suffix == ".json":
-            with open(path) as f:
-                json_data = json.load(f)
-        elif path.suffix == ".jsonl":
-            with open(path) as f:
-                json_data = [json.loads(line) for line in f]
-
-        if isinstance(json_data, list):
-            dataset_or_tasks = json_data
-            dataset_name = f"Dataset: {path.name}"
-            hud_console.info(f"Found {len(json_data)} tasks in file: {path.name}")
-        else:
-            hud_console.error("File must contain a list of tasks when using --full flag")
-            raise typer.Exit(1)
-
-
     # Build agent class + config for run_dataset
     if agent_type == "integration_test": # --integration-test mode
         from hud.agents.integration_test_agent import IntegrationTestRunner
