@@ -245,6 +245,7 @@ async def run_single_task(
             task = Task(**task_data)
             agent = MockToolRunner(verbose=verbose)
             result = await agent.run(task, max_steps=max_steps)
+            return
 
         # Use unified loader for both JSON and JSONL
         tasks: list[Task] = load_tasks(str(path))  # type: ignore[assignment]
