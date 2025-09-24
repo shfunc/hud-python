@@ -960,28 +960,10 @@ def eval(
         "--verbose",
         help="Enable verbose output from the agent",
     ),
-<<<<<<< HEAD
-    very_verbose: bool = typer.Option(
+    integration_test: bool = typer.Option(
         False,
-        "--very-verbose",
-        "-vv",
-        help="Enable debug-level logs for maximum visibility",
-    ),
-    vllm_base_url: str | None = typer.Option(
-        None,
-        "--vllm-base-url",
-        help="Base URL for vLLM server (when using --agent vllm)",
-    ),
-    group_size: int = typer.Option(
-        1,
-        "--group-size",
-        help="Number of times to run each task (similar to RL training)",
-=======
-    mock: bool = typer.Option(
-        False,
-        "--mock",
-        help="Run mock_problem tool, where problem is setup, actions are applied, and evaluation is performed, without spinning up an agent",
->>>>>>> 5c2ee9f (mock single working)
+        "--integration-test",
+        help="Run integration_test_tool, where problem is setup, actions are applied, and evaluation is performed, without spinning up an agent",
     ),
 ) -> None:
     """🚀 Run evaluation on datasets or individual tasks with agents."""
@@ -1004,25 +986,10 @@ def eval(
             hud_console.info(
                 "Usage: hud eval <source> or create a task JSON file (e.g., task.json, tasks.jsonl)"
             )
-<<<<<<< HEAD
-            raise typer.Exit(1) from e
-=======
             raise typer.Exit(1)
-        elif len(json_files) == 1:
-            source = str(json_files[0])
-            hud_console.info(f"Found task file: {source}")
-        else:
-            # Multiple files found, let user choose
-            hud_console.info("Multiple task files found:")
-            file_choice = hud_console.select(
-                "Select a task file to run:",
-                choices=[str(f) for f in json_files],
-            )
-            source = file_choice
-            hud_console.success(f"Selected: {source}")
 
-    # If --mock, skip agent selection/validation entirely
-    if not mock:
+    # If --integration-test, skip agent selection/validation entirely
+    if not integration_test:
         # If no agent specified, prompt for selection
         if agent is None:
             agent = hud_console.select(
@@ -1039,7 +1006,6 @@ def eval(
         if agent not in valid_agents:
             hud_console.error(f"Invalid agent: {agent}. Must be one of: {', '.join(valid_agents)}")
             raise typer.Exit(1)
->>>>>>> 5c2ee9f (mock single working)
 
     # Import eval_command lazily to avoid importing agent dependencies
     try:
@@ -1119,46 +1085,7 @@ def eval(
         max_workers=max_workers,
         max_concurrent_per_worker=max_concurrent_per_worker,
         verbose=verbose,
-<<<<<<< HEAD
-        very_verbose=very_verbose,
-        vllm_base_url=vllm_base_url,
-        group_size=group_size,
-=======
-        mock=mock,
->>>>>>> 5c2ee9f (mock single working)
-    )
-
-
-@app.command()
-def get(
-    dataset_name: str = typer.Argument(
-        ..., help="HuggingFace dataset name (e.g., 'hud-evals/browser-2048-tasks')"
-    ),
-    split: str = typer.Option(
-        "train", "--split", "-s", help="Dataset split to download (train/test/validation)"
-    ),
-    output: Path | None = typer.Option(  # noqa: B008
-        None, "--output", "-o", help="Output filename (defaults to dataset_name.jsonl)"
-    ),
-    limit: int | None = typer.Option(
-        None, "--limit", "-l", help="Limit number of examples to download"
-    ),
-    format: str = typer.Option(
-        "json",
-        "--format",
-        "-f",
-        help="Output format: json (list) or jsonl (one task per line)",
-    ),
-) -> None:
-    """📥 Download a HuggingFace dataset and save it as JSONL."""
-    from .get import get_command
-
-    get_command(
-        dataset_name=dataset_name,
-        split=split,
-        output=output,
-        limit=limit,
-        format=format,
+        integration_test=integration_test,
     )
 
 

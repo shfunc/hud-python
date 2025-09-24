@@ -20,7 +20,7 @@ from hud.datasets import run_dataset
 
 from hud.agents.base import MCPAgent, find_reward
 from hud.types import Trace
-from hud.agents.mock_agent import MockToolRunner
+from hud.agents.integration_test_agent import IntegrationTestRunner
 import yaml
 
 if TYPE_CHECKING:
@@ -200,7 +200,7 @@ async def run_single_task(
     verbose: bool = False,
     vllm_base_url: str | None = None,
     group_size: int = 1,
-    mock: bool = False,
+    integration_test: bool = False,
 ) -> None:
     """Load one task and execute it, or detect if JSON contains a list and run as dataset."""
 
@@ -226,24 +226,24 @@ async def run_single_task(
             with open(path) as f:
                 json_data = json.load(f)
 
-        # --mock mode
-        if mock:
+        # --integration-test mode
+        if integration_test:
             # Build single task object (or forward to full runner if multiple)
             if isinstance(json_data, list):
                 if len(json_data) > 1:
-                    raise ValueError("Multiple tasks in --mock mode not supported yet")
+                    raise ValueError("Multiple tasks in --integration-test mode not supported yet")
                 task_data = json_data[0]
             elif isinstance(json_data, dict):
                 task_data = json_data
             else:
-                hud_console.error("Unsupported file format for --mock. Provide a task object or single-item list.")
+                hud_console.error("Unsupported file format for --integration-test. Provide a task object or single-item list.")
                 raise typer.Exit(1)
 
             hud_console.info('Prompt: ' + task_data.get("prompt", "[No prompt provided]"))
-            hud_console.info("🧪 --mock: setting up problem, taking actions, evaluating.")
+            hud_console.info("🧪 --integration-test: setting up problem, taking actions, evaluating.")
             
             task = Task(**task_data)
-            agent = MockToolRunner(verbose=verbose)
+            agent = IntegrationTestRunner(verbose=verbose)
             result = await agent.run(task, max_steps=max_steps)
             return
 
@@ -417,7 +417,7 @@ async def run_full_dataset(
     verbose: bool = False,
     vllm_base_url: str | None = None,
     group_size: int = 1,
-    mock: bool = False,
+    integration_test: bool = False,
 ) -> list[Any]:
     """Run evaluation across the entire dataset.
 
@@ -467,8 +467,10 @@ async def run_full_dataset(
             hud_console.error("File must contain a list of tasks when using --full flag")
             raise typer.Exit(1)
 
-    if mock: # --mock mode
-        agent_class = MockToolRunner  # type: ignore[assignment]
+
+    # Build agent class + config for run_dataset
+    if integration_test: # --integration-test mode
+        agent_class = IntegrationTestRunner  # type: ignore[assignment]
         agent_config = {"verbose": verbose}
     elif agent_type == "vllm":
         try:
@@ -610,7 +612,7 @@ async def run_full_dataset(
                 agent_class=agent_class,
                 agent_config=agent_config,
                 max_concurrent=max_concurrent,
-                metadata={"dataset": source, "parallel": True, **({"mock": True} if mock else {})},
+                metadata={"dataset": source, "parallel": True},
                 max_steps=max_steps,
                 auto_respond=True,
             )
@@ -624,7 +626,7 @@ async def run_full_dataset(
                 max_workers=max_workers,
                 max_concurrent_per_worker=max_concurrent_per_worker,
                 max_concurrent=max_concurrent,
-                metadata={"dataset": source, "parallel": True, **({"mock": True} if mock else {})},
+                metadata={"dataset": source, "parallel": True},
                 max_steps=max_steps,
                 auto_respond=True,
             )
@@ -636,7 +638,7 @@ async def run_full_dataset(
             agent_class=agent_class,
             agent_config=agent_config,
             max_concurrent=max_concurrent,
-            metadata={"dataset": source, **({"mock": True} if mock else {})},
+            metadata={"dataset": source},
             max_steps=max_steps,
         )
 
@@ -712,10 +714,10 @@ def eval_command(
         "--group-size",
         help="Number of times to run each task (similar to RL training)",
     ),
-    mock: bool = typer.Option(
+    integration_test: bool = typer.Option(
         False,
-        "--mock",
-        help="Run mock_problem tool, where problem is setup, actions are applied, and evaluation is performed, without spinning up an agent",
+        "--integration-test",
+        help="Run integration_test_tool tool, where problem is setup, actions are applied, and evaluation is performed, without spinning up an agent",
     ),
 ) -> None:
     """🚀 Run evaluation on datasets or individual tasks with agents.
@@ -823,7 +825,7 @@ def eval_command(
                 verbose=very_verbose or verbose,
                 vllm_base_url=vllm_base_url,
                 group_size=group_size,
-                mock=mock,
+                integration_test=integration_test,
             )
         )
     else:
@@ -837,6 +839,6 @@ def eval_command(
                 verbose=very_verbose or verbose,
                 vllm_base_url=vllm_base_url,
                 group_size=group_size,
-                mock=mock,
+                integration_test=integration_test,
             )
         )

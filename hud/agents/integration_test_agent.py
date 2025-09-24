@@ -3,7 +3,7 @@ from hud.types import Trace
 from typing import Any
 
 
-class MockToolRunner(MCPAgent):
+class IntegrationTestRunner(MCPAgent):
     def __init__(self, **kwargs: Any) -> None:
         kwargs["auto_trace"] = False
         super().__init__(**kwargs)
@@ -15,13 +15,13 @@ class MockToolRunner(MCPAgent):
             await self.initialize(task)
 
             # Validate task shape
-            if not getattr(task, "mock_tool", None):
-                raise ValueError("--mock requires task.mock_tool (single call)")
+            if not getattr(task, "integration_test_tool", None):
+                raise ValueError("--integration-test requires task.integration_test_tool (single call)")
             if getattr(task, "setup_tool", None) or getattr(task, "evaluate_tool", None):
-                raise ValueError("--mock requires only mock_tool; remove setup_tool/evaluate_tool")
+                raise ValueError("--integration-test requires only integration_test_tool; remove setup_tool/evaluate_tool")
 
             # Execute the tool via base helper (gets MCPToolResult list)
-            results = await self.call_tools(task.mock_tool)
+            results = await self.call_tools(task.integration_test_tool)
             reward = float(find_reward(results[0])) if results else 0.0
 
             return Trace(done=True, reward=reward, info={})
@@ -29,12 +29,12 @@ class MockToolRunner(MCPAgent):
             # Ensure resources are cleaned up so the CLI can exit cleanly
             await self._cleanup()
 
-    # Stub implementations to satisfy abstract base class; not used in --mock path
+    # Stub implementations to satisfy abstract base class; not used in --integration-test path
     async def get_system_messages(self) -> list[Any]:
         return []
 
     async def get_response(self, messages: list[Any]):  # noqa: ARG002
-        raise NotImplementedError("MockToolRunner does not implement agent loop")
+        raise NotImplementedError("IntegrationTestRunner does not implement agent loop")
 
     async def format_blocks(self, blocks: list[Any]) -> list[Any]:  # noqa: ARG002
         return []
