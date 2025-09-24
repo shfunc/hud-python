@@ -204,7 +204,9 @@ class GenericOpenAIChatAgent(MCPAgent):
 
         try:
             response = await self._invoke_chat_completion(
-                messages=messages, tools=tools, extra=extra # type: ignore
+                messages=messages,
+                tools=tools, # type: ignore
+                extra=extra,
             )
         except Exception as e:
             error_content = f"Error getting response {e}"
