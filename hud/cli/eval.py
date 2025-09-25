@@ -581,7 +581,7 @@ def eval_command(
         help="Comma-separated list of allowed tools",
     ),
     max_concurrent: int = typer.Option(
-        50,
+        30,
         "--max-concurrent",
         help="Concurrency level for asyncio mode (ignored in parallel mode)",
     ),
