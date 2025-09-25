@@ -7,7 +7,6 @@ import subprocess
 import time
 from typing import TYPE_CHECKING, Any
 
-import torch
 
 from hud.utils.hud_console import HUDConsole
 
@@ -89,6 +88,8 @@ def health_check_gpus(gpu_indices: list[int]) -> dict[str, Any]:
     """
     from rich.console import Console
     from rich.table import Table
+    import torch
+
 
     console = Console()
 
