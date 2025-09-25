@@ -509,9 +509,7 @@ class GRPOLearner:
             return token_log_probs, entropy
         except (IndexError, RuntimeError) as e:
             # Handle empty inputs or DDP errors
-            hud_console.warning_log(
-                f"Error in compute_logprobs: {e}. Returning dummy values."
-            )
+            hud_console.warning_log(f"Error in compute_logprobs: {e}. Returning dummy values.")
             # Return dummy values that match expected shapes
             seq_len = inputs["input_ids"].shape[1] - 1 if "input_ids" in inputs else 0
             batch_size = inputs["input_ids"].shape[0] if "input_ids" in inputs else 1
@@ -624,20 +622,16 @@ def _selective_log_softmax(
     if logits_bt_v.dtype in (torch.float32, torch.float64):
         # Compute logsumexp per [B, T] in a loop over batch to reduce
         # peak from B*T*V to T*V
-        logsumexp_values = torch.stack(
-            [torch.logsumexp(lg, dim=-1) for lg in logits_bt_v]
+        logsumexp_values = torch.stack([torch.logsumexp(lg, dim=-1) for lg in logits_bt_v])
+        selected_logits = torch.gather(logits_bt_v, dim=-1, index=index_bt.unsqueeze(-1)).squeeze(
+            -1
         )
-        selected_logits = torch.gather(
-            logits_bt_v, dim=-1, index=index_bt.unsqueeze(-1)
-        ).squeeze(-1)
         return selected_logits - logsumexp_values
     # Reduced precision: numerically stable route using per-row log_softmax
     token_logprobs_rows: list[torch.Tensor] = []
     for logits_row, index_row in zip(logits_bt_v, index_bt, strict=True):
         logprobs_row = logits_row.log_softmax(dim=-1)
         token_logprobs_rows.append(
-            torch.gather(
-                logprobs_row, dim=-1, index=index_row.unsqueeze(-1)
-            ).squeeze(-1)
+            torch.gather(logprobs_row, dim=-1, index=index_row.unsqueeze(-1)).squeeze(-1)
         )
     return torch.stack(token_logprobs_rows)
