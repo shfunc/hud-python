@@ -7,7 +7,6 @@ import subprocess
 import time
 from typing import TYPE_CHECKING, Any
 
-
 from hud.utils.hud_console import HUDConsole
 
 if TYPE_CHECKING:
@@ -86,10 +85,9 @@ def health_check_gpus(gpu_indices: list[int]) -> dict[str, Any]:
         - all_healthy: Boolean indicating if all GPUs are healthy
         - memory_issues: Boolean indicating if there are memory issues
     """
+    import torch
     from rich.console import Console
     from rich.table import Table
-    import torch
-
 
     console = Console()
 
