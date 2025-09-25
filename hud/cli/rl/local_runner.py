@@ -211,15 +211,15 @@ def run_local_training(
     # Step 3: Model selection (if not provided)
     if model is None and not config_file:
         if yes:
-            model = "Qwen/Qwen2.5-VL-3B-Instruct"  # Default model in yes mode
+            model = "Qwen/Qwen2.5-VL-7B-Instruct"  # Default model in yes mode
             hud_console.info(f"Auto-selecting model: {model} (--yes mode)")
         else:
             model = hud_console.select(
                 "Select a model for RL training:",
                 choices=[
                     {
-                        "name": "Qwen 2.5 VL 3B (Recommended - Vision-Language)",
-                        "value": "Qwen/Qwen2.5-VL-3B-Instruct",
+                        "name": "Qwen 2.5 VL 7B (Recommended - Vision-Language)",
+                        "value": "Qwen/Qwen2.5-VL-7B-Instruct",
                     },
                     {"name": "Custom model", "value": "custom"},
                 ],
