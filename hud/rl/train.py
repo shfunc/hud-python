@@ -11,7 +11,6 @@ import argparse
 import asyncio
 import json
 import logging
-from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -249,18 +248,18 @@ async def train(config: Config, tasks: list[Task]) -> None:
             if step % config.training.save_every_batches == 0:
                 if is_main_process() and vllm is not None and actor is not None:
                     hud_console.section_title("Saving checkpoint and updating vLLM")
-                    # get date and time
-                    now = datetime.now()
-                    checkpoint_id = now.strftime("%Y%m%d_%H%M%S") + f"-{get_global_rank()}"
-                    checkpoint_path = (
-                        Path(config.out_dir) / f"{config.adapter_prefix}-{checkpoint_id}"
-                    )
+                    checkpoint_path = Path(config.out_dir) / f"{config.adapter_prefix}-{step}"
                     learner.save(str(checkpoint_path))
 
                     # Wait for 6 seconds to ensure the checkpoint is saved
                     await asyncio.sleep(6)
 
-                    adapter_name = f"{config.adapter_prefix}-{checkpoint_id}"
+                    # If there is a previous adapter, unload it
+                    current_adapter = vllm.get_current()
+                    if current_adapter is not None:
+                        vllm.unload_adapter(current_adapter)
+
+                    adapter_name = f"{config.adapter_prefix}-{step}"
                     if vllm.load_adapter(adapter_name, str(checkpoint_path)):
                         actor.update_adapter(adapter_name)
                         hud_console.info(f"✓ Checkpoint saved and loaded: {adapter_name}")
