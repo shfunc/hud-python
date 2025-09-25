@@ -80,7 +80,7 @@ def build_agent(
 
     # Import agents lazily to avoid dependency issues
     if agent_type == "integration_test":
-        from hud.agents.integration_test_agent import IntegrationTestRunner
+        from hud.agents.misc.integration_test_agent import IntegrationTestRunner
 
         return IntegrationTestRunner(verbose=verbose)
     elif agent_type == "vllm":
@@ -247,7 +247,7 @@ async def run_single_task(
     # Use grouped evaluation if group_size > 1
     agent_config: dict[str, Any] = {}
     if agent_type == "integration_test":
-        from hud.agents.integration_test_agent import IntegrationTestRunner
+        from hud.agents.misc.integration_test_agent import IntegrationTestRunner
 
         agent_class = IntegrationTestRunner
         agent_config = {"verbose": verbose}
@@ -380,7 +380,7 @@ async def run_full_dataset(
 
     # Build agent class + config for run_dataset
     if agent_type == "integration_test":  # --integration-test mode
-        from hud.agents.integration_test_agent import IntegrationTestRunner
+        from hud.agents.misc.integration_test_agent import IntegrationTestRunner
 
         agent_class = IntegrationTestRunner
         agent_config = {"verbose": verbose}
