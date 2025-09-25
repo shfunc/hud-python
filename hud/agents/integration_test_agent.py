@@ -22,7 +22,7 @@ class IntegrationTestRunner(MCPAgent):
                 raise ValueError(
                     "--integration-test requires task.integration_test_tool (single call)"
                 )
-            
+
             if task.setup_tool:
                 _ = await self.call_tools(task.setup_tool)
 

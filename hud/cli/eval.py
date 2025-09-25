@@ -81,6 +81,7 @@ def build_agent(
     # Import agents lazily to avoid dependency issues
     if agent_type == "integration_test":
         from hud.agents.integration_test_agent import IntegrationTestRunner
+
         return IntegrationTestRunner(verbose=verbose)
     elif agent_type == "vllm":
         # Create a generic OpenAI agent for vLLM server
@@ -247,6 +248,7 @@ async def run_single_task(
     agent_config: dict[str, Any] = {}
     if agent_type == "integration_test":
         from hud.agents.integration_test_agent import IntegrationTestRunner
+
         agent_class = IntegrationTestRunner
         agent_config = {"verbose": verbose}
         if allowed_tools:
@@ -377,8 +379,9 @@ async def run_full_dataset(
     dataset_name = f"Dataset: {path.name}" if path.exists() else source.split("/")[-1]
 
     # Build agent class + config for run_dataset
-    if agent_type == "integration_test": # --integration-test mode
+    if agent_type == "integration_test":  # --integration-test mode
         from hud.agents.integration_test_agent import IntegrationTestRunner
+
         agent_class = IntegrationTestRunner
         agent_config = {"verbose": verbose}
     elif agent_type == "vllm":
@@ -626,9 +629,11 @@ def eval_command(
     integration_test: bool = typer.Option(
         False,
         "--integration-test",
-        help=("Run integration_test_tool tool, where problem is setup, "
-              "actions are applied, and evaluation is performed, without "
-              "spinning up an agent"),
+        help=(
+            "Run integration_test_tool tool, where problem is setup, "
+            "actions are applied, and evaluation is performed, without "
+            "spinning up an agent"
+        ),
     ),
 ) -> None:
     """🚀 Run evaluation on datasets or individual tasks with agents.

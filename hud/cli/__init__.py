@@ -979,9 +979,11 @@ def eval(
     integration_test: bool = typer.Option(
         False,
         "--integration-test",
-        help=("Run integration_test_tool, where problem is setup, "
-              "actions are applied, and evaluation is performed, without "
-              "spinning up an agent"),
+        help=(
+            "Run integration_test_tool, where problem is setup, "
+            "actions are applied, and evaluation is performed, without "
+            "spinning up an agent"
+        ),
     ),
 ) -> None:
     """🚀 Run evaluation on datasets or individual tasks with agents."""
@@ -1092,6 +1094,7 @@ def eval(
         group_size=group_size,
         integration_test=integration_test,
     )
+
 
 @app.command()
 def get(
