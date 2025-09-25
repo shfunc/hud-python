@@ -12,7 +12,6 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from typing import Optional
 
 from . import list_func as list_module
 from .analyze import (
@@ -145,7 +144,7 @@ def debug(
         None,
         help="Docker image, environment directory, or config file followed by optional Docker arguments",  # noqa: E501
     ),
-    config: Optional[Path] = typer.Option(  # noqa: B008
+    config: Path | None = typer.Option(  # noqa: B008
         None,
         "--config",
         "-c",
@@ -980,7 +979,9 @@ def eval(
     integration_test: bool = typer.Option(
         False,
         "--integration-test",
-        help="Run integration_test_tool, where problem is setup, actions are applied, and evaluation is performed, without spinning up an agent",
+        help=("Run integration_test_tool, where problem is setup, "
+              "actions are applied, and evaluation is performed, without "
+              "spinning up an agent"),
     ),
 ) -> None:
     """🚀 Run evaluation on datasets or individual tasks with agents."""

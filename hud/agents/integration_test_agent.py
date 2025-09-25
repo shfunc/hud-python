@@ -1,6 +1,9 @@
-from hud.agents.base import MCPAgent, find_reward
-from hud.types import Task, Trace
+from __future__ import annotations
+
 from typing import Any
+
+from hud.agents.base import MCPAgent, find_reward
+from hud.types import AgentResponse, Task, Trace
 
 
 class IntegrationTestRunner(MCPAgent):
@@ -9,14 +12,16 @@ class IntegrationTestRunner(MCPAgent):
         super().__init__(**kwargs)
         self.metadata = {}
 
-    async def run(self, task: Task, max_steps: int = 10) -> Trace:  # noqa: ARG002
+    async def run(self, task: Task, max_steps: int = 10) -> Trace:
         try:
             # Initialize using base to set up client and telemetry correctly
             await self.initialize(task)
 
             # Validate task shape
             if not getattr(task, "integration_test_tool", None):
-                raise ValueError("--integration-test requires task.integration_test_tool (single call)")
+                raise ValueError(
+                    "--integration-test requires task.integration_test_tool (single call)"
+                )
             
             if task.setup_tool:
                 _ = await self.call_tools(task.setup_tool)
@@ -36,11 +41,15 @@ class IntegrationTestRunner(MCPAgent):
     async def get_system_messages(self) -> list[Any]:
         return []
 
-    async def get_response(self, messages: list[Any]):  # noqa: ARG002
+    async def get_response(self, messages: list[Any]) -> AgentResponse:
         raise NotImplementedError("IntegrationTestRunner does not implement agent loop")
 
-    async def format_blocks(self, blocks: list[Any]) -> list[Any]:  # noqa: ARG002
+    async def format_blocks(self, blocks: list[Any]) -> list[Any]:
         return []
 
-    async def format_tool_results(self, tool_calls: list[Any], tool_results: list[Any]) -> list[Any]:  # noqa: ARG002
+    async def format_tool_results(
+        self,
+        tool_calls: list[Any],
+        tool_results: list[Any],
+    ) -> list[Any]:
         return []

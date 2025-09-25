@@ -15,7 +15,6 @@ from hud.settings import settings
 from hud.utils.group_eval import display_group_statistics, run_tasks_grouped
 from hud.utils.hud_console import HUDConsole
 
-
 if TYPE_CHECKING:
     from hud.types import Task
 logger = logging.getLogger(__name__)
@@ -563,7 +562,7 @@ def eval_command(
         "--full",
         help="Run the entire dataset (omit for single-task debug mode)",
     ),
-    agent: Literal["claude", "openai", "vllm", "litellm"] = typer.Option(
+    agent: Literal["claude", "openai", "vllm", "litellm", "integration_test"] = typer.Option(
         "claude",
         "--agent",
         help="Agent backend to use (claude, openai, vllm for local server, or litellm)",
@@ -627,7 +626,9 @@ def eval_command(
     integration_test: bool = typer.Option(
         False,
         "--integration-test",
-        help="Run integration_test_tool tool, where problem is setup, actions are applied, and evaluation is performed, without spinning up an agent",
+        help=("Run integration_test_tool tool, where problem is setup, "
+              "actions are applied, and evaluation is performed, without "
+              "spinning up an agent"),
     ),
 ) -> None:
     """🚀 Run evaluation on datasets or individual tasks with agents.
@@ -687,7 +688,7 @@ def eval_command(
 
     # We pass integration_test as the agent_type
     if integration_test:
-        agent_type = "integration_test"
+        agent = "integration_test"
 
     # Check for required API keys
     if agent == "claude":
