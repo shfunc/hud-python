@@ -130,7 +130,7 @@ class BaseTool(ABC):
         callback_list = self._callbacks.get(event_type, [])
         for callback in callback_list:
             try:
-                await callback(self, event_type, **kwargs)
+                await callback(**kwargs)
             except Exception as e:
                 logger.warning(f"Callback failed for {event_type}: {e}")
 
