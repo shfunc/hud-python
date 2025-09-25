@@ -22,13 +22,14 @@ class IntegrationTestRunner(MCPAgent):
                 raise ValueError(
                     "--integration-test requires task.integration_test_tool (single call)"
                 )
+            elif not getattr(task, "evaluate_tool", None):
+                raise ValueError("--integration-test requires task.evaluate_tool (single call)")
 
             if task.setup_tool:
                 _ = await self.call_tools(task.setup_tool)
 
             _ = await self.call_tools(task.integration_test_tool)
-            if task.evaluate_tool:
-                evaluate_result = await self.call_tools(task.evaluate_tool)
+            evaluate_result = await self.call_tools(task.evaluate_tool)
 
             reward = float(find_reward(evaluate_result[0])) if evaluate_result else 0.0
 

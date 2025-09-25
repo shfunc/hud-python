@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from mcp import types
-from openai.types.responses import ResponseOutputMessage, ResponseOutputText
 
 from hud.agents.openai import OperatorAgent
 from hud.types import MCPToolCall, MCPToolResult
@@ -168,11 +167,11 @@ class TestOperatorAgent:
             mock_output_text = MagicMock()
             mock_output_text.type = "output_text"
             mock_output_text.text = "I can see the screen content."
-            
+
             mock_output_message = MagicMock()
             mock_output_message.type = "message"
             mock_output_message.content = [mock_output_text]
-            
+
             mock_response.output = [mock_output_message]
 
             mock_openai.responses.create = AsyncMock(return_value=mock_response)
