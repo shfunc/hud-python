@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, cast, Awaitable
 
 from fastmcp import FastMCP
 
@@ -60,7 +60,10 @@ class BaseTool(ABC):
         self.title = title or self.__class__.__name__.replace("Tool", "").replace("_", " ").title()
         self.description = description or (self.__doc__.strip() if self.__doc__ else None)
         self.meta = meta
-        self._callbacks: dict[str, list[Callable]] = {}  # {"event_name": [callback_functions]}
+        self._callbacks: dict[
+            str,
+            list[Callable[..., Awaitable[Any]]],
+        ] = {}  # {"event_name": [callback_functions]}
 
         # Expose attributes FastMCP expects when registering an instance directly
         self.__name__ = self.name  # FastMCP uses fn.__name__ if name param omitted
@@ -103,7 +106,7 @@ class BaseTool(ABC):
             )
         return self._mcp_tool
 
-    def add_callback(self, event_type: str, callback: Callable):
+    def add_callback(self, event_type: str, callback: Callable[..., Awaitable[Any]]):
         """Register a callback function for specific event
         
         Args:
@@ -115,7 +118,7 @@ class BaseTool(ABC):
             self._callbacks[event_type] = []
         self._callbacks[event_type].append(callback)
 
-    def remove_callback(self, event_type: str, callback: Callable):
+    def remove_callback(self, event_type: str, callback: Callable[..., Awaitable[Any]]):
         """Remove a registered callback
         Args:
             event_type: (Required) Specific event name to trigger callback
