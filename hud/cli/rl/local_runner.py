@@ -208,18 +208,19 @@ def run_local_training(
         except Exception:
             return
 
+
     # Step 3: Model selection (if not provided)
     if model is None and not config_file:
         if yes:
-            model = "Qwen/Qwen2.5-VL-7B-Instruct"  # Default model in yes mode
+            model = "Qwen/Qwen2.5-VL-3B-Instruct"  # Default model in yes mode
             hud_console.info(f"Auto-selecting model: {model} (--yes mode)")
         else:
             model = hud_console.select(
                 "Select a model for RL training:",
                 choices=[
                     {
-                        "name": "Qwen 2.5 VL 7B (Recommended - Vision-Language)",
-                        "value": "Qwen/Qwen2.5-VL-7B-Instruct",
+                        "name": "Qwen 2.5 VL 3B (Recommended - Vision-Language)",
+                        "value": "Qwen/Qwen2.5-VL-3B-Instruct",
                     },
                     {"name": "Custom model", "value": "custom"},
                 ],
@@ -230,25 +231,24 @@ def run_local_training(
                 console.print("Enter the model name (HuggingFace ID):")
                 model = input().strip()
 
-    # Validate model is a VL model (whether provided via CLI or selected)
-    if model:
-        try:
-            validate_vl_model(model)
-        except ValueError as e:
-            console.print(f"\n[red]❌ {e}[/red]")
-            try:
-                import typer
+    if config_file:
+        console.print(f"\n[cyan]Loading configuration from: {config_file}[/cyan]")
+        config = load_config(config_file)
+        if hasattr(config, "model") and hasattr(config.model, "base_model"):
+            model = config.model.base_model
 
-                raise typer.Exit(1)
-            except Exception:
-                return
-    else:
+    # Validate model is a VL model (whether provided via CLI or selected)
+    try:
+        validate_vl_model(model)
+    except ValueError as e:
+        console.print(f"\n[red]❌ {e}[/red]")
         try:
             import typer
 
             raise typer.Exit(1)
         except Exception:
             return
+
 
     # Step 4: Generate or load configuration
     if config_file:
@@ -487,8 +487,8 @@ def run_local_training(
 
         from .vllm import start_vllm_server, wait_for_vllm_server
 
+        console.log(f"===================== {config.model.base_model} =====================")
         start_vllm_server(config.model.base_model, vllm_gpu_idx, restart=restart)
-
         server_ready = asyncio.run(wait_for_vllm_server())
         if not server_ready:
             console.print("[red]❌ Failed to start vLLM server[/red]")
@@ -507,7 +507,6 @@ def run_local_training(
             f"\n[bold green]🎯 Starting DDP training on {len(training_gpus)} GPUs...[/bold green]\n"
         )
         launch_ddp_training(training_gpus, tasks_file, temp_config_path, verbose)
-        console.print("\n[green]✅ Training completed successfully![/green]")
     else:
         console.print("\n[bold green]🎯 Starting single-GPU training...[/bold green]\n")
         try:

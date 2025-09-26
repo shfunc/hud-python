@@ -81,7 +81,7 @@ def broadcast_object(obj: Any, src: int = 0) -> Any:
         return obj
 
     obj_list = [obj] if dist.get_rank() == src else [None]
-    dist.broadcast_object_list(obj_list, src=src, device=torch.device("cpu"))
+    dist.broadcast_object_list(obj_list, src=src)
     return obj_list[0]
 
 
