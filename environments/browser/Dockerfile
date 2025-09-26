@@ -94,7 +94,7 @@ EXPOSE 8000 8080 3000-3200 5000-5200
 
 # Simple startup: environment server in background, controller with hot-reload
 CMD ["sh", "-c", "\
-    cd /app && uv run uvicorn environment.server:app --host 0.0.0.0 --port 8000 --reload --log-level info >&2 & \
+    cd /app && uv run --no-sync uvicorn environment.server:app --host 0.0.0.0 --port 8000 --reload --log-level info >&2 & \
     sleep 5 && \
     cd /app && exec hud run controller --reload\
 "] 
