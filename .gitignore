@@ -15,7 +15,6 @@ uv.lock
 *.jpeg
 *.bmp
 *.tiff
-*.ico
 
 # DS-Store
 .DS_Store
@@ -39,6 +38,7 @@ CLAUDE.md
 
 *.csv
 .rl_config_*.json
+.rl-config-*.json
 
 # RL
 wandb/
