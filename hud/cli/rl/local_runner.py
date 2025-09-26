@@ -231,11 +231,24 @@ def run_local_training(
                 console.print("Enter the model name (HuggingFace ID):")
                 model = input().strip()
 
+    # try to get model from config file
     if config_file:
         console.print(f"\n[cyan]Loading configuration from: {config_file}[/cyan]")
         config = load_config(config_file)
         if hasattr(config, "model") and hasattr(config.model, "base_model"):
-            model = config.model.base_model
+            if model is None:
+                model = config.model.base_model
+            else:
+                console.print(f"[yellow]Model already set to {model}, using that instead of {config.model.base_model}[/yellow] (override)")
+
+    if model is None:
+        console.print("[red]❌ No model specified either through CLI or config file[/red]")
+        try:
+            import typer
+
+            raise typer.Exit(1)
+        except Exception:
+            return
 
     # Validate model is a VL model (whether provided via CLI or selected)
     try:
@@ -487,7 +500,6 @@ def run_local_training(
 
         from .vllm import start_vllm_server, wait_for_vllm_server
 
-        console.log(f"===================== {config.model.base_model} =====================")
         start_vllm_server(config.model.base_model, vllm_gpu_idx, restart=restart)
         server_ready = asyncio.run(wait_for_vllm_server())
         if not server_ready:
