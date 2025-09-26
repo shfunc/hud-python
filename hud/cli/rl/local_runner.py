@@ -208,6 +208,7 @@ def run_local_training(
         except Exception:
             return
 
+
     # Step 3: Model selection (if not provided)
     if model is None and not config_file:
         if yes:
@@ -230,25 +231,37 @@ def run_local_training(
                 console.print("Enter the model name (HuggingFace ID):")
                 model = input().strip()
 
-    # Validate model is a VL model (whether provided via CLI or selected)
-    if model:
-        try:
-            validate_vl_model(model)
-        except ValueError as e:
-            console.print(f"\n[red]❌ {e}[/red]")
-            try:
-                import typer
+    # try to get model from config file
+    if config_file:
+        console.print(f"\n[cyan]Loading configuration from: {config_file}[/cyan]")
+        config = load_config(config_file)
+        if hasattr(config, "model") and hasattr(config.model, "base_model"):
+            if model is None:
+                model = config.model.base_model
+            else:
+                console.print(f"[yellow]Model already set to {model}, using that instead of {config.model.base_model}[/yellow] (override)")
 
-                raise typer.Exit(1)
-            except Exception:
-                return
-    else:
+    if model is None:
+        console.print("[red]❌ No model specified either through CLI or config file[/red]")
         try:
             import typer
 
             raise typer.Exit(1)
         except Exception:
             return
+
+    # Validate model is a VL model (whether provided via CLI or selected)
+    try:
+        validate_vl_model(model)
+    except ValueError as e:
+        console.print(f"\n[red]❌ {e}[/red]")
+        try:
+            import typer
+
+            raise typer.Exit(1)
+        except Exception:
+            return
+
 
     # Step 4: Generate or load configuration
     if config_file:
@@ -488,7 +501,6 @@ def run_local_training(
         from .vllm import start_vllm_server, wait_for_vllm_server
 
         start_vllm_server(config.model.base_model, vllm_gpu_idx, restart=restart)
-
         server_ready = asyncio.run(wait_for_vllm_server())
         if not server_ready:
             console.print("[red]❌ Failed to start vLLM server[/red]")
@@ -507,7 +519,6 @@ def run_local_training(
             f"\n[bold green]🎯 Starting DDP training on {len(training_gpus)} GPUs...[/bold green]\n"
         )
         launch_ddp_training(training_gpus, tasks_file, temp_config_path, verbose)
-        console.print("\n[green]✅ Training completed successfully![/green]")
     else:
         console.print("\n[bold green]🎯 Starting single-GPU training...[/bold green]\n")
         try:
