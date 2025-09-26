@@ -29,7 +29,7 @@
   "navigation": {
     "versions": [
       {
-        "version": "0.4.44",
+        "version": "0.4.47",
         "groups": [
           {
             "group": "Get Started",
@@ -105,6 +105,18 @@
     }
   },
   "seo": {
-    "indexHiddenPages": false
+    "indexHiddenPages": false,
+    "metatags": {
+      "charset": "UTF-8",
+      "viewport": "width=device-width, initial-scale=1",
+      "robots": "index, follow",
+      "description": "OSS Evaluations and RL Environments SDK for AI Agent Developers.",
+      "og:title": "HUD Documentation — Evaluations and RL Environments.",
+      "og:description": "OSS Evaluations and RL Environments SDK",
+      "og:site_name": "hud",
+      "twitter:site": "@hud_evals",
+      "twitter:title": "hud docs",
+      "twitter:description": "OSS Evaluations and RL Environments SDK"
+    }
   }
 }

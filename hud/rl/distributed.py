@@ -21,7 +21,7 @@ def setup_distributed() -> None:
         # Increase watchdog timeout to accommodate long eval/sampling phases
         # and enable clearer NCCL error handling.
         os.environ.setdefault("TORCH_NCCL_ASYNC_ERROR_HANDLING", "1")
-        dist.init_process_group("nccl", timeout=timedelta(minutes=15))
+        dist.init_process_group("nccl", timeout=timedelta(minutes=20))
 
 
 def get_local_rank() -> int:

@@ -146,17 +146,27 @@ class GRPOLearner:
             policy.gradient_checkpointing_enable()
             self.log("Gradient checkpointing enabled for memory efficiency")
 
-        # Add LoRA adapters
-        lora_config = LoraConfig(
-            r=model_cfg.lora_r,
-            lora_alpha=model_cfg.lora_alpha,
-            lora_dropout=model_cfg.lora_dropout,
-            task_type="CAUSAL_LM",
-            bias="none",
-            target_modules=list(model_cfg.target_modules),
-        )
+        # Add LoRA adapters or load existing adapter
         policy.config.use_cache = False
-        policy = get_peft_model(policy, lora_config)
+        
+        if model_cfg.adapter_path:
+            # Load existing adapter as baseline
+            self.log(f"Loading existing LoRA adapter from: {model_cfg.adapter_path}")
+            from peft import PeftModel
+            policy = PeftModel.from_pretrained(policy, model_cfg.adapter_path)
+            # Enable adapter training
+            policy.train()
+        else:
+            # Create new LoRA adapter
+            lora_config = LoraConfig(
+                r=model_cfg.lora_r,
+                lora_alpha=model_cfg.lora_alpha,
+                lora_dropout=model_cfg.lora_dropout,
+                task_type="CAUSAL_LM",
+                bias="none",
+                target_modules=list(model_cfg.target_modules),
+            )
+            policy = get_peft_model(policy, lora_config)
 
         # Wrap with DDP if in distributed mode
         if self.world_size > 1:
