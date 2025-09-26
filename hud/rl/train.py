@@ -95,6 +95,18 @@ async def train(config: Config, tasks: list[Task]) -> None:
         if is_main_process()
         else None
     )
+    
+    # Load initial adapter if provided
+    if is_main_process() and config.model.adapter_path and vllm:
+        hud_console.info(f"Loading baseline adapter from: {config.model.adapter_path}")
+        success = vllm.load_adapter(config.model.base_model, config.model.adapter_path)
+        if success and actor is not None:
+            hud_console.info("Successfully loaded baseline adapter as 'base_model'")
+            # Update actor to use the loaded adapter
+            actor.update_adapter(config.model.base_model)
+        else:
+            hud_console.error("Failed to load baseline adapter")
+            exit(1)
 
     # Training state
     step = 0

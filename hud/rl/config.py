@@ -57,6 +57,7 @@ class ModelConfig:
     attn_implementation: str = "flash_attention_2"
     use_liger: bool = True
     gradient_checkpointing: bool = True
+    adapter_path: str | None = None  # Path to existing LoRA adapter to load as baseline
 
 
 @dataclass
