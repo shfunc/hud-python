@@ -204,16 +204,7 @@ The action to perform. The available actions are:
             coord_tuple = tuple(coordinate) if isinstance(coordinate, list) else coordinate
 
         # Map Qwen actions to HudComputerTool actions
-        if action == "screenshot":
-            screenshot_base64 = await self.executor.screenshot()
-            if screenshot_base64:
-                # Rescale screenshot if requested
-                screenshot_base64 = await self._rescale_screenshot(screenshot_base64)
-                result = ContentResult(base64_image=screenshot_base64)
-            else:
-                result = ContentResult(error="Failed to take screenshot")
-
-        elif action == "left_click":
+        if action == "left_click":
             if coord_tuple and len(coord_tuple) >= 2:
                 scaled_x, scaled_y = self._scale_coordinates(coord_tuple[0], coord_tuple[1])
                 logger.info("Scaled coordinates: %s, %s", scaled_x, scaled_y)

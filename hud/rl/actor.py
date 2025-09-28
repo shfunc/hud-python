@@ -37,7 +37,7 @@ class Actor:
         # Match connection limits to parallel_episodes to avoid bottlenecks
         # Use shorter per-request timeout and keep retries modest to avoid long blocking
         http_client = create_retry_httpx_client(
-            timeout=httpx.Timeout(30.0),
+            timeout=httpx.Timeout(60.0),
         )
         return AsyncOpenAI(
             base_url=base_url,
