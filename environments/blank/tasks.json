@@ -13,7 +13,8 @@
       }
     },
     "agent_config": {
-      "allowed_tools": ["act"]
+      "allowed_tools": ["act"],
+      "append_setup_output": true
     },
     "setup_tool": {
       "name": "setup",
