@@ -286,23 +286,38 @@ def build_environment(
         hud_console.error(f"Directory not found: {directory}")
         raise typer.Exit(1)
 
-    # Check for pyproject.toml
-    pyproject_path = env_dir / "pyproject.toml"
-    if not pyproject_path.exists():
-        hud_console.error(f"No pyproject.toml found in {directory}")
-        raise typer.Exit(1)
-
-    # Read pyproject.toml to get image name
-    try:
-        import toml
-
-        pyproject = toml.load(pyproject_path)
-        default_image = pyproject.get("tool", {}).get("hud", {}).get("image", None)
-        if not default_image:
-            # Generate default from directory name
-            default_image = f"{env_dir.name}:dev"
-    except Exception:
-        default_image = f"{env_dir.name}:dev"
+    # Step 1: Check for hud.lock.yaml (previous build)
+    lock_path = env_dir / "hud.lock.yaml"
+    default_image = None
+    
+    if lock_path.exists():
+        try:
+            with open(lock_path) as f:
+                lock_data = yaml.safe_load(f)
+            # Get image name from lock file (strip digest if present)
+            lock_image = lock_data.get("image", "")
+            if lock_image and "@" in lock_image:
+                # Remove @sha256:... digest
+                default_image = lock_image.split("@")[0]
+            elif lock_image:
+                default_image = lock_image
+            
+            if default_image:
+                hud_console.info(f"Using image from lock file: {default_image}")
+        except Exception as e:
+            hud_console.warning(f"Could not read lock file: {e}")
+    
+    # Step 2: If no lock, check for Dockerfile
+    if not default_image:
+        dockerfile_path = env_dir / "Dockerfile"
+        if not dockerfile_path.exists():
+            hud_console.error(f"Not a valid environment directory: {directory}")
+            hud_console.info("Expected: Dockerfile or hud.lock.yaml")
+            raise typer.Exit(1)
+        
+        # First build - use directory name with version 0.1.0
+        default_image = f"{env_dir.name}:0.1.0"
+        hud_console.info(f"First build - starting at version: {default_image}")
 
     # Determine final image tag to use
     image_tag: str = tag if tag else default_image
@@ -333,6 +348,13 @@ def build_environment(
     asyncio.set_event_loop(loop)
     try:
         analysis = loop.run_until_complete(analyze_mcp_environment(temp_tag, verbose, env_vars))
+    except Exception as e:
+        hud_console.error(f"Failed to analyze MCP environment: {e}")
+        hud_console.info("")
+        hud_console.info("To debug this issue, run:")
+        hud_console.command_example(f"hud debug {temp_tag}")
+        hud_console.info("")
+        raise typer.Exit(1) from e
     finally:
         loop.close()
 
@@ -378,15 +400,22 @@ def build_environment(
         new_version = "0.1.0"
         hud_console.info(f"Setting initial version: {new_version}")
 
-    # Create lock file content - minimal and useful
+    # Determine base name for image references
+    base_name = image_tag.split(":")[0] if ":" in image_tag else image_tag
+    
+    # Create lock file content with images subsection at top
     lock_content = {
         "version": "1.0",  # Lock file format version
-        "image": tag,  # Will be updated with ID/digest later
+        "images": {
+            "local": f"{base_name}:{new_version}",  # Local tag with version
+            "full": None,  # Will be set with digest after build
+            "pushed": None,  # Will be set by hud push
+        },
         "build": {
             "generatedAt": datetime.utcnow().isoformat() + "Z",
             "hudVersion": hud_version,
             "directory": str(env_dir.name),
-            "version": new_version,  # Internal environment version
+            "version": new_version,
             # Fast source fingerprint for change detection
             "sourceHash": compute_source_hash(env_dir),
         },
@@ -491,22 +520,21 @@ def build_environment(
     hud_console.success("Built final image with lock file metadata")
 
     # NOW get the image ID after the final build
-    image_id = get_docker_image_id(image_tag)
+    image_id = get_docker_image_id(version_tag)
     if image_id:
-        # For local builds, store the image ID
-        # Docker IDs come as sha256:hash, we want tag@sha256:hash
+        # Store full reference with digest
         if image_id.startswith("sha256:"):
-            lock_content["image"] = f"{image_tag}@{image_id}"
+            lock_content["images"]["full"] = f"{version_tag}@{image_id}"
         else:
-            lock_content["image"] = f"{image_tag}@sha256:{image_id}"
+            lock_content["images"]["full"] = f"{version_tag}@sha256:{image_id}"
 
-        # Update the lock file with the new image reference
+        # Update the lock file with the full image reference
         with open(lock_path, "w") as f:
             yaml.dump(lock_content, f, default_flow_style=False, sort_keys=False)
 
-        hud_console.success("Updated lock file with image ID")
+        hud_console.success("Updated lock file with image digest")
     else:
-        hud_console.warning("Could not retrieve image ID for lock file")
+        hud_console.warning("Could not retrieve image digest")
 
     # Remove temp image after we're done
     subprocess.run(["docker", "rmi", "-f", temp_tag], capture_output=True)  # noqa: S603, S607
@@ -514,7 +542,8 @@ def build_environment(
     # Add to local registry
     if image_id:
         # Save to local registry using the helper
-        save_to_registry(lock_content, lock_content.get("image", tag), verbose)
+        local_ref = lock_content.get("images", {}).get("local", version_tag)
+        save_to_registry(lock_content, local_ref, verbose)
 
     # Print summary
     hud_console.section_title("Build Complete")
