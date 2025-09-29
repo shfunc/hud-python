@@ -352,10 +352,13 @@ async def run_dataset_parallel_manual(
     # Apply custom system prompt if provided
     if custom_system_prompt:
         for task_dict in task_dicts:
-            if "system_prompt" not in task_dict:
-                task_dict["system_prompt"] = custom_system_prompt
+            # Add custom system prompt to agent_config
+            if "agent_config" not in task_dict:
+                task_dict["agent_config"] = {}
+            if "system_prompt" not in task_dict["agent_config"]:
+                task_dict["agent_config"]["system_prompt"] = custom_system_prompt
             else:
-                task_dict["system_prompt"] += "\n" + custom_system_prompt
+                task_dict["agent_config"]["system_prompt"] += "\n" + custom_system_prompt
 
     # Prepare job metadata
     job_metadata = metadata or {}
