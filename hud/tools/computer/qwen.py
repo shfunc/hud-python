@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Literal, cast
+import re
+from typing import TYPE_CHECKING, Any, Literal
 
 from mcp import ErrorData, McpError
 from mcp.types import INTERNAL_ERROR, INVALID_PARAMS, ContentBlock
@@ -59,7 +60,9 @@ class QwenComputerTool(HudComputerTool):
         self.display_height_px = height
 
         # Build custom description with resolution info
-        custom_description = description or f"""
+        custom_description = (
+            description
+            or f"""
 Use a mouse and keyboard to interact with a computer, and take screenshots.
 * This is an interface to a desktop GUI. You do not have access to a terminal or applications menu. You must click on desktop icons to start applications.
 * Some applications may take time to start or process actions, so you may need to wait and take successive screenshots to see the results of your actions. E.g. if you click on Firefox and a window doesn't open, try wait and taking another screenshot.
@@ -68,6 +71,7 @@ Use a mouse and keyboard to interact with a computer, and take screenshots.
 * If you tried clicking on a program or link but it failed to load, even after waiting, try adjusting your cursor position so that the tip of the cursor visually falls on the element that you want to click.
 * Make sure to click any buttons, links, icons, etc with the cursor tip in the center of the element. Don't click boxes on their edges.
 """.strip()
+        )
 
         super().__init__(
             executor=executor,
@@ -221,7 +225,9 @@ The action to perform. The available actions are:
                 result = await self.executor.click(x=scaled_x, y=scaled_y, pattern=[100])
             else:
                 raise McpError(
-                    ErrorData(code=INVALID_PARAMS, message="coordinate is required for double_click")
+                    ErrorData(
+                        code=INVALID_PARAMS, message="coordinate is required for double_click"
+                    )
                 )
 
         elif action == "triple_click":
@@ -232,7 +238,9 @@ The action to perform. The available actions are:
                 result = await self.executor.click(x=scaled_x, y=scaled_y, pattern=[100])
             else:
                 raise McpError(
-                    ErrorData(code=INVALID_PARAMS, message="coordinate is required for triple_click")
+                    ErrorData(
+                        code=INVALID_PARAMS, message="coordinate is required for triple_click"
+                    )
                 )
 
         elif action == "right_click":
@@ -250,7 +258,9 @@ The action to perform. The available actions are:
                 result = await self.executor.click(x=scaled_x, y=scaled_y, button="middle")
             else:
                 raise McpError(
-                    ErrorData(code=INVALID_PARAMS, message="coordinate is required for middle_click")
+                    ErrorData(
+                        code=INVALID_PARAMS, message="coordinate is required for middle_click"
+                    )
                 )
 
         elif action == "mouse_move":
@@ -314,23 +324,28 @@ The action to perform. The available actions are:
                 current_pos = await self.executor.position()
                 if isinstance(current_pos, ContentResult) and current_pos.output:
                     # Parse the position from the output
-                    import re
                     match = re.search(r"x=(\d+), y=(\d+)", current_pos.output)
                     if match:
-                        start_x, start_y = int(match.group(1)), int(match.group(2))
-                        path = [(start_x, start_y), (coord_tuple[0], coord_tuple[1])]
-                        scaled_path = self._scale_path(path)
-                        result = await self.executor.drag(path=scaled_path)
+                        # Current position is in screen coordinates
+                        screen_start_x, screen_start_y = int(match.group(1)), int(match.group(2))
+                        # End position is in agent coordinates, needs scaling
+                        scaled_end_x, scaled_end_y = self._scale_coordinates(
+                            coord_tuple[0], coord_tuple[1]
+                        )
+                        # Create path in screen coordinates
+                        path = [(screen_start_x, screen_start_y), (scaled_end_x, scaled_end_y)]
+                        # Path is already in screen coordinates, no need to scale again
+                        result = await self.executor.drag(path=path)
                     else:
-                        # If we can't get the current position, drag from (0, 0)
-                        path = [(0, 0), (coord_tuple[0], coord_tuple[1])]
-                        scaled_path = self._scale_path(path)
-                        result = await self.executor.drag(path=scaled_path)
+                        raise McpError(
+                            ErrorData(
+                                code=INTERNAL_ERROR, message="Failed to parse current position"
+                            )
+                        )
                 else:
-                    # If we can't get the current position, drag from (0, 0)
-                    path = [(0, 0), (coord_tuple[0], coord_tuple[1])]
-                    scaled_path = self._scale_path(path)
-                    result = await self.executor.drag(path=scaled_path)
+                    raise McpError(
+                        ErrorData(code=INTERNAL_ERROR, message="Failed to get current position")
+                    )
             else:
                 raise McpError(
                     ErrorData(
@@ -371,7 +386,11 @@ The action to perform. The available actions are:
             "left_click_drag",
         }
 
-        if action in interactive_actions and isinstance(result, ContentResult) and not result.base64_image:
+        if (
+            action in interactive_actions
+            and isinstance(result, ContentResult)
+            and not result.base64_image
+        ):
             screenshot_base64 = await self.executor.screenshot()
             if screenshot_base64:
                 # Rescale screenshot if requested
