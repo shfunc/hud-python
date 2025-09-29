@@ -364,10 +364,8 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
             item["setup_tool"] = _simplify_tool_call(t.setup_tool)
         if t.evaluate_tool is not None:
             item["evaluate_tool"] = _simplify_tool_call(t.evaluate_tool)
-        if t.agent_tools is not None:
-            item["agent_tools"] = t.agent_tools
-        if t.system_prompt is not None:
-            item["system_prompt"] = t.system_prompt
+        if t.agent_config is not None:
+            item["agent_config"] = t.agent_config
         if t.metadata:
             item["metadata"] = t.metadata
         if t.id is not None:

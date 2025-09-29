@@ -102,8 +102,12 @@ async def run_dataset(
             async with sem:
                 # Create trace for this task
                 task_name = task_dict.get("prompt") or f"Task {index}"
-                if custom_system_prompt and "system_prompt" not in task_dict:
-                    task_dict["system_prompt"] = custom_system_prompt
+                if custom_system_prompt:
+                    # Add custom system prompt to agent_config if not already present
+                    if "agent_config" not in task_dict:
+                        task_dict["agent_config"] = {}
+                    if "system_prompt" not in task_dict["agent_config"]:
+                        task_dict["agent_config"]["system_prompt"] = custom_system_prompt
                 # Ensure task_id is a string for baggage propagation
                 raw_task_id = task_dict.get("id")
                 safe_task_id = str(raw_task_id) if raw_task_id is not None else None

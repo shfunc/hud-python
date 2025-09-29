@@ -100,7 +100,6 @@ class MCPAgent(ABC):
         self.disallowed_tools = disallowed_tools or []
 
         # Task filtering
-        self.agent_tools = None
         self.lifecycle_tools = []
 
         # Messages
@@ -146,34 +145,34 @@ class MCPAgent(ABC):
         except Exception as e:
             self._handle_connection_error(e)
 
-        # If task is provided, add lifecycle tools
+        # If task is provided, apply agent_config and add lifecycle tools
         if isinstance(task, Task):
-            if task.agent_tools:
-                self.agent_tools = task.agent_tools
+            # Apply agent_config if present
+            if task.agent_config:
+                if "system_prompt" in task.agent_config and task.agent_config["system_prompt"]:
+                    self.system_prompt += "\n\n" + task.agent_config["system_prompt"]
+                if "append_setup_output" in task.agent_config:
+                    self.append_setup_output = task.agent_config["append_setup_output"]
+                if "initial_screenshot" in task.agent_config:
+                    self.initial_screenshot = task.agent_config["initial_screenshot"]
+                if "allowed_tools" in task.agent_config:
+                    self.allowed_tools = task.agent_config["allowed_tools"]
+                if "disallowed_tools" in task.agent_config:
+                    self.disallowed_tools = task.agent_config["disallowed_tools"]
+
+            # Add lifecycle tools (setup/evaluate) - they should always be available
             if task.setup_tool:
                 if isinstance(task.setup_tool, list):
                     for tool in task.setup_tool:
-                        if not self.agent_tools or (
-                            self.agent_tools and tool.name not in self.agent_tools
-                        ):
-                            self.lifecycle_tools.append(tool.name)
-                elif not self.agent_tools or (
-                    self.agent_tools and task.setup_tool.name not in self.agent_tools
-                ):
+                        self.lifecycle_tools.append(tool.name)
+                else:
                     self.lifecycle_tools.append(task.setup_tool.name)
             if task.evaluate_tool:
                 if isinstance(task.evaluate_tool, list):
                     for tool in task.evaluate_tool:
-                        if not self.agent_tools or (
-                            self.agent_tools and tool.name not in self.agent_tools
-                        ):
-                            self.lifecycle_tools.append(tool.name)
-                elif not self.agent_tools or (
-                    self.agent_tools and task.evaluate_tool.name not in self.agent_tools
-                ):
+                        self.lifecycle_tools.append(tool.name)
+                else:
                     self.lifecycle_tools.append(task.evaluate_tool.name)
-            if task.system_prompt:
-                self.system_prompt += "\n\n" + task.system_prompt
 
         # Re-apply filtering with updated lifecycle tools
         await self._filter_tools()
@@ -634,7 +633,6 @@ class MCPAgent(ABC):
 
         self.console.debug(f"All tools: {[t.name for t in all_tools]}")
         self.console.debug(f"Allowed tools: {self.allowed_tools}")
-        self.console.debug(f"Agent tools: {self.agent_tools}")
         self.console.debug(f"Disallowed tools: {self.disallowed_tools}")
         self.console.debug(f"Lifecycle tools: {self.lifecycle_tools}")
 
@@ -646,9 +644,6 @@ class MCPAgent(ABC):
             if not is_lifecycle:
                 if self.allowed_tools and tool.name not in self.allowed_tools:
                     self.console.debug(f"Skipping tool '{tool.name}' - not in allowed_tools")
-                    continue
-                if self.agent_tools and tool.name not in self.agent_tools:
-                    self.console.debug(f"Skipping tool '{tool.name}' - not in agent_tools")
                     continue
                 if tool.name in self.disallowed_tools:
                     self.console.debug(f"Skipping tool '{tool.name}' - in disallowed_tools")
