@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
+from mcp import types
 
 from hud.cli.eval import build_agent, eval_command, get_available_models, run_full_dataset, run_single_task
 from hud.types import Task, Trace
@@ -117,3 +118,108 @@ class TestRunSingleTask:
             mock_grouped.assert_called_once()
             assert mock_grouped.call_args.kwargs["group_size"] == 3
             assert mock_grouped.call_args.kwargs["max_steps"] == 10
+
+
+class TestToolFiltering:
+    """Test wildcard tool filtering via agent_config in tasks."""
+
+    @pytest.fixture
+    def mock_mcp_client(self):
+        """Fixture for mock MCP client."""
+        client = MagicMock()
+        client.initialize = AsyncMock()
+        client.mcp_config = {"local": {"url": "http://localhost"}}
+        return client
+
+    @pytest.fixture
+    def mock_model_client(self):
+        """Fixture for mock Anthropic client."""
+        return MagicMock()
+
+    async def _run_agent_with_tools(
+        self,
+        mock_mcp_client: MagicMock,
+        mock_model_client: MagicMock,
+        tools: list[types.Tool],
+        agent_config: dict | None = None,
+    ) -> list[types.Tool]:
+        """Helper to create agent, initialize with tools and config, return filtered tools."""
+        from hud.agents import ClaudeAgent
+        
+        mock_mcp_client.list_tools = AsyncMock(return_value=tools)
+        
+        task = Task(
+            prompt="Test",
+            mcp_config={"local": {"url": "http://localhost"}},
+            agent_config=agent_config or {}
+        )
+        
+        agent = ClaudeAgent(
+            mcp_client=mock_mcp_client,
+            model_client=mock_model_client,
+            model="test",
+            validate_api_key=False
+        )
+        await agent.initialize(task)
+        return agent.get_available_tools()
+
+    @pytest.mark.asyncio
+    async def test_no_filters_returns_all_tools(self, mock_mcp_client, mock_model_client) -> None:
+        """Test that no filters in agent_config returns all tools."""
+        tools = [
+            types.Tool(name="tool1", description="Tool 1", inputSchema={}),
+            types.Tool(name="tool2", description="Tool 2", inputSchema={}),
+            types.Tool(name="debug_tool", description="Debug", inputSchema={}),
+        ]
+        
+        result = await self._run_agent_with_tools(mock_mcp_client, mock_model_client, tools)
+        
+        assert len(result) == 3
+
+    @pytest.mark.asyncio
+    async def test_allowed_tools_filters_correctly(self, mock_mcp_client, mock_model_client) -> None:
+        """Test that allowed_tools in agent_config filters to matching patterns."""
+        tools = [
+            types.Tool(name="screenshot_take", description="Tool 1", inputSchema={}),
+            types.Tool(name="screenshot_full", description="Tool 2", inputSchema={}),
+            types.Tool(name="click", description="Tool 3", inputSchema={}),
+        ]
+        agent_config = {"allowed_tools": ["screenshot_*"]}
+        
+        result = await self._run_agent_with_tools(mock_mcp_client, mock_model_client, tools, agent_config)
+        
+        assert len(result) == 2
+        assert all("screenshot" in t.name for t in result)
+
+    @pytest.mark.asyncio
+    async def test_disallowed_tools_excludes_correctly(self, mock_mcp_client, mock_model_client) -> None:
+        """Test that disallowed_tools in agent_config excludes matching patterns."""
+        tools = [
+            types.Tool(name="tool1", description="Tool 1", inputSchema={}),
+            types.Tool(name="debug_tool", description="Tool 2", inputSchema={}),
+            types.Tool(name="internal_secret", description="Tool 3", inputSchema={}),
+        ]
+        agent_config = {"disallowed_tools": ["debug_*", "internal_*"]}
+        
+        result = await self._run_agent_with_tools(mock_mcp_client, mock_model_client, tools, agent_config)
+        
+        assert len(result) == 1
+        assert result[0].name == "tool1"
+
+    @pytest.mark.asyncio
+    async def test_both_filters_applies_allowed_then_disallowed(self, mock_mcp_client, mock_model_client) -> None:
+        """Test that both filters in agent_config work together (disallowed takes precedence)."""
+        tools = [
+            types.Tool(name="browser_click", description="Tool 1", inputSchema={}),
+            types.Tool(name="browser_debug", description="Tool 2", inputSchema={}),
+            types.Tool(name="system_click", description="Tool 3", inputSchema={}),
+        ]
+        agent_config = {
+            "allowed_tools": ["browser_*"],
+            "disallowed_tools": ["*_debug"]
+        }
+        
+        result = await self._run_agent_with_tools(mock_mcp_client, mock_model_client, tools, agent_config)
+        
+        assert len(result) == 1
+        assert result[0].name == "browser_click"
