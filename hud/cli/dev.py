@@ -211,13 +211,14 @@ async def run_mcp_module(
     run_kwargs = {
         "transport": transport,
         "show_banner": False,
-        "log_level": "INFO" if verbose else "ERROR",
     }
     
     if transport == "http":
         run_kwargs["port"] = port
         run_kwargs["path"] = "/mcp"
         run_kwargs["host"] = "0.0.0.0"  # noqa: S104
+        run_kwargs["log_level"] = "INFO" if verbose else "ERROR"
+    # Note: stdio transport doesn't support log_level parameter
     
     # Run the server
     await mcp_server.run_async(**run_kwargs)
@@ -406,7 +407,9 @@ def run_with_reload(
             break
 
 
-def run_docker_dev_server(port: int, verbose: bool, docker_args: list[str]) -> None:
+def run_docker_dev_server(
+    port: int, verbose: bool, inspector: bool, interactive: bool, docker_args: list[str]
+) -> None:
     """Run MCP server in Docker with volume mounts, expose via local HTTP proxy."""
     import typer
     import yaml
@@ -550,6 +553,14 @@ def run_docker_dev_server(port: int, verbose: bool, docker_args: list[str]) -> N
     # Create proxy using MCPServer (includes /docs and REST wrappers!)
     proxy = MCPServer.as_proxy(mcp_config, name="HUD Docker Dev Proxy")
     
+    # Launch inspector if requested
+    if inspector:
+        asyncio.run(launch_inspector(port))
+    
+    # Launch interactive mode if requested
+    if interactive:
+        launch_interactive_thread(port, verbose)
+    
     try:
         # Run proxy with HTTP transport
         asyncio.run(
@@ -587,12 +598,12 @@ def run_mcp_dev_server(
         hud_console.note("Detected Dockerfile - using Docker mode with volume mounts")
         hud_console.dim_info("Tip", "Use 'hud dev --help' to see all options")
         hud_console.info("")
-        run_docker_dev_server(port, verbose, docker_args)
+        run_docker_dev_server(port, verbose, inspector, interactive, docker_args)
         return
     
     # Route to Docker mode if explicitly requested
     if docker:
-        run_docker_dev_server(port, verbose, docker_args)
+        run_docker_dev_server(port, verbose, inspector, interactive, docker_args)
         return
     
     transport = "stdio" if stdio else "http"
