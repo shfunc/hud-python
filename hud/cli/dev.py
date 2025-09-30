@@ -53,17 +53,8 @@ def auto_detect_module() -> tuple[str, Path | None] | tuple[None, None]:
 
 
 def should_use_docker_mode(cwd: Path) -> bool:
-    """Check if environment requires Docker mode (has Dockerfile in env root)."""
-    # Check current directory
-    if (cwd / "Dockerfile").exists():
-        return True
-    
-    # Check parent directory (if we're in server/ or environment/)
-    parent = cwd.parent
-    if (parent / "Dockerfile").exists() and (parent / "server").exists():
-        return True
-    
-    return False
+    """Check if environment requires Docker mode (has Dockerfile in current dir)."""
+    return (cwd / "Dockerfile").exists()
 
 
 async def run_mcp_module(
