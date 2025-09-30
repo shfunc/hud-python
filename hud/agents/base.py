@@ -154,9 +154,18 @@ class MCPAgent(ABC):
                 if "initial_screenshot" in task.agent_config:
                     self.initial_screenshot = task.agent_config["initial_screenshot"]
                 if "allowed_tools" in task.agent_config:
-                    self.allowed_tools = task.agent_config["allowed_tools"]
+                    # If allowed_tools has already been set, we take the intersection of the two
+                    # If the list had been empty, we were allowing all tools, so we overwrite in this
+                    if isinstance(self.allowed_tools, list) and len(self.allowed_tools) > 0:
+                        self.allowed_tools = [tool for tool in self.allowed_tools if tool in task.agent_config["allowed_tools"]]
+                    else:  # If allowed_tools is None, we overwrite it
+                        self.allowed_tools = task.agent_config["allowed_tools"]
                 if "disallowed_tools" in task.agent_config:
-                    self.disallowed_tools = task.agent_config["disallowed_tools"]
+                    # If disallowed_tools has already been set, we take the union of the two
+                    if isinstance(self.disallowed_tools, list):
+                        self.disallowed_tools.extend(task.agent_config["disallowed_tools"])
+                    else:  # If disallowed_tools is None, we overwrite it
+                        self.disallowed_tools = task.agent_config["disallowed_tools"]
 
         all_tools = await self.mcp_client.list_tools()
         self._available_tools = []

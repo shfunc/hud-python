@@ -375,7 +375,7 @@ async def run_full_dataset(
     hud_console.info(f"📊 Loading tasks from: {source}…")
     tasks: list[Task] = load_tasks(source)  # type: ignore[assignment]
 
-    if not tasks:
+    if len(tasks) == 0:
         hud_console.error(f"No tasks found in: {source}")
         raise typer.Exit(1)
 
