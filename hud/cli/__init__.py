@@ -935,8 +935,8 @@ def eval(
         "--max-concurrent",
         help="Max concurrent tasks (prevents rate limits in both asyncio and parallel modes)",
     ),
-    max_steps: int = typer.Option(
-        30,
+    max_steps: int | None = typer.Option(
+        None,
         "--max-steps",
         help="Maximum steps per task (default: 10 for single, 50 for full)",
     ),
