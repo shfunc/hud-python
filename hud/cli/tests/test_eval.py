@@ -387,3 +387,139 @@ class TestRunDatasetToolFiltering:
             
             expected_tools = {"browser_click", "browser_type", "system_screenshot"}
             assert filtered_names == expected_tools, f"Expected {expected_tools}, got {filtered_names}"
+
+
+class TestSystemPromptHandling:
+    """Test system prompt handling through run_dataset flow."""
+
+    @pytest.fixture
+    def mock_mcp_client(self):
+        """Fixture for mock MCP client."""
+        client = MagicMock()
+        client.initialize = AsyncMock()
+        client.list_tools = AsyncMock(return_value=[])
+        client.shutdown = AsyncMock()
+        client.mcp_config = {"local": {"url": "http://localhost:8765/mcp"}}
+        return client
+
+    @pytest.fixture
+    def captured_agent_fixture(self):
+        """Fixture that returns a dictionary to capture the agent instance."""
+        return {"agent": None}
+
+    @pytest.fixture
+    def mock_run_context(self, captured_agent_fixture):
+        """Fixture for mocking _run_context to capture agent."""
+        async def _mock(self, context, max_steps=10):
+            captured_agent_fixture["agent"] = self
+            return Trace(reward=1.0, done=True, content="Done")
+        return _mock
+
+    @pytest.fixture
+    def mock_call_tools(self):
+        """Fixture for mocking call_tools."""
+        async def _mock(self, tool_call=None):
+            return []
+        return _mock
+
+    @pytest.mark.asyncio
+    async def test_task_system_prompt_only(
+        self, captured_agent_fixture, mock_run_context, mock_call_tools, mock_mcp_client
+    ) -> None:
+        """Test that task system_prompt is appended when agent has default system prompt."""
+        from hud.agents import ClaudeAgent
+        from hud.agents.base import GLOBAL_SYSTEM_PROMPT
+        from hud.datasets.runner import run_dataset
+        
+        task_system_prompt = "Task prompt"
+        
+        # Create a task with its own system_prompt in agent_config
+        task_dict = {
+            "prompt": "Test task",
+            "mcp_config": {"local": {"url": "http://localhost:8765/mcp"}},
+            "agent_config": {
+                "system_prompt": task_system_prompt,
+            }
+        }
+        
+        # Agent config with no custom system_prompt (will use default)
+        agent_init_config = {
+            "validate_api_key": False,
+        }
+        
+        with patch("hud.job"), \
+             patch("hud.trace"), \
+             patch.object(ClaudeAgent, "_run_context", mock_run_context), \
+             patch.object(ClaudeAgent, "call_tools", mock_call_tools), \
+             patch("hud.clients.MCPClient", return_value=mock_mcp_client):
+            
+            # Run the dataset
+            await run_dataset(
+                name="test_job",
+                dataset=[task_dict],
+                agent_class=ClaudeAgent,
+                agent_config=agent_init_config,
+                max_steps=10,
+            )
+            
+            # Verify agent was created and ran
+            captured_agent = captured_agent_fixture["agent"]
+            assert captured_agent is not None
+            
+            # Verify the task system prompt was appended
+            assert captured_agent.system_prompt.endswith(f"\n\n{task_system_prompt}")
+            # Verify it starts with the base global system prompt
+            assert captured_agent.system_prompt.startswith(GLOBAL_SYSTEM_PROMPT)
+
+    @pytest.mark.asyncio
+    async def test_both_agent_and_task_system_prompts(
+        self, captured_agent_fixture, mock_run_context, mock_call_tools, mock_mcp_client
+    ) -> None:
+        """Test that both agent init and task system prompts are present when both are set."""
+        from hud.agents import ClaudeAgent
+        from hud.datasets.runner import run_dataset
+        
+        agent_custom_prompt = "Agent init prompt"
+        task_system_prompt = "Task prompt"
+        
+        # Create a task with its own system_prompt in agent_config
+        task_dict = {
+            "prompt": "Test task",
+            "mcp_config": {"local": {"url": "http://localhost:8765/mcp"}},
+            "agent_config": {
+                "system_prompt": task_system_prompt,
+            }
+        }
+        
+        # Agent config WITH custom system_prompt
+        agent_init_config = {
+            "system_prompt": agent_custom_prompt,
+            "validate_api_key": False,
+        }
+        
+        with patch("hud.job"), \
+             patch("hud.trace"), \
+             patch.object(ClaudeAgent, "_run_context", mock_run_context), \
+             patch.object(ClaudeAgent, "call_tools", mock_call_tools), \
+             patch("hud.clients.MCPClient", return_value=mock_mcp_client):
+            
+            # Run the dataset
+            await run_dataset(
+                name="test_job",
+                dataset=[task_dict],
+                agent_class=ClaudeAgent,
+                agent_config=agent_init_config,
+                max_steps=10,
+            )
+            
+            # Verify agent was created and ran
+            captured_agent = captured_agent_fixture["agent"]
+            assert captured_agent is not None
+            
+            # Verify the task system prompt was appended at the end
+            assert captured_agent.system_prompt.endswith(f"\n\n{task_system_prompt}")
+            # Verify it starts with the agent custom prompt
+            assert captured_agent.system_prompt.startswith(agent_custom_prompt)
+            # Verify both prompts are present
+            assert agent_custom_prompt in captured_agent.system_prompt
+            assert task_system_prompt in captured_agent.system_prompt
