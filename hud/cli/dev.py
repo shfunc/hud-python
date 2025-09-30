@@ -18,6 +18,68 @@ from hud.utils.hud_console import HUDConsole, GREEN
 hud_console = HUDConsole()
 
 
+def show_dev_server_info(
+    server_name: str,
+    port: int,
+    transport: str,
+    inspector: bool,
+    interactive: bool,
+    env_dir: Path | None = None,
+) -> str:
+    """Show consistent server info for both Python and Docker modes.
+    
+    Returns the Cursor deeplink URL.
+    """
+    import base64
+    import json
+    
+    # Generate Cursor deeplink
+    server_config = {"url": f"http://localhost:{port}/mcp"}
+    config_json = json.dumps(server_config, indent=2)
+    config_base64 = base64.b64encode(config_json.encode()).decode()
+    cursor_deeplink = (
+        f"cursor://anysphere.cursor-deeplink/mcp/install?"
+        f"name={server_name}&config={config_base64}"
+    )
+    
+    # Server section
+    hud_console.section_title("Server")
+    hud_console.info(f"{hud_console.sym.ITEM} {server_name}")
+    if transport == "http":
+        hud_console.info(f"{hud_console.sym.ITEM} http://localhost:{port}/mcp")
+    else:
+        hud_console.info(f"{hud_console.sym.ITEM} (stdio)")
+    
+    # Quick Links (only for HTTP mode)
+    if transport == "http":
+        hud_console.section_title("Quick Links")
+        hud_console.info(f"{hud_console.sym.ITEM} Docs: http://localhost:{port}/docs")
+        hud_console.info(f"{hud_console.sym.ITEM} Cursor: {cursor_deeplink}")
+        
+        # Check for VNC (browser environment)
+        if env_dir and (env_dir / "environment" / "server.py").exists():
+            try:
+                content = (env_dir / "environment" / "server.py").read_text()
+                if "x11vnc" in content.lower() or "vnc" in content.lower():
+                    hud_console.info(f"{hud_console.sym.ITEM} VNC: http://localhost:8080/vnc.html")
+            except Exception:
+                pass
+        
+        # Inspector/Interactive status
+        if inspector or interactive:
+            hud_console.info("")
+            if inspector:
+                hud_console.info(f"{hud_console.sym.SUCCESS} Inspector launching...")
+            if interactive:
+                hud_console.info(f"{hud_console.sym.SUCCESS} Interactive mode enabled")
+    
+    hud_console.info("")
+    hud_console.info(f"{hud_console.sym.SUCCESS} Hot-reload enabled")
+    hud_console.info("")
+    
+    return cursor_deeplink
+
+
 def auto_detect_module() -> tuple[str, Path | None] | tuple[None, None]:
     """Auto-detect MCP module in current directory.
     
@@ -157,36 +219,16 @@ async def run_mcp_module(
         hud_console.info("")
         hud_console.header("HUD Development Server")
     
-    # Show concise info only on first run
-    if not is_reload and transport == "http":
-        import base64
-        import json
-        
-        # Generate Cursor deeplink
-        server_config = {"url": f"http://localhost:{port}/mcp"}
-        config_json = json.dumps(server_config, indent=2)
-        config_base64 = base64.b64encode(config_json.encode()).decode()
-        server_name = mcp_server.name or "mcp-server"
-        cursor_deeplink = (
-            f"cursor://anysphere.cursor-deeplink/mcp/install?"
-            f"name={server_name}&config={config_base64}"
+    # Show server info only on first run
+    if not is_reload:
+        show_dev_server_info(
+            server_name=mcp_server.name or "mcp-server",
+            port=port,
+            transport=transport,
+            inspector=inspector,
+            interactive=interactive,
+            env_dir=Path.cwd().parent if (Path.cwd().parent / "environment").exists() else None,
         )
-        
-        hud_console.section_title("Server")
-        hud_console.info(f"{hud_console.sym.ITEM} {mcp_server.name}")
-        hud_console.info(f"{hud_console.sym.ITEM} http://localhost:{port}/mcp")
-        
-        hud_console.section_title("Quick Links")
-        hud_console.info(f"{hud_console.sym.ITEM} Docs: http://localhost:{port}/docs")
-        hud_console.info(f"{hud_console.sym.ITEM} Cursor: {cursor_deeplink}")
-        hud_console.info(f"{hud_console.sym.ITEM} Inspector: Run with --inspector")
-        hud_console.info(f"{hud_console.sym.ITEM} Interactive: Run with --interactive")
-        hud_console.info("")
-        hud_console.info(f"{hud_console.sym.SUCCESS} Hot-reload enabled")
-    elif not is_reload:
-        hud_console.info(f"{hud_console.sym.ITEM} {mcp_server.name} (stdio)")
-        hud_console.info("")
-        hud_console.info(f"{hud_console.sym.SUCCESS} Hot-reload enabled")
     
     # Check if there's an environment backend and remind user to start it (first run only)
     if not is_reload:
@@ -218,7 +260,6 @@ async def run_mcp_module(
         run_kwargs["path"] = "/mcp"
         run_kwargs["host"] = "0.0.0.0"  # noqa: S104
         run_kwargs["log_level"] = "INFO" if verbose else "ERROR"
-    # Note: stdio transport doesn't support log_level parameter
     
     # Run the server
     await mcp_server.run_async(**run_kwargs)
@@ -231,6 +272,7 @@ async def launch_inspector(port: int) -> None:
     try:
         import platform
         import urllib.parse
+
 
         server_url = f"http://localhost:{port}/mcp"
         encoded_url = urllib.parse.quote(server_url)
@@ -501,14 +543,6 @@ def run_docker_dev_server(
     
     # Print startup info
     hud_console.header("HUD Development Mode (Docker)")
-    hud_console.section_title("Configuration")
-    hud_console.detail(f"Image: {image_name}")
-    hud_console.detail(f"Container: {container_name}")
-    hud_console.detail(f"Environment: {env_dir.name}")
-    
-    hud_console.section_title("Volume Mounts")
-    hud_console.detail("server/ → /app/server (hot-reload enabled)")
-    hud_console.detail("environment/ → /app/environment (hot-reload enabled)")
     
     if verbose:
         hud_console.section_title("Docker Command")
@@ -522,26 +556,15 @@ def run_docker_dev_server(
         }
     }
     
-    # Create local HTTP proxy to the container's stdio MCP server
-    hud_console.section_title("Server")
-    hud_console.flow("Starting Docker container with volume mounts...")
-    hud_console.note("Edit server/ or environment/ files to trigger reload inside container")
-    hud_console.info("")
-    
-    hud_console.section_title("Quick Links")
-    hud_console.detail(f"MCP Server: http://localhost:{port}/mcp")
-    hud_console.detail(f"API Docs: http://localhost:{port}/docs")
-    
-    # Check if browser environment (has VNC)
-    if (env_dir / "environment" / "server.py").exists():
-        content = (env_dir / "environment" / "server.py").read_text()
-        if "x11vnc" in content.lower() or "vnc" in content.lower():
-            hud_console.detail("VNC Web: http://localhost:8080/vnc.html")
-    
-    hud_console.detail(f"Cursor: vscode://file/{env_dir.absolute()}")
-    hud_console.info("")
-    hud_console.note("Press Ctrl+C to stop")
-    hud_console.info("")
+    # Show consistent server info
+    show_dev_server_info(
+        server_name=image_name,
+        port=port,
+        transport="http",  # Docker mode always uses HTTP proxy
+        inspector=inspector,
+        interactive=interactive,
+        env_dir=env_dir,
+    )
     
     # Suppress logs unless verbose
     if not verbose:
@@ -550,35 +573,50 @@ def run_docker_dev_server(
         logging.getLogger("uvicorn").setLevel(logging.ERROR)
         os.environ["FASTMCP_DISABLE_BANNER"] = "1"
     
-    # Create proxy using MCPServer (includes /docs and REST wrappers!)
-    proxy = MCPServer.as_proxy(mcp_config, name="HUD Docker Dev Proxy")
+    # Note about hot-reload behavior
+    hud_console.dim_info("", "Container restarts on file changes (mounted volumes), if changing tools restart hud dev")
+    hud_console.info("")
     
-    # Launch inspector if requested
-    if inspector:
-        asyncio.run(launch_inspector(port))
-    
-    # Launch interactive mode if requested
-    if interactive:
-        launch_interactive_thread(port, verbose)
+    # Create and run proxy with HUD helpers
+    async def run_proxy() -> None:
+        from fastmcp import FastMCP
+        
+        # Create FastMCP proxy to Docker stdio
+        fastmcp_proxy = FastMCP.as_proxy(mcp_config, name="HUD Docker Dev Proxy")
+        
+        # Wrap in MCPServer to get /docs and REST wrappers
+        proxy = MCPServer(name="HUD Docker Dev Proxy")
+        
+        # Import all tools from the FastMCP proxy
+        await proxy.import_server(fastmcp_proxy)
+        
+        # Launch inspector if requested
+        if inspector:
+            await launch_inspector(port)
+        
+        # Launch interactive mode if requested
+        if interactive:
+            launch_interactive_thread(port, verbose)
+        
+        # Run proxy with HTTP transport
+        await proxy.run_async(
+            transport="http",
+            host="0.0.0.0",
+            port=port,
+            path="/mcp",
+            log_level="error" if not verbose else "info",
+                    show_banner=False,
+                )
     
     try:
-        # Run proxy with HTTP transport
-        asyncio.run(
-            proxy.run_async(
-                transport="http",
-                host="0.0.0.0",
-                port=port,
-                path="/mcp",
-                log_level="error" if not verbose else "info",
-                show_banner=False,
-            )
-        )
+        asyncio.run(run_proxy())
     except KeyboardInterrupt:
         hud_console.info("\n\nStopping...")
         raise typer.Exit(0)
 
 
 def run_mcp_dev_server(
+
     module: str | None,
     stdio: bool,
     port: int,
@@ -589,6 +627,7 @@ def run_mcp_dev_server(
     docker: bool = False,
     docker_args: list[str] | None = None,
 ) -> None:
+
     """Run MCP development server with hot-reload."""
     docker_args = docker_args or []
     cwd = Path.cwd()
@@ -648,3 +687,4 @@ def run_mcp_dev_server(
         asyncio.run(run_mcp_module(module, transport, port, verbose, False, False))
     else:
         run_with_reload(module, watch_paths, transport, port, verbose, inspector, interactive)
+

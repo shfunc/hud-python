@@ -184,7 +184,8 @@ async def analyze_mcp_environment(
         if verbose:
             hud_console.info(f"Initializing MCP client with command: {' '.join(docker_cmd)}")
 
-        await client.initialize()
+        # Add timeout to fail fast instead of hanging (30 seconds)
+        await asyncio.wait_for(client.initialize(), timeout=60.0)
         initialized = True
         initialize_ms = int((time.time() - start_time) * 1000)
 
@@ -205,6 +206,11 @@ async def analyze_mcp_environment(
             "tools": tool_info,
             "success": True,
         }
+    except asyncio.TimeoutError:
+        from hud.shared.exceptions import HudException
+        hud_console.error("MCP server initialization timed out after 60 seconds")
+        hud_console.info("The server likely crashed during startup - check stderr logs with 'hud debug'")
+        raise HudException("MCP server initialization timeout") from None
     except Exception as e:
         from hud.shared.exceptions import HudException
 
