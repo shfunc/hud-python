@@ -133,7 +133,7 @@ class MCPServer(FastMCP):
        FastMCP ``FunctionTool`` interface.
     """
 
-    def __init__(self, *, name: str | None = None, **fastmcp_kwargs: Any) -> None:
+    def __init__(self, name: str | None = None, instructions: str | None = None, **fastmcp_kwargs: Any) -> None:
         # Store shutdown function placeholder before super().__init__
         self._shutdown_fn: Callable | None = None
 
@@ -179,7 +179,7 @@ class MCPServer(FastMCP):
 
             fastmcp_kwargs["lifespan"] = _lifespan
 
-        super().__init__(name=name, **fastmcp_kwargs)
+        super().__init__(name=name, instructions=instructions, **fastmcp_kwargs)
         self._initializer_fn: Callable | None = None
         self._did_init = False
         self._replaced_server = False

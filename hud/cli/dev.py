@@ -416,9 +416,10 @@ def run_with_reload(
 
 
 def run_docker_dev_server(port: int, verbose: bool, docker_args: list[str]) -> None:
-    """Run MCP server in Docker with volume mounts for hot-reload."""
+    """Run MCP server in Docker with volume mounts, expose via local HTTP proxy."""
     import typer
     import yaml
+    from hud.server import MCPServer
     
     cwd = Path.cwd()
     
@@ -457,32 +458,19 @@ def run_docker_dev_server(port: int, verbose: bool, docker_args: list[str]) -> N
         hud_console.error(f"Failed to read lock file: {e}")
         raise typer.Exit(1) from e
     
-    # Check if image exists
-    try:
-        subprocess.run(
-            ["docker", "inspect", image_name],
-            capture_output=True,
-            check=True,
-        )
-    except subprocess.CalledProcessError:
-        hud_console.error(f"Image '{image_name}' not found")
-        hud_console.info("Run 'hud build' to create it")
-        raise typer.Exit(1)
-    
     # Generate unique container name
-    import os
     pid = str(os.getpid())[-6:]
     base_name = image_name.replace(":", "-").replace("/", "-")
     container_name = f"{base_name}-dev-{pid}"
     
     # Build docker run command with volume mounts
     docker_cmd = [
-         "docker",
+        "docker",
         "run",
         "--rm",
         "-i",
         "--name",
-         container_name,
+        container_name,
         # Mount both server and environment for hot-reload
         "-v",
         f"{env_dir.absolute()}/server:/app/server:rw",
@@ -493,11 +481,6 @@ def run_docker_dev_server(port: int, verbose: bool, docker_args: list[str]) -> N
         "-e",
         "PYTHONUNBUFFERED=1",
     ]
-    
-    # Expose common ports (can be overridden with docker_args)
-    default_ports = ["8000:8000", "8080:8080", f"{port}:{port}"]
-    for port_mapping in default_ports:
-        docker_cmd.extend(["-p", port_mapping])
     
     # Load .env file if present
     env_file = env_dir / ".env"
@@ -530,32 +513,66 @@ def run_docker_dev_server(port: int, verbose: bool, docker_args: list[str]) -> N
     hud_console.detail(f"Environment: {env_dir.name}")
     
     hud_console.section_title("Volume Mounts")
-    hud_console.detail(f"server/ → /app/server (hot-reload enabled)")
-    hud_console.detail(f"environment/ → /app/environment (hot-reload enabled)")
-    
-    hud_console.section_title("Ports")
-    for port_map in default_ports:
-        hud_console.detail(f"localhost:{port_map.split(':')[0]} → container:{port_map.split(':')[1]}")
+    hud_console.detail("server/ → /app/server (hot-reload enabled)")
+    hud_console.detail("environment/ → /app/environment (hot-reload enabled)")
     
     if verbose:
         hud_console.section_title("Docker Command")
         hud_console.info(" ".join(docker_cmd))
     
+    # Create MCP config pointing to the Docker container's stdio
+    mcp_config = {
+        "docker": {
+            "command": docker_cmd[0],
+            "args": docker_cmd[1:],
+        }
+    }
+    
+    # Create local HTTP proxy to the container's stdio MCP server
     hud_console.section_title("Server")
-    hud_console.flow("Starting Docker container...")
-    hud_console.note("Edit server/ or environment/ files to trigger reload")
+    hud_console.flow("Starting Docker container with volume mounts...")
+    hud_console.note("Edit server/ or environment/ files to trigger reload inside container")
+    hud_console.info("")
+    
+    hud_console.section_title("Quick Links")
+    hud_console.detail(f"MCP Server: http://localhost:{port}/mcp")
+    hud_console.detail(f"API Docs: http://localhost:{port}/docs")
+    
+    # Check if browser environment (has VNC)
+    if (env_dir / "environment" / "server.py").exists():
+        content = (env_dir / "environment" / "server.py").read_text()
+        if "x11vnc" in content.lower() or "vnc" in content.lower():
+            hud_console.detail("VNC Web: http://localhost:8080/vnc.html")
+    
+    hud_console.detail(f"Cursor: vscode://file/{env_dir.absolute()}")
+    hud_console.info("")
     hud_console.note("Press Ctrl+C to stop")
     hud_console.info("")
     
-    # Run Docker container (streams output directly)
+    # Suppress logs unless verbose
+    if not verbose:
+        logging.getLogger("fastmcp").setLevel(logging.ERROR)
+        logging.getLogger("mcp").setLevel(logging.ERROR)
+        logging.getLogger("uvicorn").setLevel(logging.ERROR)
+        os.environ["FASTMCP_DISABLE_BANNER"] = "1"
+    
+    # Create proxy using MCPServer (includes /docs and REST wrappers!)
+    proxy = MCPServer.as_proxy(mcp_config, name="HUD Docker Dev Proxy")
+    
     try:
-        process = subprocess.run(docker_cmd, check=False)  # noqa: S603
-        if process.returncode != 0:
-            hud_console.error(f"Docker container exited with code {process.returncode}")
-            raise typer.Exit(process.returncode)
+        # Run proxy with HTTP transport
+        asyncio.run(
+            proxy.run_async(
+                transport="http",
+                host="0.0.0.0",
+                port=port,
+                path="/mcp",
+                log_level="error" if not verbose else "info",
+                show_banner=False,
+            )
+        )
     except KeyboardInterrupt:
         hud_console.info("\n\nStopping...")
-        # Docker --rm will clean up automatically
         raise typer.Exit(0)
 
 
