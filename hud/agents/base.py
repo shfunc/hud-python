@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import fnmatch
 import json
 import logging
 from abc import ABC, abstractmethod
@@ -157,11 +158,20 @@ class MCPAgent(ABC):
                 if "disallowed_tools" in task.agent_config:
                     self.disallowed_tools = task.agent_config["disallowed_tools"]
 
-        self._available_tools = [
-            tool for tool in await self.mcp_client.list_tools()
-            if (self.allowed_tools and tool.name in self.allowed_tools) and
-            (self.disallowed_tools is None or tool.name not in self.disallowed_tools)
-        ]
+        all_tools = await self.mcp_client.list_tools()
+        self._available_tools = []
+
+        # Filter tools based on allowed and disallowed patterns
+        # No allowed tools and no disallowed tools -> we accept all tools
+        # No allowed tools and disallowed tools -> we accept all tools except the disallowed ones
+        for tool in all_tools:
+            if self.allowed_tools is not None:
+                if not any(fnmatch.fnmatch(tool.name, pattern) for pattern in self.allowed_tools):
+                    continue
+            if self.disallowed_tools is not None:
+                if any(fnmatch.fnmatch(tool.name, pattern) for pattern in self.disallowed_tools):
+                    continue
+            self._available_tools.append(tool)
 
     async def run(self, prompt_or_task: str | Task | dict[str, Any], max_steps: int = 10) -> Trace:
         """
