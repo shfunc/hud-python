@@ -654,10 +654,10 @@ def eval_command(
         hud eval hud-evals/SheetBench-50 --full --agent claude
 
         # Run large dataset with PARALLEL execution (auto-optimized)
-        hud eval hud-evals/OSWorld-Verified-XLang --full --parallel
+        hud eval hud-evals/OSWorld-Verified-Gold --full --parallel
 
         # Parallel mode with manual configuration (16 workers, 25 tasks each)
-        hud eval hud-evals/OSWorld-Verified-XLang --full --parallel --max-workers 16
+        hud eval hud-evals/OSWorld-Verified-Gold --full --parallel --max-workers 16
 
         # Limit total concurrent tasks to prevent rate limits
         hud eval hud-evals/SheetBench-50 --full --parallel --max-concurrent 20
