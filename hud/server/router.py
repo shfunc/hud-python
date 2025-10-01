@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from .server import MCPServer
+from hud.server.server import MCPServer
 
 if TYPE_CHECKING:
     from collections.abc import Callable
