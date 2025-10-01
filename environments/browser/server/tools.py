@@ -85,4 +85,5 @@ async def api_request(url: str, method: str = "GET", data: dict | None = None) -
             else response.text,
         }
 
+
 __all__ = ["playwright"]

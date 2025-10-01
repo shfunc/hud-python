@@ -162,8 +162,7 @@ class ServiceManager:
 
             # Open a default page so the browser window is visible
             default_context = await self._browser.new_context(
-                viewport={"width": 1920, "height": 1080},
-                no_viewport=False
+                viewport={"width": 1920, "height": 1080}, no_viewport=False
             )
             default_page = await default_context.new_page()
             await default_page.goto("about:blank")
@@ -367,7 +366,9 @@ class ServiceManager:
 
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.get(f"http://localhost:{self.cdp_port}/json/version", timeout=5.0)
+                response = await client.get(
+                    f"http://localhost:{self.cdp_port}/json/version", timeout=5.0
+                )
                 if response.status_code == 200:
                     data = response.json()
                     # Chrome returns webSocketDebuggerUrl in /json/version response
@@ -376,7 +377,9 @@ class ServiceManager:
                         return websocket_url
 
                 # Fallback: try /json/list to find a browser target
-                response = await client.get(f"http://localhost:{self.cdp_port}/json/list", timeout=5.0)
+                response = await client.get(
+                    f"http://localhost:{self.cdp_port}/json/list", timeout=5.0
+                )
                 if response.status_code == 200:
                     targets = response.json()
                     # Look for a browser target (type 'page' or title containing 'about:blank')

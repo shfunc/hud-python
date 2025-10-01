@@ -24,29 +24,29 @@ _INTERNAL_PREFIX = "int_"
 
 class HiddenRouter(MCPRouter):
     """Wraps a FastMCP router to provide a single dispatcher tool for its sub-tools.
-    
+
     Instead of exposing all tools at the top level, this creates a single tool
     (named after the router) that dispatches to the router's tools internally.
-    
+
     Useful for setup/evaluate patterns where you want:
     - A single 'setup' tool that can call setup_basic(), setup_advanced(), etc.
     - A single 'evaluate' tool that can call evaluate_score(), evaluate_complete(), etc.
-    
+
     Example:
         # Create a router with multiple setup functions
         setup_router = MCPRouter(name="setup")
-        
+
         @setup_router.tool
         async def reset():
             return "Environment reset"
-        
+
         @setup_router.tool
         async def seed_data():
             return "Data seeded"
-        
+
         # Wrap in HiddenRouter
         hidden_setup = HiddenRouter(setup_router)
-        
+
         # Now you have one 'setup' tool that dispatches to reset/seed_data
         mcp.include_router(hidden_setup)
     """
@@ -68,24 +68,24 @@ class HiddenRouter(MCPRouter):
             meta: Optional metadata for the dispatcher tool
         """
         name = router.name or "router"
-        
+
         # Naming scheme for hidden/internal tools
         self._prefix_fn: Callable[[str], str] = lambda n: f"{_INTERNAL_PREFIX}{n}"
-        
+
         super().__init__(name=name)
-        
+
         # Set up dispatcher tool
         dispatcher_title = title or f"{name.title()} Dispatcher"
         dispatcher_desc = description or f"Call internal '{name}' functions"
-        
+
         # Register dispatcher that routes to hidden tools
         async def _dispatch(
             name: str,
             arguments: dict | str | None = None,
             ctx: Any | None = None,
-        ):
+        ) -> Any:
             """Gateway to hidden tools.
-            
+
             Args:
                 name: Internal function name (without prefix)
                 arguments: Arguments to forward to the internal tool (dict or JSON string)
@@ -94,19 +94,17 @@ class HiddenRouter(MCPRouter):
             # Handle JSON string inputs
             if isinstance(arguments, str):
                 import json
+
                 try:
                     arguments = json.loads(arguments)
                 except json.JSONDecodeError:
                     arguments = {}
-            
+
             # Call the internal tool
-            return await self._tool_manager.call_tool(
-                self._prefix_fn(name),
-                arguments or {}
-            )
-        
+            return await self._tool_manager.call_tool(self._prefix_fn(name), arguments or {})  # type: ignore
+
         from fastmcp.tools.tool import FunctionTool
-        
+
         dispatcher_tool = FunctionTool.from_function(
             _dispatch,
             name=name,
@@ -116,12 +114,12 @@ class HiddenRouter(MCPRouter):
             meta=meta,
         )
         self._tool_manager.add_tool(dispatcher_tool)
-        
+
         # Copy all tools from source router as hidden tools
         for tool in router._tool_manager._tools.values():
             tool._key = self._prefix_fn(tool.name)
             self._tool_manager.add_tool(tool)
-        
+
         # Expose list of available functions via resource
         async def _functions_catalogue() -> list[str]:
             """List all internal function names without prefix."""
@@ -130,9 +128,9 @@ class HiddenRouter(MCPRouter):
                 for key in self._tool_manager._tools
                 if key.startswith(_INTERNAL_PREFIX)
             ]
-        
+
         from fastmcp.resources import Resource
-        
+
         catalogue_resource = Resource.from_function(
             _functions_catalogue,
             uri=f"{name}://functions",
@@ -149,7 +147,7 @@ class HiddenRouter(MCPRouter):
             for key, tool in self._tool_manager._tools.items()
             if not key.startswith(_INTERNAL_PREFIX)
         ]
-    
+
     def _sync_list_tools(self) -> dict[str, Tool]:
         """Override _list_tools to hide internal tools when mounted."""
         return {
@@ -158,4 +156,5 @@ class HiddenRouter(MCPRouter):
             if not key.startswith(_INTERNAL_PREFIX)
         }
 
-__all__ = ["MCPRouter", "HiddenRouter"]
+
+__all__ = ["HiddenRouter", "MCPRouter"]

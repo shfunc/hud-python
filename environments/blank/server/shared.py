@@ -13,5 +13,3 @@ http_client = httpx.AsyncClient(
 )
 
 __all__ = ["ENV_SERVER_PORT", "http_client"]
-
-

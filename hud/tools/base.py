@@ -145,7 +145,7 @@ _INTERNAL_PREFIX = "int_"
 
 class BaseHub(FastMCP):
     """A composition-friendly FastMCP server that holds an internal tool dispatcher.
-    
+
     Note: BaseHub can be used standalone or to wrap existing routers. For the newer
     FastAPI-like pattern, consider using HiddenRouter from hud.server instead.
     """

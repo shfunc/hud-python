@@ -206,10 +206,13 @@ async def analyze_mcp_environment(
             "tools": tool_info,
             "success": True,
         }
-    except asyncio.TimeoutError:
+    except TimeoutError:
         from hud.shared.exceptions import HudException
+
         hud_console.error("MCP server initialization timed out after 60 seconds")
-        hud_console.info("The server likely crashed during startup - check stderr logs with 'hud debug'")
+        hud_console.info(
+            "The server likely crashed during startup - check stderr logs with 'hud debug'"
+        )
         raise HudException("MCP server initialization timeout") from None
     except Exception as e:
         from hud.shared.exceptions import HudException
@@ -295,7 +298,7 @@ def build_environment(
     # Step 1: Check for hud.lock.yaml (previous build)
     lock_path = env_dir / "hud.lock.yaml"
     base_name = None
-    
+
     if lock_path.exists():
         try:
             with open(lock_path) as f:
@@ -311,7 +314,7 @@ def build_environment(
                 hud_console.info(f"Using base name from lock file: {base_name}")
         except Exception as e:
             hud_console.warning(f"Could not read lock file: {e}")
-    
+
     # Step 2: If no lock, check for Dockerfile
     if not base_name:
         dockerfile_path = env_dir / "Dockerfile"
@@ -319,7 +322,7 @@ def build_environment(
             hud_console.error(f"Not a valid environment directory: {directory}")
             hud_console.info("Expected: Dockerfile or hud.lock.yaml")
             raise typer.Exit(1)
-        
+
         # First build - use directory name
         base_name = env_dir.name
         hud_console.info(f"First build - using base name: {base_name}")
@@ -414,7 +417,7 @@ def build_environment(
     # Determine base name for image references
     if image_tag:
         base_name = image_tag.split(":")[0] if ":" in image_tag else image_tag
-    
+
     # Create lock file content with images subsection at top
     lock_content = {
         "version": "1.1",  # Lock file format version
@@ -512,7 +515,7 @@ def build_environment(
             latest_tag,  # Always tag with latest
         ]
     )
-    
+
     # Add custom tag if user provided one
     if image_tag and image_tag not in [version_tag, latest_tag]:
         label_cmd.extend(["-t", image_tag])
@@ -573,13 +576,13 @@ def build_environment(
 
     # Show the version tag as primary since that's what will be pushed
     hud_console.status_item("Built image", version_tag, primary=True)
-    
+
     # Show additional tags
     additional_tags = [latest_tag]
     if image_tag and image_tag not in [version_tag, latest_tag]:
         additional_tags.append(image_tag)
     hud_console.status_item("Also tagged", ", ".join(additional_tags))
-    
+
     hud_console.status_item("Version", new_version)
     hud_console.status_item("Lock file", "hud.lock.yaml")
     hud_console.status_item("Tools found", str(analysis["toolCount"]))

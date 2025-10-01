@@ -46,5 +46,3 @@ def _discover_cdp_url(timeout_sec: float = 60.0, poll_interval_sec: float = 0.5)
 playwright = PlaywrightTool(cdp_url=_discover_cdp_url())
 
 __all__ = ["ENV_SERVER_URL", "http_client", "playwright"]
-
-

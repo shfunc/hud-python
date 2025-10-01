@@ -133,7 +133,9 @@ class MCPServer(FastMCP):
        FastMCP ``FunctionTool`` interface.
     """
 
-    def __init__(self, name: str | None = None, instructions: str | None = None, **fastmcp_kwargs: Any) -> None:
+    def __init__(
+        self, name: str | None = None, instructions: str | None = None, **fastmcp_kwargs: Any
+    ) -> None:
         # Store shutdown function placeholder before super().__init__
         self._shutdown_fn: Callable | None = None
 
@@ -419,7 +421,7 @@ class MCPServer(FastMCP):
 
         # Import the hidden router (synchronous)
         self._sync_import_router(HiddenRouter(router), hidden=True, prefix=prefix, **kwargs)
-    
+
     def _sync_import_router(
         self,
         router: FastMCP,
@@ -428,13 +430,15 @@ class MCPServer(FastMCP):
         **kwargs: Any,
     ) -> None:
         """Synchronously import tools/resources from a router.
-        
+
         This is a synchronous alternative to import_server for use at module import time.
         """
         import re
-        
+
         # Import tools directly - use internal dict to preserve keys
-        tools = router._tool_manager._tools.items() if not hidden else router._sync_list_tools().items() # type: ignore
+        tools = (
+            router._tool_manager._tools.items() if not hidden else router._sync_list_tools().items()
+        )  # type: ignore
         for key, tool in tools:
             # Validate tool name
             if not re.match(r"^[a-zA-Z0-9_-]{1,128}$", key):
@@ -442,15 +446,15 @@ class MCPServer(FastMCP):
                     f"Tool name '{key}' must match ^[a-zA-Z0-9_-]{{1,128}}$ "
                     "(letters, numbers, underscore, hyphen only, 1-128 chars)"
                 )
-            
+
             new_key = f"{prefix}_{key}" if prefix else key
             self._tool_manager._tools[new_key] = tool
-        
+
         # Import resources directly
         for key, resource in router._resource_manager._resources.items():
             new_key = f"{prefix}_{key}" if prefix else key
             self._resource_manager._resources[new_key] = resource
-        
+
         # Import prompts directly
         for key, prompt in router._prompt_manager._prompts.items():
             new_key = f"{prefix}_{key}" if prefix else key
@@ -479,7 +483,7 @@ class MCPServer(FastMCP):
 
                 try:
                     result = await self._tool_manager.call_tool(key, data)
-                    
+
                     # Recursively serialize MCP objects
                     def serialize_obj(obj: Any) -> Any:
                         """Recursively serialize MCP objects to JSON-compatible format."""
@@ -500,7 +504,7 @@ class MCPServer(FastMCP):
                             return serialize_obj(obj.__dict__)
                         # Fallback: convert to string
                         return str(obj)
-                    
+
                     serialized = serialize_obj(result)
                     return JSONResponse({"success": True, "result": serialized})
                 except Exception as e:
@@ -508,7 +512,7 @@ class MCPServer(FastMCP):
 
             return tool_endpoint
 
-        for tool_key in self._tool_manager._tools.keys():
+        for tool_key in self._tool_manager._tools.keys():  # noqa: SIM118
             endpoint = create_tool_endpoint(tool_key)
             self.custom_route(f"/api/tools/{tool_key}", methods=["POST"])(endpoint)
 
@@ -563,7 +567,7 @@ class MCPServer(FastMCP):
                         }
                     }
                 except Exception as e:
-                    logger.warning(f"Failed to generate spec for {tool_key}: {e}")
+                    logger.warning("Failed to generate spec for %s: %s", tool_key, e)
 
             return JSONResponse(spec)
 
@@ -572,16 +576,16 @@ class MCPServer(FastMCP):
             """Interactive documentation page."""
             import base64
             import json
-            
+
             base_url = str(request.base_url).rstrip("/")
             tool_count = len(self._tool_manager._tools)
             resource_count = len(self._resource_manager._resources)
-            
+
             # Generate Cursor deeplink
             server_config = {"url": f"{base_url}/mcp"}
             config_json = json.dumps(server_config, indent=2)
             config_base64 = base64.b64encode(config_json.encode()).decode()
-            cursor_deeplink = f"cursor://anysphere.cursor-deeplink/mcp/install?name={self.name or 'mcp-server'}&config={config_base64}"
+            cursor_deeplink = f"cursor://anysphere.cursor-deeplink/mcp/install?name={self.name or 'mcp-server'}&config={config_base64}"  # noqa: E501
 
             html = f"""
 <!DOCTYPE html>
@@ -589,7 +593,7 @@ class MCPServer(FastMCP):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{self.name or 'MCP Server'} - Documentation</title>
+    <title>{self.name or "MCP Server"} - Documentation</title>
     <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
     <style>
         body {{ margin: 0; padding: 0; font-family: monospace; }}
@@ -604,7 +608,7 @@ class MCPServer(FastMCP):
 </head>
 <body>
     <div class="header">
-        <h1>{self.name or 'MCP Server'} - Development Tools</h1>
+        <h1>{self.name or "MCP Server"} - Development Tools</h1>
         <div class="info">MCP Endpoint (use this with agents): <a href="{base_url}/mcp">{base_url}/mcp</a></div>
         <div class="info">Tools: {tool_count} | Resources: {resource_count}</div>
         <div class="info">Add to Cursor: <a href="{cursor_deeplink}">Click here to install</a></div>
@@ -630,5 +634,5 @@ class MCPServer(FastMCP):
     </script>
 </body>
 </html>
-"""
+"""  # noqa: E501
             return Response(content=html, media_type="text/html")

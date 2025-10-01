@@ -6,12 +6,14 @@ from server.shared import http_client
 
 router = MCPRouter()
 
+
 @router.tool
 async def act() -> str:
     """Perform one action step in the environment (increment the counter)."""
     resp = await http_client.post("/act")
     data = resp.json()
     return f"Action #{data.get('count', 0)} performed. Current count: {data.get('count', 0)}"
+
 
 @router.tool
 async def setup() -> str:

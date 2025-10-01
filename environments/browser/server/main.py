@@ -76,6 +76,7 @@ async def on_shutdown() -> None:
         except Exception as exc:  # noqa: BLE001
             logger.warning("HTTP client close failed: %s", exc)
 
+
 __all__ = ["mcp", "http_client", "ENV_SERVER_URL"]
 
 

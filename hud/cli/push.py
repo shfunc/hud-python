@@ -163,10 +163,7 @@ def push_environment(
         lock_data = yaml.safe_load(f)
 
     # Handle both old and new lock file formats
-    local_image = (
-        lock_data.get("images", {}).get("local")
-        or lock_data.get("image", "")
-    )
+    local_image = lock_data.get("images", {}).get("local") or lock_data.get("image", "")
 
     # Get internal version from lock file
     internal_version = lock_data.get("build", {}).get("version", None)
@@ -308,14 +305,20 @@ def push_environment(
     for line in process.stdout or []:
         line = line.rstrip()
         # Only show: digest, pushed, mounted, or error lines
-        if any(keyword in line.lower() for keyword in ["digest:", "pushed", "mounted", "error", "denied"]):
+        if any(
+            keyword in line.lower()
+            for keyword in ["digest:", "pushed", "mounted", "error", "denied"]
+        ):
             if "pushed" in line.lower():
                 layers_pushed += 1
-            if verbose or "error" in line.lower() or "denied" in line.lower():
+            if (
+                verbose
+                or "error" in line.lower()
+                or "denied" in line.lower()
+                or "digest:" in line.lower()
+            ):
                 hud_console.info(line)
-            elif "digest:" in line.lower():
-                hud_console.info(line)
-    
+
     if layers_pushed > 0 and not verbose:
         hud_console.info(f"Pushed {layers_pushed} layer(s)")
 

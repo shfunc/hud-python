@@ -406,7 +406,7 @@ def dev(
     # Extract module from params if provided (first param when not --docker)
     module = params[0] if params and not docker else None
     docker_args = params if docker else []
-    
+
     run_mcp_dev_server(
         module,
         stdio,

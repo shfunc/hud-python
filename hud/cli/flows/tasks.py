@@ -197,7 +197,7 @@ def _extract_dotenv_api_key_vars(env_dir: Path) -> set[str]:
 
 def _extract_env_vars_from_docker_args(args: list[str]) -> set[str]:
     """Extract environment variable names from docker run arguments.
-    
+
     Parses args like: ["run", "--rm", "-i", "-e", "API_KEY=value", "-e", "TOKEN", "image:tag"]
     Returns set of env var names (not values).
     """
@@ -205,7 +205,7 @@ def _extract_env_vars_from_docker_args(args: list[str]) -> set[str]:
     i = 0
     while i < len(args):
         arg = args[i]
-        
+
         # Check for -e or --env flags
         if arg in ("-e", "--env"):
             if i + 1 < len(args):
@@ -222,9 +222,9 @@ def _extract_env_vars_from_docker_args(args: list[str]) -> set[str]:
             var_name = env_spec.split("=", 1)[0].strip()
             if var_name:
                 env_vars.add(var_name)
-        
+
         i += 1
-    
+
     env_vars.discard("HUD_API_KEY")
     return env_vars
 
@@ -232,23 +232,23 @@ def _extract_env_vars_from_docker_args(args: list[str]) -> set[str]:
 def _extract_vars_from_task_configs(raw_tasks: list[dict[str, Any]]) -> set[str]:
     """Extract environment variable names from docker run commands in task mcp_configs."""
     all_env_vars: set[str] = set()
-    
+
     for task in raw_tasks:
         mcp_config = task.get("mcp_config", {})
-        
+
         # Iterate through all server configs
         for server_config in mcp_config.values():
             if not isinstance(server_config, dict):
                 continue
-            
+
             command = server_config.get("command", "")
             args = server_config.get("args", [])
-            
+
             # Only process docker run commands
             if command == "docker" and "run" in args:
                 env_vars = _extract_env_vars_from_docker_args(args)
                 all_env_vars.update(env_vars)
-    
+
     return all_env_vars
 
 
@@ -369,16 +369,16 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
     # Extract environment variables from multiple sources:
     # 1. Lock file (authoritative for required env vars)
     provided_keys = _extract_api_key_vars(lock_data)
-    
+
     # 2. Task configs (docker run -e flags)
     task_env_vars = _extract_vars_from_task_configs(raw_tasks)
-    
+
     # 3. .env file (detect API-like vars)
     dotenv_keys = _extract_dotenv_api_key_vars(env_dir)
 
     # Combine: lock file vars + task config vars, then check for missing from .env
     all_detected = provided_keys | task_env_vars
-    
+
     # If .env contains API-like vars not yet included, offer to add them
     missing = sorted(dotenv_keys - all_detected)
     if missing:
@@ -389,7 +389,7 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
         )
         if hud_console.confirm(prompt, default=True):
             all_detected.update(missing)
-    
+
     # Final set of env vars to convert to headers
     provided_keys = all_detected
 

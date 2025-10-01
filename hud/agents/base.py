@@ -7,7 +7,7 @@ import fnmatch
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, ClassVar, List, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import mcp.types as types
 
@@ -97,9 +97,9 @@ class MCPAgent(ABC):
             self.console.set_verbose(True)
 
         # User filtering
-        self.allowed_tools: List[str] | None = allowed_tools
-        self.disallowed_tools: List[str] | None = disallowed_tools
-        self._available_tools: List[types.Tool] | None = None
+        self.allowed_tools: list[str] | None = allowed_tools
+        self.disallowed_tools: list[str] | None = disallowed_tools
+        self._available_tools: list[types.Tool] | None = None
 
         # Messages
         self.system_prompt = system_prompt
@@ -144,28 +144,30 @@ class MCPAgent(ABC):
             self._handle_connection_error(e)
 
         # If task is provided, apply agent_config and add lifecycle tools
-        if isinstance(task, Task):
-            # Apply agent_config if present
-            if task.agent_config:
-                if "system_prompt" in task.agent_config and task.agent_config["system_prompt"]:
-                    self.system_prompt += "\n\n" + task.agent_config["system_prompt"]
-                if "append_setup_output" in task.agent_config:
-                    self.append_setup_output = task.agent_config["append_setup_output"]
-                if "initial_screenshot" in task.agent_config:
-                    self.initial_screenshot = task.agent_config["initial_screenshot"]
-                if "allowed_tools" in task.agent_config:
-                    # If allowed_tools has already been set, we take the intersection of the two
-                    # If the list had been empty, we were allowing all tools, so we overwrite in this
-                    if isinstance(self.allowed_tools, list) and len(self.allowed_tools) > 0:
-                        self.allowed_tools = [tool for tool in self.allowed_tools if tool in task.agent_config["allowed_tools"]]
-                    else:  # If allowed_tools is None, we overwrite it
-                        self.allowed_tools = task.agent_config["allowed_tools"]
-                if "disallowed_tools" in task.agent_config:
-                    # If disallowed_tools has already been set, we take the union of the two
-                    if isinstance(self.disallowed_tools, list):
-                        self.disallowed_tools.extend(task.agent_config["disallowed_tools"])
-                    else:  # If disallowed_tools is None, we overwrite it
-                        self.disallowed_tools = task.agent_config["disallowed_tools"]
+        if isinstance(task, Task) and task.agent_config:
+            if task.agent_config.get("system_prompt"):
+                self.system_prompt += "\n\n" + task.agent_config["system_prompt"]
+            if "append_setup_output" in task.agent_config:
+                self.append_setup_output = task.agent_config["append_setup_output"]
+            if "initial_screenshot" in task.agent_config:
+                self.initial_screenshot = task.agent_config["initial_screenshot"]
+            if "allowed_tools" in task.agent_config:
+                # If allowed_tools has already been set, we take the intersection of the two
+                # If the list had been empty, we were allowing all tools, so we overwrite this
+                if isinstance(self.allowed_tools, list) and len(self.allowed_tools) > 0:
+                    self.allowed_tools = [
+                        tool
+                        for tool in self.allowed_tools
+                        if tool in task.agent_config["allowed_tools"]
+                    ]
+                else:  # If allowed_tools is None, we overwrite it
+                    self.allowed_tools = task.agent_config["allowed_tools"]
+            if "disallowed_tools" in task.agent_config:
+                # If disallowed_tools has already been set, we take the union of the two
+                if isinstance(self.disallowed_tools, list):
+                    self.disallowed_tools.extend(task.agent_config["disallowed_tools"])
+                else:  # If disallowed_tools is None, we overwrite it
+                    self.disallowed_tools = task.agent_config["disallowed_tools"]
 
         all_tools = await self.mcp_client.list_tools()
         self._available_tools = []
@@ -174,14 +176,16 @@ class MCPAgent(ABC):
         # No allowed tools and no disallowed tools -> we accept all tools
         # No allowed tools and disallowed tools -> we accept all tools except the disallowed ones
         for tool in all_tools:
-            if self.allowed_tools is not None:
-                if not any(fnmatch.fnmatch(tool.name, pattern) for pattern in self.allowed_tools):
-                    continue
-            if self.disallowed_tools is not None:
-                if any(fnmatch.fnmatch(tool.name, pattern) for pattern in self.disallowed_tools):
-                    continue
+            if self.allowed_tools is not None and not any(
+                fnmatch.fnmatch(tool.name, pattern) for pattern in self.allowed_tools
+            ):
+                continue
+            if self.disallowed_tools is not None and any(
+                fnmatch.fnmatch(tool.name, pattern) for pattern in self.disallowed_tools
+            ):
+                continue
             self._available_tools.append(tool)
-        
+
         self.console.info(
             f"Agent initialized with {len(self.get_available_tools())} tools: {', '.join([t.name for t in self.get_available_tools()])}"  # noqa: E501
         )
@@ -622,7 +626,9 @@ class MCPAgent(ABC):
     def get_available_tools(self) -> list[types.Tool]:
         """Get list of available MCP tools for LLM use (excludes lifecycle tools)."""
         if self._available_tools is None:
-            raise RuntimeError("Tools have not been initialized. Call initialize() before accessing available tools.")
+            raise RuntimeError(
+                "Tools have not been initialized. Call initialize() before accessing available tools."  # noqa: E501
+            )
         return self._available_tools
 
     def get_tool_schemas(self) -> list[dict]:

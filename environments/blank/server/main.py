@@ -18,7 +18,9 @@ mcp = MCPServer(name="blank-environment")
 
 # Include routers
 from server.tools import router as tools_router
+
 mcp.include_router(tools_router)
+
 
 # Lifecycle hooks
 @mcp.initialize
@@ -29,11 +31,13 @@ async def init():
     else:
         raise ValueError("http_client is not set")
 
+
 @mcp.shutdown
 async def cleanup():
     """Close the HTTP client"""
     if http_client:
         await http_client.aclose()
+
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")
