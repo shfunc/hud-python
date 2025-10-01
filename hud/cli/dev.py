@@ -516,6 +516,8 @@ def run_docker_dev_server(
         "PYTHONPATH=/app",
         "-e",
         "PYTHONUNBUFFERED=1",
+        "-e",
+        "HUD_DEV=1",
     ]
     
     # Load .env file if present
@@ -574,7 +576,7 @@ def run_docker_dev_server(
         os.environ["FASTMCP_DISABLE_BANNER"] = "1"
     
     # Note about hot-reload behavior
-    hud_console.dim_info("", "Container restarts on file changes (mounted volumes), if changing tools restart hud dev")
+    hud_console.dim_info("", "Container restarts on file changes (mounted volumes), if changing tools run hud dev again")
     hud_console.info("")
     
     # Create and run proxy with HUD helpers
