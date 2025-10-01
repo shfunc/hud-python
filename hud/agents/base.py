@@ -181,6 +181,10 @@ class MCPAgent(ABC):
                 if any(fnmatch.fnmatch(tool.name, pattern) for pattern in self.disallowed_tools):
                     continue
             self._available_tools.append(tool)
+        
+        self.console.info(
+            f"Agent initialized with {len(self.get_available_tools())} tools: {', '.join([t.name for t in self.get_available_tools()])}"  # noqa: E501
+        )
 
     async def run(self, prompt_or_task: str | Task | dict[str, Any], max_steps: int = 10) -> Trace:
         """
