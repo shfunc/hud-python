@@ -1,25 +1,44 @@
-# Blank Environment
+# Deep Research Environment
 
-Minimal starter template for building HUD environments.
+Web research environment powered by Exa API for searching and fetching content.
 See [docs](https://docs.hud.so/build-environments) for the complete environment design workflow.
 
 ## Architecture
 
-**`environment/`** - Produces structured data
-- Owns all state (game logic, browser sessions, databases, etc.)
-- Exposes HTTP endpoints `/health`, `/act`, `/reset`, `/state` that return structured information about the environment state
+**`environment/`** - Manages Exa API integration and state
+- Holds the Exa API key server-side
+- Exposes HTTP endpoints `/search`, `/fetch`, `/answer`, `/evaluate` for research workflows
+- Implements exponential backoff for rate limiting
 
 **`server/`** - Wraps data in MCP tools
-- Calls environment endpoints to get structured data for the agent, and environment setup/evaluation
-- Agents and tasks interact only with these tools!
+- Provides `search()`, `fetch()`, `answer()`, `evaluate()` tools for agents
+- Agents and tasks interact only with these tools
 
-**Why separate?** Edit tools for the agent or tasks without restarting the heavy environment backend.
+**Why separate?** Edit tools for the agent or tasks without restarting the environment backend.
+
+## Tools
+
+- **`search(query: str)`** - Search the web using Exa API, returns list of results with titles and URLs
+- **`fetch(url: str)`** - Fetch full content from a URL, returns summary, highlights, and text
+- **`answer(final_answer: str)`** - Submit the final research answer
+- **`evaluate(expected_answer: str)`** - Evaluate submitted answer against expected result
+
+## Setup
+
+### Requirements
+- Exa API key (get one at [exa.ai](https://exa.ai))
+
+### Environment Variables
+```bash
+export EXA_API_KEY="your_exa_api_key_here"
+```
 
 ## Development
 
 ```bash
 # Terminal 1 - Environment backend
 cd environment
+export EXA_API_KEY="your_key"
 uv run uvicorn server:app --reload
 
 # Terminal 2 - MCP server
@@ -27,20 +46,21 @@ cd server
 uv run hud dev
 ```
 
-Uncomment the `setup` tool in `server/tools.py`, save, and watch it reload.
-Visit http://localhost:8765/docs to see the new tool appear instantly.
+The environment includes exponential backoff for rate limiting, so API calls will automatically retry on 429 errors.
 
 In general, we recommend starting work on the environment backend first, then developing the MCP server to expose the right things to the agent.
 
 For complex environments that require many dependencies, we recommend running `hud dev` in the environment root:
 ```bash
 cd ..
+export EXA_API_KEY="your_key"
 hud dev
 ```
 
 ## Tasks & Evaluation
+
 ```bash
-# Build first in the global folder with the Dockerfile (creates blank:0.1.0)
+# Build first in the global folder with the Dockerfile (creates deepresearch:0.1.0)
 hud build
 ```
 
@@ -48,15 +68,23 @@ Your `tasks.json` uses `docker run` to launch the environment:
 
 ```json
 {
-  "prompt": "Your task prompt",
+  "prompt": "Research and answer: What is the capital of France?",
   "mcp_config": {
     "local": {
       "command": "docker",
-      "args": ["run", "--rm", "-i", "blank:0.1.0"]
+      "args": ["run", "--rm", "-i", "-e", "EXA_API_KEY", "deepresearch:0.1.0"]
+    }
+  },
+  "evaluator": {
+    "tool_name": "evaluate",
+    "tool_params": {
+      "expected_answer": "Paris"
     }
   }
 }
 ```
+
+**Note:** The `-e EXA_API_KEY` flag passes your local API key to the container.
 
 **Commands:**
 ```bash
@@ -64,6 +92,7 @@ Your `tasks.json` uses `docker run` to launch the environment:
 hud build
 
 # Test task locally
+export EXA_API_KEY="your_key"
 hud eval tasks.json
 
 # Push environment for remote running
@@ -119,3 +148,18 @@ hud eval "your-org/your-dataset" --agent claude
 
 📚 Learn more: [Creating Benchmarks](https://docs.hud.so/evaluate-agents/create-benchmarks) | [Leaderboards](https://docs.hud.so/evaluate-agents/leaderboards)
 
+## Example Research Workflow
+
+```python
+# Agent searches for information
+results = search("latest AI developments 2024")
+
+# Agent fetches detailed content from top result
+content = fetch(results[0]["url"])
+
+# Agent submits final answer
+answer("Based on research, AI developments in 2024 include...")
+
+# Evaluate answer
+result = evaluate(expected_answer="AI developments")
+```

@@ -1,6 +1,6 @@
 [
   {
-    "prompt": "Increment the counter to reach 2",
+    "prompt": "Increment the counter to reach 3",
     "mcp_config": {
       "local": {
         "command": "docker",
@@ -8,7 +8,7 @@
           "run",
           "--rm",
           "-i",
-          "hud-blank:latest"
+          "blank:latest"
         ]
       }
     },
@@ -28,12 +28,16 @@
       {
         "name": "act",
         "arguments": {}
+      },
+      {
+        "name": "act",
+        "arguments": {}
       }
     ],
     "evaluate_tool": {
       "name": "evaluate",
       "arguments": {
-        "target": 2
+        "target": 3
       }
     }
   }
