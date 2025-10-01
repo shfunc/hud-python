@@ -2,11 +2,11 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Literal, get_args
 
+from mcp.types import ContentBlock
+
 from .base import BaseTool
 from .types import ContentResult, ToolError
 from .utils import maybe_truncate, run
-
-from mcp.types import ContentBlock
 
 Command = Literal[
     "view",
@@ -52,7 +52,7 @@ class EditTool(BaseTool):
         view_range: list[int] | None = None,
         old_str: str | None = None,
         new_str: str | None = None,
-        insert_line: int | None = None
+        insert_line: int | None = None,
     ) -> list[ContentBlock]:
         _path = Path(path)
         self.validate_path(command, _path)
