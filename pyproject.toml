@@ -210,9 +210,6 @@ lint.ignore = [
 [tool.ruff.format]
 docstring-code-format = true
 
-[tool.ruff.lint.isort]
-required-imports = ["from __future__ import annotations"]
-
 [tool.ruff.lint.flake8-type-checking]
 runtime-evaluated-base-classes = ["pydantic.BaseModel"]
 
