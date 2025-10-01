@@ -190,9 +190,9 @@ def run_local_training(
 
     invalid_tasks: list[str] = []
     for i, task in enumerate(tasks):
-        if not hasattr(task, "prompt") or not task.prompt:
+        if not hasattr(task, "prompt") or not task.prompt:  # type: ignore
             invalid_tasks.append(f"Task {i}: missing 'prompt' field")
-        if not hasattr(task, "mcp_config") or not task.mcp_config:
+        if not hasattr(task, "mcp_config") or not task.mcp_config:  # type: ignore
             invalid_tasks.append(f"Task {i}: missing 'mcp_config' field")
 
     if invalid_tasks:
@@ -530,7 +530,7 @@ def run_local_training(
             # Import and run the async training function lazily
             from hud.rl.train import train  # heavy import
 
-            asyncio.run(train(config, tasks))
+            asyncio.run(train(config, tasks))  # type: ignore
             console.print("\n[green]✅ Training completed successfully![/green]")
 
             try:

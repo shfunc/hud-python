@@ -437,8 +437,8 @@ class MCPServer(FastMCP):
 
         # Import tools directly - use internal dict to preserve keys
         tools = (
-            router._tool_manager._tools.items() if not hidden else router._sync_list_tools().items()
-        )  # type: ignore
+            router._tool_manager._tools.items() if not hidden else router._sync_list_tools().items()  # type: ignore
+        )
         for key, tool in tools:
             # Validate tool name
             if not re.match(r"^[a-zA-Z0-9_-]{1,128}$", key):
