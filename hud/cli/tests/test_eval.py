@@ -223,3 +223,303 @@ class TestToolFiltering:
         
         assert len(result) == 1
         assert result[0].name == "browser_click"
+
+
+class TestRunDatasetToolFiltering:
+    """Test tool filtering via run_dataset with agent_config in both init and task."""
+
+    @pytest.fixture
+    def all_tools(self):
+        """Fixture for a standard set of tools."""
+        return [
+            types.Tool(name="browser_click", description="Click", inputSchema={}),
+            types.Tool(name="browser_type", description="Type", inputSchema={}),
+            types.Tool(name="browser_debug", description="Debug", inputSchema={}),
+            types.Tool(name="system_screenshot", description="Screenshot", inputSchema={}),
+            types.Tool(name="system_execute", description="Execute", inputSchema={}),
+        ]
+
+    @pytest.fixture
+    def captured_agent_fixture(self):
+        """Fixture that returns a dictionary to capture the agent instance."""
+        return {"agent": None}
+
+    @pytest.fixture
+    def mock_run_context(self, captured_agent_fixture):
+        """Fixture for mocking _run_context."""
+        async def _mock(self, context, max_steps=10):
+            captured_agent_fixture["agent"] = self
+            return Trace(reward=1.0, done=True, content="Done")
+        return _mock
+
+    @pytest.fixture
+    def mock_call_tools(self):
+        """Fixture for mocking call_tools."""
+        async def _mock(self, tool_call=None):
+            return []
+        return _mock
+
+    @pytest.fixture
+    def mock_client_instance(self, all_tools):
+        """Fixture for mock MCP client instance."""
+        mock_client = MagicMock()
+        mock_client.initialize = AsyncMock()
+        mock_client.list_tools = AsyncMock(return_value=all_tools)
+        mock_client.shutdown = AsyncMock()
+        mock_client.mcp_config = {"local": {"url": "http://localhost:8765/mcp"}}
+        return mock_client
+
+    @pytest.mark.asyncio
+    async def test_agent_config_intersection_union_via_run_dataset(
+        self, all_tools, captured_agent_fixture, mock_run_context, mock_call_tools, mock_client_instance
+    ) -> None:
+        """Test that allowed_tools intersect and disallowed_tools union when set in both __init__ and task.agent_config."""
+        from hud.agents import ClaudeAgent
+        from hud.datasets.runner import run_dataset
+        
+        # Create a task with its own agent_config
+        task_dict = {
+            "prompt": "Test task",
+            "mcp_config": {"local": {"url": "http://localhost:8765/mcp"}},
+            "agent_config": {
+                "allowed_tools": ["browser_*", "system_screenshot"],  # Task wants browser_* and system_screenshot
+                "disallowed_tools": ["*_debug", "*_execute"],  # Task disallows *_debug and *_execute
+            }
+        }
+        
+        # Agent config passed to __init__ via run_dataset
+        agent_init_config = {
+            "allowed_tools": ["browser_*", "system_*"],  # Agent init wants browser_* and system_*
+            "disallowed_tools": ["browser_debug"],  # Agent init disallows browser_debug
+            "validate_api_key": False,
+        }
+        
+        with patch("hud.job"), \
+             patch("hud.trace"), \
+             patch.object(ClaudeAgent, "_run_context", mock_run_context), \
+             patch.object(ClaudeAgent, "call_tools", mock_call_tools), \
+             patch("hud.clients.MCPClient", return_value=mock_client_instance):
+            
+            # Run the dataset
+            await run_dataset(
+                name="test_job",
+                dataset=[task_dict],
+                agent_class=ClaudeAgent,
+                agent_config=agent_init_config,
+                max_steps=10,
+            )
+            
+            # Verify agent was created and ran
+            captured_agent = captured_agent_fixture["agent"]
+            assert captured_agent is not None
+            
+            # Get the filtered tools
+            filtered_tools = captured_agent.get_available_tools()
+            filtered_names = {tool.name for tool in filtered_tools}
+            
+            # Expected behavior:
+            # 1. allowed_tools intersection: ["browser_*", "system_*"] ∩ ["browser_*", "system_screenshot"]
+            #    Exact string intersection: only "browser_*" is in both lists
+            #    So only tools matching browser_* are allowed: browser_click, browser_type, browser_debug
+            # 2. disallowed_tools union: ["browser_debug"] ∪ ["*_debug", "*_execute"]
+            #    Result: ["browser_debug", "*_debug", "*_execute"] (all patterns included)
+            # 3. Final: {browser_click, browser_type, browser_debug} - {browser_debug}
+            #    Result: browser_click, browser_type
+            
+            expected_tools = {"browser_click", "browser_type"}
+            assert filtered_names == expected_tools, f"Expected {expected_tools}, got {filtered_names}"
+
+    @pytest.mark.asyncio
+    async def test_no_allowed_tools_keeps_all_tools_except_disallowed(
+        self, all_tools, captured_agent_fixture, mock_run_context, mock_call_tools, mock_client_instance
+    ) -> None:
+        """Test that when allowed_tools is not set, all tools are available except disallowed ones."""
+        from hud.agents import ClaudeAgent
+        from hud.datasets.runner import run_dataset
+        
+        # Create a task with its own agent_config (no allowed_tools)
+        task_dict = {
+            "prompt": "Test task",
+            "mcp_config": {"local": {"url": "http://localhost:8765/mcp"}},
+            "agent_config": {
+                # No allowed_tools set - should allow all tools
+                "disallowed_tools": ["*_execute"],  # Task disallows *_execute
+            }
+        }
+        
+        # Agent config passed to __init__ via run_dataset (no allowed_tools)
+        agent_init_config = {
+            # No allowed_tools set - should allow all tools
+            "disallowed_tools": ["browser_debug"],  # Agent init disallows browser_debug
+            "validate_api_key": False,
+        }
+        
+        with patch("hud.job"), \
+             patch("hud.trace"), \
+             patch.object(ClaudeAgent, "_run_context", mock_run_context), \
+             patch.object(ClaudeAgent, "call_tools", mock_call_tools), \
+             patch("hud.clients.MCPClient", return_value=mock_client_instance):
+            
+            # Run the dataset
+            await run_dataset(
+                name="test_job",
+                dataset=[task_dict],
+                agent_class=ClaudeAgent,
+                agent_config=agent_init_config,
+                max_steps=10,
+            )
+            
+            # Verify agent was created and ran
+            captured_agent = captured_agent_fixture["agent"]
+            assert captured_agent is not None
+            
+            # Get the filtered tools
+            filtered_tools = captured_agent.get_available_tools()
+            filtered_names = {tool.name for tool in filtered_tools}
+            
+            # Expected behavior:
+            # 1. allowed_tools: None (no allowed_tools set in either init or task)
+            #    Result: All tools are initially allowed
+            # 2. disallowed_tools union: ["browser_debug"] ∪ ["*_execute"]
+            #    Result: ["browser_debug", "*_execute"] (all patterns included)
+            # 3. Final: {all tools} - {browser_debug, system_execute}
+            #    Result: browser_click, browser_type, system_screenshot
+            
+            expected_tools = {"browser_click", "browser_type", "system_screenshot"}
+            assert filtered_names == expected_tools, f"Expected {expected_tools}, got {filtered_names}"
+
+
+class TestSystemPromptHandling:
+    """Test system prompt handling through run_dataset flow."""
+
+    @pytest.fixture
+    def mock_mcp_client(self):
+        """Fixture for mock MCP client."""
+        client = MagicMock()
+        client.initialize = AsyncMock()
+        client.list_tools = AsyncMock(return_value=[])
+        client.shutdown = AsyncMock()
+        client.mcp_config = {"local": {"url": "http://localhost:8765/mcp"}}
+        return client
+
+    @pytest.fixture
+    def captured_agent_fixture(self):
+        """Fixture that returns a dictionary to capture the agent instance."""
+        return {"agent": None}
+
+    @pytest.fixture
+    def mock_run_context(self, captured_agent_fixture):
+        """Fixture for mocking _run_context to capture agent."""
+        async def _mock(self, context, max_steps=10):
+            captured_agent_fixture["agent"] = self
+            return Trace(reward=1.0, done=True, content="Done")
+        return _mock
+
+    @pytest.fixture
+    def mock_call_tools(self):
+        """Fixture for mocking call_tools."""
+        async def _mock(self, tool_call=None):
+            return []
+        return _mock
+
+    @pytest.mark.asyncio
+    async def test_task_system_prompt_only(
+        self, captured_agent_fixture, mock_run_context, mock_call_tools, mock_mcp_client
+    ) -> None:
+        """Test that task system_prompt is appended when agent has default system prompt."""
+        from hud.agents import ClaudeAgent
+        from hud.agents.base import GLOBAL_SYSTEM_PROMPT
+        from hud.datasets.runner import run_dataset
+        
+        task_system_prompt = "Task prompt"
+        
+        # Create a task with its own system_prompt in agent_config
+        task_dict = {
+            "prompt": "Test task",
+            "mcp_config": {"local": {"url": "http://localhost:8765/mcp"}},
+            "agent_config": {
+                "system_prompt": task_system_prompt,
+            }
+        }
+        
+        # Agent config with no custom system_prompt (will use default)
+        agent_init_config = {
+            "validate_api_key": False,
+        }
+        
+        with patch("hud.job"), \
+             patch("hud.trace"), \
+             patch.object(ClaudeAgent, "_run_context", mock_run_context), \
+             patch.object(ClaudeAgent, "call_tools", mock_call_tools), \
+             patch("hud.clients.MCPClient", return_value=mock_mcp_client):
+            
+            # Run the dataset
+            await run_dataset(
+                name="test_job",
+                dataset=[task_dict],
+                agent_class=ClaudeAgent,
+                agent_config=agent_init_config,
+                max_steps=10,
+            )
+            
+            # Verify agent was created and ran
+            captured_agent = captured_agent_fixture["agent"]
+            assert captured_agent is not None
+            
+            # Verify the task system prompt was appended
+            assert captured_agent.system_prompt.endswith(f"\n\n{task_system_prompt}")
+            # Verify it starts with the base global system prompt
+            assert captured_agent.system_prompt.startswith(GLOBAL_SYSTEM_PROMPT)
+
+    @pytest.mark.asyncio
+    async def test_both_agent_and_task_system_prompts(
+        self, captured_agent_fixture, mock_run_context, mock_call_tools, mock_mcp_client
+    ) -> None:
+        """Test that both agent init and task system prompts are present when both are set."""
+        from hud.agents import ClaudeAgent
+        from hud.datasets.runner import run_dataset
+        
+        agent_custom_prompt = "Agent init prompt"
+        task_system_prompt = "Task prompt"
+        
+        # Create a task with its own system_prompt in agent_config
+        task_dict = {
+            "prompt": "Test task",
+            "mcp_config": {"local": {"url": "http://localhost:8765/mcp"}},
+            "agent_config": {
+                "system_prompt": task_system_prompt,
+            }
+        }
+        
+        # Agent config WITH custom system_prompt
+        agent_init_config = {
+            "system_prompt": agent_custom_prompt,
+            "validate_api_key": False,
+        }
+        
+        with patch("hud.job"), \
+             patch("hud.trace"), \
+             patch.object(ClaudeAgent, "_run_context", mock_run_context), \
+             patch.object(ClaudeAgent, "call_tools", mock_call_tools), \
+             patch("hud.clients.MCPClient", return_value=mock_mcp_client):
+            
+            # Run the dataset
+            await run_dataset(
+                name="test_job",
+                dataset=[task_dict],
+                agent_class=ClaudeAgent,
+                agent_config=agent_init_config,
+                max_steps=10,
+            )
+            
+            # Verify agent was created and ran
+            captured_agent = captured_agent_fixture["agent"]
+            assert captured_agent is not None
+            
+            # Verify the task system prompt was appended at the end
+            assert captured_agent.system_prompt.endswith(f"\n\n{task_system_prompt}")
+            # Verify it starts with the agent custom prompt
+            assert captured_agent.system_prompt.startswith(agent_custom_prompt)
+            # Verify both prompts are present
+            assert agent_custom_prompt in captured_agent.system_prompt
+            assert task_system_prompt in captured_agent.system_prompt

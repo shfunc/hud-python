@@ -208,7 +208,6 @@ def run_local_training(
         except Exception:
             return
 
-
     # Step 3: Model selection (if not provided)
     if model is None and not config_file:
         if yes:
@@ -239,7 +238,10 @@ def run_local_training(
             if model is None:
                 model = config.model.base_model
             else:
-                console.print(f"[yellow]Model already set to {model}, using that instead of {config.model.base_model}[/yellow] (override)")
+                console.print(
+                    f"[yellow]Model already set to {model}, using that instead "
+                    f"of {config.model.base_model}[/yellow] (override)"
+                )
 
     if model is None:
         console.print("[red]❌ No model specified either through CLI or config file[/red]")
@@ -261,7 +263,6 @@ def run_local_training(
             raise typer.Exit(1)
         except Exception:
             return
-
 
     # Step 4: Generate or load configuration
     if config_file:

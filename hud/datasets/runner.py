@@ -27,7 +27,6 @@ async def run_dataset(
     max_steps: int = 10,
     split: str = "train",
     auto_respond: bool = False,
-    custom_system_prompt: str | None = None,
 ) -> list[Any]:
     """
     Run all tasks in a dataset with automatic job tracking.
@@ -43,7 +42,6 @@ async def run_dataset(
         max_steps: Maximum steps per task
         split: Dataset split to use when loading from string (default: "train")
         auto_respond: Whether to use auto-response agent
-        custom_system_prompt: Override system prompt for all tasks
 
     Returns:
         List of results from agent.run() in dataset order
@@ -102,12 +100,7 @@ async def run_dataset(
             async with sem:
                 # Create trace for this task
                 task_name = task_dict.get("prompt") or f"Task {index}"
-                if custom_system_prompt:
-                    # Add custom system prompt to agent_config if not already present
-                    if "agent_config" not in task_dict:
-                        task_dict["agent_config"] = {}
-                    if "system_prompt" not in task_dict["agent_config"]:
-                        task_dict["agent_config"]["system_prompt"] = custom_system_prompt
+
                 # Ensure task_id is a string for baggage propagation
                 raw_task_id = task_dict.get("id")
                 safe_task_id = str(raw_task_id) if raw_task_id is not None else None
