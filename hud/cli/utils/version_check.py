@@ -164,15 +164,27 @@ def check_for_updates() -> VersionInfo | None:
     if os.environ.get("CI") or os.environ.get("HUD_SKIP_VERSION_CHECK"):
         return None
 
-    # Try to load from cache first
-    cached_info = _load_cache()
-    if cached_info:
-        return cached_info
-
-    # Get current version
+    # Get current version first
     current = _get_current_version()
     if current == "unknown":
         return None
+
+    # Try to load from cache
+    cached_info = _load_cache()
+    
+    # If cache exists but current version has changed (user upgraded), invalidate cache
+    if cached_info and cached_info.current != current:
+        cached_info = None  # Force fresh check
+    
+    if cached_info:
+        # Update the current version in the cached info to reflect reality
+        # but keep the cached latest version and timestamp
+        return VersionInfo(
+            latest=cached_info.latest,
+            current=current,  # Use actual current version, not cached
+            is_outdated=_compare_versions(current, cached_info.latest),
+            checked_at=cached_info.checked_at,
+        )
 
     # Fetch latest version from PyPI
     latest = _fetch_latest_version()
