@@ -171,11 +171,11 @@ def check_for_updates() -> VersionInfo | None:
 
     # Try to load from cache
     cached_info = _load_cache()
-    
+
     # If cache exists but current version has changed (user upgraded), invalidate cache
     if cached_info and cached_info.current != current:
         cached_info = None  # Force fresh check
-    
+
     if cached_info:
         # Update the current version in the cached info to reflect reality
         # but keep the cached latest version and timestamp
