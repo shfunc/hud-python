@@ -68,6 +68,50 @@ def get_available_models() -> list[dict[str, str | None]]:
         return []
 
 
+def _build_vllm_config(
+    vllm_base_url: str | None,
+    model: str | None,
+    allowed_tools: list[str] | None,
+    verbose: bool,
+) -> dict[str, Any]:
+    """Build configuration for vLLM agent.
+    
+    Args:
+        vllm_base_url: Optional base URL for vLLM server
+        model: Model name to use
+        allowed_tools: Optional list of allowed tools
+        verbose: Enable verbose output
+        
+    Returns:
+        Dictionary with agent configuration
+    """
+    # Determine base URL and API key
+    if vllm_base_url is not None:
+        base_url = vllm_base_url
+        api_key = settings.api_key if base_url.startswith(settings.hud_rl_url) else "token-abc123"
+        hud_console.info(f"Using vLLM server at {base_url}")
+    else:
+        base_url = "http://localhost:8000/v1"
+        api_key = "token-abc123"
+    
+    config: dict[str, Any] = {
+        "api_key": api_key,
+        "base_url": base_url,
+        "model_name": model or "served-model",
+        "verbose": verbose,
+        "completion_kwargs": {
+            "temperature": 0.7,
+            "max_tokens": 2048,
+            "tool_choice": "auto",
+        },
+    }
+    
+    if allowed_tools:
+        config["allowed_tools"] = allowed_tools
+    
+    return config
+
+
 def build_agent(
     agent_type: Literal["claude", "openai", "vllm", "litellm", "integration_test"],
     *,
@@ -94,31 +138,14 @@ def build_agent(
             )
             raise typer.Exit(1) from e
 
-        # Determine the base URL to use
-        if vllm_base_url is not None:
-            # Use the provided vLLM URL (for custom/local servers)
-            base_url = vllm_base_url
-            hud_console.info(f"Using vLLM server at {base_url}")
-            api_key = (
-                settings.api_key if base_url.startswith(settings.hud_rl_url) else "token-abc123"
-            )
-        else:
-            # Default to localhost
-            base_url = "http://localhost:8000/v1"
-            api_key = "token-abc123"
-
-        # Pass config to agent instead of creating client
-        return GenericOpenAIChatAgent(
-            api_key=api_key,
-            base_url=base_url,
-            model_name=model or "served-model",  # Default model name
+        # Use the shared config builder
+        config = _build_vllm_config(
+            vllm_base_url=vllm_base_url,
+            model=model,
+            allowed_tools=allowed_tools,
             verbose=verbose,
-            completion_kwargs={
-                "temperature": 0.7,
-                "max_tokens": 2048,
-                "tool_choice": "required",  # if self.actor_config.force_tool_choice else "auto",
-            },
         )
+        return GenericOpenAIChatAgent(**config)
 
     elif agent_type == "openai":
         try:
@@ -254,29 +281,13 @@ async def run_single_task(
 
         agent_class = GenericOpenAIChatAgent
         
-        # Determine the base URL to use
-        if vllm_base_url is not None:
-            base_url = vllm_base_url
-            api_key = (
-                settings.api_key if base_url.startswith(settings.hud_rl_url) else "token-abc123"
-            )
-        else:
-            base_url = "http://localhost:8000/v1"
-            api_key = "token-abc123"
-            
-        agent_config = {
-            "api_key": api_key,
-            "base_url": base_url,
-            "model_name": model or "served-model",
-            "verbose": verbose,
-            "completion_kwargs": {
-                "temperature": 0.7,
-                "max_tokens": 2048,
-                "tool_choice": "required",
-            },
-        }
-        if allowed_tools:
-            agent_config["allowed_tools"] = allowed_tools
+        # Use the shared config builder
+        agent_config = _build_vllm_config(
+            vllm_base_url=vllm_base_url,
+            model=model,
+            allowed_tools=allowed_tools,
+            verbose=verbose,
+        )
     elif agent_type == "openai":
         from hud.agents import OperatorAgent
 
@@ -388,6 +399,7 @@ async def run_full_dataset(
     dataset_name = f"Dataset: {path.name}" if path.exists() else source.split("/")[-1]
 
     # Build agent class + config for run_dataset
+    agent_config: dict[str, Any]
     if agent_type == "integration_test":  # --integration-test mode
         from hud.agents.misc.integration_test_agent import IntegrationTestRunner
 
@@ -405,30 +417,13 @@ async def run_full_dataset(
             )
             raise typer.Exit(1) from e
 
-        # Determine the base URL to use
-        if vllm_base_url is not None:
-            base_url = vllm_base_url
-            api_key = (
-                settings.api_key if base_url.startswith(settings.hud_rl_url) else "token-abc123"
-            )
-        else:
-            base_url = "http://localhost:8000/v1"
-            api_key = "token-abc123"
-            
-        # Build config directly instead of creating sample agent
-        agent_config: dict[str, Any] = {
-            "api_key": api_key,
-            "base_url": base_url,
-            "model_name": model or "served-model",
-            "verbose": verbose,
-            "completion_kwargs": {
-                "temperature": 0.7,
-                "max_tokens": 2048,
-                "tool_choice": "required",
-            },
-        }
-        if allowed_tools:
-            agent_config["allowed_tools"] = allowed_tools
+        # Use the shared config builder
+        agent_config = _build_vllm_config(
+            vllm_base_url=vllm_base_url,
+            model=model,
+            allowed_tools=allowed_tools,
+            verbose=verbose,
+        )
     elif agent_type == "openai":
         try:
             from hud.agents import OperatorAgent
@@ -687,8 +682,6 @@ def eval_command(
         # Run with verbose output for debugging
         hud eval task.json --verbose
     """
-    from hud.settings import settings
-
     # Always configure basic logging so agent steps can be logged
     # Set to INFO by default for consistency with run_evaluation.py
     if very_verbose:
