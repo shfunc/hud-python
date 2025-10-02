@@ -86,8 +86,6 @@ def build_agent(
     elif agent_type == "vllm":
         # Create a generic OpenAI agent for vLLM server
         try:
-            from openai import AsyncOpenAI
-
             from hud.agents.openai_chat_generic import GenericOpenAIChatAgent
         except ImportError as e:
             hud_console.error(
@@ -109,15 +107,10 @@ def build_agent(
             base_url = "http://localhost:8000/v1"
             api_key = "token-abc123"
 
-        # Create OpenAI client for vLLM
-        openai_client = AsyncOpenAI(
-            base_url=base_url,
-            api_key=api_key,
-            timeout=30.0,
-        )
-
+        # Pass config to agent instead of creating client
         return GenericOpenAIChatAgent(
-            openai_client=openai_client,
+            api_key=api_key,
+            base_url=base_url,
             model_name=model or "served-model",  # Default model name
             verbose=verbose,
             completion_kwargs={
@@ -257,25 +250,33 @@ async def run_single_task(
             agent_config["allowed_tools"] = allowed_tools
     elif agent_type == "vllm":
         # Special handling for vLLM
-        sample_agent = build_agent(
-            agent_type,
-            model=model,
-            allowed_tools=allowed_tools,
-            verbose=verbose,
-            vllm_base_url=vllm_base_url,
-        )
-        agent_config = {
-            "openai_client": sample_agent.oai,
-            "model_name": sample_agent.model_name,
-            "verbose": verbose,
-            "completion_kwargs": sample_agent.completion_kwargs,
-        }
-        if allowed_tools:
-            agent_config["allowed_tools"] = allowed_tools
-
         from hud.agents.openai_chat_generic import GenericOpenAIChatAgent
 
         agent_class = GenericOpenAIChatAgent
+        
+        # Determine the base URL to use
+        if vllm_base_url is not None:
+            base_url = vllm_base_url
+            api_key = (
+                settings.api_key if base_url.startswith(settings.hud_rl_url) else "token-abc123"
+            )
+        else:
+            base_url = "http://localhost:8000/v1"
+            api_key = "token-abc123"
+            
+        agent_config = {
+            "api_key": api_key,
+            "base_url": base_url,
+            "model_name": model or "served-model",
+            "verbose": verbose,
+            "completion_kwargs": {
+                "temperature": 0.7,
+                "max_tokens": 2048,
+                "tool_choice": "required",
+            },
+        }
+        if allowed_tools:
+            agent_config["allowed_tools"] = allowed_tools
     elif agent_type == "openai":
         from hud.agents import OperatorAgent
 
@@ -399,21 +400,27 @@ async def run_full_dataset(
             )
             raise typer.Exit(1) from e
 
-        # Use build_agent to create a sample agent to get the config
-        sample_agent = build_agent(
-            agent_type,
-            model=model,
-            allowed_tools=allowed_tools,
-            verbose=verbose,
-            vllm_base_url=vllm_base_url,
-        )
-
-        # Extract the config from the sample agent
+        # Determine the base URL to use
+        if vllm_base_url is not None:
+            base_url = vllm_base_url
+            api_key = (
+                settings.api_key if base_url.startswith(settings.hud_rl_url) else "token-abc123"
+            )
+        else:
+            base_url = "http://localhost:8000/v1"
+            api_key = "token-abc123"
+            
+        # Build config directly instead of creating sample agent
         agent_config: dict[str, Any] = {
-            "openai_client": sample_agent.oai,
-            "model_name": sample_agent.model_name,
+            "api_key": api_key,
+            "base_url": base_url,
+            "model_name": model or "served-model",
             "verbose": verbose,
-            "completion_kwargs": sample_agent.completion_kwargs,
+            "completion_kwargs": {
+                "temperature": 0.7,
+                "max_tokens": 2048,
+                "tool_choice": "required",
+            },
         }
         if allowed_tools:
             agent_config["allowed_tools"] = allowed_tools
