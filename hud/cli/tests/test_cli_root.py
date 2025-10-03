@@ -31,9 +31,10 @@ def test_analyze_params_live(mock_run, mock_build_cmd, mock_analyze_env):
 
 def test_analyze_no_params_errors():
     import typer
+
     # When no params provided, analyze prints help and exits(1)
     with pytest.raises(typer.Exit):
-        cli.analyze(params=None, config=None, cursor=None, output_format="json", verbose=False)
+        cli.analyze(params=None, config=None, cursor=None, output_format="json", verbose=False)  # type: ignore
 
 
 @patch("hud.cli.analyze.analyze_environment_from_config", new_callable=AsyncMock)
@@ -41,7 +42,7 @@ def test_analyze_no_params_errors():
 def test_analyze_from_config(mock_run, mock_func, tmp_path: Path):
     cfg = tmp_path / "cfg.json"
     cfg.write_text("{}")
-    cli.analyze(params=None, config=cfg, cursor=None, output_format="json", verbose=False)
+    cli.analyze(params=None, config=cfg, cursor=None, output_format="json", verbose=False)  # type: ignore
     assert mock_run.called
 
 
@@ -50,7 +51,7 @@ def test_analyze_from_config(mock_run, mock_func, tmp_path: Path):
 @patch("asyncio.run")
 def test_analyze_from_cursor(mock_run, mock_analyze, mock_parse):
     mock_parse.return_value = (["cmd", "arg"], None)
-    cli.analyze(params=None, config=None, cursor="server", output_format="json", verbose=False)
+    cli.analyze(params=None, config=None, cursor="server", output_format="json", verbose=False)  # type: ignore
     assert mock_run.called
 
 
@@ -76,7 +77,7 @@ def test_run_local_calls_runner(mock_runner):
         local=True,
         transport="stdio",
         port=1234,
-        url=None,
+        url=None,  # type: ignore
         api_key=None,
         run_id=None,
         verbose=False,
@@ -103,7 +104,7 @@ def test_run_no_params_errors():
     import typer
 
     with pytest.raises(typer.Exit):
-        cli.run(params=None)
+        cli.run(params=None)  # type: ignore
 
 
 @patch("hud.cli.run_mcp_dev_server")
@@ -116,7 +117,7 @@ def test_dev_calls_runner(mock_dev):
         verbose=False,
         inspector=False,
         interactive=False,
-        watch=None,
+        watch=None,  # type: ignore
     )
     assert mock_dev.called
 

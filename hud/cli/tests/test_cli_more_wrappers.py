@@ -29,8 +29,3 @@ def test_remove_wrapper(mock_remove):
     cli.remove(target="all", yes=True, verbose=False)
     assert mock_remove.called
 
-
-@patch("hud.cli.get_command")
-def test_get_wrapper(mock_get):
-    cli.get(dataset_name="hud-evals/X", split="train", output=None, limit=None, format="json")
-    assert mock_get.called

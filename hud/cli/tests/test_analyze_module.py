@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 # Mark entire module as asyncio to ensure async tests run with pytest-asyncio
 pytestmark = pytest.mark.asyncio
 
+
 def test_parse_docker_command():
     cmd = ["docker", "run", "--rm", "-i", "img"]
     cfg = parse_docker_command(cmd)
@@ -78,12 +79,7 @@ def test_display_interactive_metadata_only(monkeypatch):
     display_interactive(analysis)
 
 
-def test_display_markdown_both_paths(monkeypatch):
-    import hud.cli.analyze as mod
-
-    mock_console = MagicMock()
-    monkeypatch.setattr(mod, "console", mock_console, raising=False)
-
+def test_display_markdown_both_paths(capsys):
     # metadata-only
     md_only = {"image": "img:latest", "tool_count": 0, "tools": [], "resources": []}
     display_markdown(md_only)
@@ -91,7 +87,10 @@ def test_display_markdown_both_paths(monkeypatch):
     # live metadata
     live = {"metadata": {"servers": ["s1"], "initialized": True}, "tools": [], "resources": []}
     display_markdown(live)
-    assert mock_console.print.called
+
+    # Check that output was generated
+    captured = capsys.readouterr()
+    assert "MCP Environment Analysis" in captured.out
 
 
 @patch("hud.cli.analyze.MCPClient")

@@ -24,7 +24,7 @@ def test_fetch_lock_from_registry_success(mock_get, mock_settings):
     resp.json.return_value = {"lock": "image: img\n"}
     mock_get.return_value = resp
     lock = fetch_lock_from_registry("org/name:tag")
-    assert lock["image"] == "img"
+    assert lock is not None and lock["image"] == "img"
 
 
 def test_check_local_cache_not_found(tmp_path: Path, monkeypatch):

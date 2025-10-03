@@ -27,11 +27,11 @@ def test_push_happy_path(
         "images:\n  local: org/env:latest\nbuild:\n  version: 0.1.0\n"
     )
 
-    # Provide API key
-    monkeypatch.setattr("hud.cli.push.settings.api_key", "sk-test", raising=False)
+    # Provide API key via main settings module
+    monkeypatch.setattr("hud.settings.settings.api_key", "sk-test", raising=False)
 
-    # ensure_built noop
-    monkeypatch.setattr("hud.cli.push.ensure_built", lambda *_a, **_k: None)
+    # ensure_built noop - patch from the right module
+    monkeypatch.setattr("hud.cli.utils.env_check.ensure_built", lambda *_a, **_k: {})
 
     # Mock subprocess.run behavior depending on command
     def run_side_effect(args, *a, **k):

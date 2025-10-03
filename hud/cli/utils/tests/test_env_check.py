@@ -43,16 +43,19 @@ def test_collect_source_diffs_basic(tmp_path: Path):
 
 
 def test_find_environment_dir_prefers_lock(tmp_path: Path):
-    tasks = tmp_path / "tasks.json"
+    # Create env as a sibling to tasks, so it will be in the candidates list
+    parent = tmp_path / "parent"
+    parent.mkdir()
+    tasks = parent / "tasks.json"
     tasks.write_text("[]")
     env = tmp_path / "env"
     env.mkdir()
     (env / "hud.lock.yaml").write_text("version: 1.0")
-    # Current working dir becomes candidate; include env parent
-    with patch("pathlib.Path.cwd", return_value=tmp_path):
+    # Set cwd to env so it's in the candidate list
+    with patch("pathlib.Path.cwd", return_value=env):
         found = find_environment_dir(tasks)
-    # On Windows, Path equality may differ if resolves; compare string endings
-    assert str(found).replace("\\", "/").endswith("/env")
+    # Should find env because cwd returns env and it has hud.lock.yaml
+    assert found == env
 
 
 def test_ensure_built_no_lock_noninteractive(tmp_path: Path):

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -61,17 +60,23 @@ class TestTaskExtended:
         assert setup_tools[1].arguments is not None
         assert setup_tools[1].arguments["mode"] == "test"
 
-    def test_env_var_complex_resolution(self):
+    def test_env_var_complex_resolution(self, monkeypatch):
         """Test complex environment variable scenarios."""
-        from hud.settings import settings
+        # Set environment variables
+        monkeypatch.setenv("HUD_API_KEY", "sk-12345")
+        monkeypatch.setenv("HUD_TELEMETRY_URL", "https://api.example.com")
+        monkeypatch.setenv("EMPTY_VAR", "")
+        monkeypatch.setenv("RUN_ID", "run-789")
 
-        os.environ["HUD_API_KEY"] = "sk-12345"
-        settings.api_key = "sk-12345"
-        os.environ["HUD_TELEMETRY_URL"] = "https://api.example.com"
-        os.environ["EMPTY_VAR"] = ""
-        os.environ["RUN_ID"] = "run-789"
+        # Mock settings to return our test values
+        with patch("hud.types.settings") as mock_settings:
+            mock_settings.api_key = "sk-12345"
+            mock_settings.hud_telemetry_url = "https://api.example.com"
+            mock_settings.model_dump.return_value = {
+                "api_key": "sk-12345",
+                "hud_telemetry_url": "https://api.example.com",
+            }
 
-        try:
             task = Task(
                 prompt="Complex env test",
                 mcp_config={
@@ -89,20 +94,13 @@ class TestTaskExtended:
                 },
             )
 
-            assert task.mcp_config["auth"]["bearer"] == "Bearer sk-12345"
-            assert task.mcp_config["auth"]["empty"] == ""
-            assert task.mcp_config["auth"]["missing"] == ""
-            assert task.mcp_config["endpoints"][0] == "https://api.example.com/v1"
-            assert task.mcp_config["endpoints"][1] == "https://api.example.com/v2"
-            assert task.mcp_config["endpoints"][2] == ""
-            assert task.mcp_config["metadata"]["combined"] == "sk-12345-run-789"
-
-        finally:
-            del os.environ["HUD_API_KEY"]
-            del os.environ["HUD_TELEMETRY_URL"]
-            del os.environ["EMPTY_VAR"]
-            del os.environ["RUN_ID"]
-            settings.api_key = None
+        assert task.mcp_config["auth"]["bearer"] == "Bearer sk-12345"
+        assert task.mcp_config["auth"]["empty"] == ""
+        assert task.mcp_config["auth"]["missing"] == ""
+        assert task.mcp_config["endpoints"][0] == "https://api.example.com/v1"
+        assert task.mcp_config["endpoints"][1] == "https://api.example.com/v2"
+        assert task.mcp_config["endpoints"][2] == ""
+        assert task.mcp_config["metadata"]["combined"] == "sk-12345-run-789"
 
     def test_non_string_values_preserved(self):
         """Test that non-string values are preserved during env resolution."""

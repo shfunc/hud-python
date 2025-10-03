@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 import pytest
+import typer
 
 from hud.cli.build import build_environment
 
@@ -12,17 +13,12 @@ if TYPE_CHECKING:
 
 
 @patch("hud.cli.build.compute_source_hash", return_value="deadbeef")
-@patch("hud.cli.build.anyio")
-@patch("hud.cli.build.MCPServer")
-@patch("hud.cli.build.FastMCP")
 @patch(
     "hud.cli.build.analyze_mcp_environment",
     return_value={"initializeMs": 10, "toolCount": 0, "tools": []},
 )
 @patch("hud.cli.build.build_docker_image", return_value=True)
-def test_build_label_rebuild_failure(
-    _bd, _an, _fm, _ms, _anyio, _hash, tmp_path: Path, monkeypatch
-):
+def test_build_label_rebuild_failure(_bd, _an, _hash, tmp_path: Path, monkeypatch):
     # Minimal environment dir
     env = tmp_path / "env"
     env.mkdir()
@@ -40,6 +36,6 @@ def test_build_label_rebuild_failure(
     monkeypatch.setenv("FASTMCP_DISABLE_BANNER", "1")
     with (
         patch("hud.cli.build.subprocess.run", side_effect=run_side_effect),
-        pytest.raises(SystemExit),
+        pytest.raises(typer.Exit),
     ):
         build_environment(str(env), verbose=False)
