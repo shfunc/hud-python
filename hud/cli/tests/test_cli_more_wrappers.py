@@ -28,4 +28,3 @@ def test_clone_wrapper(mock_tutorial, _msg, _clone):
 def test_remove_wrapper(mock_remove):
     cli.remove(target="all", yes=True, verbose=False)
     assert mock_remove.called
-
