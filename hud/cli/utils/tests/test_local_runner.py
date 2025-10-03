@@ -45,6 +45,6 @@ async def test_run_with_reload_import_error(monkeypatch):
     monkeypatch.setattr(_builtins, "__import__", _imp)
 
     with pytest.raises(SystemExit) as exc:
-        # run_with_reload is sync in this module; call directly
-        run_with_reload("server:app", ["."], verbose=False)  # type: ignore
+        # run_with_reload is async in this module; await it
+        await run_with_reload("server:app", transport="stdio", verbose=False)
     assert exc.value.code == 1

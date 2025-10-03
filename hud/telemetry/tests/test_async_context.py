@@ -98,10 +98,15 @@ async def test_async_trace_no_print_url_with_job():
 async def test_async_trace_with_exception():
     """Test AsyncTrace handles exceptions."""
     with (
+        patch("hud.telemetry.async_context.settings") as mock_settings,
         patch("hud.telemetry.async_context.OtelTrace") as mock_otel,
         patch("hud.telemetry.async_context.track_task"),
         patch("hud.telemetry.async_context._print_trace_complete_url") as mock_print,
     ):
+        # Enable telemetry for this test
+        mock_settings.telemetry_enabled = True
+        mock_settings.api_key = "test-key"
+
         mock_otel_instance = MagicMock()
         mock_otel.return_value = mock_otel_instance
 
