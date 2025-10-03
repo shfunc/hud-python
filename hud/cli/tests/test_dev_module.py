@@ -10,7 +10,8 @@ pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="Prefers Linux")
 
 
 def test_run_mcp_dev_server_auto_detect_failure(monkeypatch):
-    from hud.cli import dev as dev_module
+    # Import the dev module file (not the dev function from hud.cli)
+    import hud.cli.dev as dev_module
 
     # Patch at module level where they're defined
     monkeypatch.setattr(dev_module, "should_use_docker_mode", lambda cwd: False)
