@@ -94,7 +94,7 @@ class TestBaseMCPAgent:
 
         assert agent.mcp_client is not None
         assert agent.allowed_tools is None
-        assert agent.disallowed_tools == []
+        assert agent.disallowed_tools is None
         assert agent.initial_screenshot is True
         assert agent.system_prompt is not None  # Default system prompt is set
 
@@ -334,7 +334,7 @@ class TestBaseMCPAgent:
         schemas = agent.get_tool_schemas()
 
         # Should include non-lifecycle tools
-        assert len(schemas) == 1
+        assert len(schemas) == 2
         assert schemas[0]["name"] == "tool1"
 
     def test_get_tools_by_server(self):

@@ -63,7 +63,7 @@ class TestTaskExtended:
 
     def test_env_var_complex_resolution(self):
         """Test complex environment variable scenarios."""
-        os.environ["API_KEY"] = "sk-12345"
+        os.environ["HUD_API_KEY"] = "sk-12345"
         os.environ["HUD_TELEMETRY_URL"] = "https://api.example.com"
         os.environ["EMPTY_VAR"] = ""
         os.environ["RUN_ID"] = "run-789"
@@ -73,7 +73,7 @@ class TestTaskExtended:
                 prompt="Complex env test",
                 mcp_config={
                     "auth": {
-                        "bearer": "Bearer ${API_KEY}",
+                        "bearer": "Bearer ${HUD_API_KEY}",
                         "empty": "${EMPTY_VAR}",
                         "missing": "${MISSING_VAR}",
                     },
@@ -82,7 +82,7 @@ class TestTaskExtended:
                         "${HUD_TELEMETRY_URL}/v2",
                         "${MISSING_URL}",
                     ],
-                    "metadata": {"run_id": "${RUN_ID}", "combined": "${API_KEY}-${RUN_ID}"},
+                    "metadata": {"run_id": "${RUN_ID}", "combined": "${HUD_API_KEY}-${RUN_ID}"},
                 },
             )
 
@@ -95,7 +95,7 @@ class TestTaskExtended:
             assert task.mcp_config["metadata"]["combined"] == "sk-12345-run-789"
 
         finally:
-            del os.environ["API_KEY"]
+            del os.environ["HUD_API_KEY"]
             del os.environ["HUD_TELEMETRY_URL"]
             del os.environ["EMPTY_VAR"]
             del os.environ["RUN_ID"]
@@ -129,11 +129,16 @@ class TestDatasetOperations:
         with patch("datasets.Dataset") as MockDataset:
             mock_instance = MagicMock()
             MockDataset.from_list.return_value = mock_instance
+            mock_instance.push_to_hub.return_value = None
 
             save_tasks([], "test-org/empty-dataset")
 
             MockDataset.from_list.assert_called_once_with([])
-            mock_instance.push_to_hub.assert_called_once()
+            mock_instance.push_to_hub.assert_called_once_with(
+                repo_id="test-org/empty-dataset",
+                dataset_type="json",
+                split="train",
+            )
 
     def test_save_taskconfigs_mixed_rejection(self):
         """Test that mixing dicts and Task objects is rejected."""

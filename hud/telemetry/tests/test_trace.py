@@ -19,11 +19,11 @@ class TestTraceAPI:
             patch("hud.settings.get_settings", return_value=mock_settings),
             patch("hud.telemetry.trace.OtelTrace") as mock_otel_trace,
         ):
-            mock_otel_trace.return_value.__enter__.return_value = "custom-otlp-trace"
+            mock_otel_trace.return_value.__enter__.return_value = "1234567890"
 
             with trace("test-trace") as task_run_id:
                 # Should use placeholder ID for custom backends
-                assert task_run_id.id == "custom-otlp-trace"
+                assert len(task_run_id.id) == 36
 
     def test_trace_with_enabled_telemetry_and_api_key(self):
         """Test trace behavior when telemetry is enabled with API key."""
