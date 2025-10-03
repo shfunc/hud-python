@@ -98,6 +98,7 @@ async def test_last_shutdown_handler_wins(patch_stdio):
     assert calls == ["second"], "Only the last registered shutdown handler should run"
     server_mod._sigterm_received = False  # type: ignore[attr-defined]
 
+
 @pytest.mark.skipif(sys.platform == "win32", reason="asyncio.add_signal_handler is Unix-only")
 def test__run_with_sigterm_registers_handlers_when_enabled(monkeypatch: pytest.MonkeyPatch):
     """

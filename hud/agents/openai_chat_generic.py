@@ -51,7 +51,7 @@ class GenericOpenAIChatAgent(MCPAgent):
     ) -> None:
         # Accept base-agent settings via **agent_kwargs (e.g., mcp_client, system_prompt, etc.)
         super().__init__(**agent_kwargs)
-        
+
         # Handle client creation - support both patterns
         if openai_client is not None:
             # Use provided client (backward compatibility)
@@ -61,7 +61,7 @@ class GenericOpenAIChatAgent(MCPAgent):
             self.oai = AsyncOpenAI(api_key=api_key, base_url=base_url)
         else:
             raise ValueError("Either openai_client or (api_key and base_url) must be provided")
-            
+
         self.model_name = model_name
         self.completion_kwargs: dict[str, Any] = completion_kwargs or {}
         self.mcp_schemas = []
