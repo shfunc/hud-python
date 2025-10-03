@@ -63,7 +63,10 @@ class TestTaskExtended:
 
     def test_env_var_complex_resolution(self):
         """Test complex environment variable scenarios."""
+        from hud.settings import settings
+
         os.environ["HUD_API_KEY"] = "sk-12345"
+        settings.api_key = "sk-12345"
         os.environ["HUD_TELEMETRY_URL"] = "https://api.example.com"
         os.environ["EMPTY_VAR"] = ""
         os.environ["RUN_ID"] = "run-789"
@@ -99,6 +102,7 @@ class TestTaskExtended:
             del os.environ["HUD_TELEMETRY_URL"]
             del os.environ["EMPTY_VAR"]
             del os.environ["RUN_ID"]
+            settings.api_key = None
 
     def test_non_string_values_preserved(self):
         """Test that non-string values are preserved during env resolution."""
@@ -134,11 +138,7 @@ class TestDatasetOperations:
             save_tasks([], "test-org/empty-dataset")
 
             MockDataset.from_list.assert_called_once_with([])
-            mock_instance.push_to_hub.assert_called_once_with(
-                repo_id="test-org/empty-dataset",
-                dataset_type="json",
-                split="train",
-            )
+            mock_instance.push_to_hub.assert_called_once_with("test-org/empty-dataset")
 
     def test_save_taskconfigs_mixed_rejection(self):
         """Test that mixing dicts and Task objects is rejected."""

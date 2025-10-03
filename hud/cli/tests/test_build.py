@@ -237,7 +237,9 @@ class TestAnalyzeMcpEnvironment:
         mock_client_class.return_value = mock_client
         mock_client.initialize.side_effect = ConnectionError("Connection failed")
 
-        with pytest.raises(ConnectionError):
+        from hud.shared.exceptions import HudException
+
+        with pytest.raises(HudException, match="Connection failed"):
             await analyze_mcp_environment("test:latest")
 
     @mock.patch("hud.cli.build.MCPClient")
@@ -363,7 +365,7 @@ ENV API_KEY
         mock_run.return_value = mock_result
 
         # Run build
-        build_environment(str(env_dir), "test/env:latest")
+        build_environment(str(env_dir), "test-env:latest")
 
         # Check lock file was created
         lock_file = env_dir / "hud.lock.yaml"

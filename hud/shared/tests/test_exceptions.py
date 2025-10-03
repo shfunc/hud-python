@@ -17,7 +17,6 @@ from hud.shared.exceptions import (
     HudClientError,
     HudConfigError,
     HudException,
-    HudMCPError,
     HudRateLimitError,
     HudRequestError,
     HudTimeoutError,
@@ -156,13 +155,15 @@ class TestHudExceptionAutoConversion:
 
             assert str(exc_info.value) == "Async operation timed out"
 
-    def test_generic_error_passes_through_uncategorized(self):
-        """Uncategorized errors pass through unchanged per current design."""
+    def test_generic_error_remains_hudexception(self):
+        """Uncategorized errors become base HudException with original message."""
         try:
             raise ValueError("Some random error")
         except Exception as e:
-            with pytest.raises(ValueError) as exc_info:
+            with pytest.raises(HudException) as exc_info:
                 raise HudException from e
+            # Should be base HudException, not subclass
+            assert type(exc_info.value) is HudException
             assert str(exc_info.value) == "Some random error"
 
     def test_custom_message_override(self):
@@ -390,11 +391,11 @@ class TestEdgeCases:
             assert type(error) is HudException
 
     def test_empty_error_message(self):
-        """Uncategorized empty-message errors pass through unchanged."""
+        """Empty message still results in a HudException instance."""
         try:
             raise ValueError("")
         except Exception as e:
-            with pytest.raises(ValueError):
+            with pytest.raises(HudException):
                 raise HudException from e
 
     def test_circular_exception_chain(self):
