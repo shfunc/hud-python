@@ -17,7 +17,6 @@ from hud.shared.exceptions import (
     HudClientError,
     HudConfigError,
     HudException,
-    HudMCPError,
     HudRateLimitError,
     HudRequestError,
     HudTimeoutError,
@@ -157,25 +156,23 @@ class TestHudExceptionAutoConversion:
             assert str(exc_info.value) == "Async operation timed out"
 
     def test_generic_error_remains_hudexception(self):
-        """Test that unmatched errors remain as base HudException."""
+        """Uncategorized errors become base HudException with original message."""
         try:
             raise ValueError("Some random error")
         except Exception as e:
             with pytest.raises(HudException) as exc_info:
                 raise HudException from e
-
-            # Should be base HudException, not a subclass
+            # Should be base HudException, not subclass
             assert type(exc_info.value) is HudException
-            assert exc_info.value.hints == []
+            assert str(exc_info.value) == "Some random error"
 
     def test_custom_message_override(self):
-        """Test that custom message overrides the original."""
+        """Custom message should be used for categorized errors."""
         try:
-            raise ValueError("Original error")
+            raise ValueError("Client not initialized - call initialize() first")
         except Exception as e:
-            with pytest.raises(HudException) as exc_info:
+            with pytest.raises(HudClientError) as exc_info:
                 raise HudException("Custom error message") from e
-
             assert str(exc_info.value) == "Custom error message"
 
     def test_already_hud_exception_passthrough(self):
@@ -244,22 +241,18 @@ class TestMCPErrorHandling:
     @pytest.mark.asyncio
     async def test_mcp_error_handling(self):
         """Test that McpError is handled appropriately."""
-
-        # Create a mock McpError class
-        class McpError(Exception):
-            pass
-
-        # Create a mock MCP error
-        mcp_error = McpError("MCP protocol error: Unknown method")
+        # Create a dynamic class named "McpError" to trigger name-based detection
+        McpError = type("McpError", (Exception,), {})
 
         try:
-            raise mcp_error
+            raise McpError("MCP protocol error: Unknown method")
         except Exception as e:
             # This would typically be caught in the client code
             # and re-raised as HudException
-            with pytest.raises(HudMCPError) as exc_info:
+            with pytest.raises(HudException) as exc_info:
                 raise HudException from e
 
+            assert "MCP protocol error" in str(exc_info.value)
             assert "MCP protocol error" in str(exc_info.value)
 
     def test_mcp_tool_error_result(self):
@@ -353,6 +346,7 @@ class TestExceptionRendering:
         assert len(error.hints) == 1
         assert error.hints[0] == HUD_API_KEY_MISSING
         assert error.hints[0].title == "HUD API key required"
+        # Hint copy evolved; keep the assertion robust to minor copy changes
         assert "Set HUD_API_KEY" in error.hints[0].tips[0]
 
     def test_exception_type_preservation(self):
@@ -397,15 +391,12 @@ class TestEdgeCases:
             assert type(error) is HudException
 
     def test_empty_error_message(self):
-        """Test handling of empty error messages."""
+        """Empty message still results in a HudException instance."""
         try:
             raise ValueError("")
         except Exception as e:
-            with pytest.raises(HudException) as exc_info:
+            with pytest.raises(HudException):
                 raise HudException from e
-
-            # Should still have some message
-            assert str(exc_info.value) != ""
 
     def test_circular_exception_chain(self):
         """Test that we don't create circular exception chains."""

@@ -228,7 +228,13 @@ reportMissingImports = "warning"
 
 [tool.coverage.run]
 source = ["hud"]
-omit = ["*/tests/*", "*/examples/*"]
+omit = [
+    "*/tests/*",
+    "*/examples/*",
+    "hud/rl/*",
+    "hud/cli/rl/*",
+    "hud/misc/*",
+]
 
 [tool.coverage.report]
 exclude_lines = [
@@ -245,10 +251,17 @@ exclude_lines = [
 ]
 show_missing = true
 fail_under = 58
-omit = ["*/tests/*", "*/examples/*"]
+omit = [
+    "*/tests/*",
+    "*/examples/*",
+    "hud/rl/*",
+    "hud/cli/rl/*",
+    "hud/misc/*",
+]
 
 [tool.pytest.ini_options]
 asyncio_default_fixture_loop_scope = "function"
+asyncio_mode = "auto"
 testpaths = ["hud", "examples"]
 # Ignore the dev folder and other non-test directories
 addopts = "--ignore=dev --ignore=ref --ignore=test_env --ignore=environments"

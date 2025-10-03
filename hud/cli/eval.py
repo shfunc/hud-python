@@ -75,13 +75,13 @@ def _build_vllm_config(
     verbose: bool,
 ) -> dict[str, Any]:
     """Build configuration for vLLM agent.
-    
+
     Args:
         vllm_base_url: Optional base URL for vLLM server
         model: Model name to use
         allowed_tools: Optional list of allowed tools
         verbose: Enable verbose output
-        
+
     Returns:
         Dictionary with agent configuration
     """
@@ -93,7 +93,7 @@ def _build_vllm_config(
     else:
         base_url = "http://localhost:8000/v1"
         api_key = "token-abc123"
-    
+
     config: dict[str, Any] = {
         "api_key": api_key,
         "base_url": base_url,
@@ -105,10 +105,10 @@ def _build_vllm_config(
             "tool_choice": "auto",
         },
     }
-    
+
     if allowed_tools:
         config["allowed_tools"] = allowed_tools
-    
+
     return config
 
 
@@ -280,7 +280,7 @@ async def run_single_task(
         from hud.agents.openai_chat_generic import GenericOpenAIChatAgent
 
         agent_class = GenericOpenAIChatAgent
-        
+
         # Use the shared config builder
         agent_config = _build_vllm_config(
             vllm_base_url=vllm_base_url,
