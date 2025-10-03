@@ -43,8 +43,6 @@ from typing import Any, Literal
 import hud
 from datasets import load_dataset
 from hud.agents import ClaudeAgent, OperatorAgent
-from hud.agents.misc.response_agent import ResponseAgent
-from hud.clients import MCPClient
 from hud.datasets import Task, run_dataset
 
 logger = logging.getLogger(__name__)
@@ -68,22 +66,35 @@ def _build_agent(
     """Create and return the requested agent type."""
 
     if agent_type == "openai":
-        allowed_tools = allowed_tools or ["openai_computer"]
-
-        return OperatorAgent(
-            allowed_tools=allowed_tools,
-            response_agent=ResponseAgent(),
-        )
+        # Only pass allowed_tools if explicitly provided
+        # This allows tasks to specify their own via agent_config
+        if allowed_tools:
+            return OperatorAgent(
+                allowed_tools=allowed_tools,
+                validate_api_key=False,
+            )
+        else:
+            return OperatorAgent(
+                validate_api_key=False,
+            )
 
     # Fallback Claude agent (Anthropic)
-    model = model or "claude-sonnet-4-20250514"
-    allowed_tools = allowed_tools or ["anthropic_computer"]
+    # model = model or "claude-sonnet-4-20250514"
+    model = model or "claude-sonnet-4-5-20250929"
 
-    return ClaudeAgent(
-        model=model,
-        allowed_tools=allowed_tools,
-        response_agent=ResponseAgent(),
-    )
+    # Only pass allowed_tools if explicitly provided
+    # This allows tasks to specify their own via agent_config
+    if allowed_tools:
+        return ClaudeAgent(
+            model=model,
+            allowed_tools=allowed_tools,
+            validate_api_key=False,
+        )
+    else:
+        return ClaudeAgent(
+            model=model,
+            validate_api_key=False,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -146,16 +157,23 @@ async def run_full_dataset(
     if agent_type == "openai":
         agent_class = OperatorAgent
         agent_config: dict[str, Any] = {
-            "allowed_tools": allowed_tools or ["openai_computer"],
             "validate_api_key": False,
         }
+        # Only add allowed_tools if explicitly provided
+        # This allows tasks to specify their own via agent_config
+        if allowed_tools:
+            agent_config["allowed_tools"] = allowed_tools
     else:
         agent_class = ClaudeAgent
         agent_config = {
-            "model": model or "claude-sonnet-4-20250514",
-            "allowed_tools": allowed_tools or ["anthropic_computer"],
+            # "model": model or "claude-sonnet-4-20250514",
+            "model": model or "claude-sonnet-4-5-20250929",
             "validate_api_key": False,
         }
+        # Only add allowed_tools if explicitly provided
+        # This allows tasks to specify their own via agent_config
+        if allowed_tools:
+            agent_config["allowed_tools"] = allowed_tools
 
     eval_name = f"Evaluation {dataset_name.split('/')[-1]}"
 
