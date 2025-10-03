@@ -17,6 +17,7 @@ from hud.shared.exceptions import (
     HudClientError,
     HudConfigError,
     HudException,
+    HudMCPError,
     HudRateLimitError,
     HudRequestError,
     HudTimeoutError,
@@ -250,6 +251,7 @@ class TestMCPErrorHandling:
             with pytest.raises(HudException) as exc_info:
                 raise HudException from e
 
+            assert "MCP protocol error" in str(exc_info.value)
             assert "MCP protocol error" in str(exc_info.value)
 
     def test_mcp_tool_error_result(self):

@@ -241,6 +241,13 @@ class TestBaseMCPAgent:
         assert "tool2" not in tool_names  # Not in allowed list
         assert "tool3" not in tool_names  # In disallowed list
 
+        # Make sure tool schemas are correct
+        schemas = agent.get_tool_schemas()
+        assert len(schemas) == 1
+        assert schemas[0]["name"] == "tool1"
+        assert schemas[0]["description"] == "Tool 1"
+        assert schemas[0]["parameters"] == {"type": "object"}
+
     @pytest.mark.asyncio
     async def test_call_tool_success(self):
         """Test successful tool call."""
