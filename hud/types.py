@@ -5,6 +5,7 @@ import json
 import logging
 import uuid
 from collections import defaultdict
+from enum import Enum
 from string import Template
 from typing import Any, Literal
 
@@ -16,6 +17,14 @@ from hud.settings import settings
 from hud.utils.tool_shorthand import normalize_to_tool_call_dict
 
 logger = logging.getLogger(__name__)
+
+
+class AgentType(str, Enum):
+    CLAUDE = "claude"
+    OPENAI = "openai"
+    VLLM = "vllm"
+    LITELLM = "litellm"
+    INTEGRATION_TEST = "integration_test"
 
 
 class Task(BaseModel):
@@ -319,6 +328,7 @@ class Trace(BaseModel):
 
 __all__ = [
     "AgentResponse",
+    "AgentType",
     "MCPToolCall",
     "MCPToolResult",
     "Trace",
