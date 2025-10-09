@@ -185,11 +185,20 @@ class HudRequestError(HudException):
         self.response_text = response_text
         self.response_headers = response_headers
         # Compute default hints from status code if none provided
-        if hints is None and status_code in (401, 403, 429):
+        if hints is None and status_code in (401, 402, 403, 429):
             try:
-                from hud.shared.hints import HUD_API_KEY_MISSING, RATE_LIMIT_HIT  # type: ignore
+                from hud.shared.hints import (  # type: ignore
+                    CREDITS_EXHAUSTED,
+                    HUD_API_KEY_MISSING,
+                    PRO_PLAN_REQUIRED,
+                    RATE_LIMIT_HIT,
+                )
 
-                if status_code in (401, 403):
+                if status_code == 402:
+                    hints = [CREDITS_EXHAUSTED]
+                elif status_code == 403:
+                    hints = [PRO_PLAN_REQUIRED]
+                elif status_code == 401:
                     hints = [HUD_API_KEY_MISSING]
                 elif status_code == 429:
                     hints = [RATE_LIMIT_HIT]

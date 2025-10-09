@@ -17,6 +17,9 @@ from hud.utils.tool_shorthand import normalize_to_tool_call_dict
 
 logger = logging.getLogger(__name__)
 
+# Guard to ensure we only log missing HUD_API_KEY once
+_missing_api_key_error_logged: bool = False
+
 
 class Task(BaseModel):
     """
@@ -119,7 +122,10 @@ class Task(BaseModel):
         if settings.api_key:
             mapping["HUD_API_KEY"] = settings.api_key
         else:
-            logger.error("HUD_API_KEY is not set, tracing and remote training will not work")
+            global _missing_api_key_error_logged
+            if not _missing_api_key_error_logged:
+                logger.error("HUD_API_KEY is not set, tracing and remote training will not work")
+                _missing_api_key_error_logged = True
 
         def substitute_in_value(obj: Any) -> Any:
             """Recursively substitute variables in nested structures."""
