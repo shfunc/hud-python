@@ -479,6 +479,39 @@ async def run_full_dataset(
         if allowed_tools:
             agent_config["allowed_tools"] = allowed_tools
 
+    elif agent_type == "openrouter":
+        try:
+            # Use adapter class directly so it satisfies type[MCPAgent]
+            from hud.agents.openrouter import (
+                OpenRouterAgent,
+                _ADAPTER_REGISTRY,
+                _load_adapter,
+            )
+        except ImportError as e:
+            hud_console.error(
+                "OpenRouter agent dependencies are not installed. "
+                "Please install with: pip install 'hud-python[agent]'"
+            )
+            raise typer.Exit(1) from e
+
+        # Normalize model and resolve adapter
+        raw_model = model or "z-ai/glm-4.5v"
+        try:
+            normalized = OpenRouterAgent._normalize_model_name(raw_model)
+            adapter_path = _ADAPTER_REGISTRY[normalized]
+        except Exception as e:
+            hud_console.error(f"Unsupported OpenRouter model: {raw_model}")
+            raise typer.Exit(1) from e
+
+        adapter_cls = _load_adapter(adapter_path)
+        agent_class = adapter_cls
+        agent_config = {
+            "model_name": f"openrouter/{normalized}",
+            "verbose": verbose,
+        }
+        if allowed_tools:
+            agent_config["allowed_tools"] = allowed_tools
+
     else:
         try:
             from hud.agents import ClaudeAgent
