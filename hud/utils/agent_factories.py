@@ -88,13 +88,4 @@ def create_grounded_agent(**kwargs: Any) -> GroundedOpenAIChatAgent:
 def create_openrouter_agent(**kwargs: Any) -> OpenRouterAgent:
     """Factory for OpenRouterAgent with run_dataset compatibility."""
 
-    api_key = kwargs.pop("api_key", None)
-    base_url = kwargs.pop("base_url", None)
-    cache_control = kwargs.pop("cache_control", True)
-
-    return OpenRouterAgent(
-        api_key=api_key,
-        base_url=base_url,
-        cache_control=cache_control,
-        **kwargs,
-    )
+    return OpenRouterAgent(**kwargs)

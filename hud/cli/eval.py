@@ -191,7 +191,7 @@ def build_agent(
             raise typer.Exit(1) from e
 
         return OpenRouterAgent(
-            model_name=model or "z-ai/glm-4.6",
+            model_name=model or "z-ai/glm-4.5v",
             allowed_tools=allowed_tools,
             verbose=verbose,
         )
@@ -568,7 +568,7 @@ def eval_command(
         "claude",
         "--agent",
         help=(
-            "Agent backend to use (claude, openai computer use, openrouter responses, "
+            "Agent backend to use (claude, openai computer use, openrouter, "
             "vllm for local server, or litellm)"
         ),
     ),

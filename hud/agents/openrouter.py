@@ -1,592 +1,452 @@
-"""OpenRouter agent that uses the Responses API with prompt caching."""
+"""OpenRouter agent facade plus shared tooling helpers."""
 
 from __future__ import annotations
 
+import base64
 import json
-import logging
+import re
 import uuid
-from typing import Any, Iterable
+from importlib import import_module
+from io import BytesIO
+from typing import Any, Dict, Type
 
-import mcp.types as types
-from openai import AsyncOpenAI
+from PIL import Image
 
-from hud import instrument
-from hud.settings import settings
-from hud.types import AgentResponse, MCPToolCall, MCPToolResult
+from hud.agents.base import MCPAgent
+from hud.tools.computer.settings import computer_settings
 
-from .openai_chat_generic import GenericOpenAIChatAgent
-
-logger = logging.getLogger(__name__)
-
-_DEFAULT_BASE_URL = "https://openrouter.ai/api/alpha"
-_DEFAULT_HEADERS = {
-    "HTTP-Referer": "https://hud.so",
-    "X-Title": "HUD Python SDK",
-    "Accept": "application/json",
-}
-
-_DEFAULT_COMPLETION_KWARGS: dict[str, Any] = {
-    "temperature": 0.1,
-    "max_output_tokens": 1024,
-}
+# Shared helper utilities for computer-use adapters
+def _random_id() -> str:
+    return f"call_{uuid.uuid4().hex[:8]}"
 
 
-class OpenRouterAgent(GenericOpenAIChatAgent):
-    """MCP-enabled agent that talks to OpenRouter through the Responses API."""
+def _make_reasoning_item(reasoning: str) -> dict[str, Any]:
+    return {
+        "id": _random_id(),
+        "type": "reasoning",
+        "summary": [{"type": "summary_text", "text": reasoning}],
+    }
 
-    def __init__(
-        self,
-        *,
-        api_key: str | None = None,
-        base_url: str | None = None,
-        model_name: str = "z-ai/glm-4.5v",
-        default_headers: dict[str, str] | None = None,
-        cache_control: dict[str, Any] | bool | None = True,
-        cacheable_roles: Iterable[str] | None = None,
-        openai_client: AsyncOpenAI | None = None,
-        completion_kwargs: dict[str, Any] | None = None,
-        **agent_kwargs: Any,
-    ) -> None:
-        api_key = api_key or settings.openrouter_api_key
-        if not api_key:
-            raise ValueError(
-                "OpenRouter API key not found. Set OPENROUTER_API_KEY or pass api_key explicitly."
-            )
 
-        base_url = base_url or _DEFAULT_BASE_URL
+def _make_output_text_item(content: str) -> dict[str, Any]:
+    return {
+        "id": _random_id(),
+        "type": "message",
+        "role": "assistant",
+        "status": "completed",
+        "content": [{"type": "output_text", "text": content, "annotations": []}],
+    }
 
-        headers: dict[str, str] = dict(_DEFAULT_HEADERS)
-        if default_headers:
-            headers.update(default_headers)
 
-        client = openai_client or AsyncOpenAI(
-            api_key=api_key,
-            base_url=base_url,
-            default_headers=headers,
-        )
+def _make_computer_call_item(action: dict[str, Any], call_id: str | None = None) -> dict[str, Any]:
+    call_id = call_id or _random_id()
+    return {
+        "id": _random_id(),
+        "call_id": call_id,
+        "type": "computer_call",
+        "status": "completed",
+        "pending_safety_checks": [],
+        "action": action,
+    }
 
-        super().__init__(
-            openai_client=client,
-            model_name=model_name,
-            completion_kwargs=completion_kwargs,
-            **agent_kwargs,
-        )
 
-        self._responses_kwargs = {
-            "tool_choice": "auto",
-            **_DEFAULT_COMPLETION_KWARGS,
-            **dict(self.completion_kwargs),
-        }
-        self.completion_kwargs.clear()
+def _make_click_item(x: int, y: int, button: str = "left", call_id: str | None = None) -> dict[str, Any]:
+    return _make_computer_call_item({"type": "click", "x": x, "y": y, "button": button}, call_id)
 
-        self._cache_control = self._normalize_cache_control(cache_control)
-        self._cacheable_roles = tuple(cacheable_roles or ("system", "user", "tool"))
 
-    @staticmethod
-    def _normalize_cache_control(
-        cache_control: dict[str, Any] | bool | str | None,
-    ) -> dict[str, Any] | None:
-        if cache_control is False:
-            return None
-        if cache_control is None:
-            return {"type": "ephemeral"}
-        if cache_control is True:
-            return {"type": "ephemeral"}
-        if isinstance(cache_control, dict):
-            return cache_control
-        return {"type": str(cache_control)}
+def _make_double_click_item(x: int, y: int, call_id: str | None = None) -> dict[str, Any]:
+    return _make_computer_call_item({"type": "double_click", "x": x, "y": y}, call_id)
 
-    def _should_cache(self, role: str) -> bool:
-        return self._cache_control is not None and role in self._cacheable_roles
 
-    def _text_item(self, text: str, role: str) -> dict[str, Any]:
-        item: dict[str, Any] = {"type": "input_text", "text": text}
-        if self._should_cache(role):
-            item["cache_control"] = self._cache_control
-        return item
+def _make_move_item(x: int, y: int, call_id: str | None = None) -> dict[str, Any]:
+    return _make_computer_call_item({"type": "move", "x": x, "y": y}, call_id)
 
-    def _image_item(self, image_payload: Any, role: str) -> dict[str, Any]:
-        url: str | None = None
-        detail = None
 
-        if isinstance(image_payload, dict):
-            # Standard OpenAI-style wrapper
-            if "image_url" in image_payload and isinstance(image_payload["image_url"], dict):
-                img = image_payload["image_url"]
-                url = img.get("url")
-                detail = img.get("detail") or image_payload.get("detail")
-            # Direct url / data uri
-            elif image_payload.get("url"):
-                url = image_payload.get("url")
-                detail = image_payload.get("detail")
-            # Raw base64 payload from computer/tool results
-            elif image_payload.get("data"):
-                mime = (
-                    image_payload.get("mimeType")
-                    or image_payload.get("mime_type")
-                    or "image/png"
-                )
-                data = image_payload.get("data")
-                if data:
-                    url = f"data:{mime};base64,{data}"
-                detail = image_payload.get("detail")
-            elif isinstance(image_payload.get("source"), dict):
-                source = image_payload["source"]
-                data = source.get("data")
-                mime = source.get("media_type") or source.get("mime_type") or "image/png"
-                if data:
-                    url = f"data:{mime};base64,{data}"
-                detail = source.get("detail")
-        elif isinstance(image_payload, str):
-            url = image_payload
+def _make_drag_item(path: list[dict[str, int]], call_id: str | None = None) -> dict[str, Any]:
+    return _make_computer_call_item({"type": "drag", "path": path}, call_id)
 
-        item: dict[str, Any] = {"type": "input_image"}
-        if url:
-            item["image_url"] = url
-        item["detail"] = str(detail or "auto")
-        if self._should_cache(role):
-            item["cache_control"] = self._cache_control
-        return item
 
-    def _convert_message_content(self, role: str, content: Any) -> list[dict[str, Any]]:
-        if content is None:
-            return []
+def _make_keypress_item(keys: list[str], call_id: str | None = None) -> dict[str, Any]:
+    return _make_computer_call_item({"type": "keypress", "keys": keys}, call_id)
 
-        blocks: list[dict[str, Any]] = []
-        if isinstance(content, str):
-            blocks.append(self._text_item(content, role))
-            return blocks
 
-        if isinstance(content, dict):
-            content = [content]
+def _make_type_item(text: str, call_id: str | None = None) -> dict[str, Any]:
+    return _make_computer_call_item({"type": "type", "text": text}, call_id)
 
-        if isinstance(content, list):
-            for entry in content:
-                if isinstance(entry, str):
-                    blocks.append(self._text_item(entry, role))
-                elif isinstance(entry, dict):
-                    entry_copy = dict(entry)
-                    entry_type = entry_copy.get("type")
-                    if entry_type in {"text", "input_text", None}:
-                        text = entry_copy.get("text") or ""
-                        blocks.append(self._text_item(text, role))
-                    elif entry_type in {"image_url", "input_image"}:
-                        payload = entry_copy.get("image_url", entry_copy.get("image")) or entry_copy
-                        blocks.append(self._image_item(payload, role))
-                    elif entry_type in {"image", "output_image", "rendered"}:
-                        blocks.append(self._image_item(entry_copy, role))
-                    elif entry_type == "tool_result":
-                        text = entry_copy.get("text", "")
-                        blocks.append(self._text_item(text, role))
-                    else:
-                        text_value = entry_copy.get("text") or json.dumps(entry_copy)
-                        blocks.append(self._text_item(text_value, role))
-                else:
-                    blocks.append(self._text_item(str(entry), role))
-            return blocks
 
-        blocks.append(self._text_item(str(content), role))
-        return blocks
+def _make_scroll_item(
+    x: int,
+    y: int,
+    scroll_x: int,
+    scroll_y: int,
+    call_id: str | None = None,
+) -> dict[str, Any]:
+    action = {"type": "scroll", "x": x, "y": y, "scroll_x": scroll_x, "scroll_y": scroll_y}
+    return _make_computer_call_item(action, call_id)
 
-    def _convert_messages(self, messages: list[Any]) -> list[dict[str, Any]]:
-        converted: list[dict[str, Any]] = []
-        for message in messages:
-            if not isinstance(message, dict):
-                logger.debug("Skipping non-dict message: %s", message)
-                continue
 
-            if "type" in message and "role" not in message:
-                converted.append(message)
-                continue
+def _make_wait_item(call_id: str | None = None) -> dict[str, Any]:
+    return _make_computer_call_item({"type": "wait"}, call_id)
 
-            role = message.get("role") or "user"
 
-            if role == "assistant" and message.get("tool_calls"):
-                content_items = self._convert_message_content(role, message.get("content"))
-                if content_items:
-                    converted.append({"role": "assistant", "content": content_items})
-                for tool_call in message.get("tool_calls", []):
-                    converted.append(self._convert_tool_call(tool_call))
-                continue
+def _make_screenshot_item(call_id: str) -> dict[str, Any]:
+    return _make_computer_call_item({"type": "screenshot"}, call_id)
 
-            if role == "tool":
-                converted.extend(self._convert_tool_message(message))
-                continue
 
-            payload: dict[str, Any] = {"role": role}
-            content_items = self._convert_message_content(role, message.get("content"))
-            if content_items:
-                payload["content"] = content_items
-            if message.get("name"):
-                payload["name"] = message["name"]
-            if message.get("metadata"):
-                payload["metadata"] = message["metadata"]
-            converted.append(payload)
+def _make_failed_tool_call_items(
+    tool_name: str,
+    tool_kwargs: dict[str, Any],
+    error_message: str,
+    call_id: str,
+) -> list[dict[str, Any]]:
+    call = _make_computer_call_item({"type": tool_name, **tool_kwargs}, call_id)
+    call["status"] = "failed"
+    failure_text = _make_output_text_item(f"Tool {tool_name} failed: {error_message}")
+    failure_text["role"] = "assistant"
+    return [call, failure_text]
 
-        return converted
 
-    @staticmethod
-    def _jsonify_schema(value: Any) -> Any:
-        from pydantic import BaseModel
-        from pydantic.fields import FieldInfo
+def _coerce_to_pixel_coordinates(
+    x_val: Any,
+    y_val: Any,
+    *,
+    width: int,
+    height: int,
+) -> tuple[int, int] | None:
+    try:
+        x_float = float(x_val)
+        y_float = float(y_val)
+    except (TypeError, ValueError):
+        return None
 
-        if isinstance(value, (str, int, float, bool)) or value is None:
-            return value
+    def clamp(value: int, maximum: int) -> int:
+        return max(0, min(maximum - 1, value))
 
-        if isinstance(value, dict):
-            return {str(k): OpenRouterAgent._jsonify_schema(v) for k, v in value.items()}
+    abs_x = abs(x_float)
+    abs_y = abs(y_float)
+    if abs_x <= 1.0 and abs_y <= 1.0:
+        px = int(x_float * width)
+        py = int(y_float * height)
+    elif abs_x <= 999.0 and abs_y <= 999.0:
+        px = int((x_float / 999.0) * width)
+        py = int((y_float / 999.0) * height)
+    else:
+        px = int(x_float)
+        py = int(y_float)
 
-        if isinstance(value, (list, tuple, set)):
-            return [OpenRouterAgent._jsonify_schema(v) for v in value]
+    return clamp(px, width), clamp(py, height)
 
+
+def _parse_coordinate_box(value: Any) -> tuple[float, float] | None:
+    if isinstance(value, (list, tuple)) and len(value) >= 2:
         try:
-            return json.loads(json.dumps(value))
+            return float(value[0]), float(value[1])
+        except (TypeError, ValueError):
+            return None
+
+    if isinstance(value, str):
+        stripped = value.strip()
+        try:
+            loaded = json.loads(stripped)
         except Exception:
-            if isinstance(value, BaseModel):
-                return OpenRouterAgent._jsonify_schema(value.model_dump())
-            if isinstance(value, FieldInfo):
-                data: dict[str, Any] = {}
-                if value.annotation is not None:
-                    data.setdefault(
-                        "type",
-                        getattr(value.annotation, "__name__", str(value.annotation)),
-                    )
-                if value.description:
-                    data["description"] = value.description
-                if value.title:
-                    data["title"] = value.title
-                if value.default not in (None, Ellipsis):
-                    data["default"] = OpenRouterAgent._jsonify_schema(value.default)
-                if value.json_schema_extra:
-                    extra = OpenRouterAgent._jsonify_schema(value.json_schema_extra)
-                    if isinstance(extra, dict):
-                        data.update(extra)
-                return data or str(value)
-            if hasattr(value, "model_dump"):
-                return OpenRouterAgent._jsonify_schema(value.model_dump())
-            if hasattr(value, "__dict__") and value.__dict__:
-                return OpenRouterAgent._jsonify_schema(
-                    {
-                        k: v
-                        for k, v in value.__dict__.items()
-                        if not k.startswith("_")
-                    }
-                )
-            return str(value)
-
-    @staticmethod
-    def _convert_tools_for_responses(tools: list[dict] | None) -> list[dict]:
-        if not tools:
-            return []
-
-        converted: list[dict] = []
-        for tool in tools:
-            if not isinstance(tool, dict):
-                continue
-
-            if tool.get("type") == "function" and isinstance(tool.get("function"), dict):
-                fn = tool["function"]
-                name = fn.get("name")
-                params = fn.get("parameters", {})
-                description = fn.get("description", "")
-
-                if not isinstance(name, str) or not name:
-                    logger.debug("Skipping tool with missing name: %s", tool)
-                    continue
-
-                converted.append(
-                    {
-                        "type": "function",
-                        "name": name,
-                        "description": str(description or ""),
-                        "parameters": OpenRouterAgent._jsonify_schema(params),
-                    }
-                )
-            else:
-                converted.append(OpenRouterAgent._jsonify_schema(tool))
-
-        return converted
-
-    def _convert_tool_call(self, tool_call: dict[str, Any]) -> dict[str, Any]:
-        if not isinstance(tool_call, dict):
-            return {}
-
-        function = tool_call.get("function") or {}
-        name = function.get("name") or tool_call.get("name") or "tool_call"
-        raw_arguments = function.get("arguments")
-
-        if isinstance(raw_arguments, dict):
-            arguments = json.dumps(self._jsonify_schema(raw_arguments))
-        elif isinstance(raw_arguments, str):
-            try:
-                parsed = json.loads(raw_arguments)
-            except json.JSONDecodeError:
-                arguments = raw_arguments
-            else:
-                arguments = json.dumps(self._jsonify_schema(parsed))
-        elif raw_arguments is None:
-            arguments = "{}"
+            matches = re.findall(r"-?\d+(?:\.\d+)?", stripped)
+            if len(matches) >= 2:
+                return float(matches[0]), float(matches[1])
         else:
-            arguments = json.dumps(self._jsonify_schema(raw_arguments))
+            if isinstance(loaded, (list, tuple)) and len(loaded) >= 2:
+                try:
+                    return float(loaded[0]), float(loaded[1])
+                except (TypeError, ValueError):
+                    return None
+    return None
 
-        call_id = (
-            tool_call.get("id")
-            or function.get("id")
-            or function.get("call_id")
-            or f"call_{uuid.uuid4().hex}"
-        )
 
-        return {
-            "type": "function_call",
-            "id": call_id,
-            "name": name,
-            "arguments": arguments or "{}",
-        }
+def _coerce_box_to_pixels(
+    box: Any,
+    *,
+    width: int,
+    height: int,
+) -> tuple[int, int] | None:
+    coords = _parse_coordinate_box(box)
+    if not coords:
+        return None
+    return _coerce_to_pixel_coordinates(coords[0], coords[1], width=width, height=height)
 
-    def _convert_tool_message(self, message: dict[str, Any]) -> list[dict[str, Any]]:
-        entries: list[dict[str, Any]] = []
-        call_id = message.get("tool_call_id") or message.get("id") or f"call_{uuid.uuid4().hex}"
 
-        text_parts: list[str] = []
-        image_payloads: list[Any] = []
+def _parse_json_action_string(action_text: str) -> dict[str, Any] | None:
+    candidate = action_text.strip()
+    if not (candidate.startswith("{") and candidate.endswith("}")):
+        return None
 
-        content = message.get("content")
-        if isinstance(content, list):
-            for item in content:
-                if isinstance(item, dict):
-                    item_type = item.get("type")
-                    if item_type in {"text", "input_text"} and item.get("text"):
-                        text_parts.append(str(item.get("text")))
-                    elif item_type in {"image", "input_image", "image_url", "output_image", "rendered"}:
-                        image_payloads.append(item)
-                elif isinstance(item, str):
-                    text_parts.append(item)
-        elif isinstance(content, str):
-            text_parts.append(content)
+    attempts = [candidate]
+    if "\\" in candidate:
+        try:
+            attempts.append(candidate.encode("utf-8").decode("unicode_escape"))
+        except Exception:
+            pass
+        attempts.append(candidate.replace("\\\"", '"'))
 
-        structured = message.get("structuredContent")
-        if structured and not text_parts:
-            try:
-                text_parts.append(json.dumps(structured))
-            except Exception:
-                text_parts.append(str(structured))
+    for attempt in attempts:
+        try:
+            return json.loads(attempt)
+        except Exception:
+            continue
 
-        output_text = "\n".join(part for part in text_parts if part) or ""
+    return None
 
-        entries.append(
-            {
-                "type": "function_call_output",
-                "id": message.get("id") or call_id,
-                "call_id": call_id,
-                "output": output_text,
-            }
-        )
 
-        for payload in image_payloads:
-            entries.append(
-                {
-                    "role": "user",
-                    "content": [self._image_item(payload, "user")],
-                }
-            )
-
+def _convert_json_action_to_items(
+    json_action: dict[str, Any],
+    *,
+    call_id: str,
+    image_width: int,
+    image_height: int,
+) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    action_type = str(json_action.get("type", "")).lower()
+    if not action_type:
         return entries
 
-    async def format_tool_results(
-        self,
-        tool_calls: list[MCPToolCall],
-        tool_results: list[MCPToolResult],
-    ) -> list[dict[str, Any]]:
-        converted: list[dict[str, Any]] = []
-
-        for call, result in zip(tool_calls, tool_results, strict=False):
-            call_id = call.id or call.name or f"call_{uuid.uuid4().hex}"
-
-            text_parts: list[str] = []
-            image_payloads: list[Any] = []
-
-            for item in result.content or []:
-                if isinstance(item, types.TextContent):
-                    text_parts.append(item.text)
-                elif isinstance(item, types.ImageContent):
-                    image_payloads.append(
-                        {
-                            "mimeType": item.mimeType,
-                            "data": item.data,
-                            "detail": getattr(item, "detail", None),
-                        }
-                    )
-                elif isinstance(item, dict):
-                    if item.get("type") in {"text", "input_text"}:
-                        text_parts.append(str(item.get("text", "")))
-                    elif item.get("type") in {"image", "input_image", "image_url", "output_image", "rendered"}:
-                        image_payloads.append(item)
-                elif isinstance(item, str):
-                    text_parts.append(item)
-
-            if result.structuredContent and not text_parts:
-                try:
-                    text_parts.append(json.dumps(result.structuredContent))
-                except Exception:
-                    text_parts.append(str(result.structuredContent))
-
-            if getattr(result, "isError", False):
-                text_parts.append(getattr(result, "error", "Tool execution failed."))
-
-            output_text = "\n".join(part for part in text_parts if part) or ""
-
-            converted.append(
-                {
-                    "type": "function_call_output",
-                    "id": call_id,
-                    "call_id": call_id,
-                    "output": output_text,
-                }
+    if action_type in {"type", "text"}:
+        text_value = json_action.get("content") or json_action.get("text") or ""
+        if text_value:
+            entries.append(_make_type_item(str(text_value), call_id=call_id))
+    elif action_type in {"click", "left_click"}:
+        start_box = (
+            json_action.get("start_box")
+            or json_action.get("startBox")
+            or json_action.get("position")
+        )
+        coords = _coerce_box_to_pixels(start_box, width=image_width, height=image_height)
+        if not coords and json_action.get("x") is not None and json_action.get("y") is not None:
+            coords = _coerce_to_pixel_coordinates(
+                json_action.get("x"),
+                json_action.get("y"),
+                width=image_width,
+                height=image_height,
             )
+        if coords:
+            button = str(json_action.get("button", "left") or "left").lower()
+            entries.append(_make_click_item(coords[0], coords[1], button=button, call_id=call_id))
+    elif action_type in {"right_click", "middle_click"}:
+        start_box = json_action.get("start_box") or json_action.get("startBox")
+        coords = _coerce_box_to_pixels(start_box, width=image_width, height=image_height)
+        if not coords and json_action.get("x") is not None and json_action.get("y") is not None:
+            coords = _coerce_to_pixel_coordinates(
+                json_action.get("x"),
+                json_action.get("y"),
+                width=image_width,
+                height=image_height,
+            )
+        if coords:
+            button = "right" if action_type == "right_click" else "middle"
+            entries.append(_make_click_item(coords[0], coords[1], button=button, call_id=call_id))
+    elif action_type in {"double_click", "left_double_click"}:
+        start_box = json_action.get("start_box") or json_action.get("startBox")
+        coords = _coerce_box_to_pixels(start_box, width=image_width, height=image_height)
+        if not coords and json_action.get("x") is not None and json_action.get("y") is not None:
+            coords = _coerce_to_pixel_coordinates(
+                json_action.get("x"),
+                json_action.get("y"),
+                width=image_width,
+                height=image_height,
+            )
+        if coords:
+            entries.append(_make_double_click_item(coords[0], coords[1], call_id=call_id))
+    elif action_type in {"drag", "left_drag"}:
+        start_box = json_action.get("start_box") or json_action.get("startBox")
+        end_box = json_action.get("end_box") or json_action.get("endBox")
+        start_coords = _coerce_box_to_pixels(start_box, width=image_width, height=image_height)
+        end_coords = _coerce_box_to_pixels(end_box, width=image_width, height=image_height)
+        if not start_coords and json_action.get("x") is not None and json_action.get("y") is not None:
+            start_coords = _coerce_to_pixel_coordinates(
+                json_action.get("x"),
+                json_action.get("y"),
+                width=image_width,
+                height=image_height,
+            )
+        if start_coords and end_coords:
+            path = [
+                {"x": start_coords[0], "y": start_coords[1]},
+                {"x": end_coords[0], "y": end_coords[1]},
+            ]
+            entries.append(_make_drag_item(path, call_id=call_id))
+    elif action_type == "scroll":
+        start_box = json_action.get("start_box") or json_action.get("startBox")
+        coords = _coerce_box_to_pixels(start_box, width=image_width, height=image_height)
+        if not coords and json_action.get("x") is not None and json_action.get("y") is not None:
+            coords = _coerce_to_pixel_coordinates(
+                json_action.get("x"),
+                json_action.get("y"),
+                width=image_width,
+                height=image_height,
+            )
+        direction = str(json_action.get("direction", "")).lower()
+        step = int(json_action.get("step", 5) or 5)
+        if coords:
+            scroll_x = 0
+            scroll_y = 0
+            if direction == "up":
+                scroll_y = -abs(step)
+            elif direction == "down":
+                scroll_y = abs(step)
+            elif direction == "left":
+                scroll_x = -abs(step)
+            elif direction == "right":
+                scroll_x = abs(step)
+            entries.append(
+                _make_scroll_item(coords[0], coords[1], scroll_x, scroll_y, call_id=call_id)
+            )
+    elif action_type in {"hover", "move"}:
+        target_box = (
+            json_action.get("start_box")
+            or json_action.get("startBox")
+            or json_action.get("position")
+        )
+        coords = _coerce_box_to_pixels(target_box, width=image_width, height=image_height)
+        if not coords and json_action.get("x") is not None and json_action.get("y") is not None:
+            coords = _coerce_to_pixel_coordinates(
+                json_action.get("x"),
+                json_action.get("y"),
+                width=image_width,
+                height=image_height,
+            )
+        if coords:
+            entries.append(_make_move_item(coords[0], coords[1], call_id=call_id))
+    elif action_type in {"keypress", "key", "key_press"}:
+        keys = json_action.get("keys")
+        key_list: list[str] = []
+        if isinstance(keys, str):
+            key_list = [segment.strip() for segment in keys.split("+") if segment.strip()]
+        elif isinstance(keys, list):
+            key_list = [str(segment).strip() for segment in keys if str(segment).strip()]
+        if key_list:
+            entries.append(_make_keypress_item(key_list, call_id=call_id))
+    elif action_type == "wait":
+        entries.append(_make_wait_item(call_id=call_id))
+    elif action_type == "screenshot":
+        entries.append(_make_screenshot_item(call_id))
 
-            for payload in image_payloads:
-                converted.append(
-                    {
-                        "role": "user",
-                        "content": [self._image_item(payload, "user")],
-                    }
-                )
+    return entries
 
-        return converted
+
+def _decode_image_dimensions(image_b64: str) -> tuple[int, int]:
+    try:
+        data = base64.b64decode(image_b64)
+        with Image.open(BytesIO(data)) as img:
+            return img.size
+    except Exception:  # pragma: no cover - defensive fallback
+        return computer_settings.OPENAI_COMPUTER_WIDTH, computer_settings.OPENAI_COMPUTER_HEIGHT
+
+
+def _extract_user_instruction(messages: list[dict[str, Any]]) -> str:
+    for message in messages:
+        if not isinstance(message, dict):
+            continue
+        if message.get("type") == "message" and message.get("role") == "user":
+            content = message.get("content") or []
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") in {"text", "input_text"}:
+                        text = block.get("text")
+                        if isinstance(text, str) and text.strip():
+                            return text.strip()
+    return ""
+
+
+def get_last_image_from_messages(messages: list[dict[str, Any]]) -> str | None:
+    for message in reversed(messages):
+        if not isinstance(message, dict):
+            continue
+        msg_type = message.get("type")
+        if msg_type == "computer_call_output":
+            output = message.get("output") or {}
+            if isinstance(output, dict):
+                image_url = output.get("image_url")
+                if isinstance(image_url, str) and image_url.startswith("data:image/"):
+                    return image_url.split(",", 1)[1]
+        if msg_type == "message" and message.get("role") == "user":
+            content = message.get("content")
+            if isinstance(content, list):
+                for item in reversed(content):
+                    if isinstance(item, dict) and item.get("type") == "image_url":
+                        url_obj = item.get("image_url")
+                        if isinstance(url_obj, dict):
+                            url = url_obj.get("url")
+                            if isinstance(url, str) and url.startswith("data:image/"):
+                                return url.split(",", 1)[1]
+    return None
+
+# Adapter dispatch
+_ADAPTER_REGISTRY: Dict[str, str] = {
+    "z-ai/glm-4.5v": "hud.agents.glm45v:Glm45vAgent",
+}
+
+
+def _load_adapter(path: str) -> Type[MCPAgent]:
+    module_name, class_name = path.split(":", 1)
+    module = import_module(module_name)
+    return getattr(module, class_name)
+
+
+class OpenRouterAgent:
+    """Dispatch wrapper that selects the correct OpenRouter adapter by model."""
+
+    def __init__(self, *, model_name: str = "z-ai/glm-4.5v", **kwargs: Any) -> None:
+        normalized = self._normalize_model_name(model_name)
+        try:
+            adapter_path = _ADAPTER_REGISTRY[normalized]
+        except KeyError as exc:  # pragma: no cover - defensive
+            raise ValueError(f"Unsupported OpenRouter model: {model_name}") from exc
+
+        adapter_cls = _load_adapter(adapter_path)
+        canonical_model = f"openrouter/{normalized}"
+        self.model_name = canonical_model
+        self._adapter = adapter_cls(model_name=canonical_model, **kwargs)
 
     @staticmethod
-    def _parse_arguments(arguments: Any) -> dict[str, Any]:
-        if isinstance(arguments, dict):
-            return arguments
-        if isinstance(arguments, str) and arguments:
-            try:
-                parsed = json.loads(arguments)
-                if isinstance(parsed, dict):
-                    return parsed
-            except json.JSONDecodeError:
-                logger.debug("Failed to decode arguments: %s", arguments)
-        return {}
+    def _normalize_model_name(raw_model: str | None) -> str:
+        if not raw_model:
+            raise ValueError("Model name must be provided for OpenRouterAgent")
+        key = raw_model.strip()
+        if key.startswith("openrouter/"):
+            key = key[len("openrouter/") :]
+        key = key.lower()
+        if key in _ADAPTER_REGISTRY:
+            return key
+        raise ValueError(f"Unknown OpenRouter model: {raw_model}")
 
-    def _to_mcp_tool_call(self, payload: dict[str, Any]) -> MCPToolCall:
-        tool_name = payload.get("name") or payload.get("function", {}).get("name") or ""
-        call_id = payload.get("id") or payload.get("tool_call_id") or payload.get("call_id")
-        if not call_id:
-            call_id = tool_name
-        arguments = payload.get("arguments")
-        if not arguments and "function" in payload:
-            arguments = payload["function"].get("arguments")
-        parsed_arguments = self._parse_arguments(arguments)
-        return MCPToolCall(id=call_id, name=tool_name, arguments=parsed_arguments)
+    def __getattr__(self, item: str) -> Any: 
+        return getattr(self._adapter, item)
 
-    def _coerce_response_payload(self, response: Any) -> dict[str, Any]:
-        """Convert OpenRouter SDK return types into a plain dictionary."""
+    def __dir__(self) -> list[str]: 
+        base_dir = set(super().__dir__())
+        base_dir.update(self.__dict__.keys())
+        base_dir.update(dir(self._adapter))
+        return sorted(base_dir)
 
-        if response is None:
-            return {}
 
-        if isinstance(response, dict):
-            return response
-
-        for attr in ("model_dump", "dict", "to_dict"):
-            if hasattr(response, attr):
-                try:
-                    payload = getattr(response, attr)()
-                except Exception as exc:  # pragma: no cover - defensive
-                    logger.debug("Failed to read response via %s: %s", attr, exc)
-                else:
-                    if isinstance(payload, dict):
-                        return payload
-
-        snapshot = getattr(response, "__dict__", None)
-        if isinstance(snapshot, dict):
-            return snapshot
-
-        logger.error("Unexpected response carrier from OpenRouter: %r", response)
-        raise TypeError("Unexpected response type from OpenRouter")
-
-    def _extract_response(self, response: Any) -> AgentResponse:
-        data = self._coerce_response_payload(response)
-        if not isinstance(data, dict):
-            raise TypeError("Unexpected response type from OpenRouter")
-
-        output = data.get("output", [])
-        text_parts: list[str] = []
-        tool_calls: list[MCPToolCall] = []
-        reasoning_parts: list[str] = []
-
-        for item in output:
-            item_type = item.get("type") if isinstance(item, dict) else None
-            if item_type == "message":
-                contents = item.get("content", [])
-                if isinstance(contents, list):
-                    for block in contents:
-                        if not isinstance(block, dict):
-                            continue
-                        block_type = block.get("type")
-                        if block_type in {"output_text", "text"}:
-                            text = block.get("text")
-                            if text:
-                                text_parts.append(text)
-                        elif block_type == "reasoning" and block.get("text"):
-                            reasoning_parts.append(block["text"])
-                for tc in item.get("tool_calls", []) or []:
-                    if isinstance(tc, dict):
-                        tool_calls.append(self._to_mcp_tool_call(tc))
-            elif item_type in {"tool_call", "function_call"} and isinstance(item, dict):
-                tool_calls.append(self._to_mcp_tool_call(item))
-            elif item_type == "reasoning" and isinstance(item, dict):
-                summary = item.get("summary")
-                if isinstance(summary, list):
-                    for block in summary:
-                        if isinstance(block, dict) and block.get("text"):
-                            reasoning_parts.append(block["text"])
-                elif isinstance(summary, str):
-                    reasoning_parts.append(summary)
-
-        merged_text = "\n".join(reasoning_parts + text_parts).strip()
-        status = data.get("status", "completed")
-        done = not tool_calls and status != "in_progress"
-        return AgentResponse(
-            content=merged_text,
-            tool_calls=tool_calls,
-            done=done,
-            raw=response,
-        )
-
-    @instrument(
-        span_type="agent",
-        record_args=False,
-        record_result=True,
-    )
-    async def get_response(self, messages: list[Any]) -> AgentResponse:
-        converted_messages = self._convert_messages(messages)
-        tools = self._convert_tools_for_responses(self.get_tool_schemas())
-
-        protected_keys = {"model", "input", "tools"}
-        extra = {k: v for k, v in self._responses_kwargs.items() if k not in protected_keys}
-        # If tools are provided and tool_choice isn't explicitly set, require tool use
-        if tools and "tool_choice" not in extra:
-            extra["tool_choice"] = "required"
-
-        try:
-            payload: dict[str, Any] = {
-                "model": self.model_name,
-                "input": converted_messages,
-                **extra,
-            }
-            if tools:
-                payload["tools"] = tools
-
-            response = await self.oai.responses.create(**payload)
-        except Exception as exc:
-            error_content = f"Error getting response {exc}"
-            logger.exception("OpenRouter call failed: %s", exc)
-            return AgentResponse(
-                content=error_content,
-                tool_calls=[],
-                done=True,
-                isError=True,
-                raw=None,
-            )
-
-        return self._extract_response(response)
+__all__ = [
+    "OpenRouterAgent",
+    "_random_id",
+    "_make_reasoning_item",
+    "_make_output_text_item",
+    "_make_computer_call_item",
+    "_make_click_item",
+    "_make_double_click_item",
+    "_make_drag_item",
+    "_make_keypress_item",
+    "_make_type_item",
+    "_make_scroll_item",
+    "_make_wait_item",
+    "_make_screenshot_item",
+    "_make_failed_tool_call_items",
+    "_coerce_to_pixel_coordinates",
+    "_parse_coordinate_box",
+    "_coerce_box_to_pixels",
+    "_parse_json_action_string",
+    "_convert_json_action_to_items",
+    "_decode_image_dimensions",
+    "_extract_user_instruction",
+    "get_last_image_from_messages",
+]

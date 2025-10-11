@@ -894,7 +894,7 @@ def eval(
             [
                 {"name": "Claude 4 Sonnet", "value": "claude"},
                 {"name": "OpenAI Computer Use", "value": "openai"},
-                {"name": "OpenRouter (Responses)", "value": "openrouter"},
+                {"name": "OpenRouter", "value": "openrouter"},
                 {"name": "vLLM (Local Server)", "value": "vllm"},
                 {"name": "LiteLLM (Multi-provider)", "value": "litellm"},
             ]
