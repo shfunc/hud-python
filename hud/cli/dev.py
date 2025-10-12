@@ -521,20 +521,14 @@ def run_docker_dev_server(
         "-e",
         "HUD_DEV=1",
     ]
+    combined_args = [*base_args, *docker_args] if docker_args else base_args
     docker_cmd = create_docker_run_command(
         image_name,
-        docker_args=base_args,
+        docker_args=combined_args,
         env_dir=env_dir,
     )
 
     # Env flags already injected by create_docker_run_command
-
-    # Add user-provided Docker arguments
-    if docker_args:
-        docker_cmd.extend(docker_args)
-
-    # Append the image name
-    docker_cmd.append(image_name)
 
     # Print startup info
     hud_console.header("HUD Development Mode (Docker)")
