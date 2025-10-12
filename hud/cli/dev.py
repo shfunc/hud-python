@@ -504,15 +504,12 @@ def run_docker_dev_server(
     base_name = image_name.replace(":", "-").replace("/", "-")
     container_name = f"{base_name}-dev-{pid}"
 
-    # Build docker run command with volume mounts
-    docker_cmd = [
-        "docker",
-        "run",
-        "--rm",
-        "-i",
+    # Build docker run command with volume mounts and folder-mode envs
+    from .utils.docker import create_docker_run_command
+
+    base_args = [
         "--name",
         container_name,
-        # Mount both server and environment for hot-reload
         "-v",
         f"{env_dir.absolute()}/server:/app/server:rw",
         "-v",
@@ -524,22 +521,13 @@ def run_docker_dev_server(
         "-e",
         "HUD_DEV=1",
     ]
+    docker_cmd = create_docker_run_command(
+        image_name,
+        docker_args=base_args,
+        env_dir=env_dir,
+    )
 
-    # Load .env file if present
-    env_file = env_dir / ".env"
-    loaded_env_vars: dict[str, str] = {}
-    if env_file.exists():
-        try:
-            from hud.cli.utils.config import parse_env_file
-
-            env_contents = env_file.read_text(encoding="utf-8")
-            loaded_env_vars = parse_env_file(env_contents)
-            for key, value in loaded_env_vars.items():
-                docker_cmd.extend(["-e", f"{key}={value}"])
-            if verbose and loaded_env_vars:
-                hud_console.info(f"Loaded {len(loaded_env_vars)} env var(s) from .env")
-        except Exception as e:
-            hud_console.warning(f"Failed to load .env file: {e}")
+    # Env flags already injected by create_docker_run_command
 
     # Add user-provided Docker arguments
     if docker_args:

@@ -242,15 +242,18 @@ def debug(
                 if build and not build_environment(directory, image_name):
                     raise typer.Exit(1)
 
-            # Build Docker command
-            from .utils.docker import build_run_command
+            # Build Docker command with folder-mode envs
+            from .utils.docker import create_docker_run_command
 
-            command = build_run_command(image_name, docker_args)
+            command = create_docker_run_command(
+                image_name, docker_args=docker_args, env_dir=directory
+            )
         else:
             # Assume it's an image name
             image = first_param
             from .utils.docker import build_run_command
 
+            # Image-only mode: do not auto-inject local .env
             command = build_run_command(image, docker_args)
     else:
         console.print(
