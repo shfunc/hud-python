@@ -197,7 +197,29 @@ class HudRequestError(HudException):
                 if status_code == 402:
                     hints = [CREDITS_EXHAUSTED]
                 elif status_code == 403:
-                    hints = [PRO_PLAN_REQUIRED]
+                    # Default 403 to auth unless the message clearly indicates Pro plan
+                    combined_text = (message or "").lower()
+                    try:
+                        if response_text:
+                            combined_text += "\n" + str(response_text).lower()
+                    except Exception:  # noqa: S110
+                        pass
+                    try:
+                        if response_json and isinstance(response_json, dict):
+                            detail = response_json.get("detail")
+                            if isinstance(detail, str):
+                                combined_text += "\n" + detail.lower()
+                    except Exception:  # noqa: S110
+                        pass
+
+                    mentions_pro = (
+                        "pro plan" in combined_text
+                        or "requires pro" in combined_text
+                        or "pro mode" in combined_text
+                        or combined_text.strip().startswith("pro ")
+                    )
+
+                    hints = [PRO_PLAN_REQUIRED] if mentions_pro else [HUD_API_KEY_MISSING]
                 elif status_code == 401:
                     hints = [HUD_API_KEY_MISSING]
                 elif status_code == 429:
