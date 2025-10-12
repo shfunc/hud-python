@@ -3,6 +3,18 @@ title: "RL Quickstart"
 icon: "graduation-cap"
 ---
 
+## Prerequisites
+
+- HUD API key: Remote training requires authentication. Set `HUD_API_KEY` before running:
+
+```bash
+export HUD_API_KEY="sk-hud-..."  # get one at https://hud.so
+# Or persist it locally:
+hud set HUD_API_KEY=sk-hud-...
+```
+
+- Docker daemon: For local runs (using `--local`) or when training against a local Docker image, ensure Docker Desktop is installed and the Docker daemon is running.
+
 ## Quickstart
 
 Install and download a taskset:
