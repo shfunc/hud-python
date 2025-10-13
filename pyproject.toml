@@ -135,7 +135,7 @@ dev = [
     "langchain",
     "langchain-openai",
     "langchain-anthropic",
-    "litellm",
+    "litellm>=1.55.0",
     # Jupyter support
     "ipykernel",
     "ipython <9",
