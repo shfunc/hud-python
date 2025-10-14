@@ -178,87 +178,62 @@ def _parse_json_action_string(action_text: str) -> dict[str, Any] | None:
 
 def _convert_json_action_to_items(
     json_action: dict[str, Any],
-    *,
     call_id: str,
     image_width: int,
     image_height: int,
 ) -> list[dict[str, Any]]:
-    entries: list[dict[str, Any]] = []
+    items: list[dict[str, Any]] = []
     
     action_type = str(json_action.get("type", json_action.get("action_type", ""))).lower()
     if not action_type:
-        return entries
-
-    def box2d_center_pixels(box2d: Any) -> tuple[int, int] | None:
-        try:
-            if isinstance(box2d, str):
-                parsed = json.loads(box2d)
-            else:
-                parsed = box2d
-            if isinstance(parsed, list) and len(parsed) >= 1:
-                first = parsed[0]
-                if isinstance(first, (list, tuple)) and len(first) >= 4:
-                    xmin, ymin, xmax, ymax = float(first[0]), float(first[1]), float(first[2]), float(first[3])
-                    cx = (xmin + xmax) / 2.0
-                    cy = (ymin + ymax) / 2.0
-                    # interpret as 0-999 normalized
-                    px = int((cx / 999.0) * image_width)
-                    py = int((cy / 999.0) * image_height)
-                    return px, py
-        except Exception:
-            return None
-        return None
+        return items
 
     if action_type in {"type", "text", "input_text"}:
         text_value = json_action.get("content") or json_action.get("text") or ""
         if text_value:
-            entries.append(_make_type_item(str(text_value), call_id=call_id))
-    elif action_type in {"click", "left_click"}:
-        start_box = (
-            json_action.get("start_box")
-            or json_action.get("startBox")
-            or json_action.get("position")
-        )
+            items.append(_make_type_item(str(text_value), call_id=call_id))
+    elif action_type in {"click", "left_click", "right_click"}:
+        # Handle both "start_box" and the new "start_x"/"start_y" format
+        start_box = json_action.get("start_box") or json_action.get("startBox")
         coords = _coerce_box_to_pixels(start_box, width=image_width, height=image_height)
-        if not coords and json_action.get("box_2d") is not None:
-            coords = box2d_center_pixels(json_action.get("box_2d"))
-        if not coords and json_action.get("x") is not None and json_action.get("y") is not None:
-            coords = _coerce_to_pixel_coordinates(
-                json_action.get("x"),
-                json_action.get("y"),
+        if not coords:
+             coords = _coerce_to_pixel_coordinates(
+                json_action.get("start_x") or json_action.get("x"),
+                json_action.get("start_y") or json_action.get("y"),
                 width=image_width,
                 height=image_height,
             )
         if coords:
             button = str(json_action.get("button", "left") or "left").lower()
-            entries.append(_make_click_item(coords[0], coords[1], button=button, call_id=call_id))
+            items.append(_make_click_item(coords[0], coords[1], button=button, call_id=call_id))
     elif action_type in {"double_click", "left_double_click"}:
         start_box = json_action.get("start_box") or json_action.get("startBox")
         coords = _coerce_box_to_pixels(start_box, width=image_width, height=image_height)
-        if not coords and json_action.get("box_2d") is not None:
-            coords = box2d_center_pixels(json_action.get("box_2d"))
-        if not coords and json_action.get("x") is not None and json_action.get("y") is not None:
+        if not coords:
             coords = _coerce_to_pixel_coordinates(
-                json_action.get("x"),
-                json_action.get("y"),
+                json_action.get("start_x") or json_action.get("x"),
+                json_action.get("start_y") or json_action.get("y"),
                 width=image_width,
                 height=image_height,
             )
         if coords:
-            entries.append(_make_double_click_item(coords[0], coords[1], call_id=call_id))
+            items.append(_make_double_click_item(coords[0], coords[1], call_id=call_id))
     elif action_type in {"drag", "left_drag"}:
         start_box = json_action.get("start_box") or json_action.get("startBox")
         end_box = json_action.get("end_box") or json_action.get("endBox")
         start_coords = _coerce_box_to_pixels(start_box, width=image_width, height=image_height)
         end_coords = _coerce_box_to_pixels(end_box, width=image_width, height=image_height)
-        if not start_coords and json_action.get("box_2d") is not None:
-            start_coords = box2d_center_pixels(json_action.get("box_2d"))
-        if not end_coords and json_action.get("end_box_2d") is not None:
-            end_coords = box2d_center_pixels(json_action.get("end_box_2d"))
-        if not start_coords and json_action.get("x") is not None and json_action.get("y") is not None:
+        if not start_coords:
             start_coords = _coerce_to_pixel_coordinates(
-                json_action.get("x"),
-                json_action.get("y"),
+                json_action.get("start_x") or json_action.get("x"),
+                json_action.get("start_y") or json_action.get("y"),
+                width=image_width,
+                height=image_height,
+            )
+        if not end_coords:
+            end_coords = _coerce_to_pixel_coordinates(
+                json_action.get("end_x"),
+                json_action.get("end_y"),
                 width=image_width,
                 height=image_height,
             )
@@ -267,16 +242,14 @@ def _convert_json_action_to_items(
                 {"x": start_coords[0], "y": start_coords[1]},
                 {"x": end_coords[0], "y": end_coords[1]},
             ]
-            entries.append(_make_drag_item(path, call_id=call_id))
+            items.append(_make_drag_item(path, call_id=call_id))
     elif action_type == "scroll":
         start_box = json_action.get("start_box") or json_action.get("startBox")
         coords = _coerce_box_to_pixels(start_box, width=image_width, height=image_height)
-        if not coords and json_action.get("box_2d") is not None:
-            coords = box2d_center_pixels(json_action.get("box_2d"))
-        if not coords and json_action.get("x") is not None and json_action.get("y") is not None:
+        if not coords:
             coords = _coerce_to_pixel_coordinates(
-                json_action.get("x"),
-                json_action.get("y"),
+                json_action.get("start_x") or json_action.get("x"),
+                json_action.get("start_y") or json_action.get("y"),
                 width=image_width,
                 height=image_height,
             )
@@ -293,7 +266,7 @@ def _convert_json_action_to_items(
                 scroll_x = -abs(step)
             elif direction == "right":
                 scroll_x = abs(step)
-            entries.append(
+            items.append(
                 _make_scroll_item(coords[0], coords[1], scroll_x, scroll_y, call_id=call_id)
             )
     # hover/move dropped in minimal action surface
@@ -305,11 +278,11 @@ def _convert_json_action_to_items(
         elif isinstance(keys, list):
             key_list = [str(segment).strip() for segment in keys if str(segment).strip()]
         if key_list:
-            entries.append(_make_keypress_item(key_list, call_id=call_id))
+            items.append(_make_keypress_item(key_list, call_id=call_id))
     elif action_type == "wait":
-        entries.append(_make_wait_item(call_id=call_id))
+        items.append(_make_wait_item(call_id=call_id))
 
-    return entries
+    return items
 
 
 def _decode_image_dimensions(image_b64: str) -> tuple[int, int]:

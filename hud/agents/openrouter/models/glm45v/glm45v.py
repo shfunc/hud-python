@@ -21,17 +21,10 @@ from hud.agents.openrouter import (
     _convert_json_action_to_items,
     _decode_image_dimensions,
     _extract_user_instruction,
-    _make_click_item,
-    _make_double_click_item,
-    _make_drag_item,
     _make_failed_tool_call_items,
-    _make_keypress_item,
     _make_output_text_item,
     _make_reasoning_item,
     _make_screenshot_item,
-    _make_scroll_item,
-    _make_type_item,
-    _make_wait_item,
     _parse_json_action_string,
     _random_id,
     get_last_image_from_messages,
@@ -91,7 +84,8 @@ def convert_responses_items_to_glm45v_pc_prompt(
     current_step: list[dict[str, Any]] = []
     step_num = 0
 
-    for message in messages:
+    # Optimization: Limit history to last 10 messages to improve performance
+    for message in messages[-10:]:
         if not isinstance(message, dict):
             continue
         msg_type = message.get("type")
@@ -157,6 +151,48 @@ def convert_responses_items_to_glm45v_pc_prompt(
     content.append({"type": "text", "text": current_text})
     return content
 
+def _parse_string_action_to_dict(action: str) -> dict[str, Any]:
+    """Converts GLM's string-based action output to a structured dictionary."""
+    if action.startswith("left_click"):
+        match = re.search(r"start_box='?\[(\d+),\s*(\d+)\]'?", action)
+        if match: return {"type": "click", "button": "left", "start_box": [match.group(1), match.group(2)]}
+    elif action.startswith("right_click"):
+        match = re.search(r"start_box='?\[(\d+),\s*(\d+)\]'?", action)
+        if match: return {"type": "click", "button": "right", "start_box": [match.group(1), match.group(2)]}
+    elif action.startswith("left_double_click"):
+        match = re.search(r"start_box='?\[(\d+),\s*(\d+)\]'?", action)
+        if match: return {"type": "double_click", "start_box": [match.group(1), match.group(2)]}
+    elif action.startswith("left_drag"):
+        start_match = re.search(r"start_box='?\[(\d+),\s*(\d+)\]'?", action)
+        end_match = re.search(r"end_box='?\[(\d+),\s*(\d+)\]'?", action)
+        if start_match and end_match:
+            return {
+                "type": "drag",
+                "start_box": [start_match.group(1), start_match.group(2)],
+                "end_box": [end_match.group(1), end_match.group(2)],
+            }
+    elif action.startswith("key"):
+        key_match = re.search(r"keys='([^']+)'", action)
+        if key_match:
+            keys = key_match.group(1)
+            key_list = keys.split("+") if "+" in keys else [keys]
+            return {"type": "keypress", "keys": key_list}
+    elif action.startswith("type"):
+        content_match = re.search(r"content='([^']*)'", action)
+        if content_match: return {"type": "type", "content": content_match.group(1)}
+    elif action.startswith("scroll"):
+        coord_match = re.search(r"start_box='?\[(\d+),\s*(\d+)\]'?", action)
+        direction_match = re.search(r"direction='([^']+)'", action)
+        if coord_match and direction_match:
+            return {
+                "type": "scroll",
+                "start_box": [coord_match.group(1), coord_match.group(2)],
+                "direction": direction_match.group(1),
+            }
+    elif action == "WAIT()":
+        return {"type": "wait"}
+    return {}
+
 
 def convert_glm_completion_to_responses_items(
     response: ModelResponse,
@@ -194,9 +230,11 @@ def convert_glm_completion_to_responses_items(
 
     if action:
         call_id = _random_id()
-        handled_json = False
 
         json_action = _parse_json_action_string(action)
+        if not json_action:
+            json_action = _parse_string_action_to_dict(action)
+
         if json_action:
             json_entries = _convert_json_action_to_items(
                 json_action,
@@ -206,97 +244,22 @@ def convert_glm_completion_to_responses_items(
             )
             if json_entries:
                 items.extend(json_entries)
-                handled_json = True
-
-        if action.startswith("left_click"):
-            match = re.search(r"start_box='?\[(\d+),\s*(\d+)\]'?", action)
-            if match:
-                x, y = int(match.group(1)), int(match.group(2))
-                actual_x = int((x / 999.0) * image_width)
-                actual_y = int((y / 999.0) * image_height)
-                if not handled_json:
-                    items.append(_make_click_item(actual_x, actual_y, call_id=call_id))
-        elif action.startswith("right_click"):
-            match = re.search(r"start_box='?\[(\d+),\s*(\d+)\]'?", action)
-            if match:
-                x, y = int(match.group(1)), int(match.group(2))
-                actual_x = int((x / 999.0) * image_width)
-                actual_y = int((y / 999.0) * image_height)
-                if not handled_json:
-                    items.append(_make_click_item(actual_x, actual_y, button="right", call_id=call_id))
-        elif action.startswith("left_double_click"):
-            match = re.search(r"start_box='?\[(\d+),\s*(\d+)\]'?", action)
-            if match:
-                x, y = int(match.group(1)), int(match.group(2))
-                actual_x = int((x / 999.0) * image_width)
-                actual_y = int((y / 999.0) * image_height)
-                if not handled_json:
-                    items.append(_make_double_click_item(actual_x, actual_y, call_id=call_id))
-        elif action.startswith("left_drag"):
-            start_match = re.search(r"start_box='?\[(\d+),\s*(\d+)\]'?", action)
-            end_match = re.search(r"end_box='?\[(\d+),\s*(\d+)\]'?", action)
-            if start_match and end_match:
-                x1, y1 = int(start_match.group(1)), int(start_match.group(2))
-                x2, y2 = int(end_match.group(1)), int(end_match.group(2))
-                actual_x1 = int((x1 / 999.0) * image_width)
-                actual_y1 = int((y1 / 999.0) * image_height)
-                actual_x2 = int((x2 / 999.0) * image_width)
-                actual_y2 = int((y2 / 999.0) * image_height)
-                path = [
-                    {"x": actual_x1, "y": actual_y1},
-                    {"x": actual_x2, "y": actual_y2},
-                ]
-                if not handled_json:
-                    items.append(_make_drag_item(path, call_id=call_id))
-        elif action.startswith("key"):
-            key_match = re.search(r"keys='([^']+)'", action)
-            if key_match:
-                keys = key_match.group(1)
-                key_list = keys.split("+") if "+" in keys else [keys]
-                if not handled_json:
-                    items.append(_make_keypress_item(key_list, call_id=call_id))
-        elif action.startswith("type"):
-            content_match = re.search(r"content='([^']*)'", action)
-            if content_match:
-                text = content_match.group(1)
-                if not handled_json:
-                    items.append(_make_type_item(text, call_id=call_id))
-        elif action.startswith("scroll"):
-            coord_match = re.search(r"start_box='?\[(\d+),\s*(\d+)\]'?", action)
-            direction_match = re.search(r"direction='([^']+)'", action)
-            if coord_match and direction_match:
-                x, y = int(coord_match.group(1)), int(coord_match.group(2))
-                direction = direction_match.group(1)
-                actual_x = int((x / 999.0) * image_width)
-                actual_y = int((y / 999.0) * image_height)
-                scroll_x = 0
-                scroll_y = 0
-                if direction == "up":
-                    scroll_y = -5
-                elif direction == "down":
-                    scroll_y = 5
-                elif direction == "left":
-                    scroll_x = -5
-                elif direction == "right":
-                    scroll_x = 5
-                if not handled_json:
-                    items.append(_make_scroll_item(actual_x, actual_y, scroll_x, scroll_y, call_id=call_id))
-        elif action == "WAIT()":
-            if not handled_json:
-                items.append(_make_wait_item(call_id=call_id))
 
     return items
 
 
 def parse_glm_response(response: str) -> dict[str, str]:
-    pattern = r"<\|begin_of_box\|>(.*?)<\|end_of_box\|>"
-    match = re.search(pattern, response)
-    if match:
-        action = match.group(1).strip()
+    json_match = re.search(r'(\{.*\})', response)
+    if json_match:
+        action = json_match.group(1).strip()
     else:
-        action_pattern = r"[\w_]+\([^)]*\)"
-        matches = re.findall(action_pattern, response)
-        action = matches[0] if matches else ""
+        box_match = re.search(r"<\|begin_of_box\|>(.*?)<\|end_of_box\|>", response)
+        if box_match:
+            action = box_match.group(1).strip()
+        else:
+            action_pattern = r"[\w_]+\([^)]*\)"
+            matches = re.findall(action_pattern, response)
+            action = matches[0] if matches else ""
 
     memory_pattern = r"Memory:(.*?)$"
     memory_match = re.search(memory_pattern, response, re.DOTALL)
