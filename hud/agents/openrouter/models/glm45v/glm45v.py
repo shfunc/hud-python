@@ -6,12 +6,14 @@ import json
 import logging
 import re
 from typing import Any, ClassVar
+from pathlib import Path
 
 import litellm
 import mcp.types as types
 from litellm.types.utils import ModelResponse
 
 from hud.agents.base import MCPAgent
+from hud.settings import settings
 from hud.tools.computer.settings import computer_settings
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult
 from hud import instrument
@@ -37,245 +39,26 @@ from hud.agents.openrouter import (
 
 logger = logging.getLogger(__name__)
 
+def _load_text_resource(path: str | Path) -> str | None:
+    try:
+        p = Path(path)
+        with p.open("r", encoding="utf-8") as f:
+            return f.read()
+    except Exception:
+        return None
 
-DEFAULT_SYSTEM_PROMPT = """
-You are an autonomous computer-using agent. Follow these guidelines:
+_BASE_DIR = Path(__file__).resolve().parent
+_ACTION_SPACE_PATH = _BASE_DIR / "action_space.txt"
 
-1. Do not ask for permission; act decisively to finish the task.
-2. Always ground actions in the latest screenshot and task instructions.
-3. Use the provided mouse/keyboard tools precisely (coordinates are 0-999).
-4. Keep memory concise—store only facts that matter for later steps.
-5. When the task is complete, reply with DONE() and include the final answer.
-6. If the task is impossible, reply with FAIL() and explain briefly.
-""".strip()
-
-
-GLM_ACTION_SPACE = """
-### {left,right,middle}_click
-
-Call rule: `{left,right,middle}_click(start_box='[x,y]', element_info='')`
-{
-    'name': ['left_click', 'right_click', 'middle_click'],
-    'description': 'Perform a left/right/middle mouse click at the specified coordinates on the screen.',
-    'parameters': {
-        'type': 'object',
-        'properties': {
-            'start_box': {
-                'type': 'array',
-                'items': {
-                    'type': 'integer'
-                },
-                'description': 'Coordinates [x,y] where to perform the click, normalized to 0-999 range.'
-            },
-            'element_info': {
-                'type': 'string',
-                'description': 'Optional text description of the UI element being clicked.'
-            }
-        },
-        'required': ['start_box']
-    }
-}
-
-### hover
-
-Call rule: `hover(start_box='[x,y]', element_info='')`
-{
-    'name': 'hover',
-    'description': 'Move the mouse pointer to the specified coordinates without performing any click action.',
-    'parameters': {
-        'type': 'object',
-        'properties': {
-            'start_box': {
-                'type': 'array',
-                'items': {
-                    'type': 'integer'
-                },
-                'description': 'Coordinates [x,y] where to move the mouse pointer, normalized to 0-999 range.'
-            },
-            'element_info': {
-                'type': 'string',
-                'description': 'Optional text description of the UI element being hovered over.'
-            }
-        },
-        'required': ['start_box']
-    }
-}
-
-### left_double_click
-
-Call rule: `left_double_click(start_box='[x,y]', element_info='')`
-{
-    'name': 'left_double_click',
-    'description': 'Perform a left mouse double-click at the specified coordinates on the screen.',
-    'parameters': {
-        'type': 'object',
-        'properties': {
-            'start_box': {
-                'type': 'array',
-                'items': {
-                    'type': 'integer'
-                },
-                'description': 'Coordinates [x,y] where to perform the double-click, normalized to 0-999 range.'
-            },
-            'element_info': {
-                'type': 'string',
-                'description': 'Optional text description of the UI element being double-clicked.'
-            }
-        },
-        'required': ['start_box']
-    }
-}
-
-### left_drag
-
-Call rule: `left_drag(start_box='[x1,y1]', end_box='[x2,y2]', element_info='')`
-{
-    'name': 'left_drag',
-    'description': 'Drag the mouse from starting coordinates to ending coordinates while holding the left mouse button.',
-    'parameters': {
-        'type': 'object',
-        'properties': {
-            'start_box': {
-                'type': 'array',
-                'items': {
-                    'type': 'integer'
-                },
-                'description': 'Starting coordinates [x1,y1] for the drag operation, normalized to 0-999 range.'
-            },
-            'end_box': {
-                'type': 'array',
-                'items': {
-                    'type': 'integer'
-                },
-                'description': 'Ending coordinates [x2,y2] for the drag operation, normalized to 0-999 range.'
-            },
-            'element_info': {
-                'type': 'string',
-                'description': 'Optional text description of the UI element being dragged.'
-            }
-        },
-        'required': ['start_box', 'end_box']
-    }
-}
-
-### key
-
-Call rule: `key(keys='')`
-{
-    'name': 'key',
-    'description': 'Simulate pressing a single key or combination of keys on the keyboard.',
-    'parameters': {
-        'type': 'object',
-        'properties': {
-            'keys': {
-                'type': 'string',
-                'description': "The key or key combination to press. Use '+' to separate keys in combinations (e.g., 'ctrl+c', 'alt+tab')."
-            }
-        },
-        'required': ['keys']
-    }
-}
-
-### type
-
-Call rule: `type(content='')`
-{
-    'name': 'type',
-    'description': 'Type text content into the currently focused text input field. This action only performs typing and does not handle field activation or clearing.',
-    'parameters': {
-        'type': 'object',
-        'properties': {
-            'content': {
-                'type': 'string',
-                'description': 'The text content to be typed into the active text field.'
-            }
-        },
-        'required': ['content']
-    }
-}
-
-### scroll
-
-Call rule: `scroll(start_box='[x,y]', direction='', step=5, element_info='')`
-{
-    'name': 'scroll',
-    'description': 'Scroll an element at the specified coordinates in the specified direction by a given number of wheel steps.',
-    'parameters': {
-        'type': 'object',
-        'properties': {
-            'start_box': {
-                'type': 'array',
-                'items': {
-                    'type': 'integer'
-                },
-                'description': 'Coordinates [x,y] of the element or area to scroll, normalized to 0-999 range.'
-            },
-            'direction': {
-                'type': 'string',
-                'enum': ['down', 'up'],
-                'description': "The direction to scroll: 'down' or 'up'."
-            },
-            'step': {
-                'type': 'integer',
-                'default': 5,
-                'description': 'Number of wheel steps to scroll, default is 5.'
-            },
-            'element_info': {
-                'type': 'string',
-                'description': 'Optional text description of the UI element being scrolled.'
-            }
-        },
-        'required': ['start_box', 'direction']
-    }
-}
-
-### WAIT
-
-Call rule: `WAIT()`
-{
-    'name': 'WAIT',
-    'description': 'Wait for 5 seconds before proceeding to the next action.',
-    'parameters': {
-        'type': 'object',
-        'properties': {},
-        'required': []
-    }
-}
-
-### DONE
-
-Call rule: `DONE()`
-{
-    'name': 'DONE',
-    'description': 'Indicate that the current task has been completed successfully and no further actions are needed.',
-    'parameters': {
-        'type': 'object',
-        'properties': {},
-        'required': []
-    }
-}
-
-### FAIL
-
-Call rule: `FAIL()`
-{
-    'name': 'FAIL',
-    'description': 'Indicate that the current task cannot be completed or is impossible to accomplish.',
-    'parameters': {
-        'type': 'object',
-        'properties': {},
-        'required': []
-    }
-}"""
-
-
+GLM_ACTION_SPACE = _load_text_resource(_ACTION_SPACE_PATH) or ""
+if not GLM_ACTION_SPACE.strip():
+    raise RuntimeError(f"Missing action space file at {_ACTION_SPACE_PATH}")
 
 def convert_responses_items_to_glm45v_pc_prompt(
     messages: list[dict[str, Any]],
     task: str,
     memory: str = "[]",
 ) -> list[dict[str, Any]]:
-    action_space = GLM_ACTION_SPACE
     head_text = (
         "You are a GUI Agent, and your primary task is to respond accurately to user"
         " requests or questions. In addition to directly answering the user's queries,"
@@ -285,7 +68,7 @@ def convert_responses_items_to_glm45v_pc_prompt(
         " thinking and reflection when appropriate. The coordinates involved are all"
         " represented in thousandths (0-999)."
         "\n\n# Task:\n"
-        f"{task}\n\n# Task Platform\nUbuntu\n\n# Action Space\n{action_space}\n\n"
+        f"{task}\n\n# Task Platform\nUbuntu\n\n# Action Space\n{GLM_ACTION_SPACE}\n\n"
         "# Historical Actions and Current Memory\nHistory:"
     )
 
@@ -294,7 +77,7 @@ def convert_responses_items_to_glm45v_pc_prompt(
         f"{memory}\n"
         "# Output Format\nPlain text explanation with action(param='...')\n"
         "Memory:\n[{\"key\": \"value\"}, ...]\n\n# Some Additional Notes\n"
-        "- I'll give you the most recent 4 history screenshots(shrunked to 50%*50%) along with the historical action steps.\n"
+        "- I'll give you the most recent history screenshots(shrunked to 50%*50%) along with the historical action steps.\n"
         "- You should put the key information you *have to remember* in a seperated memory part and I'll give it to you in the next round."
         " The content in this part should be a dict list. If you no longer need some given information, you should remove it from the memory."
         " Even if you don't need to remember anything, you should also output an empty list.\n"
@@ -350,7 +133,7 @@ def convert_responses_items_to_glm45v_pc_prompt(
     current_text = head_text
 
     total_steps = len(history)
-    image_tail = min(4, len(history_images))
+    image_tail = min(2, len(history_images))
 
     for idx, step in enumerate(history):
         step_no = step["step_num"]
@@ -531,11 +314,6 @@ def parse_glm_response(response: str) -> dict[str, str]:
         "memory": memory,
     }
 
-
-
-
-
-
 class Glm45vAgent(MCPAgent):
     """LiteLLM-backed GLM-4.5V agent that speaks MCP."""
 
@@ -555,20 +333,12 @@ class Glm45vAgent(MCPAgent):
         **agent_kwargs: Any,
     ) -> None:
         super().__init__(**agent_kwargs)
-        # Normalize to canonical openrouter/<vendor>/<model>
-        if not model_name.startswith("openrouter/"):
-            self.model_name = f"openrouter/{model_name}"
-        else:
-            self.model_name = model_name
+        self.model_name = model_name
         self.completion_kwargs = completion_kwargs or {}
-        combined_prompt = DEFAULT_SYSTEM_PROMPT
         if system_prompt:
-            combined_prompt = f"{combined_prompt}\n\n{system_prompt}"
-
-        if self.system_prompt:
-            self.system_prompt = f"{self.system_prompt}\n\n{combined_prompt}"
+            self.system_prompt = system_prompt
         else:
-            self.system_prompt = combined_prompt
+            self.system_prompt = ""
         self._memory = "[]"
         self._last_instruction = ""
         self._task_description = ""
@@ -668,13 +438,14 @@ class Glm45vAgent(MCPAgent):
             {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{screenshot_b64}"}}
         )
 
-        system_prompt = self.system_prompt or "You are a helpful GUI agent assistant."
-        litellm_messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt_content},
-        ]
+        litellm_messages: list[dict[str, Any]] = []
+        if getattr(self, "system_prompt", None):
+            litellm_messages.append({"role": "system", "content": self.system_prompt})
+        litellm_messages.append({"role": "user", "content": prompt_content})
 
         api_kwargs = {"model": self.model_name, "messages": litellm_messages}
+        if settings.openrouter_api_key:
+            api_kwargs["api_key"] = settings.openrouter_api_key
         api_kwargs.update(self.completion_kwargs)
 
         try:

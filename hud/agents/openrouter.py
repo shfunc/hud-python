@@ -7,6 +7,8 @@ import json
 import re
 import uuid
 from importlib import import_module
+import importlib.util
+from pathlib import Path
 from io import BytesIO
 from typing import Any, Dict, Type
 
@@ -19,14 +21,12 @@ from hud.tools.computer.settings import computer_settings
 def _random_id() -> str:
     return f"call_{uuid.uuid4().hex[:8]}"
 
-
 def _make_reasoning_item(reasoning: str) -> dict[str, Any]:
     return {
         "id": _random_id(),
         "type": "reasoning",
         "summary": [{"type": "summary_text", "text": reasoning}],
     }
-
 
 def _make_output_text_item(content: str) -> dict[str, Any]:
     return {
@@ -36,7 +36,6 @@ def _make_output_text_item(content: str) -> dict[str, Any]:
         "status": "completed",
         "content": [{"type": "output_text", "text": content, "annotations": []}],
     }
-
 
 def _make_computer_call_item(action: dict[str, Any], call_id: str | None = None) -> dict[str, Any]:
     call_id = call_id or _random_id()
@@ -49,30 +48,20 @@ def _make_computer_call_item(action: dict[str, Any], call_id: str | None = None)
         "action": action,
     }
 
-
 def _make_click_item(x: int, y: int, button: str = "left", call_id: str | None = None) -> dict[str, Any]:
     return _make_computer_call_item({"type": "click", "x": x, "y": y, "button": button}, call_id)
-
 
 def _make_double_click_item(x: int, y: int, call_id: str | None = None) -> dict[str, Any]:
     return _make_computer_call_item({"type": "double_click", "x": x, "y": y}, call_id)
 
-
-def _make_move_item(x: int, y: int, call_id: str | None = None) -> dict[str, Any]:
-    return _make_computer_call_item({"type": "move", "x": x, "y": y}, call_id)
-
-
 def _make_drag_item(path: list[dict[str, int]], call_id: str | None = None) -> dict[str, Any]:
     return _make_computer_call_item({"type": "drag", "path": path}, call_id)
-
 
 def _make_keypress_item(keys: list[str], call_id: str | None = None) -> dict[str, Any]:
     return _make_computer_call_item({"type": "keypress", "keys": keys}, call_id)
 
-
 def _make_type_item(text: str, call_id: str | None = None) -> dict[str, Any]:
     return _make_computer_call_item({"type": "type", "text": text}, call_id)
-
 
 def _make_scroll_item(
     x: int,
@@ -84,14 +73,11 @@ def _make_scroll_item(
     action = {"type": "scroll", "x": x, "y": y, "scroll_x": scroll_x, "scroll_y": scroll_y}
     return _make_computer_call_item(action, call_id)
 
-
 def _make_wait_item(call_id: str | None = None) -> dict[str, Any]:
     return _make_computer_call_item({"type": "wait"}, call_id)
 
-
 def _make_screenshot_item(call_id: str) -> dict[str, Any]:
     return _make_computer_call_item({"type": "screenshot"}, call_id)
-
 
 def _make_failed_tool_call_items(
     tool_name: str,
@@ -104,7 +90,6 @@ def _make_failed_tool_call_items(
     failure_text = _make_output_text_item(f"Tool {tool_name} failed: {error_message}")
     failure_text["role"] = "assistant"
     return [call, failure_text]
-
 
 def _coerce_to_pixel_coordinates(
     x_val: Any,
@@ -136,7 +121,6 @@ def _coerce_to_pixel_coordinates(
 
     return clamp(px, width), clamp(py, height)
 
-
 def _parse_coordinate_box(value: Any) -> tuple[float, float] | None:
     if isinstance(value, (list, tuple)) and len(value) >= 2:
         try:
@@ -160,7 +144,6 @@ def _parse_coordinate_box(value: Any) -> tuple[float, float] | None:
                     return None
     return None
 
-
 def _coerce_box_to_pixels(
     box: Any,
     *,
@@ -171,7 +154,6 @@ def _coerce_box_to_pixels(
     if not coords:
         return None
     return _coerce_to_pixel_coordinates(coords[0], coords[1], width=width, height=height)
-
 
 def _parse_json_action_string(action_text: str) -> dict[str, Any] | None:
     candidate = action_text.strip()
@@ -194,7 +176,6 @@ def _parse_json_action_string(action_text: str) -> dict[str, Any] | None:
 
     return None
 
-
 def _convert_json_action_to_items(
     json_action: dict[str, Any],
     *,
@@ -203,11 +184,32 @@ def _convert_json_action_to_items(
     image_height: int,
 ) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
-    action_type = str(json_action.get("type", "")).lower()
+    
+    action_type = str(json_action.get("type", json_action.get("action_type", ""))).lower()
     if not action_type:
         return entries
 
-    if action_type in {"type", "text"}:
+    def box2d_center_pixels(box2d: Any) -> tuple[int, int] | None:
+        try:
+            if isinstance(box2d, str):
+                parsed = json.loads(box2d)
+            else:
+                parsed = box2d
+            if isinstance(parsed, list) and len(parsed) >= 1:
+                first = parsed[0]
+                if isinstance(first, (list, tuple)) and len(first) >= 4:
+                    xmin, ymin, xmax, ymax = float(first[0]), float(first[1]), float(first[2]), float(first[3])
+                    cx = (xmin + xmax) / 2.0
+                    cy = (ymin + ymax) / 2.0
+                    # interpret as 0-999 normalized
+                    px = int((cx / 999.0) * image_width)
+                    py = int((cy / 999.0) * image_height)
+                    return px, py
+        except Exception:
+            return None
+        return None
+
+    if action_type in {"type", "text", "input_text"}:
         text_value = json_action.get("content") or json_action.get("text") or ""
         if text_value:
             entries.append(_make_type_item(str(text_value), call_id=call_id))
@@ -218,6 +220,8 @@ def _convert_json_action_to_items(
             or json_action.get("position")
         )
         coords = _coerce_box_to_pixels(start_box, width=image_width, height=image_height)
+        if not coords and json_action.get("box_2d") is not None:
+            coords = box2d_center_pixels(json_action.get("box_2d"))
         if not coords and json_action.get("x") is not None and json_action.get("y") is not None:
             coords = _coerce_to_pixel_coordinates(
                 json_action.get("x"),
@@ -228,22 +232,11 @@ def _convert_json_action_to_items(
         if coords:
             button = str(json_action.get("button", "left") or "left").lower()
             entries.append(_make_click_item(coords[0], coords[1], button=button, call_id=call_id))
-    elif action_type in {"right_click", "middle_click"}:
-        start_box = json_action.get("start_box") or json_action.get("startBox")
-        coords = _coerce_box_to_pixels(start_box, width=image_width, height=image_height)
-        if not coords and json_action.get("x") is not None and json_action.get("y") is not None:
-            coords = _coerce_to_pixel_coordinates(
-                json_action.get("x"),
-                json_action.get("y"),
-                width=image_width,
-                height=image_height,
-            )
-        if coords:
-            button = "right" if action_type == "right_click" else "middle"
-            entries.append(_make_click_item(coords[0], coords[1], button=button, call_id=call_id))
     elif action_type in {"double_click", "left_double_click"}:
         start_box = json_action.get("start_box") or json_action.get("startBox")
         coords = _coerce_box_to_pixels(start_box, width=image_width, height=image_height)
+        if not coords and json_action.get("box_2d") is not None:
+            coords = box2d_center_pixels(json_action.get("box_2d"))
         if not coords and json_action.get("x") is not None and json_action.get("y") is not None:
             coords = _coerce_to_pixel_coordinates(
                 json_action.get("x"),
@@ -258,6 +251,10 @@ def _convert_json_action_to_items(
         end_box = json_action.get("end_box") or json_action.get("endBox")
         start_coords = _coerce_box_to_pixels(start_box, width=image_width, height=image_height)
         end_coords = _coerce_box_to_pixels(end_box, width=image_width, height=image_height)
+        if not start_coords and json_action.get("box_2d") is not None:
+            start_coords = box2d_center_pixels(json_action.get("box_2d"))
+        if not end_coords and json_action.get("end_box_2d") is not None:
+            end_coords = box2d_center_pixels(json_action.get("end_box_2d"))
         if not start_coords and json_action.get("x") is not None and json_action.get("y") is not None:
             start_coords = _coerce_to_pixel_coordinates(
                 json_action.get("x"),
@@ -274,6 +271,8 @@ def _convert_json_action_to_items(
     elif action_type == "scroll":
         start_box = json_action.get("start_box") or json_action.get("startBox")
         coords = _coerce_box_to_pixels(start_box, width=image_width, height=image_height)
+        if not coords and json_action.get("box_2d") is not None:
+            coords = box2d_center_pixels(json_action.get("box_2d"))
         if not coords and json_action.get("x") is not None and json_action.get("y") is not None:
             coords = _coerce_to_pixel_coordinates(
                 json_action.get("x"),
@@ -297,22 +296,7 @@ def _convert_json_action_to_items(
             entries.append(
                 _make_scroll_item(coords[0], coords[1], scroll_x, scroll_y, call_id=call_id)
             )
-    elif action_type in {"hover", "move"}:
-        target_box = (
-            json_action.get("start_box")
-            or json_action.get("startBox")
-            or json_action.get("position")
-        )
-        coords = _coerce_box_to_pixels(target_box, width=image_width, height=image_height)
-        if not coords and json_action.get("x") is not None and json_action.get("y") is not None:
-            coords = _coerce_to_pixel_coordinates(
-                json_action.get("x"),
-                json_action.get("y"),
-                width=image_width,
-                height=image_height,
-            )
-        if coords:
-            entries.append(_make_move_item(coords[0], coords[1], call_id=call_id))
+    # hover/move dropped in minimal action surface
     elif action_type in {"keypress", "key", "key_press"}:
         keys = json_action.get("keys")
         key_list: list[str] = []
@@ -324,8 +308,6 @@ def _convert_json_action_to_items(
             entries.append(_make_keypress_item(key_list, call_id=call_id))
     elif action_type == "wait":
         entries.append(_make_wait_item(call_id=call_id))
-    elif action_type == "screenshot":
-        entries.append(_make_screenshot_item(call_id))
 
     return entries
 
@@ -379,15 +361,28 @@ def get_last_image_from_messages(messages: list[dict[str, Any]]) -> str | None:
 
 # Adapter dispatch
 _ADAPTER_REGISTRY: Dict[str, str] = {
-    "z-ai/glm-4.5v": "hud.agents.glm45v:Glm45vAgent",
+    "z-ai/glm-4.5v": "hud.agents.openrouter.models.glm45v.glm45v:Glm45vAgent",
 }
-
 
 def _load_adapter(path: str) -> Type[MCPAgent]:
     module_name, class_name = path.split(":", 1)
-    module = import_module(module_name)
+    try:
+        module = import_module(module_name)
+    except ModuleNotFoundError:
+        here = Path(__file__).resolve()
+        # e.g., models/glm45v/glm45v.py
+        parts = module_name.split(".models.")
+        if len(parts) == 2:
+            rel = parts[1].replace(".", "/") + ".py"
+            candidate = here.with_name("openrouter") / "models" / Path(rel)
+            if candidate.exists():
+                spec = importlib.util.spec_from_file_location("hud.agents._adapter", str(candidate))
+                if spec and spec.loader:
+                    mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(mod)
+                    return getattr(mod, class_name)
+        raise
     return getattr(module, class_name)
-
 
 class OpenRouterAgent:
     """Dispatch wrapper that selects the correct OpenRouter adapter by model."""
@@ -425,7 +420,6 @@ class OpenRouterAgent:
         base_dir.update(dir(self._adapter))
         return sorted(base_dir)
 
-
 __all__ = [
     "OpenRouterAgent",
     "_random_id",
@@ -438,7 +432,6 @@ __all__ = [
     "_make_keypress_item",
     "_make_type_item",
     "_make_scroll_item",
-    "_make_wait_item",
     "_make_screenshot_item",
     "_make_failed_tool_call_items",
     "_coerce_to_pixel_coordinates",
