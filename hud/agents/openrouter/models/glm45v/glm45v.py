@@ -430,10 +430,7 @@ class Glm45vAgent(MCPAgent):
         }
         if parsed.get("memory"):
             self._memory = parsed["memory"]
-        logger.debug("glm45v model content: %s", response_content)
-        trimmed = response_content[:400] if response_content else ""
-        self.console.debug(f"glm45v model content: {trimmed}")
-        self.console.debug(f"glm45v parsed response: {parsed}")
+        # logger.debug("glm45v model content: %s", response_content)
 
         image_width, image_height = _decode_image_dimensions(screenshot_b64)
         response_items = convert_glm_completion_to_responses_items(
@@ -470,10 +467,11 @@ class Glm45vAgent(MCPAgent):
         reasoning_text = "\n".join(reasoning_parts).strip()
 
         if not tool_calls:
-            self.console.info_log(
-                f"glm45v returned no tool calls. content='{content_text}' reasoning='{reasoning_text}'"
-            )
-            self.console.info_log(f"glm45v parsed response: {parsed}")
+            pass
+            # self.console.info_log(
+            #     f"glm45v returned no tool calls. content='{content_text}' reasoning='{reasoning_text}'"
+            # )
+            # self.console.info_log(f"glm45v parsed response: {parsed}")
 
         return AgentResponse(
             content=content_text or None,
