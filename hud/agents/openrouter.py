@@ -335,6 +335,7 @@ def get_last_image_from_messages(messages: list[dict[str, Any]]) -> str | None:
 # Adapter dispatch
 _ADAPTER_REGISTRY: Dict[str, str] = {
     "z-ai/glm-4.5v": "hud.agents.openrouter.models.glm45v.glm45v:Glm45vAgent",
+    "huggingface/bytedance-seed/ui-tars-1.5-7b": "hud.agents.openrouter.models.uitars.uitars:UITarsAgent",
 }
 
 def _load_adapter(path: str) -> Type[MCPAgent]:
