@@ -12,10 +12,12 @@ from pathlib import Path
 from io import BytesIO
 from typing import Any, Dict, Type
 
+import mcp.types as types
 from PIL import Image
 
 from hud.agents.base import MCPAgent
 from hud.tools.computer.settings import computer_settings
+from hud.types import MCPToolCall, MCPToolResult
 
 # Shared helper utilities for computer-use adapters
 def _random_id() -> str:
@@ -332,6 +334,108 @@ def get_last_image_from_messages(messages: list[dict[str, Any]]) -> str | None:
                                 return url.split(",", 1)[1]
     return None
 
+class OpenRouterBaseAgent(MCPAgent):
+    """Base class for OpenRouter vision-language agents with shared formatting logic."""
+
+    async def format_blocks(self, blocks: list[types.ContentBlock]) -> list[dict[str, Any]]:
+        """Format MCP content blocks into message items."""
+        content_items: list[dict[str, Any]] = []
+        text_parts: list[str] = []
+        for block in blocks:
+            if isinstance(block, types.TextContent):
+                if block.text:
+                    text_parts.append(block.text)
+            elif isinstance(block, types.ImageContent):
+                content_items.append(
+                    {
+                        "type": "message",
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:{getattr(block, 'mimeType', 'image/png')};base64,{block.data}",
+                                },
+                            }
+                        ],
+                    }
+                )
+
+        if text_parts:
+            content_items.insert(
+                0,
+                {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "\n".join(text_parts)}],
+                },
+            )
+
+        return content_items
+
+    async def format_tool_results(
+        self, tool_calls: list[MCPToolCall], tool_results: list[MCPToolResult]
+    ) -> list[dict[str, Any]]:
+        """Format tool execution results into message items."""
+        import mcp.types as types  # noqa: PLC0415
+
+        rendered: list[dict[str, Any]] = []
+        for call, result in zip(tool_calls, tool_results, strict=False):
+            call_args = call.arguments or {}
+            if result.isError:
+                error_text = "".join(
+                    c.text for c in result.content if isinstance(c, types.TextContent)
+                )
+                rendered.extend(
+                    _make_failed_tool_call_items(
+                        tool_name=call_args.get("type", call.name),
+                        tool_kwargs=call_args,
+                        error_message=error_text or "Unknown error",
+                        call_id=call.id,
+                    )
+                )
+                continue
+
+            screenshot_found = False
+            for content in result.content:
+                if isinstance(content, types.ImageContent):
+                    rendered.append(
+                        {
+                            "type": "computer_call_output",
+                            "call_id": call.id,
+                            "output": {
+                                "type": "input_image",
+                                "image_url": f"data:{content.mimeType};base64,{content.data}",
+                            },
+                        }
+                    )
+                    screenshot_found = True
+                    break
+
+            text_parts = [
+                c.text for c in result.content if isinstance(c, types.TextContent) and c.text
+            ]
+            if text_parts:
+                rendered.append(
+                    {
+                        "type": "message",
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": "\n".join(text_parts)}],
+                    }
+                )
+
+            if not screenshot_found and not text_parts:
+                rendered.append(
+                    {
+                        "type": "computer_call_output",
+                        "call_id": call.id,
+                        "output": {"type": "input_text", "text": "Tool executed"},
+                    }
+                )
+
+        return rendered
+
+
 # Adapter dispatch
 _ADAPTER_REGISTRY: Dict[str, str] = {
     "z-ai/glm-4.5v": "hud.agents.openrouter.models.glm45v.glm45v:Glm45vAgent",
@@ -396,6 +500,7 @@ class OpenRouterAgent:
 
 __all__ = [
     "OpenRouterAgent",
+    "OpenRouterBaseAgent",
     "_random_id",
     "_make_reasoning_item",
     "_make_output_text_item",

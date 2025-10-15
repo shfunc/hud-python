@@ -17,8 +17,8 @@ import litellm
 import mcp.types as types
 
 from hud import instrument
-from hud.agents.base import MCPAgent
 from hud.agents.openrouter import (
+    OpenRouterBaseAgent,
     _convert_json_action_to_items,
     _decode_image_dimensions,
     _extract_user_instruction,
@@ -32,7 +32,6 @@ from hud.types import AgentResponse, MCPToolCall, MCPToolResult
 
 logger = logging.getLogger(__name__)
 
-# Constants from the official UITARS parser
 IMAGE_FACTOR = 28
 MIN_PIXELS = 100 * 28 * 28
 MAX_PIXELS = 16384 * 28 * 28
@@ -375,7 +374,7 @@ def _parse_to_json_action(actions: list[dict[str, Any]]) -> dict[str, Any] | Non
         return {"type": "finished", "content": str(inputs.get("content") or "")}
     return None
 
-class UITarsAgent(MCPAgent):
+class UITarsAgent(OpenRouterBaseAgent):
     """UITARS computer-use agent (Doubao-style prompts + official parser)."""
 
     metadata: ClassVar[dict[str, Any]] = {
@@ -407,42 +406,6 @@ class UITarsAgent(MCPAgent):
 
     async def get_system_messages(self) -> list[Any]:
         return []
-
-    @instrument(span_type="agent", record_args=False)
-    async def format_blocks(self, blocks: list[types.ContentBlock]) -> list[dict[str, Any]]:
-        content_items: list[dict[str, Any]] = []
-        text_parts: list[str] = []
-        for block in blocks:
-            if isinstance(block, types.TextContent):
-                if block.text:
-                    text_parts.append(block.text)
-            elif isinstance(block, types.ImageContent):
-                content_items.append(
-                    {
-                        "type": "message",
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:{getattr(block, 'mimeType', 'image/png')};base64,{block.data}",
-                                },
-                            }
-                        ],
-                    }
-                )
-
-        if text_parts:
-            content_items.insert(
-                0,
-                {
-                    "type": "message",
-                    "role": "user",
-                    "content": [{"type": "input_text", "text": "\n".join(text_parts)}],
-                },
-            )
-
-        return content_items
 
     def _tool_call(self, item: dict[str, Any]) -> MCPToolCall:
         call_id = item.get("call_id") or _random_id()
@@ -530,9 +493,7 @@ class UITarsAgent(MCPAgent):
             return AgentResponse(content=f"UITARS request failed: {exc}", tool_calls=[], done=True, isError=True)
 
         content = (getattr(response.choices[0], "message", None) or {}).get("content", "")
-        
-        if content:
-            print(f"\n{'='*60}\nUITars output:\n{content}\n{'='*60}\n")
+        logger.debug("UITARS model output: %s", content)
 
         actions = parse_action_to_structure_output(
             content or "",
@@ -575,45 +536,6 @@ class UITarsAgent(MCPAgent):
 
         tool_calls = [self._tool_call(i) for i in items if i.get("type") == "computer_call"]
         return AgentResponse(content=None, tool_calls=tool_calls, done=not tool_calls, raw=response)
-
-    @instrument(span_type="agent", record_args=False)
-    async def format_tool_results(self, tool_calls: list[MCPToolCall], tool_results: list[MCPToolResult]) -> list[dict[str, Any]]:
-        rendered: list[dict[str, Any]] = []
-        for call, result in zip(tool_calls, tool_results, strict=False):
-            call_args = call.arguments or {}
-            if result.isError:
-                error_text = "".join(c.text for c in result.content if isinstance(c, types.TextContent))
-                rendered.extend(
-                    _make_failed_tool_call_items(
-                        tool_name=call_args.get("type", call.name),
-                        tool_kwargs=call_args,
-                        error_message=error_text or "Unknown error",
-                        call_id=call.id,
-                    )
-                )
-                continue
-
-            screenshot_found = False
-            for content in result.content:
-                if isinstance(content, types.ImageContent):
-                    rendered.append(
-                        {
-                            "type": "computer_call_output",
-                            "call_id": call.id,
-                            "output": {"type": "input_image", "image_url": f"data:{content.mimeType};base64,{content.data}"},
-                        }
-                    )
-                    screenshot_found = True
-                    break
-
-            text_parts = [c.text for c in result.content if isinstance(c, types.TextContent) and c.text]
-            if text_parts:
-                rendered.append({"type": "message", "role": "user", "content": [{"type": "input_text", "text": "\n".join(text_parts)}]})
-
-            if not screenshot_found and not text_parts:
-                rendered.append({"type": "computer_call_output", "call_id": call.id, "output": {"type": "input_text", "text": "Tool executed"}})
-
-        return rendered
 
 
 __all__ = ["UITarsAgent"]

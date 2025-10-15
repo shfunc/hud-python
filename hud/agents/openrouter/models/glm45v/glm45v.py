@@ -12,12 +12,12 @@ import litellm
 import mcp.types as types
 from litellm.types.utils import ModelResponse
 
-from hud.agents.base import MCPAgent
 from hud.settings import settings
 from hud.tools.computer.settings import computer_settings
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult
 from hud import instrument
 from hud.agents.openrouter import (
+    OpenRouterBaseAgent,
     _convert_json_action_to_items,
     _decode_image_dimensions,
     _extract_user_instruction,
@@ -277,7 +277,7 @@ def parse_glm_response(response: str) -> dict[str, str]:
         "memory": memory,
     }
 
-class Glm45vAgent(MCPAgent):
+class Glm45vAgent(OpenRouterBaseAgent):
     """LiteLLM-backed GLM-4.5V agent that speaks MCP."""
 
     metadata: ClassVar[dict[str, Any]] = {
@@ -308,41 +308,6 @@ class Glm45vAgent(MCPAgent):
 
     async def get_system_messages(self) -> list[Any]:
         return []
-
-    @instrument(span_type="agent", record_args=False)
-    async def format_blocks(self, blocks: list[types.ContentBlock]) -> list[dict[str, Any]]:
-        content_items: list[dict[str, Any]] = []
-        text_parts: list[str] = []
-        for block in blocks:
-            if isinstance(block, types.TextContent):
-                text_parts.append(block.text)
-            elif isinstance(block, types.ImageContent):
-                content_items.append(
-                    {
-                        "type": "message",
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:{getattr(block, 'mimeType', 'image/png')};base64,{block.data}",
-                                },
-                            }
-                        ],
-                    }
-                )
-
-        if text_parts:
-            content_items.insert(
-                0,
-                {
-                    "type": "message",
-                    "role": "user",
-                    "content": [{"type": "input_text", "text": "\n".join(text_parts)}],
-                },
-            )
-
-        return content_items
 
     def _glm_tool_call_to_mcp(self, item: dict[str, Any]) -> MCPToolCall:
         call_id = item.get("call_id") or _random_id()
@@ -430,7 +395,6 @@ class Glm45vAgent(MCPAgent):
         }
         if parsed.get("memory"):
             self._memory = parsed["memory"]
-        # logger.debug("glm45v model content: %s", response_content)
 
         image_width, image_height = _decode_image_dimensions(screenshot_b64)
         response_items = convert_glm_completion_to_responses_items(
@@ -466,13 +430,6 @@ class Glm45vAgent(MCPAgent):
         content_text = "\n".join(text_parts).strip()
         reasoning_text = "\n".join(reasoning_parts).strip()
 
-        if not tool_calls:
-            pass
-            # self.console.info_log(
-            #     f"glm45v returned no tool calls. content='{content_text}' reasoning='{reasoning_text}'"
-            # )
-            # self.console.info_log(f"glm45v parsed response: {parsed}")
-
         return AgentResponse(
             content=content_text or None,
             reasoning=reasoning_text or None,
@@ -480,73 +437,6 @@ class Glm45vAgent(MCPAgent):
             done=not tool_calls,
             raw=response,
         )
-
-    @instrument(span_type="agent", record_args=False)
-    async def format_tool_results(
-        self,
-        tool_calls: list[MCPToolCall],
-        tool_results: list[MCPToolResult],
-    ) -> list[dict[str, Any]]:
-        rendered: list[dict[str, Any]] = []
-
-        for call, result in zip(tool_calls, tool_results, strict=False):
-            call_args = call.arguments or {}
-            if result.isError:
-                error_text = "".join(
-                    content.text
-                    for content in result.content
-                    if isinstance(content, types.TextContent)
-                )
-                rendered.extend(
-                    _make_failed_tool_call_items(
-                        tool_name=call_args.get("type", call.name),
-                        tool_kwargs=call_args,
-                        error_message=error_text or "Unknown error",
-                        call_id=call.id,
-                    )
-                )
-                continue
-
-            screenshot_found = False
-            for content in result.content:
-                if isinstance(content, types.ImageContent):
-                    rendered.append(
-                        {
-                            "type": "computer_call_output",
-                            "call_id": call.id,
-                            "output": {
-                                "type": "input_image",
-                                "image_url": f"data:{content.mimeType};base64,{content.data}",
-                            },
-                        }
-                    )
-                    screenshot_found = True
-                    break
-
-            text_parts = [
-                content.text
-                for content in result.content
-                if isinstance(content, types.TextContent) and content.text
-            ]
-            if text_parts:
-                rendered.append(
-                    {
-                        "type": "message",
-                        "role": "user",
-                        "content": [{"type": "input_text", "text": "\n".join(text_parts)}],
-                    }
-                )
-
-            if not screenshot_found and not text_parts:
-                rendered.append(
-                    {
-                        "type": "computer_call_output",
-                        "call_id": call.id,
-                        "output": {"type": "input_text", "text": "Tool executed"},
-                    }
-                )
-
-        return rendered
 
 
 __all__ = ["Glm45vAgent"]
