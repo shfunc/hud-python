@@ -72,9 +72,7 @@ def convert_point_to_coordinates(text: str, is_answer: bool = False) -> str:
 
     def replace_match(match: re.Match[str]) -> str:
         x1, y1 = map(int, match.groups())
-        x = (x1 + x1) // 2
-        y = (y1 + y1) // 2
-        return f"({x},{y})"
+        return f"({x1},{y1})"
 
     text = re.sub(r"\[EOS\]", "", text)
     return re.sub(pattern, replace_match, text).strip()
