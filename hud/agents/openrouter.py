@@ -11,13 +11,22 @@ import importlib.util
 from pathlib import Path
 from io import BytesIO
 from typing import Any, Dict, Type
+from abc import abstractmethod
 
 import mcp.types as types
 from PIL import Image
 
+import litellm
+
 from hud.agents.base import MCPAgent
 from hud.tools.computer.settings import computer_settings
-from hud.types import MCPToolCall, MCPToolResult
+from hud.types import MCPToolCall, MCPToolResult, AgentResponse
+from hud import instrument
+import logging
+logger = logging.getLogger(__name__)
+
+from hud.settings import settings
+import os
 
 # Shared helper utilities for computer-use adapters
 def _random_id() -> str:
@@ -337,6 +346,10 @@ def get_last_image_from_messages(messages: list[dict[str, Any]]) -> str | None:
 class OpenRouterBaseAgent(MCPAgent):
     """Base class for OpenRouter vision-language agents with shared formatting logic."""
 
+    def __init__(self, completion_kwargs: dict[str, Any] | None = None, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.completion_kwargs = completion_kwargs or {}
+
     async def format_blocks(self, blocks: list[types.ContentBlock]) -> list[dict[str, Any]]:
         """Format MCP content blocks into message items."""
         content_items: list[dict[str, Any]] = []
@@ -434,6 +447,52 @@ class OpenRouterBaseAgent(MCPAgent):
                 )
 
         return rendered
+
+    @abstractmethod
+    async def build_prompt(self, messages: list[dict[str, Any]], instruction: str, screenshot_b64: str) -> list[dict[str, Any]]:
+        """Subclass hook to build model-specific prompt/messages."""
+        pass
+
+    @abstractmethod
+    async def parse_response(self, response: Any, messages: list[dict[str, Any]], screenshot_b64: str) -> AgentResponse:
+        """Subclass hook to parse model response into AgentResponse."""
+        pass
+
+    async def get_response(self, messages: list[dict[str, Any]]) -> AgentResponse:
+        instruction = _extract_user_instruction(messages)
+        
+        screenshot_b64 = get_last_image_from_messages(messages)
+        if not screenshot_b64:
+            call_id = _random_id()
+            messages.append(_make_screenshot_item(call_id))
+            return AgentResponse(
+                content="capturing initial screenshot",
+                tool_calls=[MCPToolCall(id=call_id, name="openai_computer", arguments={"type": "screenshot"})],
+                done=False,
+            )
+        
+        litellm_messages = await self.build_prompt(messages, instruction, screenshot_b64)
+        
+        api_kwargs: dict[str, Any] = {
+            "model": self.model_name,
+            "messages": litellm_messages,
+        }
+        if "openrouter" in self.model_name.lower():
+            api_kwargs["api_key"] = settings.openrouter_api_key or os.getenv("OPENROUTER_API_KEY")
+        api_kwargs.update(self.completion_kwargs)
+        
+        try:
+            response = await litellm.acompletion(**api_kwargs)
+        except Exception as exc:
+            logger.exception(f"{self.__class__.__name__} completion failed: %s", exc)
+            return AgentResponse(
+                content=f"{self.__class__.__name__} request failed: {exc}",
+                tool_calls=[],
+                done=True,
+                isError=True,
+            )
+        
+        return await self.parse_response(response, messages, screenshot_b64)
 
 
 # Adapter dispatch

@@ -13,22 +13,15 @@ from typing import Any, ClassVar
 
 from PIL import Image
 
-import litellm
-import mcp.types as types
-
-from hud import instrument
 from hud.agents.openrouter import (
     OpenRouterBaseAgent,
     _convert_json_action_to_items,
     _decode_image_dimensions,
-    _extract_user_instruction,
-    _make_failed_tool_call_items,
     _make_screenshot_item,
     _random_id,
-    get_last_image_from_messages,
 )
 from hud.tools.computer.settings import computer_settings
-from hud.types import AgentResponse, MCPToolCall, MCPToolResult
+from hud.types import AgentResponse, MCPToolCall
 
 logger = logging.getLogger(__name__)
 
@@ -403,6 +396,8 @@ class UITarsAgent(OpenRouterBaseAgent):
             self._base_completion_kwargs["custom_llm_provider"] = "huggingface"
 
         self._provider_model = _resolve_provider_model_name(self.model_name)
+        self.completion_kwargs = self._base_completion_kwargs
+        self.model_name = self._provider_model
 
     async def get_system_messages(self) -> list[Any]:
         return []
@@ -412,20 +407,7 @@ class UITarsAgent(OpenRouterBaseAgent):
         action = item.get("action") or {}
         return MCPToolCall(id=call_id, name="openai_computer", arguments=action)
 
-    @instrument(span_type="agent", record_args=False)
-    async def get_response(self, messages: list[dict[str, Any]]) -> AgentResponse:
-        instruction = _extract_user_instruction(messages)
-        screenshot_b64 = get_last_image_from_messages(messages)
-        if not screenshot_b64:
-            call_id = _random_id()
-            messages.append(_make_screenshot_item(call_id))
-            return AgentResponse(
-                content="capturing initial screenshot",
-                tool_calls=[MCPToolCall(id=call_id, name="openai_computer", arguments={"type": "screenshot"})],
-                done=False,
-            )
-
-        # Decode original image dims and make a processed copy for the model
+    async def build_prompt(self, messages: list[dict[str, Any]], instruction: str, screenshot_b64: str) -> list[dict[str, Any]]:
         try:
             data = base64.b64decode(screenshot_b64.split(",", 1)[1] if screenshot_b64.startswith("data:image") else screenshot_b64)
             img = Image.open(BytesIO(data))
@@ -440,13 +422,11 @@ class UITarsAgent(OpenRouterBaseAgent):
             img, proc_w, proc_h = _resize_for_model(img)
             proc_uri = _pil_to_data_uri(img)
 
-        # Build messages with history: system prompt + previous turns + current screenshot
         system_prompt = COMPUTER_USE_DOUBAO.format(language="English", instruction=instruction or "")
-        
+
         litellm_messages: list[dict[str, Any]] = []
         
-        # Add history of previous actions and screenshots
-        for msg in messages[:-1]:  # Skip the current screenshot
+        for msg in messages[:-1]:
             if not isinstance(msg, dict):
                 continue
             msg_type = msg.get("type")
@@ -477,29 +457,20 @@ class UITarsAgent(OpenRouterBaseAgent):
                 {"type": "image_url", "image_url": {"url": proc_uri}},
             ],
         })
+        
+        return litellm_messages
 
-        api_kwargs: dict[str, Any] = {
-            "model": self._provider_model,
-            "messages": litellm_messages,
-            "temperature": 0.1,
-            "max_tokens": 256,
-        }
-        api_kwargs.update(self._base_completion_kwargs)
-
-        try:
-            response = await litellm.acompletion(**api_kwargs)
-        except Exception as exc:  # pragma: no cover - network errors
-            logger.exception("uitars completion failed: %s", exc)
-            return AgentResponse(content=f"UITARS request failed: {exc}", tool_calls=[], done=True, isError=True)
-
+    async def parse_response(self, response: Any, messages: list[dict[str, Any]], screenshot_b64: str) -> AgentResponse:
         content = (getattr(response.choices[0], "message", None) or {}).get("content", "")
         logger.debug("UITARS model output: %s", content)
+
+        orig_w, orig_h = _decode_image_dimensions(screenshot_b64)
 
         actions = parse_action_to_structure_output(
             content or "",
             factor=1000,
-            origin_resized_height=proc_h,
-            origin_resized_width=proc_w,
+            origin_resized_height=orig_h,
+            origin_resized_width=orig_w,
             model_type="qwen25vl",
         )
         json_action = _parse_to_json_action(actions)
@@ -507,7 +478,6 @@ class UITarsAgent(OpenRouterBaseAgent):
         items: list[dict[str, Any]] = []
         if json_action:
             call_id = _random_id()
-            # Feed original dimensions so normalized coords map to real pixels
             items.extend(
                 _convert_json_action_to_items(
                     json_action,
@@ -517,10 +487,9 @@ class UITarsAgent(OpenRouterBaseAgent):
                 )
             )
             
-            # Auto-wait after clicking taskbar/launcher icons (left edge, x < 50)
             if items and json_action.get("type") in {"click", "left_click"}:
                 x_coord = json_action.get("x", 0)
-                if x_coord < 50:  # Likely a launcher icon
+                if x_coord < 50:
                     logger.info("Detected launcher click at x=%d, adding auto-wait", x_coord)
                     items.append({
                         "type": "computer_call",
@@ -536,6 +505,9 @@ class UITarsAgent(OpenRouterBaseAgent):
 
         tool_calls = [self._tool_call(i) for i in items if i.get("type") == "computer_call"]
         return AgentResponse(content=None, tool_calls=tool_calls, done=not tool_calls, raw=response)
+
+    async def get_response(self, messages: list[dict[str, Any]]) -> AgentResponse:
+        return await super().get_response(messages)
 
 
 __all__ = ["UITarsAgent"]

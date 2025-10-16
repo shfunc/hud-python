@@ -8,26 +8,19 @@ import re
 from typing import Any, ClassVar
 from pathlib import Path
 
-import litellm
-import mcp.types as types
 from litellm.types.utils import ModelResponse
 
 from hud.settings import settings
 from hud.tools.computer.settings import computer_settings
-from hud.types import AgentResponse, MCPToolCall, MCPToolResult
-from hud import instrument
+from hud.types import AgentResponse, MCPToolCall
 from hud.agents.openrouter import (
     OpenRouterBaseAgent,
     _convert_json_action_to_items,
     _decode_image_dimensions,
-    _extract_user_instruction,
-    _make_failed_tool_call_items,
     _make_output_text_item,
     _make_reasoning_item,
-    _make_screenshot_item,
     _parse_json_action_string,
     _random_id,
-    get_last_image_from_messages,
 )
 
 logger = logging.getLogger(__name__)
@@ -329,30 +322,12 @@ class Glm45vAgent(OpenRouterBaseAgent):
 
         return MCPToolCall(id=call_id, name="openai_computer", arguments=arguments)
 
-    @instrument(span_type="agent", record_args=False)
-    async def get_response(self, messages: list[dict[str, Any]]) -> AgentResponse:
-        instruction = _extract_user_instruction(messages)
+    async def build_prompt(self, messages: list[dict[str, Any]], instruction: str, screenshot_b64: str) -> list[dict[str, Any]]:
+        # Original prompt building logic from get_response
         if instruction:
-            self._last_instruction = instruction  # type: ignore[attr-defined]
+            self._last_instruction = instruction
             self._task_description = instruction
         task_instruction = self._task_description or getattr(self, "_last_instruction", "")
-
-        screenshot_b64 = get_last_image_from_messages(messages)
-        if not screenshot_b64:
-            call_id = _random_id()
-            screenshot_call = _make_screenshot_item(call_id)
-            messages.append(screenshot_call)
-            logger.debug("glm45v requesting initial screenshot")
-            tool_call = MCPToolCall(
-                id=call_id,
-                name="openai_computer",
-                arguments={"type": "screenshot"},
-            )
-            return AgentResponse(
-                content="capturing initial screenshot",
-                tool_calls=[tool_call],
-                done=False,
-            )
 
         self.console.debug(f"glm45v task instruction: {task_instruction}")
         self.console.debug(f"glm45v memory (pre-step): {self._memory}")
@@ -370,23 +345,11 @@ class Glm45vAgent(OpenRouterBaseAgent):
         if getattr(self, "system_prompt", None):
             litellm_messages.append({"role": "system", "content": self.system_prompt})
         litellm_messages.append({"role": "user", "content": prompt_content})
+        
+        return litellm_messages
 
-        api_kwargs = {"model": self.model_name, "messages": litellm_messages}
-        if settings.openrouter_api_key:
-            api_kwargs["api_key"] = settings.openrouter_api_key
-        api_kwargs.update(self.completion_kwargs)
-
-        try:
-            response = await litellm.acompletion(**api_kwargs)
-        except Exception as exc:  # pragma: no cover - network errors
-            logger.exception("glm45v completion failed: %s", exc)
-            return AgentResponse(
-                content=f"GLM-4.5V request failed: {exc}",
-                tool_calls=[],
-                done=True,
-                isError=True,
-            )
-
+    async def parse_response(self, response: Any, messages: list[dict[str, Any]], screenshot_b64: str) -> AgentResponse:
+        # Original parsing logic from get_response
         choice = response.choices[0]
         message = getattr(choice, "message", None)
         response_content = getattr(message, "content", "") if message else ""
@@ -437,6 +400,9 @@ class Glm45vAgent(OpenRouterBaseAgent):
             done=not tool_calls,
             raw=response,
         )
+
+    async def get_response(self, messages: list[dict[str, Any]]) -> AgentResponse:
+        return await super().get_response(messages)
 
 
 __all__ = ["Glm45vAgent"]
