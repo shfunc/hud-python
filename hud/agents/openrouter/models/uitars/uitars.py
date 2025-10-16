@@ -488,7 +488,8 @@ class UITarsAgent(OpenRouterBaseAgent):
             )
             
             if items and json_action.get("type") in {"click", "left_click"}:
-                x_coord = json_action.get("x", 0)
+                converted_action = items[0].get("action", {}) if items else {}
+                x_coord = converted_action.get("x", 0)
                 if x_coord < 50:
                     logger.info("Detected launcher click at x=%d, adding auto-wait", x_coord)
                     items.append({
