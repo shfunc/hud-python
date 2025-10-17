@@ -458,6 +458,12 @@ class OpenRouterBaseAgent(MCPAgent):
         """Subclass hook to parse model response into AgentResponse."""
         pass
 
+    @instrument(
+        span_type="agent",
+        record_args=False,
+        record_result=True,
+    )
+    
     async def get_response(self, messages: list[dict[str, Any]]) -> AgentResponse:
         instruction = _extract_user_instruction(messages)
         
