@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import fnmatch
 import json
 import logging
@@ -13,6 +14,8 @@ import mcp.types as types
 
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult, Trace
 from hud.utils.hud_console import HUDConsole
+from hud.agents.utils import log_task_config_to_current_trace, log_agent_metadata_to_status
+
 from hud.utils.mcp import MCPConfigPatch, patch_mcp_config, setup_hud_telemetry
 
 if TYPE_CHECKING:
@@ -62,6 +65,7 @@ class MCPAgent(ABC):
         initial_screenshot: bool = True,
         # Misc
         model_name: str = "mcp-agent",
+        checkpoint_name: str | None = None,
         response_agent: ResponseAgent | None = None,
         auto_trace: bool = True,
         verbose: bool = False,
@@ -92,6 +96,7 @@ class MCPAgent(ABC):
         self._auto_created_client = False  # Track if we created the client
 
         self.model_name = model_name
+        self.checkpoint_name = checkpoint_name
         self.console = HUDConsole(logger=logger)
 
         # Set verbose mode if requested
@@ -197,6 +202,8 @@ class MCPAgent(ABC):
         self.console.info(
             f"Agent initialized with {len(self.get_available_tools())} tools: {', '.join([t.name for t in self.get_available_tools()])}"  # noqa: E501
         )
+        
+        await log_agent_metadata_to_status(self.model_name, self.checkpoint_name)
 
     async def run(self, prompt_or_task: str | Task | dict[str, Any], max_steps: int = 10) -> Trace:
         """
@@ -223,6 +230,9 @@ class MCPAgent(ABC):
 
             # Handle Task objects with full lifecycle
             if isinstance(prompt_or_task, Task):
+                # Log a compact summary of task config to the current trace (async)
+                await log_task_config_to_current_trace(prompt_or_task)
+
                 return await self.run_task(prompt_or_task, max_steps)
 
             # Handle simple string prompts

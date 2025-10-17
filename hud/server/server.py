@@ -311,10 +311,35 @@ class MCPServer(FastMCP):
         if transport is None:
             transport = "stdio"
 
-        # Register HTTP helpers for HTTP transport
+        # Register HTTP helpers and CORS for HTTP transport
         if transport in ("http", "sse"):
             self._register_hud_helpers()
             logger.info("Registered HUD helper endpoints at /hud/*")
+
+            # Add CORS middleware if not already provided
+            from starlette.middleware import Middleware
+            from starlette.middleware.cors import CORSMiddleware
+
+            # Get or create middleware list
+            middleware = transport_kwargs.get("middleware", [])
+            if isinstance(middleware, list):
+                # Check if CORS is already configured
+                has_cors = any(
+                    isinstance(m, Middleware) and m.cls == CORSMiddleware
+                    for m in middleware
+                )
+                if not has_cors:
+                    # Add CORS with permissive defaults for dev
+                    cors_middleware = Middleware(
+                        CORSMiddleware,
+                        allow_origins=["*"],
+                        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+                        allow_headers=["*"],
+                        expose_headers=["Mcp-Session-Id"],
+                    )
+                    middleware = [cors_middleware, *middleware]
+                    transport_kwargs["middleware"] = middleware
+                    logger.info("Added CORS middleware for browser compatibility")
 
         try:
             await super().run_async(
@@ -506,9 +531,11 @@ class MCPServer(FastMCP):
                         return str(obj)
 
                     serialized = serialize_obj(result)
-                    return JSONResponse({"success": True, "result": serialized})
+                    # Return the serialized CallToolResult directly (no wrapper)
+                    return JSONResponse(serialized)
                 except Exception as e:
-                    return JSONResponse({"success": False, "error": str(e)}, status_code=400)
+                    # Return a simple error object
+                    return JSONResponse({"error": str(e)}, status_code=400)
 
             return tool_endpoint
 

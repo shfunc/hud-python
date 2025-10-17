@@ -264,7 +264,7 @@ async def run_single_task(
             "Using first task from dataset (run with --full to run the entire dataset)..."
         )
 
-    task_prompt = task.prompt[:50] + "..." if len(task.prompt) > 50 else task.prompt
+    task_prompt = task.prompt
 
     # Use grouped evaluation if group_size > 1
     agent_config: dict[str, Any] = {}

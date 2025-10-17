@@ -6,6 +6,7 @@ User-facing APIs are in hud.telemetry.
 
 from __future__ import annotations
 
+import contextlib
 import contextvars
 import logging
 from contextlib import contextmanager
@@ -232,6 +233,7 @@ async def _update_task_status_async(
     error_message: str | None = None,
     trace_name: str | None = None,
     task_id: str | None = None,
+    extra_metadata: dict[str, Any] | None = None,
 ) -> None:
     """Async task status update."""
     if not settings.telemetry_enabled:
@@ -271,6 +273,11 @@ async def _update_task_status_async(
         metadata["mcp_tool_steps"] = get_mcp_tool_steps()
         metadata["agent_steps"] = get_agent_steps()
 
+        # Merge any extra metadata provided by callers (e.g., task config summaries)
+        if extra_metadata:
+            with contextlib.suppress(Exception):
+                metadata.update(extra_metadata)
+
         if metadata:
             data["metadata"] = metadata
 
@@ -297,10 +304,19 @@ def _fire_and_forget_status_update(
     error_message: str | None = None,
     trace_name: str | None = None,
     task_id: str | None = None,
+    extra_metadata: dict[str, Any] | None = None,
 ) -> None:
     """Fire and forget status update - works in any context including Jupyter."""
     fire_and_forget(
-        _update_task_status_async(task_run_id, status, job_id, error_message, trace_name, task_id),
+        _update_task_status_async(
+            task_run_id,
+            status,
+            job_id,
+            error_message,
+            trace_name,
+            task_id,
+            extra_metadata,
+        ),
         f"update task {task_run_id} status to {status}",
     )
 
@@ -312,6 +328,7 @@ def _update_task_status_sync(
     error_message: str | None = None,
     trace_name: str | None = None,
     task_id: str | None = None,
+    extra_metadata: dict[str, Any] | None = None,
 ) -> None:
     """Synchronous task status update."""
     if not settings.telemetry_enabled:
@@ -350,6 +367,11 @@ def _update_task_status_sync(
         metadata["base_mcp_steps"] = get_base_mcp_steps()
         metadata["mcp_tool_steps"] = get_mcp_tool_steps()
         metadata["agent_steps"] = get_agent_steps()
+
+        # Merge any extra metadata provided by callers
+        if extra_metadata:
+            with contextlib.suppress(Exception):
+                metadata.update(extra_metadata)
 
         if metadata:
             data["metadata"] = metadata
