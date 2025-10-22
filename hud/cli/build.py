@@ -602,7 +602,7 @@ def build_environment(
     hud_console.section_title("Next Steps")
     hud_console.info("Test locally:")
     hud_console.command_example("hud dev", "Hot-reload development")
-    hud_console.command_example(f"hud run {latest_tag}", "Run the built image")
+    hud_console.command_example(f"hud run {version_tag}", "Run the built image")
     hud_console.info("")
     hud_console.info("Publish to registry:")
     hud_console.command_example("hud push", f"Push as {version_tag}")

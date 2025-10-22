@@ -1080,6 +1080,52 @@ def rl(
 
 
 @app.command()
+def convert(
+    tasks_file: str = typer.Argument(
+        ..., help="Path to tasks file (JSON/JSONL) to convert to remote MCP configuration"
+    ),
+) -> None:
+    """Convert local MCP task configs to remote (mcp.hud.so) format.
+
+    This mirrors the implicit conversion flow used by 'hud rl' and writes a new
+    remote_<name>.json next to the source file when needed.
+    """
+    from pathlib import Path
+
+    from hud.utils.hud_console import HUDConsole
+
+    hud_console = HUDConsole()
+
+    try:
+        from .flows.tasks import convert_tasks_to_remote
+
+        result_path = convert_tasks_to_remote(tasks_file)
+
+        # If nothing changed, inform the user
+        try:
+            if Path(result_path).resolve() == Path(tasks_file).resolve():
+                hud_console.success(
+                    "Tasks already reference remote MCP URLs. No conversion needed."
+                )
+                hud_console.hint(
+                    "You can run them directly with: hud eval <tasks_file> --full"
+                )
+                return
+        except Exception as e:
+            # Best effort; continue with success message
+            hud_console.debug(f"Path comparison failed, continuing: {e}")
+
+        hud_console.success(f"Converted tasks written to: {result_path}")
+        hud_console.hint(
+            "You can now run remote flows: hud rl <converted_file> or hud eval <converted_file>"
+        )
+    except typer.Exit:
+        raise
+    except Exception as e:
+        hud_console.error(f"Failed to convert tasks: {e}")
+        raise typer.Exit(1) from e
+
+@app.command()
 def set(
     assignments: list[str] = typer.Argument(  # type: ignore[arg-type]  # noqa: B008
         ..., help="One or more KEY=VALUE pairs to persist in ~/.hud/.env"

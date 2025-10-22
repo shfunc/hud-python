@@ -22,6 +22,28 @@ logger = logging.getLogger(__name__)
 hud_console = HUDConsole()
 
 
+def _tasks_use_local_mcp(tasks: list[Task]) -> bool:
+    """Return True if any task's MCP config uses a local command instead of a URL.
+
+    A config is considered local when a server entry contains a 'command' key and
+    does not provide a 'url'.
+    """
+    try:
+        for t in tasks:
+            cfg = getattr(t, "mcp_config", {}) or {}
+            if not isinstance(cfg, dict):
+                continue
+            for server_cfg in cfg.values():
+                if isinstance(server_cfg, dict) and (
+                    "command" in server_cfg and not server_cfg.get("url")
+                ):
+                    return True
+        return False
+    except Exception:
+        # Be conservative: if detection fails, do not block
+        return False
+
+
 def get_available_models() -> list[dict[str, str | None]]:
     """Fetch available models from the HUD API (only ready models).
 
@@ -265,6 +287,34 @@ async def run_single_task(
             "Using first task from dataset (run with --full to run the entire dataset)..."
         )
 
+    # Warn/confirm if the task uses local MCP config
+    try:
+        if group_size > 1 and _tasks_use_local_mcp([task]):
+            hud_console.warning(
+                "Detected a local MCP configuration (uses 'command' instead of a 'url')."
+            )
+            hud_console.info(
+                "Ensure there are no exposed port conflicts during Docker runs/builds in eval."
+            )
+            proceed = hud_console.confirm(
+                "Proceed with running local MCP servers for this evaluation?",
+                default=True,
+            )
+            if not proceed:
+                # Provide a helpful next step
+                hud_console.hint(
+                    "You can convert tasks to remote with: hud convert <tasks_file>"
+                )
+                raise typer.Exit(1)
+            # Always show the convert hint for awareness
+            hud_console.hint(
+                "Avoid local port conflicts by converting to remote: hud convert <tasks_file>"
+            )
+    except typer.Exit:
+        raise
+    except Exception as e:
+        hud_console.debug(f"Local MCP confirmation skipped due to error: {e}")
+
     task_prompt = task.prompt
 
     # Use grouped evaluation if group_size > 1
@@ -386,6 +436,56 @@ async def run_full_dataset(
     if len(tasks) == 0:
         hud_console.error(f"No tasks found in: {source}")
         raise typer.Exit(1)
+
+    # Warn/confirm once if any task uses local MCP config
+    try:
+        if _tasks_use_local_mcp(tasks):
+            hud_console.warning(
+                "Detected local MCP configurations (use 'command' instead of a 'url')."
+            )
+            hud_console.info(
+                "When running many tasks concurrently, exposed host ports from Docker may conflict."
+            )
+            proceed = hud_console.confirm(
+                "Proceed with running local MCP servers for this evaluation?",
+                default=True,
+            )
+            if not proceed:
+                # Helpful hint when source is a file path
+                try:
+                    path = Path(source)
+                    if path.exists():
+                        hud_console.hint(
+                            f"You can convert tasks to remote with: hud convert {path.name}"
+                        )
+                    else:
+                        hud_console.hint(
+                            "You can convert tasks to remote with: hud convert <tasks_file>"
+                        )
+                except Exception:
+                    hud_console.hint(
+                        "You can convert tasks to remote with: hud convert <tasks_file>"
+                    )
+                raise typer.Exit(1)
+            # Always show the convert hint for awareness
+            try:
+                path = Path(source)
+                if path.exists():
+                    hud_console.hint(
+                        f"Convert to remote to avoid port conflicts: hud convert {path.name}"
+                    )
+                else:
+                    hud_console.hint(
+                        "Convert to remote to avoid port conflicts: hud convert <tasks_file>"
+                    )
+            except Exception:
+                hud_console.hint(
+                    "Convert to remote to avoid port conflicts: hud convert <tasks_file>"
+                )
+    except typer.Exit:
+        raise
+    except Exception as e:
+        hud_console.debug(f"Local MCP confirmation skipped due to error: {e}")
 
     # Convert Task objects to dicts for dataset runners
     dataset_or_tasks = [task.model_dump() for task in tasks]
