@@ -23,6 +23,7 @@ PRESET_MAP: dict[str, str | None] = {
     "blank": "blank",
     "deep-research": "deepresearch",
     "browser": "browser",
+    "rubrics": "rubrics",
 }
 
 SKIP_DIR_NAMES = {"node_modules", "__pycache__", "dist", "build", ".next", ".git"}
@@ -91,6 +92,7 @@ def _prompt_for_preset() -> str:
             {"name": "blank", "message": "blank"},
             {"name": "deep-research", "message": "deep-research"},
             {"name": "browser", "message": "browser"},
+            {"name": "rubrics", "message": "rubrics"},
         ]
         display_choices = [c["message"] for c in choices]
         selected = questionary.select(
@@ -194,7 +196,7 @@ def create_environment(
     if preset_normalized not in PRESET_MAP:
         hud_console.warning(
             f"Unknown preset '{preset_normalized}', defaulting to 'blank' "
-            "(available: blank, deep-research, browser)"
+            "(available: blank, deep-research, browser, rubrics)"
         )
         preset_normalized = "blank"
 

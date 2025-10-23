@@ -746,7 +746,7 @@ def init(
         None,
         "--preset",
         "-p",
-        help="Preset to use: blank, deep-research, browser. If omitted, you'll choose interactively.",  # noqa: E501
+        help="Preset to use: blank, deep-research, browser, rubrics. If omitted, you'll choose interactively.",  # noqa: E501
     ),
     directory: str = typer.Option(".", "--dir", "-d", help="Target directory"),
     force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing files"),
