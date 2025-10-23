@@ -385,28 +385,24 @@ def build_environment(
     # Extract environment variables from Dockerfile
     dockerfile_path = env_dir / "Dockerfile"
     required_env, optional_env = extract_env_vars_from_dockerfile(dockerfile_path)
+    
+    # Show env vars detected from .env file
+    if env_from_file:
+        hud_console.info(f"Detected environment variables from .env file: {', '.join(sorted(env_from_file.keys()))}")
 
-    # Merge user-provided env vars with detected ones
-    provided_env_vars: dict[str, str] = {}
-    missing_required = []
-    if env_vars:
-        # Use placeholders in lock file for any provided values to avoid storing secrets
-        provided_env_vars = {k: f"${{{k}}}" for k in env_vars}
-        # Track which required vars are still missing
-        missing_required = [e for e in required_env if e not in env_vars]
-
-        # Show what env vars were provided
-        hud_console.success(f"Using provided environment variables: {', '.join(env_vars.keys())}")
-    else:
-        missing_required = required_env[:]
-
-    # Warn about missing required variables
-    if missing_required:
+    # Create a complete set of all required variables for warning
+    all_required_for_warning = set(required_env)
+    all_required_for_warning.update(env_from_file.keys())
+    
+    # Find which ones are missing (not provided via -e flags)
+    all_missing = all_required_for_warning - set(env_vars.keys() if env_vars else [])
+    
+    if all_missing:
         hud_console.warning(
-            f"Missing required environment variables: {', '.join(missing_required)}"
+            f"Environment variables not provided via -e flags: {', '.join(sorted(all_missing))}"
         )
         hud_console.info(
-            "These can be added to the lock file after build or provided with -e flags"
+            "These will be added to the required list in the lock file"
         )
 
     # Check for existing version and increment
@@ -449,7 +445,13 @@ def build_environment(
     }
 
     # Add environment variables section if any exist
-    if missing_required or optional_env or provided_env_vars:
+    # Include env vars from .env file as well
+    env_vars_from_file = set(env_from_file.keys()) if env_from_file else set()
+    
+    # Check if we have any env vars to document
+    has_env_vars = bool(required_env or optional_env or env_vars or env_vars_from_file)
+    
+    if has_env_vars:
         lock_content["environment"]["variables"] = {}
 
         # Add note about editing environment variables
@@ -458,10 +460,21 @@ def build_environment(
             "Provided variables will be used when running the environment."
         )
 
-        if provided_env_vars:
-            lock_content["environment"]["variables"]["provided"] = provided_env_vars
-        if missing_required:
-            lock_content["environment"]["variables"]["required"] = missing_required
+        # Combine all required variables: from Dockerfile, .env file, and provided vars
+        all_required = set(required_env)
+        
+        # Add all env vars from .env file to required
+        all_required.update(env_vars_from_file)
+        
+        # Add all provided env vars to required
+        if env_vars:
+            all_required.update(env_vars.keys())
+        
+        # Remove any that are optional - they stay in optional
+        all_required = all_required - set(optional_env)
+        
+        if all_required:
+            lock_content["environment"]["variables"]["required"] = sorted(list(all_required))
         if optional_env:
             lock_content["environment"]["variables"]["optional"] = optional_env
 
