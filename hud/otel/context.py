@@ -277,7 +277,7 @@ async def _update_task_status_async(
 
         if task_id:
             data["task_id"] = task_id
-        
+
         if group_id:
             data["group_id"] = group_id
 
@@ -305,7 +305,9 @@ def _fire_and_forget_status_update(
 ) -> None:
     """Fire and forget status update - works in any context including Jupyter."""
     fire_and_forget(
-        _update_task_status_async(task_run_id, status, job_id, error_message, trace_name, task_id, group_id),
+        _update_task_status_async(
+            task_run_id, status, job_id, error_message, trace_name, task_id, group_id
+        ),
         f"update task {task_run_id} status to {status}",
     )
 
@@ -362,7 +364,7 @@ def _update_task_status_sync(
 
         if task_id:
             data["task_id"] = task_id
-        
+
         if group_id:
             data["group_id"] = group_id
 

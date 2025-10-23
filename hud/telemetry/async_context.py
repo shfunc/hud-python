@@ -299,7 +299,14 @@ def async_trace(
         Use this async version only in high-concurrency scenarios (200+ parallel
         tasks) or when writing custom async evaluation frameworks.
     """
-    return AsyncTrace(name, root=root, attrs=attrs, job_id=job_id, task_id=task_id, group_id=group_id)
+    return AsyncTrace(
+        name,
+        root=root,
+        attrs=attrs,
+        job_id=job_id,
+        task_id=task_id,
+        group_id=group_id if group_id else str(uuid.uuid4()),
+    )
 
 
 def async_job(
