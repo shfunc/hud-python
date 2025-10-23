@@ -314,7 +314,6 @@ def _fire_and_forget_status_update(
     """Fire and forget status update - works in any context including Jupyter."""
     fire_and_forget(
         _update_task_status_async(
-            
             task_run_id,
             status,
             job_id,
