@@ -195,7 +195,7 @@ class GenericOpenAIChatAgent(MCPAgent):
             raise ValueError("openai_client is required for GenericOpenAIChatAgent")
         # default transport = OpenAI SDK
         return await self.oai.chat.completions.create(
-            model=self.model_name,
+            model=self.checkpoint_name,
             messages=messages,
             tools=tools,  # type: ignore ready ChatCompletionToolParam-shaped
             **extra,
