@@ -1113,9 +1113,7 @@ def convert(
                 hud_console.success(
                     "Tasks already reference remote MCP URLs. No conversion needed."
                 )
-                hud_console.hint(
-                    "You can run them directly with: hud eval <tasks_file> --full"
-                )
+                hud_console.hint("You can run them directly with: hud eval <tasks_file> --full")
                 return
         except Exception as e:
             # Best effort; continue with success message
@@ -1130,6 +1128,7 @@ def convert(
     except Exception as e:
         hud_console.error(f"Failed to convert tasks: {e}")
         raise typer.Exit(1) from e
+
 
 @app.command()
 def set(

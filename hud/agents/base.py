@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import fnmatch
 import json
 import logging
@@ -12,10 +11,9 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import mcp.types as types
 
+from hud.agents.utils import log_agent_metadata_to_status, log_task_config_to_current_trace
 from hud.types import AgentResponse, MCPToolCall, MCPToolResult, Trace
 from hud.utils.hud_console import HUDConsole
-from hud.agents.utils import log_task_config_to_current_trace, log_agent_metadata_to_status
-
 from hud.utils.mcp import MCPConfigPatch, patch_mcp_config, setup_hud_telemetry
 
 if TYPE_CHECKING:
@@ -202,7 +200,7 @@ class MCPAgent(ABC):
         self.console.info(
             f"Agent initialized with {len(self.get_available_tools())} tools: {', '.join([t.name for t in self.get_available_tools()])}"  # noqa: E501
         )
-        
+
         await log_agent_metadata_to_status(self.model_name, self.checkpoint_name)
 
     async def run(self, prompt_or_task: str | Task | dict[str, Any], max_steps: int = 10) -> Trace:

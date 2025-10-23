@@ -54,21 +54,21 @@ def increment_version(version_str: str, increment_type: str = "patch") -> str:
 
 def find_task_files_in_env(env_dir: Path) -> list[Path]:
     """Find all task files in an environment directory.
-    
+
     This looks for .json and .jsonl files that contain task definitions,
     excluding config files and lock files.
-    
+
     Args:
         env_dir: Environment directory to search
-        
+
     Returns:
         List of task file paths
     """
     task_files: list[Path] = []
-    
+
     # Find all .json and .jsonl files
     json_files = list(env_dir.glob("*.json")) + list(env_dir.glob("*.jsonl"))
-    
+
     # Filter out config files and lock files
     for file in json_files:
         # Skip hidden files, config files, and lock files
@@ -80,20 +80,22 @@ def find_task_files_in_env(env_dir: Path) -> list[Path]:
             or file.name.endswith(".lock.json")
         ):
             continue
-            
+
         # Check if it's a task file by looking for mcp_config
         try:
-            with open(file, "r", encoding="utf-8") as f:
+            with open(file, encoding="utf-8") as f:
                 content = json.load(f)
-                
+
             # It's a task file if it's a list with mcp_config entries
-            if isinstance(content, list) and len(content) > 0:
-                if any(isinstance(item, dict) and "mcp_config" in item for item in content):
-                    task_files.append(file)
-        except (json.JSONDecodeError, Exception):
-            # Skip files that can't be parsed
+            if (
+                isinstance(content, list)
+                and len(content) > 0
+                and any(isinstance(item, dict) and "mcp_config" in item for item in content)
+            ):
+                task_files.append(file)
+        except (json.JSONDecodeError, Exception):  # noqa: S112
             continue
-            
+
     return task_files
 
 
@@ -101,13 +103,13 @@ def update_tasks_json_versions(
     env_dir: Path, base_name: str, old_version: str | None, new_version: str
 ) -> list[Path]:
     """Update image references in tasks.json files to use the new version.
-    
+
     Args:
         env_dir: Environment directory
         base_name: Base image name (without version)
-        old_version: Previous version (if any) 
+        old_version: Previous version (if any)
         new_version: New version to use
-        
+
     Returns:
         List of updated task files
     """
@@ -116,71 +118,71 @@ def update_tasks_json_versions(
 
     for task_file in find_task_files_in_env(env_dir):
         try:
-            with open(task_file, "r", encoding="utf-8") as f:
+            with open(task_file, encoding="utf-8") as f:
                 tasks = json.load(f)
             if not isinstance(tasks, list):
                 continue
-                
+
             modified = False
-            
+
             # Process each task
             for task in tasks:
                 if not isinstance(task, dict) or "mcp_config" not in task:
                     continue
-                    
+
                 mcp_config = task["mcp_config"]
-                
+
                 # Handle local Docker format
                 if "local" in mcp_config and isinstance(mcp_config["local"], dict):
                     local_config = mcp_config["local"]
-                    
+
                     # Check for docker run args
                     if "args" in local_config and isinstance(local_config["args"], list):
                         for i, arg in enumerate(local_config["args"]):
-                            # Match image references like "deepresearch:latest" or "deepresearch:0.1.0"
+                            # Match image references
                             if isinstance(arg, str) and (
-                                arg == f"{base_name}:latest" or
-                                (old_version and arg == f"{base_name}:{old_version}") or
-                                re.match(rf"^{re.escape(base_name)}:\d+\.\d+\.\d+$", arg)
+                                arg == f"{base_name}:latest"
+                                or (old_version and arg == f"{base_name}:{old_version}")
+                                or re.match(rf"^{re.escape(base_name)}:\d+\.\d+\.\d+$", arg)
                             ):
                                 # Update to new version
                                 local_config["args"][i] = f"{base_name}:{new_version}"
                                 modified = True
-                                
+
                 # Handle HUD API format (remote MCP)
                 elif "hud" in mcp_config and isinstance(mcp_config["hud"], dict):
                     hud_config = mcp_config["hud"]
-                    
+
                     # Check headers for Mcp-Image
                     if "headers" in hud_config and isinstance(hud_config["headers"], dict):
                         headers = hud_config["headers"]
-                        
+
                         if "Mcp-Image" in headers:
                             image_ref = headers["Mcp-Image"]
-                            
+
                             # Match various image formats
                             if isinstance(image_ref, str) and ":" in image_ref:
                                 # Split into image name and tag
                                 image_name, _ = image_ref.rsplit(":", 1)
-                                
+
                                 if (
-                                    image_name == base_name or  # Exact match
-                                    image_name.endswith(f"/{base_name}")  # With prefix
+                                    image_name == base_name  # Exact match
+                                    or image_name.endswith(f"/{base_name}")  # With prefix
                                 ):
                                     # Update to new version, preserving the full image path
                                     headers["Mcp-Image"] = f"{image_name}:{new_version}"
                                     modified = True
-            
+
             # Save the file if modified
             if modified:
                 with open(task_file, "w") as f:
                     json.dump(tasks, f, indent=2)
                 updated_files.append(task_file)
                 hud_console.success(f"Updated {task_file.name} with version {new_version}")
-                
+
         except Exception as e:
             hud_console.warning(f"Could not update {task_file.name}: {e}")
-            
+
     return updated_files
 
 
@@ -519,25 +521,25 @@ def build_environment(
     # Extract environment variables from Dockerfile
     dockerfile_path = env_dir / "Dockerfile"
     required_env, optional_env = extract_env_vars_from_dockerfile(dockerfile_path)
-    
+
     # Show env vars detected from .env file
     if env_from_file:
-        hud_console.info(f"Detected environment variables from .env file: {', '.join(sorted(env_from_file.keys()))}")
+        hud_console.info(
+            f"Detected environment variables from .env file: {', '.join(sorted(env_from_file.keys()))}"  # noqa: E501
+        )
 
     # Create a complete set of all required variables for warning
     all_required_for_warning = set(required_env)
     all_required_for_warning.update(env_from_file.keys())
-    
+
     # Find which ones are missing (not provided via -e flags)
     all_missing = all_required_for_warning - set(env_vars.keys() if env_vars else [])
-    
+
     if all_missing:
         hud_console.warning(
             f"Environment variables not provided via -e flags: {', '.join(sorted(all_missing))}"
         )
-        hud_console.info(
-            "These will be added to the required list in the lock file"
-        )
+        hud_console.info("These will be added to the required list in the lock file")
 
     # Check for existing version and increment
     lock_path = env_dir / "hud.lock.yaml"
@@ -581,10 +583,10 @@ def build_environment(
     # Add environment variables section if any exist
     # Include env vars from .env file as well
     env_vars_from_file = set(env_from_file.keys()) if env_from_file else set()
-    
+
     # Check if we have any env vars to document
     has_env_vars = bool(required_env or optional_env or env_vars or env_vars_from_file)
-    
+
     if has_env_vars:
         lock_content["environment"]["variables"] = {}
 
@@ -596,17 +598,17 @@ def build_environment(
 
         # Combine all required variables: from Dockerfile, .env file, and provided vars
         all_required = set(required_env)
-        
+
         # Add all env vars from .env file to required
         all_required.update(env_vars_from_file)
-        
+
         # Add all provided env vars to required
         if env_vars:
             all_required.update(env_vars.keys())
-        
+
         # Remove any that are optional - they stay in optional
         all_required = all_required - set(optional_env)
-        
+
         if all_required:
             lock_content["environment"]["variables"]["required"] = sorted(list(all_required))
         if optional_env:
@@ -731,7 +733,7 @@ def build_environment(
     updated_task_files = update_tasks_json_versions(
         env_dir, base_name, existing_version, new_version
     )
-    
+
     if updated_task_files:
         hud_console.success(f"Updated {len(updated_task_files)} task file(s)")
     else:

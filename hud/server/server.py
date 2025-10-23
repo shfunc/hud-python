@@ -325,8 +325,7 @@ class MCPServer(FastMCP):
             if isinstance(middleware, list):
                 # Check if CORS is already configured
                 has_cors = any(
-                    isinstance(m, Middleware) and m.cls == CORSMiddleware
-                    for m in middleware
+                    isinstance(m, Middleware) and m.cls == CORSMiddleware for m in middleware
                 )
                 if not has_cors:
                     # Add CORS with permissive defaults for dev

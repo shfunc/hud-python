@@ -28,7 +28,9 @@ async def log_task_config_to_current_trace(task: Task) -> None:
         )
 
 
-async def log_agent_metadata_to_status(model_name: str | None = None, checkpoint_name: str | None = None) -> None:
+async def log_agent_metadata_to_status(
+    model_name: str | None = None, checkpoint_name: str | None = None
+) -> None:
     """Attach agent metadata (model/checkpoint) to current trace status metadata."""
     with contextlib.suppress(Exception):
         task_run_id = get_current_task_run_id()
@@ -46,5 +48,3 @@ async def log_agent_metadata_to_status(model_name: str | None = None, checkpoint
             "running",
             extra_metadata={"agent": agent_meta},
         )
-
-

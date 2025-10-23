@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import json
 import logging
-import contextlib
 from typing import Any
 
 from hud.settings import settings
@@ -109,7 +109,7 @@ def show_dev_ui(
 
     # Show panel with just the link
     # Center the link and style it: blue, bold, underlined
-    link_markup = f"[bold underline rgb(108,113,196)][link={live_trace_url}]{live_trace_url}[/link][/bold underline rgb(108,113,196)]"  # SECONDARY color
+    link_markup = f"[bold underline rgb(108,113,196)][link={live_trace_url}]{live_trace_url}[/link][/bold underline rgb(108,113,196)]"  # noqa: E501
     # Use center alignment by surrounding with spaces via justify
     from rich.align import Align
 
@@ -150,4 +150,6 @@ def generate_cursor_deeplink(server_name: str, port: int) -> str:
     server_config = {"url": f"http://localhost:{port}/mcp"}
     config_json = json.dumps(server_config, indent=2)
     config_base64 = base64.b64encode(config_json.encode()).decode()
-    return f"cursor://anysphere.cursor-deeplink/mcp/install?name={server_name}&config={config_base64}"
+    return (
+        f"cursor://anysphere.cursor-deeplink/mcp/install?name={server_name}&config={config_base64}"
+    )

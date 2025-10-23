@@ -314,4 +314,4 @@ def require_docker_running() -> None:
     except Exception:
         # Unknown failure - keep output minimal and avoid stack traces
         hud_console.hint("Is the Docker daemon running?")
-        raise typer.Exit(1) # noqa: B904
+        raise typer.Exit(1)  # noqa: B904

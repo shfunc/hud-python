@@ -303,7 +303,7 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
         hud_console.error("No hud.lock.yaml found. The environment needs to be built first.")
         hud_console.info("Run 'hud build' in the environment directory to build it.")
         raise typer.Exit(1)
-    
+
     # Load lock data directly
     try:
         with open(lock_path) as f:
@@ -311,7 +311,7 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
     except Exception as e:
         hud_console.error(f"Failed to read hud.lock.yaml: {e}")
         raise typer.Exit(1) from e
-    
+
     # Check if pushed - don't check Docker for convert command
     lock_data = _ensure_pushed(env_dir, lock_data, check_docker=False)
 
@@ -482,5 +482,5 @@ def convert_tasks_to_remote(tasks_file: str) -> str:
         f.write("\n")
 
     hud_console.success(f"Created remote tasks file: {remote_path.name}")
-    
+
     return str(remote_path)

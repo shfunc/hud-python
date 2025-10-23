@@ -302,9 +302,7 @@ async def run_single_task(
             )
             if not proceed:
                 # Provide a helpful next step
-                hud_console.hint(
-                    "You can convert tasks to remote with: hud convert <tasks_file>"
-                )
+                hud_console.hint("You can convert tasks to remote with: hud convert <tasks_file>")
                 raise typer.Exit(1)
             # Always show the convert hint for awareness
             hud_console.hint(

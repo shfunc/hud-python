@@ -432,10 +432,10 @@ def run_with_reload(
 
         if verbose:
             cmd.append("--verbose")
-            
+
         if new:
             cmd.append("--new")
-            
+
         if verbose:
             hud_console.info(f"Starting: {' '.join(cmd)}")
 
@@ -502,7 +502,12 @@ def run_with_reload(
 
 
 def run_docker_dev_server(
-    port: int, verbose: bool, inspector: bool, interactive: bool, docker_args: list[str], new: bool = False
+    port: int,
+    verbose: bool,
+    inspector: bool,
+    interactive: bool,
+    docker_args: list[str],
+    new: bool = False,
 ) -> None:
     """Run MCP server in Docker with volume mounts, expose via local HTTP proxy."""
     import typer
