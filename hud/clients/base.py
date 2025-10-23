@@ -333,7 +333,7 @@ class BaseHUDClient(AgentMCPClient):
             tool_info = {
                 "name": tool.name,
                 "description": tool.description,
-                "input_schema": tool.inputSchema,
+                "inputSchema": tool.inputSchema,
             }
             analysis["tools"].append(tool_info)
 

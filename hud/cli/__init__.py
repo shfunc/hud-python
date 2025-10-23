@@ -382,6 +382,11 @@ def dev(
         "--watch",
         help="Additional directories to watch for changes (default: current directory)",
     ),
+    new: bool = typer.Option(
+        False,
+        "--new",
+        help="Show Cursor installation link for new server setup",
+    ),
 ) -> None:
     """🔥 Development mode - run MCP server with hot-reload.
 
@@ -422,6 +427,7 @@ def dev(
         watch,
         docker=docker,
         docker_args=docker_args,
+        new=new,
     )
 
 
@@ -1077,6 +1083,51 @@ def rl(
         yes=yes,
         skip_vllm_startup=skip_vllm_startup,
     )
+
+
+@app.command()
+def convert(
+    tasks_file: str = typer.Argument(
+        ..., help="Path to tasks file (JSON/JSONL) to convert to remote MCP configuration"
+    ),
+) -> None:
+    """Convert local MCP task configs to remote (mcp.hud.so) format.
+
+    This mirrors the implicit conversion flow used by 'hud rl' and writes a new
+    remote_<name>.json next to the source file when needed.
+    """
+    from pathlib import Path
+
+    from hud.utils.hud_console import HUDConsole
+
+    hud_console = HUDConsole()
+
+    try:
+        from .flows.tasks import convert_tasks_to_remote
+
+        result_path = convert_tasks_to_remote(tasks_file)
+
+        # If nothing changed, inform the user
+        try:
+            if Path(result_path).resolve() == Path(tasks_file).resolve():
+                hud_console.success(
+                    "Tasks already reference remote MCP URLs. No conversion needed."
+                )
+                hud_console.hint("You can run them directly with: hud eval <tasks_file> --full")
+                return
+        except Exception as e:
+            # Best effort; continue with success message
+            hud_console.debug(f"Path comparison failed, continuing: {e}")
+
+        hud_console.success(f"Converted tasks written to: {result_path}")
+        hud_console.hint(
+            "You can now run remote flows: hud rl <converted_file> or hud eval <converted_file>"
+        )
+    except typer.Exit:
+        raise
+    except Exception as e:
+        hud_console.error(f"Failed to convert tasks: {e}")
+        raise typer.Exit(1) from e
 
 
 @app.command()
