@@ -25,6 +25,7 @@ def show_dev_server_info(
     inspector: bool,
     interactive: bool,
     env_dir: Path | None = None,
+    new: bool = False,
 ) -> str:
     """Show consistent server info for both Python and Docker modes.
 
@@ -125,6 +126,7 @@ async def run_mcp_module(
     verbose: bool,
     inspector: bool,
     interactive: bool,
+    new: bool = False,
 ) -> None:
     """Run an MCP module directly."""
     # Check if this is a reload (not first run)
@@ -222,9 +224,9 @@ async def run_mcp_module(
 
     # Show server info only on first run
     if not is_reload:
-        # Try dynamic trace first for HTTP mode
+        # Try dynamic trace first for HTTP mode (only if --new)
         live_trace_url: str | None = None
-        if transport == "http":
+        if transport == "http" and new:
             try:
                 local_mcp_config: dict[str, dict[str, Any]] = {
                     "hud": {
@@ -244,7 +246,7 @@ async def run_mcp_module(
                 pass
 
         # Show UI using shared flow logic
-        if transport == "http" and live_trace_url:
+        if transport == "http" and live_trace_url and new:
             # Minimal UI with live trace
             from hud.cli.flows.dev import generate_cursor_deeplink, show_dev_ui
 
@@ -267,6 +269,7 @@ async def run_mcp_module(
                 inspector=inspector,
                 interactive=interactive,
                 env_dir=Path.cwd().parent if (Path.cwd().parent / "environment").exists() else None,
+                new=new,
             )
 
     # Check if there's an environment backend and remind user to start it (first run only)
@@ -386,6 +389,7 @@ def run_with_reload(
     verbose: bool,
     inspector: bool,
     interactive: bool,
+    new: bool = False,
 ) -> None:
     """Run module with file watching and auto-reload."""
     try:
@@ -428,6 +432,11 @@ def run_with_reload(
 
         if verbose:
             cmd.append("--verbose")
+            
+        if new:
+            cmd.append("--new")
+            
+        if verbose:
             hud_console.info(f"Starting: {' '.join(cmd)}")
 
         # Mark as reload after first run to suppress logs
@@ -493,7 +502,7 @@ def run_with_reload(
 
 
 def run_docker_dev_server(
-    port: int, verbose: bool, inspector: bool, interactive: bool, docker_args: list[str]
+    port: int, verbose: bool, inspector: bool, interactive: bool, docker_args: list[str], new: bool = False
 ) -> None:
     """Run MCP server in Docker with volume mounts, expose via local HTTP proxy."""
     import typer
@@ -586,25 +595,26 @@ def run_docker_dev_server(
     from hud.cli.flows.dev import create_dynamic_trace, generate_cursor_deeplink, show_dev_ui
 
     live_trace_url: str | None = None
-    try:
-        local_mcp_config: dict[str, dict[str, Any]] = {
-            "hud": {
-                "url": f"http://localhost:{port}/mcp",
-                "headers": {},
+    if new:
+        try:
+            local_mcp_config: dict[str, dict[str, Any]] = {
+                "hud": {
+                    "url": f"http://localhost:{port}/mcp",
+                    "headers": {},
+                }
             }
-        }
-        live_trace_url = _asy.run(
-            create_dynamic_trace(
-                mcp_config=local_mcp_config,
-                build_status=True,
-                environment_name=image_name,
+            live_trace_url = _asy.run(
+                create_dynamic_trace(
+                    mcp_config=local_mcp_config,
+                    build_status=True,
+                    environment_name=image_name,
+                )
             )
-        )
-    except Exception:  # noqa: S110
-        pass
+        except Exception:  # noqa: S110
+            pass
 
     # Show appropriate UI
-    if live_trace_url:
+    if live_trace_url and new:
         # Minimal UI with live trace
         cursor_deeplink = generate_cursor_deeplink(image_name, port)
         show_dev_ui(
@@ -627,6 +637,7 @@ def run_docker_dev_server(
             inspector=inspector,
             interactive=interactive,
             env_dir=env_dir,
+            new=new,
         )
         hud_console.dim_info(
             "",
@@ -690,6 +701,7 @@ def run_mcp_dev_server(
     watch: list[str] | None,
     docker: bool = False,
     docker_args: list[str] | None = None,
+    new: bool = False,
 ) -> None:
     """Run MCP development server with hot-reload."""
     docker_args = docker_args or []
@@ -700,12 +712,12 @@ def run_mcp_dev_server(
         hud_console.note("Detected Dockerfile - using Docker mode with volume mounts")
         hud_console.dim_info("Tip", "Use 'hud dev --help' to see all options")
         hud_console.info("")
-        run_docker_dev_server(port, verbose, inspector, interactive, docker_args)
+        run_docker_dev_server(port, verbose, inspector, interactive, docker_args, new)
         return
 
     # Route to Docker mode if explicitly requested
     if docker:
-        run_docker_dev_server(port, verbose, inspector, interactive, docker_args)
+        run_docker_dev_server(port, verbose, inspector, interactive, docker_args, new)
         return
 
     transport = "stdio" if stdio else "http"
@@ -749,6 +761,6 @@ def run_mcp_dev_server(
     is_child = os.environ.get("_HUD_DEV_CHILD") == "1"
 
     if is_child:
-        asyncio.run(run_mcp_module(module, transport, port, verbose, False, False))
+        asyncio.run(run_mcp_module(module, transport, port, verbose, False, False, new))
     else:
-        run_with_reload(module, watch_paths, transport, port, verbose, inspector, interactive)
+        run_with_reload(module, watch_paths, transport, port, verbose, inspector, interactive, new)

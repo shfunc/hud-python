@@ -382,6 +382,11 @@ def dev(
         "--watch",
         help="Additional directories to watch for changes (default: current directory)",
     ),
+    new: bool = typer.Option(
+        False,
+        "--new",
+        help="Show Cursor installation link for new server setup",
+    ),
 ) -> None:
     """🔥 Development mode - run MCP server with hot-reload.
 
@@ -422,6 +427,7 @@ def dev(
         watch,
         docker=docker,
         docker_args=docker_args,
+        new=new,
     )
 
 
