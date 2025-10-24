@@ -216,11 +216,14 @@ class BaseHUDClient(AgentMCPClient):
     async def list_resources(self) -> list[types.Resource]:
         """List all available resources.
 
+        Uses cached resources if available, otherwise fetches from the server.
+
         Returns:
             List of available resources.
         """
-        # Fetch fresh resources and update cache
-        self._cached_resources = await self._list_resources_impl()
+        # If cache is empty, populate it
+        if not self._cached_resources:
+            self._cached_resources = await self._list_resources_impl()
         return self._cached_resources
 
     @abstractmethod
@@ -282,9 +285,10 @@ class BaseHUDClient(AgentMCPClient):
     async def _fetch_telemetry(self) -> None:
         """Common telemetry fetching for all hud clients."""
         try:
-            # First check if telemetry resource is available using cached resources
+            # Get resources (will use cache if available, otherwise fetch)
+            resources = await self.list_resources()
             telemetry_available = any(
-                str(resource.uri) == "telemetry://live" for resource in self._cached_resources
+                str(resource.uri) == "telemetry://live" for resource in resources
             )
 
             if not telemetry_available:
