@@ -13,6 +13,8 @@ import threading
 from pathlib import Path
 from typing import Any
 
+import typer
+
 from hud.utils.hud_console import HUDConsole
 
 hud_console = HUDConsole()
@@ -711,6 +713,20 @@ def run_mcp_dev_server(
     """Run MCP development server with hot-reload."""
     docker_args = docker_args or []
     cwd = Path.cwd()
+
+    # Find an available port if not using stdio transport
+    if not stdio:
+        from hud.cli.utils.logging import find_free_port
+
+        actual_port = find_free_port(port)
+        if actual_port is None:
+            hud_console.error(f"No available ports found starting from {port}")
+            raise typer.Exit(1)
+
+        if actual_port != port:
+            hud_console.info(f"Port {port} is in use, using port {actual_port} instead")
+
+        port = actual_port
 
     # Auto-detect Docker mode if Dockerfile present and no module specified
     if not docker and module is None and should_use_docker_mode(cwd):
