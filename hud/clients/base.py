@@ -214,14 +214,12 @@ class BaseHUDClient(AgentMCPClient):
         raise NotImplementedError
 
     async def list_resources(self) -> list[types.Resource]:
-        """List all available resources with optional caching.
-
-        Args:
-            use_cache: If True, use cached resources if available. Default is False.
+        """List all available resources.
 
         Returns:
             List of available resources.
         """
+        # Fetch fresh resources and update cache
         self._cached_resources = await self._list_resources_impl()
         return self._cached_resources
 
@@ -284,8 +282,9 @@ class BaseHUDClient(AgentMCPClient):
     async def _fetch_telemetry(self) -> None:
         """Common telemetry fetching for all hud clients."""
         try:
+            # First check if telemetry resource is available using cached resources
             telemetry_available = any(
-                resource.uri == "telemetry://live" for resource in self._cached_resources
+                str(resource.uri) == "telemetry://live" for resource in self._cached_resources
             )
 
             if not telemetry_available:
