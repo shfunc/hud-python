@@ -741,14 +741,14 @@ def remove(
 
 @app.command()
 def init(
-    name: str = typer.Argument(None, help="Environment name (default: current directory name)"),
+    name: str = typer.Argument(None, help="Environment name (default: chosen preset name)"),
     preset: str | None = typer.Option(
         None,
         "--preset",
         "-p",
         help="Preset to use: blank, deep-research, browser, rubrics. If omitted, you'll choose interactively.",  # noqa: E501
     ),
-    directory: str = typer.Option(".", "--dir", "-d", help="Target directory"),
+    directory: str = typer.Option(".", "--dir", "-d", help="Parent directory for the environment"),
     force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing files"),
 ) -> None:
     """🚀 Initialize a new HUD environment with minimal boilerplate.
@@ -760,8 +760,8 @@ def init(
     - Required setup/evaluate tools
 
     Examples:
-        hud init                    # Use current directory name
-        hud init my-env             # Create in ./my-env/
+        hud init                    # Choose preset interactively, create ./preset-name/
+        hud init my-env             # Create new directory ./my-env/
         hud init my-env --dir /tmp  # Create in /tmp/my-env/
     """
     create_environment(name, directory, force, preset)

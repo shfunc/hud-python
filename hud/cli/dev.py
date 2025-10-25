@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import importlib
 import importlib.util
 import logging
@@ -28,6 +29,7 @@ def show_dev_server_info(
     interactive: bool,
     env_dir: Path | None = None,
     new: bool = False,
+    docker_mode: bool = False,
 ) -> str:
     """Show consistent server info for both Python and Docker modes.
 
@@ -57,6 +59,12 @@ def show_dev_server_info(
         hud_console.section_title("Quick Links")
         hud_console.info(f"{hud_console.sym.ITEM} Docs: http://localhost:{port}/docs")
         hud_console.info(f"{hud_console.sym.ITEM} Cursor: {cursor_deeplink}")
+
+        # Show eval endpoint if in Docker mode
+        if docker_mode:
+            hud_console.info(
+                f"{hud_console.sym.ITEM} Eval API: http://localhost:{port}/eval (POST)"
+            )
 
         # Check for VNC (browser environment)
         if env_dir and (env_dir / "environment" / "server.py").exists():
@@ -512,6 +520,9 @@ def run_docker_dev_server(
     new: bool = False,
 ) -> None:
     """Run MCP server in Docker with volume mounts, expose via local HTTP proxy."""
+    import atexit
+    import signal
+
     import typer
     import yaml
 
@@ -523,6 +534,69 @@ def run_docker_dev_server(
     require_docker_running()
 
     cwd = Path.cwd()
+
+    # Container name will be set later and used for cleanup
+    container_name: str | None = None
+    cleanup_done = False
+
+    def cleanup_container() -> None:
+        """Clean up Docker container on exit."""
+        nonlocal cleanup_done
+        if cleanup_done or not container_name:
+            return
+
+        cleanup_done = True
+        hud_console.debug(f"Cleaning up container: {container_name}")
+
+        # Check if container is still running
+        try:
+            result = subprocess.run(  # noqa: S603
+                ["docker", "ps", "-q", "-f", f"name={container_name}"],  # noqa: S607
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=5,
+            )
+            if not result.stdout.strip():
+                # Container is not running, just try to remove it
+                subprocess.run(  # noqa: S603
+                    ["docker", "rm", "-f", container_name],  # noqa: S607
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=5,
+                )
+                return
+        except Exception:  # noqa: S110
+            pass
+
+        try:
+            # First try to stop gracefully
+            subprocess.run(  # noqa: S603
+                ["docker", "stop", container_name],  # noqa: S607
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+            )
+            hud_console.debug(f"Container {container_name} stopped successfully")
+        except subprocess.TimeoutExpired:
+            # Force kill if stop times out
+            hud_console.debug(f"Container {container_name} stop timeout, forcing kill")
+            with contextlib.suppress(Exception):
+                subprocess.run(  # noqa: S603
+                    ["docker", "kill", container_name],  # noqa: S607
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=5,
+                )
+
+    # Set up signal handlers for cleanup
+    def signal_handler(signum: int, frame: Any) -> None:
+        cleanup_container()
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, signal_handler)
+    if sys.platform != "win32":
+        signal.signal(signal.SIGHUP, signal_handler)
 
     # Find environment directory (current or parent with hud.lock.yaml)
     env_dir = cwd
@@ -564,10 +638,14 @@ def run_docker_dev_server(
     base_name = image_name.replace(":", "-").replace("/", "-")
     container_name = f"{base_name}-dev-{pid}"
 
+    # Register cleanup function with atexit
+    atexit.register(cleanup_container)
+
     # Build docker run command with volume mounts and folder-mode envs
     from .utils.docker import create_docker_run_command
 
     base_args = [
+        "--rm",  # Automatically remove container when it stops
         "--name",
         container_name,
         "-v",
@@ -645,6 +723,7 @@ def run_docker_dev_server(
             interactive=interactive,
             env_dir=env_dir,
             new=new,
+            docker_mode=True,
         )
         hud_console.dim_info(
             "",
@@ -681,6 +760,11 @@ def run_docker_dev_server(
             os.environ["_HUD_DEV_DOCKER_CONTAINER"] = container_name
             hud_console.debug(f"Docker container: {container_name}")
 
+        # Store the docker mcp_config for the eval endpoint
+        import json
+
+        os.environ["_HUD_DEV_DOCKER_MCP_CONFIG"] = json.dumps(mcp_config)
+
         # Create FastMCP proxy using the ProxyClient
         fastmcp_proxy = FastMCP.as_proxy(proxy_client)
 
@@ -715,7 +799,15 @@ def run_docker_dev_server(
         asyncio.run(run_proxy())
     except KeyboardInterrupt:
         hud_console.info("\n\nStopping...")
+        cleanup_container()
         raise typer.Exit(0) from None
+    except Exception:
+        # Ensure cleanup happens on any exception
+        cleanup_container()
+        raise
+    finally:
+        # Final cleanup attempt
+        cleanup_container()
 
 
 def run_mcp_dev_server(
