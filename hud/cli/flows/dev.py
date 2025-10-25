@@ -47,11 +47,11 @@ async def create_dynamic_trace(
 
     try:
         resp = await make_request("POST", url=url, json=payload, api_key=api_key)
-        # New API returns an id; construct the URL as https://hud.so/trace/{id}
+        # New API returns an id; construct the URL as https://hud.ai/trace/{id}
         trace_id = resp.get("id")
 
         if isinstance(trace_id, str) and trace_id:
-            return trace_id, f"https://hud.so/trace/{trace_id}"
+            return trace_id, f"https://hud.ai/trace/{trace_id}"
         return None, None
     except Exception as e:
         # Do not interrupt dev flow
@@ -114,7 +114,9 @@ def show_dev_ui(
     label = "Base image" if is_docker else "Server"
     hud_console.info("")
     hud_console.info(f"{hud_console.sym.ITEM} {label}: {server_name}")
-    hud_console.info(f"{hud_console.sym.ITEM} Cursor: {cursor_deeplink}")
+    hud_console.info(f"{hud_console.sym.ITEM} Cursor:")
+    # Display the Cursor link on its own line to prevent wrapping
+    hud_console.link(cursor_deeplink)
     hud_console.info("")
     hud_console.info(f"{hud_console.sym.SUCCESS} Hot-reload enabled")
     if is_docker:
