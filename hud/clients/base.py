@@ -140,7 +140,7 @@ class BaseHUDClient(AgentMCPClient):
                     raise HudAuthenticationError(
                         f'Sending authorization "{headers.get("Authorization", "")}", which may'
                         " be incomplete. Ensure HUD_API_KEY environment variable is set or send it"
-                        " as a header. You can get an API key at https://hud.so"
+                        " as a header. You can get an API key at https://hud.ai"
                     )
             # Subclasses implement connection
             await self._connect(self._mcp_config)
