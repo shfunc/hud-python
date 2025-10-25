@@ -788,7 +788,7 @@ class MCPServer(FastMCP):
                                 os.unlink(task_file)
 
                     # Start the evaluation in the background (fire and forget)
-                    asyncio.create_task(run_eval_background()) # noqa: RUF006
+                    asyncio.create_task(run_eval_background())  # noqa: RUF006
 
                     # Return immediately
                     response_data = {
