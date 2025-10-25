@@ -1,27 +1,40 @@
-# Rubrics Environment
+# SEC EDGAR Rubrics Environment
 
-Web research environment powered by Exa API for searching and fetching content, with rubric-based evaluation for structured grading.
+SEC filing research environment powered by the SEC EDGAR database for accessing company filings and financial data, with rubric-based evaluation for structured grading provided by [The LLM Data Company](https://llmdata.com).
+
 See [docs](https://docs.hud.so/build-environments) for the complete environment design workflow.
 
 ## Architecture
 
-**`environment/`** - Manages Exa API integration and state
-- Holds the Exa API key server-side
-- Exposes HTTP endpoints `/search`, `/fetch`, `/answer`, `/evaluate` for research workflows
-- Implements exponential backoff for rate limiting
+**`environment/`** - Manages SEC EDGAR and web search integration
+- Uses the edgartools Python library to access SEC filing data
+- Integrates with Exa API for supplementary web search capabilities
+- Exposes HTTP endpoints for research workflows with exponential backoff for rate limiting
 
 **`server/`** - Wraps data in MCP tools
-- Provides `search()`, `fetch()`, `answer()`, `evaluate()` tools for agents
+- Provides research tools for agents to access SEC filings, financial data, and web search
 - Agents and tasks interact only with these tools
 
 **Why separate?** Edit tools for the agent or tasks without restarting the environment backend.
 
 ## Tools
 
-- **`search(query: str)`** - Search the web using Exa API, returns list of results with titles and URLs
-- **`fetch(url: str)`** - Fetch full content from a URL, returns summary, highlights, and text
-- **`answer(final_answer: str)`** - Submit the final research answer
-- **`evaluate(rubric: list[dict])`** - Evaluate submitted answer using a structured rubric with weighted requirements
+### SEC EDGAR Tools
+- **`setup()`** - Initialize the environment and reset state.
+- **`search_company(query: str)`** - Search for a company by ticker symbol or name. Returns company information including ticker, name, and CIK.
+- **`get_filings(ticker?: str, form_type?: str, limit?: int, cutoff_date?: str)`** - Get SEC filings. When `ticker` is provided, returns company-specific filings. Otherwise, returns global recent filings. Can filter by form type (e.g., "10-K", "10-Q", "8-K"), limit results, and filter by date (YYYY-MM-DD).
+- **`get_filing_content(filing_url: str)`** - Fetch the full text content of a specific SEC filing from its URL.
+- **`get_financial_data(ticker: str, accession_number: str)`** - Extract financial statements and key metrics from a 10-K or 10-Q filing. Returns income statement, balance sheet, cash flow, and other financial data.
+- **`get_segment_data(ticker: str, accession_number: str)`** - Extract segment-level financial data from a 10-K or 10-Q filing for companies with multiple business segments.
+- **`get_filing_sections(ticker: str, accession_number: str)`** - Extract specific sections from a 10-K or 10-Q filing (e.g., Business, Risk Factors, MD&A).
+
+### Web Search Tools
+- **`web_search(query: str)`** - Search the web using Exa API. Returns titles and URLs of relevant results.
+- **`web_fetch(url: str)`** - Fetch and extract content from a web URL. Returns summary, highlights, and full content.
+
+### Evaluation Tools
+- **`answer(final_answer: str)`** - Submit the final research answer.
+- **`evaluate(rubric: list[dict])`** - Evaluate submitted answer using a structured rubric with weighted requirements.
 
 ### Rubric-Based Evaluation
 
@@ -29,12 +42,28 @@ The `evaluate` tool uses The LLM Data Company's [rubric](https://github.com/The-
 
 ## Setup
 
-### Requirements
-- Exa API key (get one at [exa.ai](https://exa.ai))
-
 ### Environment Variables
+
+The environment requires several API keys and configuration:
+
+**Required:**
+- `EDGAR_IDENTITY` - Your identity for SEC EDGAR access (required by SEC regulations)
+  - Format: `"Your Name your.email@example.com"`
+
+**Optional:**
+- `EXA_API_KEY` - For web search and content fetching capabilities (if using web_search/web_fetch tools)
+- `HUD_API_KEY` - For HUD telemetry and tracing
+- `ANTHROPIC_API_KEY` - For Claude agent (if using Claude)
+- `OPENAI_API_KEY` - For rubric evaluation (if using OpenAI-based autograders)
+
+Add these to your .env before running `hud eval`:
 ```bash
-export EXA_API_KEY="your_exa_api_key_here"
+export EDGAR_IDENTITY="Your Name your.email@example.com"
+export EXA_API_KEY="your-exa-key" # optional, for web search
+export ANTHROPIC_API_KEY="your-anthropic-key" # only if using an Anthropic model
+export OPENAI_API_KEY="your-openai-key"
+# Optional
+export HUD_API_KEY="your-hud-key"
 ```
 
 ## Development
@@ -42,7 +71,8 @@ export EXA_API_KEY="your_exa_api_key_here"
 ```bash
 # Terminal 1 - Environment backend
 cd environment
-export EXA_API_KEY="your_key"
+export EDGAR_IDENTITY="Your Name your.email@example.com"
+export EXA_API_KEY="your-exa-key"  # optional, for web search
 uv run uvicorn server:app --reload
 
 # Terminal 2 - MCP server
@@ -57,14 +87,13 @@ In general, we recommend starting work on the environment backend first, then de
 For complex environments that require many dependencies, we recommend running `hud dev` in the environment root:
 ```bash
 cd ..
-export EXA_API_KEY="your_key"
 hud dev
 ```
 
 ## Tasks & Evaluation
 
 ```bash
-# Build first in the global folder with the Dockerfile (creates rubrics:0.1.0)
+# Build first in the global folder with the Dockerfile (creates rubrics:latest)
 hud build
 ```
 
@@ -72,32 +101,23 @@ Your `tasks.json` uses `docker run` to launch the environment:
 
 ```json
 {
-  "prompt": "Research and answer: What is the capital of France?",
+  "prompt": "Analyze Tesla's FY2024 10-K filing...",
   "mcp_config": {
     "local": {
       "command": "docker",
-      "args": ["run", "--rm", "-i", "-e", "EXA_API_KEY", "rubrics:latest"]
+      "args": ["run", "--rm", "-i", "rubrics:latest"]
     }
   },
   "evaluate_tool": {
     "name": "evaluate",
     "arguments": {
-      "rubric": [
-        {
-          "requirement": "Correctly identifies Paris as the capital of France",
-          "weight": 5
-        },
-        {
-          "requirement": "Provides additional context about Paris (population, history, or geography)",
-          "weight": 10
-        }
-      ]
+      "rubric": [...]
     }
   }
 }
 ```
 
-**Note:** The `-e EXA_API_KEY` flag passes your local API key to the container.
+**Note:** Export environment variables before running. The Docker container will inherit them from your shell.
 
 **Commands:**
 ```bash
@@ -105,8 +125,11 @@ Your `tasks.json` uses `docker run` to launch the environment:
 hud build
 
 # Test task locally
-export EXA_API_KEY="your_key"
-hud eval tasks.json
+export EDGAR_IDENTITY="Your Name your.email@example.com"
+export EXA_API_KEY="your-exa-key"  # optional, for web search
+export ANTHROPIC_API_KEY="your-anthropic-key"
+export OPENAI_API_KEY="your-openai-key"
+hud eval tasks.json --max-steps 25
 
 # Push environment for remote running
 hud push
@@ -164,19 +187,53 @@ hud eval "your-org/your-dataset" --agent claude
 ## Example Research Workflow
 
 ```python
-# Agent searches for information
-results = search("latest AI developments 2024")
+# Initialize environment
+setup()
 
-# Agent fetches detailed content from top result
-content = fetch(results[0]["url"])
+# Agent searches for a company
+company_info = search_company("TSLA")
+# Returns: [{"ticker": "TSLA", "name": "Tesla Inc", "cik": "1318605"}]
+
+# Agent gets recent filings
+filings = get_filings(ticker="TSLA", form_type="10-K", limit=1)
+# Returns: [{"filing_date": "2024-01-01", "form_type": "10-K", "accession_number": "...", "filing_url": "..."}]
+
+# Agent extracts financial data
+financial_data = get_financial_data(ticker="TSLA", accession_number=filings[0]["accession_number"])
+# Returns: {"has_financials": True, "financial_data": {...income statement, balance sheet, etc...}}
+
+# Agent gets specific sections from the filing
+sections = get_filing_sections(ticker="TSLA", accession_number=filings[0]["accession_number"])
+# Returns: {"sections": {"business": "...", "risk_factors": "...", "mda": "..."}}
+
+# Agent uses web search for additional context
+search_results = web_search("Tesla FY2024 revenue analysis")
+# Returns: [{"title": "...", "url": "..."}]
+
+# Agent fetches web content
+web_content = web_fetch(search_results[0]["url"])
+# Returns: "=== SUMMARY ===\n...\n=== KEY HIGHLIGHTS ===\n...\n=== FULL CONTENT ===\n..."
 
 # Agent submits final answer
-answer("Based on research, AI developments in 2024 include...")
+answer("Based on Tesla's FY2024 10-K, revenue was $96.8B...")
 
 # Evaluate answer using rubric
 result = evaluate(rubric=[
-    {"requirement": "Mentions at least 3 specific AI developments", "weight": 15},
-    {"requirement": "Includes dates or timeframes for developments", "weight": 5},
+    {"requirement": "Correctly states FY2024 revenue", "weight": 15},
+    {"requirement": "Provides segment breakdown", "weight": 5},
 ])
 # Returns: {"reward": float, "info": {"report": [...]}, "done": True}
 ```
+
+## Dependencies
+
+- **edgartools**: Python library for accessing SEC EDGAR data
+- **fastapi**: Web framework for the environment server
+- **httpx**: HTTP client for API calls
+- **rubric**: LLM Data Company's rubric evaluation package
+- **Exa API**: Web search and content extraction (optional, for web_search/web_fetch tools)
+
+## Acknowledgments
+
+* [EdgarTools](https://github.com/dgunning/edgartools) - Python library to access SEC EDGAR
+* [SEC EDGAR MCP](https://github.com/stefanoamorelli/sec-edgar-mcp) - Rich OSS SEC MCP server
