@@ -114,7 +114,9 @@ def show_dev_ui(
     label = "Base image" if is_docker else "Server"
     hud_console.info("")
     hud_console.info(f"{hud_console.sym.ITEM} {label}: {server_name}")
-    hud_console.info(f"{hud_console.sym.ITEM} Cursor: {cursor_deeplink}")
+    hud_console.info(f"{hud_console.sym.ITEM} Cursor:")
+    # Display the Cursor link on its own line to prevent wrapping
+    hud_console.link(cursor_deeplink)
     hud_console.info("")
     hud_console.info(f"{hud_console.sym.SUCCESS} Hot-reload enabled")
     if is_docker:

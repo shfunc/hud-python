@@ -253,10 +253,23 @@ def debug(
         else:
             # Assume it's an image name
             image = first_param
-            from .utils.docker import build_run_command
+            from .utils.docker import create_docker_run_command
 
-            # Image-only mode: do not auto-inject local .env
-            command = build_run_command(image, docker_args)
+            # For image mode, check if there's a .env file in current directory
+            # and use it if available (similar to hud dev behavior)
+            cwd = Path.cwd()
+            if (cwd / ".env").exists():
+                # Use create_docker_run_command to load .env from current directory
+                command = create_docker_run_command(
+                    image,
+                    docker_args=docker_args,
+                    env_dir=cwd,  # Load .env from current directory
+                )
+            else:
+                # No .env file, use basic command without env loading
+                from .utils.docker import build_run_command
+
+                command = build_run_command(image, docker_args)
     else:
         console.print(
             "[red]Error: Must specify a directory, Docker image, --config, or --cursor[/red]"

@@ -58,7 +58,9 @@ def show_dev_server_info(
     if transport == "http":
         hud_console.section_title("Quick Links")
         hud_console.info(f"{hud_console.sym.ITEM} Docs: http://localhost:{port}/docs")
-        hud_console.info(f"{hud_console.sym.ITEM} Cursor: {cursor_deeplink}")
+        hud_console.info(f"{hud_console.sym.ITEM} Cursor:")
+        # Display the Cursor link on its own line to prevent wrapping
+        hud_console.link(cursor_deeplink)
 
         # Show eval endpoint if in Docker mode
         if docker_mode:
