@@ -16,6 +16,7 @@ from .registry import (
     extract_digest_from_image,
     list_registry_entries,
     load_from_registry,
+    resolve_lock_image,
 )
 
 console = Console()
@@ -150,7 +151,12 @@ async def analyze_from_metadata(reference: str, output_format: str, verbose: boo
                 # Save to local cache for next time
                 from .registry import save_to_registry
 
-                save_to_registry(lock_data, lock_data.get("image", ""), verbose=False)
+                image_ref = (
+                    resolve_lock_image(lock_data, prefer="full")
+                    or resolve_lock_image(lock_data)
+                    or ""
+                )
+                save_to_registry(lock_data, image_ref, verbose=False)
             else:
                 progress.update(task, description="[red]✗ Not found[/red]")
 
@@ -176,8 +182,10 @@ async def analyze_from_metadata(reference: str, output_format: str, verbose: boo
     }
 
     # Add basic info
-    if "image" in lock_data:
-        analysis["image"] = lock_data["image"]
+    if isinstance(lock_data, dict):
+        image_ref = resolve_lock_image(lock_data, prefer="full") or resolve_lock_image(lock_data)
+        if image_ref:
+            analysis["image"] = image_ref
 
     if "build" in lock_data:
         analysis["build_info"] = lock_data["build"]
@@ -198,11 +206,13 @@ async def analyze_from_metadata(reference: str, output_format: str, verbose: boo
     # Extract tools
     if "tools" in lock_data:
         for tool in lock_data["tools"]:
+            internal = tool.get("internalTools") or tool.get("internal")
             analysis["tools"].append(
                 {
                     "name": tool["name"],
                     "description": tool.get("description", ""),
                     "inputSchema": tool.get("inputSchema", {}) if verbose else None,
+                    "internalTools": internal,
                 }
             )
 

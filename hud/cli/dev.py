@@ -485,7 +485,7 @@ def run_docker_dev_server(
 
         # Get image from new or legacy format
         images = lock_data.get("images", {})
-        image_name = images.get("local") or lock_data.get("image")
+        image_name = images.get("local") or images.get("full") or lock_data.get("image")
 
         if not image_name:
             hud_console.error("No image reference found in hud.lock.yaml")

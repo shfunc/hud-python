@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hashlib
+import json
 import subprocess
 import time
 from datetime import UTC, datetime
@@ -154,6 +155,91 @@ def extract_env_vars_from_dockerfile(dockerfile_path: Path) -> tuple[list[str], 
     return required, optional
 
 
+def collect_runtime_metadata(image: str, *, verbose: bool = False) -> dict[str, str | None]:
+    """Probe container runtime to capture Python/CUDA/cuDNN/PyTorch versions."""
+    hud_console = HUDConsole()
+    runtime_script = (
+        "import json, platform\n"
+        "info = {'python': platform.python_version()}\n"
+        "try:\n"
+        "    import torch\n"
+        "    info['pytorch'] = getattr(torch, '__version__', None)\n"
+        "    cuda_version = None\n"
+        "    try:\n"
+        "        cuda_version = getattr(getattr(torch, 'version', None), 'cuda', None)\n"
+        "    except Exception:\n"
+        "        cuda_version = None\n"
+        "    if cuda_version:\n"
+        "        info['cuda'] = cuda_version\n"
+        "    try:\n"
+        "        cudnn_version = torch.backends.cudnn.version()\n"
+        "    except Exception:\n"
+        "        cudnn_version = None\n"
+        "    if cudnn_version:\n"
+        "        info['cudnn'] = str(cudnn_version)\n"
+        "except Exception:\n"
+        "    pass\n"
+        "info.setdefault('pytorch', None)\n"
+        "info.setdefault('cuda', None)\n"
+        "info.setdefault('cudnn', None)\n"
+        "print(json.dumps(info))\n"
+    )
+
+    python_binaries = ("python", "python3")
+    for binary in python_binaries:
+        cmd = [
+            "docker",
+            "run",
+            "--rm",
+            image,
+            binary,
+            "-c",
+            runtime_script,
+        ]
+        try:
+            result = subprocess.run(  # noqa: S603
+                cmd,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except FileNotFoundError:
+            # Docker not available or image missing - handled upstream
+            return {}
+
+        if result.returncode != 0:
+            if verbose:
+                hud_console.debug(
+                    f"Runtime probe failed with {binary}: {result.stderr.strip() or 'no stderr'}"
+                )
+            continue
+
+        output = (result.stdout or "").strip()
+        if not output:
+            return {}
+
+        last_line = output.splitlines()[-1]
+        try:
+            data = json.loads(last_line)
+        except json.JSONDecodeError:
+            if verbose:
+                hud_console.debug(
+                    "Runtime probe returned non-JSON output; skipping metadata capture"
+                )
+            return {}
+
+        runtime_info = {
+            "python": data.get("python"),
+            "cuda": data.get("cuda"),
+            "cudnn": data.get("cudnn"),
+            "pytorch": data.get("pytorch"),
+        }
+
+        return runtime_info
+
+    return {}
+
+
 async def analyze_mcp_environment(
     image: str, verbose: bool = False, env_vars: dict[str, str] | None = None
 ) -> dict[str, Any]:
@@ -189,22 +275,50 @@ async def analyze_mcp_environment(
         initialized = True
         initialize_ms = int((time.time() - start_time) * 1000)
 
-        # Get tools
-        tools = await client.list_tools()
+        # Gather rich analysis including nested tool metadata
+        env_analysis = await client.analyze_environment()
+        tools = env_analysis.get("tools", [])
+        hub_map = env_analysis.get("hub_tools", {})
 
-        # Extract tool information
         tool_info = []
+        internal_count = 0
         for tool in tools:
-            tool_dict = {"name": tool.name, "description": tool.description}
-            if hasattr(tool, "inputSchema") and tool.inputSchema:
-                tool_dict["inputSchema"] = tool.inputSchema
+            # Handle both dict-style (from analyze_environment) and Tool objects
+            if hasattr(tool, "name"):
+                name = tool.name
+                description = getattr(tool, "description", "")
+                input_schema = getattr(tool, "inputSchema", {}) or {}
+                internal_tools = hub_map.get(name, [])
+            else:
+                name = tool.get("name")
+                description = tool.get("description", "")
+                input_schema = (
+                    tool.get("inputSchema")
+                    or tool.get("input_schema")  # BaseHUDClient uses snake_case
+                    or {}
+                )
+                internal_tools = (
+                    tool.get("internalTools")
+                    or tool.get("internal_tools")
+                    or hub_map.get(name or "", [])
+                )
+
+            tool_dict = {"name": name, "description": description}
+            if input_schema:
+                tool_dict["inputSchema"] = input_schema
+            if internal_tools:
+                sorted_internal = sorted(set(internal_tools))
+                tool_dict["internalTools"] = sorted_internal
+                internal_count += len(sorted_internal)
             tool_info.append(tool_dict)
 
         return {
             "initializeMs": initialize_ms,
             "toolCount": len(tools),
+            "internalToolCount": internal_count,
             "tools": tool_info,
             "success": True,
+            "hubTools": hub_map,
         }
     except TimeoutError:
         from hud.shared.exceptions import HudException
@@ -418,9 +532,11 @@ def build_environment(
     if image_tag:
         base_name = image_tag.split(":")[0] if ":" in image_tag else image_tag
 
+    runtime_info = collect_runtime_metadata(temp_tag, verbose=verbose)
+
     # Create lock file content with images subsection at top
     lock_content = {
-        "version": "1.1",  # Lock file format version
+        "version": "1.2",  # Lock file format version
         "images": {
             "local": f"{base_name}:{new_version}",  # Local tag with version
             "full": None,  # Will be set with digest after build
@@ -439,6 +555,12 @@ def build_environment(
             "toolCount": analysis["toolCount"],
         },
     }
+
+    if analysis.get("internalToolCount") is not None:
+        lock_content["environment"]["internalToolCount"] = analysis["internalToolCount"]
+
+    if runtime_info:
+        lock_content["environment"]["runtime"] = runtime_info
 
     # Add environment variables section if any exist
     if missing_required or optional_env or provided_env_vars:
@@ -459,14 +581,19 @@ def build_environment(
 
     # Add tools with full schemas for RL config generation
     if analysis["tools"]:
-        lock_content["tools"] = [
-            {
+        tools_section = []
+        for tool in analysis["tools"]:
+            tool_entry = {
                 "name": tool["name"],
                 "description": tool.get("description", ""),
-                "inputSchema": tool.get("inputSchema", {}),
             }
-            for tool in analysis["tools"]
-        ]
+            input_schema = tool.get("inputSchema", {})
+            if input_schema:
+                tool_entry["inputSchema"] = input_schema
+            if tool.get("internalTools"):
+                tool_entry["internalTools"] = tool["internalTools"]
+            tools_section.append(tool_entry)
+        lock_content["tools"] = tools_section
 
     # Write lock file
     lock_path = env_dir / "hud.lock.yaml"

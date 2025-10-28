@@ -166,6 +166,12 @@ def display_interactive(analysis: dict) -> None:
                 syntax = Syntax(schema_str, "json", theme="monokai", line_numbers=False)
                 tool_node.add(syntax)
 
+            internal = tool.get("internalTools")
+            if internal:
+                internal_node = tool_node.add("[bright_black]Internal[/bright_black]")
+                for func in internal:
+                    internal_node.add(f"[bright_white]{func}[/bright_white]")
+
     console.print(tools_tree)
 
     # Resources

@@ -212,22 +212,26 @@ class TestAnalyzeMcpEnvironment:
         # Setup mock client
         mock_client = mock.AsyncMock()
         mock_client_class.return_value = mock_client
-
-        # Mock tool
-        mock_tool = mock.Mock()
-        mock_tool.name = "test_tool"
-        mock_tool.description = "Test tool"
-        mock_tool.inputSchema = {"type": "object"}
-
-        mock_client.list_tools.return_value = [mock_tool]
+        mock_client.analyze_environment.return_value = {
+            "tools": [
+                {
+                    "name": "test_tool",
+                    "description": "Test tool",
+                    "input_schema": {"type": "object"},
+                }
+            ],
+            "hub_tools": {},
+        }
 
         result = await analyze_mcp_environment("test:latest")
 
         assert result["success"] is True
         assert result["toolCount"] == 1
+        assert result["internalToolCount"] == 0
         assert len(result["tools"]) == 1
         assert result["tools"][0]["name"] == "test_tool"
         assert "initializeMs" in result
+        mock_client.analyze_environment.assert_called_once()
 
     @mock.patch("hud.cli.build.MCPClient")
     async def test_analyze_failure(self, mock_client_class):
@@ -247,13 +251,37 @@ class TestAnalyzeMcpEnvironment:
         """Test analysis in verbose mode."""
         mock_client = mock.AsyncMock()
         mock_client_class.return_value = mock_client
-        mock_client.list_tools.return_value = []
+        mock_client.analyze_environment.return_value = {"tools": [], "hub_tools": {}}
 
         # Just test that it runs without error in verbose mode
         result = await analyze_mcp_environment("test:latest", verbose=True)
 
         assert result["success"] is True
         assert "initializeMs" in result
+        mock_client.analyze_environment.assert_called_once()
+
+    @mock.patch("hud.cli.build.MCPClient")
+    async def test_analyze_hidden_tools(self, mock_client_class):
+        """Ensure hidden/internal tools are captured."""
+        mock_client = mock.AsyncMock()
+        mock_client_class.return_value = mock_client
+        mock_client.analyze_environment.return_value = {
+            "tools": [
+                {
+                    "name": "setup",
+                    "description": "Call internal 'setup' functions",
+                    "input_schema": {"type": "object"},
+                    "internal_tools": ["reset", "seed_data"],
+                }
+            ],
+            "hub_tools": {"setup": ["reset", "seed_data"]},
+        }
+
+        result = await analyze_mcp_environment("test:latest")
+
+        assert result["toolCount"] == 1
+        assert result["internalToolCount"] == 2
+        assert result["tools"][0]["internalTools"] == ["reset", "seed_data"]
 
 
 class TestBuildDockerImage:
@@ -314,6 +342,7 @@ class TestBuildEnvironment:
     """Test the main build_environment function."""
 
     @mock.patch("hud.cli.build.build_docker_image")
+    @mock.patch("hud.cli.build.collect_runtime_metadata")
     @mock.patch("hud.cli.build.analyze_mcp_environment")
     @mock.patch("hud.cli.build.save_to_registry")
     @mock.patch("hud.cli.build.get_docker_image_id")
@@ -324,6 +353,7 @@ class TestBuildEnvironment:
         mock_get_id,
         mock_save_registry,
         mock_analyze,
+        mock_collect_runtime,
         mock_build_docker,
         tmp_path,
     ):
@@ -351,13 +381,21 @@ ENV API_KEY
         mock_analyze.return_value = {
             "success": True,
             "toolCount": 2,
+            "internalToolCount": 0,
             "initializeMs": 1500,
             "tools": [
                 {"name": "tool1", "description": "Tool 1"},
                 {"name": "tool2", "description": "Tool 2"},
             ],
+            "hubTools": {},
         }
         mock_get_id.return_value = "sha256:abc123"
+        mock_collect_runtime.return_value = {
+            "python": "3.11.6",
+            "cuda": None,
+            "cudnn": None,
+            "pytorch": None,
+        }
 
         # Mock final rebuild
         mock_result = mock.Mock()
@@ -379,6 +417,9 @@ ENV API_KEY
         assert lock_data["images"]["local"] == "test-env:0.1.0"
         assert lock_data["build"]["version"] == "0.1.0"
         assert lock_data["environment"]["toolCount"] == 2
+        assert lock_data["environment"]["internalToolCount"] == 0
+        assert lock_data["environment"]["runtime"]["python"] == "3.11.6"
+        assert lock_data["version"] == "1.2"
         assert len(lock_data["tools"]) == 2
 
     def test_build_environment_no_directory(self):

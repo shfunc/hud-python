@@ -14,7 +14,7 @@ from rich.table import Table
 from hud.settings import settings
 from hud.utils.hud_console import HUDConsole
 
-from .utils.registry import save_to_registry
+from .utils.registry import resolve_lock_image, save_to_registry
 
 
 def get_docker_manifest(image: str) -> dict | None:
@@ -141,7 +141,10 @@ def pull_environment(
             with open(lock_path) as f:
                 lock_data = yaml.safe_load(f)
 
-        image_ref = lock_data.get("image", "") if lock_data else ""
+        if lock_data:
+            image_ref = resolve_lock_image(lock_data, prefer="full") or resolve_lock_image(lock_data)
+        else:
+            image_ref = ""
 
     # Mode 2: Direct image reference
     else:
@@ -162,7 +165,10 @@ def pull_environment(
 
             if lock_data:
                 hud_console.success("Found in HUD registry")
-                image_ref = lock_data.get("image", "")
+                image_ref = (
+                    resolve_lock_image(lock_data, prefer="full")
+                    or resolve_lock_image(lock_data)
+                )
             else:
                 # Fall back to treating as Docker image
                 if not settings.api_key:
@@ -182,7 +188,11 @@ def pull_environment(
 
             if manifest:
                 # Create minimal lock data from manifest
-                lock_data = {"image": image_ref, "source": "docker-manifest"}
+                lock_data = {
+                    "image": image_ref,
+                    "images": {"full": image_ref},
+                    "source": "docker-manifest",
+                }
 
                 # Try to get size
                 size = get_image_size_from_manifest(manifest)
@@ -255,6 +265,9 @@ def pull_environment(
         hud_console.section_title("Available Tools")
         for tool in lock_data["tools"]:
             hud_console.info(f"• {tool['name']}: {tool['description']}")
+            internal = tool.get("internalTools") or tool.get("internal")
+            if internal:
+                hud_console.dim_info("   ↳ internal", ", ".join(internal))
 
     # Show warnings if no metadata
     if not lock_data and not yes:

@@ -1,0 +1,99 @@
+---
+title: "hud.lock.yaml spec"
+description: "Structure of HUD environment lock files"
+icon: "file-text"
+---
+
+HUD uses `hud.lock.yaml` to capture everything needed to reproduce an environment that was built with `hud build`. The lock file is meant to be committed alongside your environment directory and shared with teammates or CI.
+
+## Top-Level Layout
+
+```yaml
+version: "1.2"
+images:
+  local: "<name>:<semver>"
+  full: "<name>:<semver>@sha256:<digest>"
+  pushed: "<registry>/<name>:<semver>" # set by hud push
+build:
+  generatedAt: "<RFC3339 timestamp>"
+  hudVersion: "<hud CLI version>"
+  directory: "<environment directory>"
+  version: "<internal semver>"
+  sourceHash: "<short hash of build inputs>"
+  sourceFiles: ["Dockerfile", "pyproject.toml", ...] # optional
+environment:
+  initializeMs: <int>
+  toolCount: <int>
+  internalToolCount: <int>
+  runtime:
+    python: "<version>" | null
+    cuda: "<version>" | null
+    cudnn: "<version>" | null
+    pytorch: "<version>" | null
+  variables:
+    _note: "Hints about editing env vars" # added when variables exist
+    provided: { KEY: "${KEY}" }
+    required: ["KEY"]
+    optional: ["KEY"]
+tools:
+  - name: "<tool name>"
+    description: "<tool description>"
+    inputSchema: { ... } # JSON Schema
+    internalTools: ["sub_tool", "other"] # dispatcher hubs only
+push:
+  source: "<tag>@sha256:<digest>"
+  pushedAt: "<RFC3339 timestamp>"
+  registry: "<registry namespace>"
+```
+
+Only `version`, `images`, `build`, `environment`, and `tools` are guaranteed. Everything else is optional and appears when the build can capture that data.
+
+## Field Reference
+
+- **`version`** – lock format version. `1.2` introduces runtime metadata and dispatcher listings.
+- **`images`**
+  - `local` – semantic version tag stored locally after `hud build`.
+  - `full` – digest-qualified reference (`name@sha256:...`) once the image is labeled.
+  - `pushed` – registry reference filled in by `hud push`.
+- **`build`**
+  - `generatedAt` – when the lock file was written.
+  - `hudVersion` – CLI version that created the lock.
+  - `directory` – name of the environment directory.
+  - `version` – auto-incremented semantic version (starts at `0.1.0`).
+  - `sourceHash` – fingerprint of tracked build inputs (used for change detection).
+  - `sourceFiles` – list of files hashed in `sourceHash` (best-effort).
+- **`environment`**
+  - `initializeMs` – MCP server initialization time measured during analysis.
+  - `toolCount` – number of top-level tools exposed by the MCP server.
+  - `internalToolCount` – number of hidden/dispatcher subtools discovered (0 if none).
+  - `runtime` – optional runtime metadata gathered by probing the container. Keys are `python`, `cuda`, `cudnn`, `pytorch`, each `null` when unavailable.
+  - `variables` – optional block summarising environment variables:
+    - `_note` – reminder that the section is editable.
+    - `provided` – variables supplied via `hud build -e KEY=value` (stored as `${KEY}` placeholders).
+    - `required` – runtime variables detected in the Dockerfile without defaults.
+    - `optional` – variables that have defaults but were discovered during analysis.
+- **`tools`** – each entry mirrors the MCP tool registry:
+  - `name`, `description`, and `inputSchema` map directly from MCP metadata.
+  - `internalTools` is present for dispatcher/hub tools (e.g., HiddenRouter or BaseHub). HUD reads each router’s function catalogue resource so the lock lists every subtool (`setup` → `reset`, `seed_data`, etc.) without polluting the top-level MCP tool list.
+- **`push`** – appended by `hud push` so that consumers know which registry copy corresponds to the lock.
+
+## Hidden/Dispatcher Tools
+
+Routers created with `HiddenRouter` or `BaseHub` expose a single top-level MCP tool (like `setup`) that delegates to multiple internal functions. During `hud build`, HUD looks for each router’s functions catalogue resource (`setup://functions`, `file:///setup/functions`, etc.), reads the JSON payload, and stores the sorted list under `tools[*].internalTools`. This keeps the lock file authoritative even though those subtools remain hidden from the default MCP `list_tools` response.
+
+## Runtime Metadata
+
+After the temporary build completes, HUD runs a small probe inside the image to collect:
+
+- Python version
+- PyTorch version
+- CUDA toolkit version (if PyTorch reports it)
+- cuDNN version (if available via `torch.backends.cudnn`)
+
+If a value cannot be detected (library missing or probing fails), the key is set to `null`. This information helps downstream evaluators or registries quickly filter compatible environments.
+
+## Related Commands
+
+- [`hud build`](/reference/cli/build) – generates the lock file.
+- [`hud push`](/reference/cli/push) – uploads the image and updates the lock with registry details.
+- [`hud analyze`](/reference/cli/analyze) – reads the lock to show tool metadata without running the container.

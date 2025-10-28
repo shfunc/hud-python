@@ -7,6 +7,7 @@ from hud.cli.utils.registry import (
     extract_name_and_tag,
     list_registry_entries,
     load_from_registry,
+    resolve_lock_image,
     save_to_registry,
 )
 
@@ -30,13 +31,23 @@ def test_extract_name_and_tag():
     assert extract_name_and_tag("myorg/myenv") == ("myorg/myenv", "latest")
 
 
+def test_resolve_lock_image():
+    assert resolve_lock_image({"images": {"local": "org/env:tag"}}) == "org/env:tag"
+    assert (
+        resolve_lock_image({"images": {"full": "org/env:tag@sha256:abc"}}, prefer="full")
+        == "org/env:tag@sha256:abc"
+    )
+    assert resolve_lock_image({"image": "legacy:latest"}) == "legacy:latest"
+    assert resolve_lock_image(None) == ""
+
+
 def test_save_load_list_registry(tmp_path: Path, monkeypatch):
     # Redirect registry dir to temp
     from hud.cli.utils import registry as mod
 
     monkeypatch.setattr(mod, "get_registry_dir", lambda: tmp_path)
 
-    data = {"image": "org/name:tag", "build": {"version": "0.1.0"}}
+    data = {"images": {"local": "org/name:tag"}, "build": {"version": "0.1.0"}}
     saved = save_to_registry(data, "org/name:tag@sha256:abcdef0123456789", verbose=True)
     assert saved is not None and saved.exists()
 
@@ -46,4 +57,4 @@ def test_save_load_list_registry(tmp_path: Path, monkeypatch):
 
     digest, _ = entries[0]
     loaded = load_from_registry(digest)
-    assert loaded and loaded.get("image") == "org/name:tag"
+    assert loaded and loaded.get("images", {}).get("local") == "org/name:tag"

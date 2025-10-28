@@ -327,6 +327,14 @@ class BaseHUDClient(AgentMCPClient):
             },
         }
 
+        resources: list[types.Resource] = []
+        try:
+            resources = await self.list_resources()
+        except Exception as e:
+            if self.verbose:
+                hud_console.debug(f"Could not list resources: {e}")
+            resources = []
+
         # Get all tools with schemas
         tools = await self.list_tools()
         for tool in tools:
@@ -335,7 +343,6 @@ class BaseHUDClient(AgentMCPClient):
                 "description": tool.description,
                 "input_schema": tool.inputSchema,
             }
-            analysis["tools"].append(tool_info)
 
             # Check if this is a hub tool (like setup, evaluate)
             if (
@@ -344,46 +351,98 @@ class BaseHUDClient(AgentMCPClient):
                 and "functions" in tool.description.lower()
             ):
                 # This is likely a hub dispatcher tool
-                hub_functions = await self.get_hub_tools(tool.name)
+                hub_functions = await self.get_hub_tools(tool.name, resources=resources)
                 if hub_functions:
                     analysis["hub_tools"][tool.name] = hub_functions
+                    tool_info["internal_tools"] = hub_functions
 
-        # Get all resources
-        try:
-            resources = await self.list_resources()
-            for resource in resources:
-                resource_info = {
-                    "uri": str(resource.uri),
-                    "name": resource.name,
-                    "description": resource.description,
-                    "mime_type": getattr(resource, "mimeType", None),
-                }
-                analysis["resources"].append(resource_info)
-        except Exception as e:
-            if self.verbose:
-                hud_console.debug(f"Could not list resources: {e}")
+            analysis["tools"].append(tool_info)
+
+        # Store resource metadata after tool analysis (tools may need raw objects)
+        for resource in resources:
+            resource_info = {
+                "uri": str(resource.uri),
+                "name": resource.name,
+                "description": resource.description,
+                "mime_type": getattr(resource, "mimeType", None),
+            }
+            analysis["resources"].append(resource_info)
 
         return analysis
 
-    async def get_hub_tools(self, hub_name: str) -> list[str]:
+    async def get_hub_tools(
+        self, hub_name: str, *, resources: list[types.Resource] | None = None
+    ) -> list[str]:
         """Get all subtools for a specific hub (setup/evaluate).
 
         Args:
             hub_name: Name of the hub (e.g., "setup", "evaluate")
+            resources: Optional cache of resources to help discover catalogue URIs
 
         Returns:
             List of available function names for the hub
         """
+        candidate_uris: list[str] = [
+            f"file:///{hub_name}/functions",
+            f"{hub_name}://functions",
+            f"{hub_name}://functions.json",
+        ]
+
+        if resources:
+            for resource in resources:
+                try:
+                    uri = str(resource.uri)
+                except Exception:
+                    continue
+                resource_name = (resource.name or "").lower()
+                hub_lower = hub_name.lower()
+                if not uri:
+                    continue
+                # Prioritize exact matches
+                if resource_name == f"{hub_lower} functions":
+                    candidate_uris.insert(0, uri)
+                elif hub_lower in resource_name and "function" in resource_name:
+                    candidate_uris.append(uri)
+                elif hub_lower in uri.lower() and "function" in uri.lower():
+                    candidate_uris.append(uri)
+
+        seen: set[str] = set()
+        for uri in candidate_uris:
+            if not uri or uri in seen:
+                continue
+            seen.add(uri)
+
+            try:
+                result = await self.read_resource(uri)
+            except Exception as e:  # pragma: no cover - verbose logging only
+                if self.verbose:
+                    hud_console.debug(f"Could not read hub resource '{uri}': {e}")
+                continue
+
+            if result and result.contents:
+                try:
+                    import json
+
+                    functions = json.loads(result.contents[0].text)  # type: ignore
+                except json.JSONDecodeError:
+                    if self.verbose:
+                        hud_console.debug(f"Hub resource '{uri}' did not return JSON list")
+                    continue
+
+                if isinstance(functions, list):
+                    # Ensure consistent ordering for determinism
+                    return sorted({str(fn) for fn in functions})
+
         try:
-            # Read the hub's functions catalogue resource
+            # Fallback for legacy catalogue location
             result = await self.read_resource(f"file:///{hub_name}/functions")
             if result and result.contents:
-                # Parse the JSON list of function names
                 import json
 
                 functions = json.loads(result.contents[0].text)  # type: ignore
-                return functions
-        except Exception as e:
+                if isinstance(functions, list):
+                    return sorted({str(fn) for fn in functions})
+        except Exception as e:  # pragma: no cover - verbose logging only
             if self.verbose:
                 hud_console.debug(f"Could not read hub functions for '{hub_name}': {e}")
         return []

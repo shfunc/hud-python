@@ -49,11 +49,11 @@ Runs the container via MCP to measure initialize time and list tools (count and 
 
 <Step title="Generate Lock File">
 Writes `hud.lock.yaml` with:
-- `version`: lock format version
-- `image`: `{tag}@sha256:<id>` after final build
-- `build`: generatedAt, hudVersion, directory, internal `version` (semver, auto‑incremented), `sourceHash`, optional `sourceFiles`
-- `environment`: initializeMs, toolCount, and optional `variables` with `provided`, `required`, `optional`
-- `tools`: name, description, inputSchema (for RL/evals tooling)
+- `version`: lock format version (`1.2`)
+- `images`: `local` tag, `full` digest reference, and `pushed` tag (filled by `hud push`)
+- `build`: generatedAt, hudVersion, directory, internal `version` (semver, auto-incremented), `sourceHash`, optional `sourceFiles`
+- `environment`: initializeMs, toolCount, internalToolCount, optional `runtime` (python/cuda/cuDNN/PyTorch), and `variables` with `provided`, `required`, `optional`
+- `tools`: name, description, inputSchema, plus `internalTools` for dispatcher/hidden hubs (e.g., `setup` → `reset`, `seed_data`)
 </Step>
 
 <Step title="Retag & Label">
@@ -98,8 +98,11 @@ They’re recorded in the lock file as placeholders under `environment.variables
 Minimal structure you’ll see:
 
 ```yaml
-version: "1.0"
-image: "my-env:dev@sha256:..."
+version: "1.2"
+images:
+  local: "my-env:0.1.0"
+  full: "my-env:0.1.0@sha256:..."
+  pushed: null
 build:
   generatedAt: "2025-01-01T12:00:00Z"
   hudVersion: "0.x.y"
@@ -109,19 +112,33 @@ build:
 environment:
   initializeMs: 450
   toolCount: 3
+  internalToolCount: 5
+  runtime:
+    python: "3.11.6"
+    cuda: null
+    cudnn: null
+    pytorch: "2.3.0"
   variables:
     provided: { API_KEY: "${API_KEY}" }
     required: ["OTHER_KEY"]
 tools:
   - name: setup
-    description: Initialize environment
+    description: "Call internal 'setup' functions"
+    inputSchema: { type: object }
+    internalTools:
+      - board
+      - reset
+  - name: evaluate
+    description: Evaluate results
     inputSchema: { type: object }
 ```
+
+See the [Lock File spec](/reference/lock-file) for full field descriptions.
 
 ## Next Steps
 
 ```bash
-# Hot‑reload development
+# Hot-reload development
 hud dev
 
 # Run the built image locally (stdio)

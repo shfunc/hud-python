@@ -8,7 +8,12 @@ import typer
 
 from hud.utils.hud_console import HUDConsole
 
-from .utils.registry import get_registry_dir, list_registry_entries, load_from_registry
+from .utils.registry import (
+    get_registry_dir,
+    list_registry_entries,
+    load_from_registry,
+    resolve_lock_image,
+)
 
 
 def remove_environment(
@@ -36,8 +41,8 @@ def remove_environment(
         for digest, lock_file in list_registry_entries():
             try:
                 lock_data = load_from_registry(digest)
-                if lock_data and "image" in lock_data:
-                    image = lock_data["image"]
+                image = resolve_lock_image(lock_data)
+                if image:
                     # Extract name and tag
                     name = image.split("@")[0] if "@" in image else image
                     if "/" in name and (target in name or name.endswith(f"/{target}")):
@@ -59,7 +64,7 @@ def remove_environment(
             raise ValueError("Found digest is None")
         lock_data = load_from_registry(found_digest)
         if lock_data:
-            image = lock_data.get("image", "unknown")
+            image = resolve_lock_image(lock_data) or "unknown"
             metadata = lock_data.get("metadata", {})
             description = metadata.get("description", "No description")
 
@@ -87,7 +92,7 @@ def remove_environment(
 
         # Check if the image is still available locally
         if lock_data:
-            image = lock_data.get("image", "")
+            image = resolve_lock_image(lock_data)
             if image:
                 hud_console.info("")
                 hud_console.info("Note: The Docker image may still exist locally.")
@@ -125,9 +130,8 @@ def remove_all_environments(
     for digest, _ in entries:
         try:
             lock_data = load_from_registry(digest)
-            if lock_data:
-                image = lock_data.get("image", "unknown")
-                hud_console.info(f"  • {digest[:12]} - {image}")
+            image = resolve_lock_image(lock_data) or "unknown"
+            hud_console.info(f"  • {digest[:12]} - {image}")
         except Exception:
             hud_console.info(f"  • {digest[:12]}")
 

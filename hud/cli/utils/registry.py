@@ -10,6 +10,30 @@ import yaml
 from hud.utils.hud_console import HUDConsole
 
 
+def resolve_lock_image(lock_data: Any, prefer: str = "local") -> str:
+    """Return best-effort image reference from lock data.
+
+    Args:
+        lock_data: Parsed YAML dictionary from hud.lock.yaml
+        prefer: Which image variant to prefer ("local" or "full")
+    """
+
+    if not isinstance(lock_data, dict):
+        return ""
+
+    images = lock_data.get("images")
+    if isinstance(images, dict):
+        preferred = images.get(prefer)
+        if preferred:
+            return preferred
+        fallback = images.get("full") or images.get("local")
+        if fallback:
+            return fallback
+
+    image = lock_data.get("image")
+    return image if isinstance(image, str) else ""
+
+
 def get_registry_dir() -> Path:
     """Get the base directory for the local HUD registry."""
     return Path.home() / ".hud" / "envs"

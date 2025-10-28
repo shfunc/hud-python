@@ -10,7 +10,12 @@ from rich.table import Table
 
 from hud.utils.hud_console import HUDConsole
 
-from .utils.registry import extract_name_and_tag, get_registry_dir, list_registry_entries
+from .utils.registry import (
+    extract_name_and_tag,
+    get_registry_dir,
+    list_registry_entries,
+    resolve_lock_image,
+)
 
 
 def format_timestamp(timestamp: float | None) -> str:
@@ -73,8 +78,12 @@ def list_environments(
                 lock_data = yaml.safe_load(f)
 
             # Extract metadata
-            image = lock_data.get("image", "unknown")
-            name, tag = extract_name_and_tag(image)
+            image = resolve_lock_image(lock_data)
+            if image:
+                name, tag = extract_name_and_tag(image)
+            else:
+                image = "unknown"
+                name, tag = "unknown", "latest"
 
             # Apply filter if specified
             if filter_name and filter_name.lower() not in name.lower():
