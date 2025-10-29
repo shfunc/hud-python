@@ -290,6 +290,114 @@ def extract_env_vars_from_dockerfile(dockerfile_path: Path) -> tuple[list[str], 
     return required, optional
 
 
+def parse_base_image(dockerfile_path: Path) -> str | None:
+    """Extract the base image from the first FROM directive in Dockerfile.
+
+    For multi-stage builds, returns the image from the first FROM. Strips any
+    trailing AS <stage> segment.
+    """
+    try:
+        if not dockerfile_path.exists():
+            return None
+        for raw_line in dockerfile_path.read_text().splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.upper().startswith("FROM "):
+                rest = line[5:].strip()
+                # Remove stage alias if present
+                lower = rest.lower()
+                if " as " in lower:
+                    # Split using the original case string at the index of lower-case match
+                    idx = lower.index(" as ")
+                    rest = rest[:idx]
+                return rest.strip()
+    except Exception:
+        return None
+    return None
+
+
+def collect_runtime_metadata(image: str, *, verbose: bool = False) -> dict[str, str | None]:
+    """Probe container to capture Python/CUDA/cuDNN/PyTorch versions.
+
+    Runs a tiny Python snippet inside the built image using docker run.
+    """
+    hud_console = HUDConsole()
+
+    runtime_script = (
+        "import json, platform\n"
+        "info = {'python': platform.python_version()}\n"
+        "try:\n"
+        "    import torch\n"
+        "    info['pytorch'] = getattr(torch, '__version__', None)\n"
+        "    cuda_version = None\n"
+        "    try:\n"
+        "        cuda_version = getattr(getattr(torch, 'version', None), 'cuda', None)\n"
+        "    except Exception:\n"
+        "        cuda_version = None\n"
+        "    if cuda_version:\n"
+        "        info['cuda'] = cuda_version\n"
+        "    try:\n"
+        "        cudnn_version = torch.backends.cudnn.version()\n"
+        "    except Exception:\n"
+        "        cudnn_version = None\n"
+        "    if cudnn_version:\n"
+        "        info['cudnn'] = str(cudnn_version)\n"
+        "except Exception:\n"
+        "    pass\n"
+        "info.setdefault('pytorch', None)\n"
+        "info.setdefault('cuda', None)\n"
+        "info.setdefault('cudnn', None)\n"
+        "print(json.dumps(info))\n"
+    )
+
+    for binary in ("python", "python3"):
+        cmd = [
+            "docker",
+            "run",
+            "--rm",
+            image,
+            binary,
+            "-c",
+            runtime_script,
+        ]
+        try:
+            result = subprocess.run(  # noqa: S603
+                cmd, capture_output=True, text=True, check=False
+            )
+        except FileNotFoundError:
+            return {}
+
+        if result.returncode != 0:
+            if verbose:
+                hud_console.debug(
+                    f"Runtime probe failed with {binary}: {result.stderr.strip() or 'no stderr'}"
+                )
+            continue
+
+        output = (result.stdout or "").strip()
+        if not output:
+            return {}
+
+        try:
+            data = json.loads(output.splitlines()[-1])
+        except json.JSONDecodeError:
+            if verbose:
+                hud_console.debug(
+                    "Runtime probe returned non-JSON output; skipping metadata capture"
+                )
+            return {}
+
+        return {
+            "python": data.get("python"),
+            "cuda": data.get("cuda"),
+            "cudnn": data.get("cudnn"),
+            "pytorch": data.get("pytorch"),
+        }
+
+    return {}
+
+
 async def analyze_mcp_environment(
     image: str, verbose: bool = False, env_vars: dict[str, str] | None = None
 ) -> dict[str, Any]:
@@ -324,15 +432,45 @@ async def analyze_mcp_environment(
         initialized = True
         initialize_ms = int((time.time() - start_time) * 1000)
 
-        # Delegate to standard analysis helper for consistency
+        # Delegate to standard analysis helper
         full_analysis = await client.analyze_environment()
 
-        # Normalize to build's expected fields
+        # Normalize and enrich with internalTools if a hub map is present
         tools_list = full_analysis.get("tools", [])
+        hub_map = full_analysis.get("hub_tools", {}) or full_analysis.get("hubTools", {})
+
+        normalized_tools: list[dict[str, Any]] = []
+        internal_total = 0
+        for t in tools_list:
+            if hasattr(t, "name"):
+                name = getattr(t, "name", None)
+                description = getattr(t, "description", None)
+                input_schema = getattr(t, "inputSchema", None)
+            else:
+                name = t.get("name")
+                description = t.get("description")
+                # accept either inputSchema or input_schema
+                input_schema = t.get("inputSchema") or t.get("input_schema")
+
+            tool_entry: dict[str, Any] = {"name": name}
+            if description:
+                tool_entry["description"] = description
+            if input_schema:
+                tool_entry["inputSchema"] = input_schema
+
+            if isinstance(hub_map, dict) and name in hub_map:
+                internal = list(dict.fromkeys(hub_map[name]))  # unique, preserve order
+                if internal:
+                    tool_entry["internalTools"] = internal
+                    internal_total += len(internal)
+
+            normalized_tools.append(tool_entry)
+
         return {
             "initializeMs": initialize_ms,
             "toolCount": len(tools_list),
-            "tools": tools_list,
+            "internalToolCount": internal_total if internal_total else None,
+            "tools": normalized_tools,
             "success": True,
         }
     except TimeoutError:
@@ -558,9 +696,14 @@ def build_environment(
     if image_tag:
         base_name = image_tag.split(":")[0] if ":" in image_tag else image_tag
 
+    # Collect runtime metadata and compute base image/platform
+    runtime_info = collect_runtime_metadata(temp_tag, verbose=verbose)
+    base_image = parse_base_image(dockerfile_path)
+    effective_platform = platform if platform is not None else "linux/amd64"
+
     # Create lock file content with images subsection at top
     lock_content = {
-        "version": "1.1",  # Lock file format version
+        "version": "1.2",  # Lock file format version
         "images": {
             "local": f"{base_name}:{new_version}",  # Local tag with version
             "full": None,  # Will be set with digest after build
@@ -573,12 +716,19 @@ def build_environment(
             "version": new_version,
             # Fast source fingerprint for change detection
             "sourceHash": compute_source_hash(env_dir),
+            "baseImage": base_image,
+            "platform": effective_platform,
         },
         "environment": {
             "initializeMs": analysis["initializeMs"],
             "toolCount": analysis["toolCount"],
         },
     }
+
+    if runtime_info:
+        lock_content["environment"]["runtime"] = runtime_info
+    if analysis.get("internalToolCount") is not None:
+        lock_content["environment"]["internalToolCount"] = analysis["internalToolCount"]
 
     # Add environment variables section if any exist
     # Include env vars from .env file as well
@@ -616,14 +766,19 @@ def build_environment(
 
     # Add tools with full schemas for RL config generation
     if analysis["tools"]:
-        lock_content["tools"] = [
-            {
+        tools_serialized: list[dict[str, Any]] = []
+        for tool in analysis["tools"]:
+            entry: dict[str, Any] = {
                 "name": tool["name"],
-                "description": tool.get("description", ""),
-                "inputSchema": tool.get("inputSchema", {}),
             }
-            for tool in analysis["tools"]
-        ]
+            if tool.get("description"):
+                entry["description"] = tool.get("description")
+            if tool.get("inputSchema"):
+                entry["inputSchema"] = tool.get("inputSchema")
+            if tool.get("internalTools"):
+                entry["internalTools"] = tool.get("internalTools")
+            tools_serialized.append(entry)
+        lock_content["tools"] = tools_serialized
 
     # Write lock file
     lock_path = env_dir / "hud.lock.yaml"
