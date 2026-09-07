@@ -11,10 +11,15 @@ env = Environment(name="fireworks-arithmetic")
 
 
 def grade_final_integer(answer: object, expected: int) -> EvaluationResult:
-    """Reward 1.0 when the last integer in the answer matches the expected value."""
+    """Compare the final numeric token as an integer, allowing thousands separators."""
     text = answer if isinstance(answer, str) else str(answer)
-    integers = re.findall(r"-?\d+", text)
-    got = int(integers[-1]) if integers else None
+    numbers = re.findall(r"[+-]?(?:\d[\d,]*(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?", text)
+    final = numbers[-1] if numbers else ""
+    got = (
+        int(final.replace(",", ""))
+        if re.fullmatch(r"[+-]?(?:\d+|\d{1,3}(?:,\d{3})+)", final)
+        else None
+    )
     return EvaluationResult(
         reward=1.0 if got == expected else 0.0,
         content=text.strip(),
