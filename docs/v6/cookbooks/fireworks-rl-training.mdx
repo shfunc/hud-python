@@ -93,8 +93,11 @@ Set a Fireworks API key with Serverless Training access:
 export FIREWORKS_API_KEY="fw_..."
 ```
 
-The default configuration uses `accounts/fireworks/models/qwen3p5-9b`. If you change the model,
-also provide the matching tokenizer and renderer:
+The default configuration uses Qwen 3.8 27B (`accounts/fireworks/models/qwen3p8-27b`)
+with tokenizer `Qwen/Qwen3.8-27B`. Fireworks deprecated the Qwen 3.5 9B and Qwen 3.6 27B
+Serverless Training pools; see the
+[Fireworks changelog](https://docs.fireworks.ai/updates/changelog).
+If you change the model, also provide the matching tokenizer and renderer:
 
 ```bash
 uv run train.py \
@@ -105,8 +108,9 @@ uv run train.py \
 ```
 
 Prompt rendering happens on the client, so the base model, tokenizer, and renderer must agree. The
-default renderer disables thinking mode. This leaves enough of the generation budget for the model
-to emit the final answer that the grader reads.
+default renderer, `qwen3_8_disable_thinking` from `tinker-cookbook>=0.5.7`, disables thinking mode.
+This leaves enough of the generation budget for the model to emit the final answer that the
+grader reads.
 
 ## Define the task and reward
 
@@ -122,12 +126,16 @@ from hud.graders import EvaluationResult
 env = Environment(name="fireworks-arithmetic")
 
 def grade_final_integer(answer: object, expected: int) -> EvaluationResult:
-    text = answer if isinstance(answer, str) else str(answer)
-    integers = re.findall(r"-?\d+", text)
-    got = int(integers[-1]) if integers else None
+    text = (answer if isinstance(answer, str) else str(answer)).strip()
+    final = text.splitlines()[-1].strip() if text else ""
+    got = (
+        int(final.replace(",", ""))
+        if re.fullmatch(r"[+-]?(?:\d+|\d{1,3}(?:,\d{3})+)", final)
+        else None
+    )
     return EvaluationResult(
         reward=1.0 if got == expected else 0.0,
-        content=text.strip(),
+        content=text,
         info={"expected": expected, "got": got},
     )
 
@@ -156,8 +164,8 @@ optimizer step:
 uv run train.py \
   --calibrate \
   --tasks-per-step 6 \
-  --group-size 6 \
-  --max-tokens 512 \
+  --group-size 4 \
+  --max-tokens 2048 \
   --debug-samples 4
 ```
 
@@ -172,6 +180,10 @@ counts; verify that better answers receive higher rewards. If all groups are cor
 operand range with `--min-a`, `--max-a`, `--min-b`, and `--max-b`. If all groups are incorrect,
 reduce the range or increase `--max-tokens`.
 
+The default uses four-digit operands and a 2,048-token budget. Three-digit tasks were nearly
+saturated on Qwen 3.8 27B, while smaller budgets cut off many answers. Inspect the full
+`--debug-samples` responses and token counts so truncation is not mistaken for arithmetic difficulty.
+
 ## Verify the complete path
 
 After calibration shows useful reward spread, run one bounded training step:
@@ -181,7 +193,7 @@ uv run train.py \
   --steps 1 \
   --tasks-per-step 2 \
   --group-size 4 \
-  --max-tokens 512 \
+  --max-tokens 2048 \
   --eval-tasks 4 \
   --require-update
 ```
@@ -189,6 +201,7 @@ uv run train.py \
 Groups with identical rewards cannot update the model. `--require-update` makes the command fail
 instead of silently skipping the optimizer. A successful run verifies authentication, sampling,
 HUD grading, one policy-gradient update, checkpoint creation, and held-out evaluation.
+Sampling or grading errors fail the command in every phase, including calibration and evaluation.
 
 ## Run the training loop
 
@@ -199,7 +212,7 @@ followed by 16 evaluation rollouts:
 uv run train.py
 ```
 
-Each rollout can generate up to 1,024 tokens and incurs Fireworks usage. Charges include prompt
+Each rollout can generate up to 2,048 tokens and incurs Fireworks usage. Charges include prompt
 prefill, sampled output, and training tokens at the selected model's
 [serverless rates](https://docs.fireworks.ai/fine-tuning/training-api/serverless#pricing).
 
@@ -259,6 +272,10 @@ Resume from a fully qualified training checkpoint:
 ```bash
 uv run train.py --resume-from "<account>/<run-id>/state-0005"
 ```
+
+Resume restores the checkpoint's original base model. Start a new run to migrate from an older
+Qwen model to Qwen 3.8; resuming does not convert the adapter. A supported non-default checkpoint
+requires its matching tokenizer and renderer.
 
 The resumed session creates a new Fireworks run and retains the optimizer state. The script prints
 the final `Sampler checkpoint` path. Sampler checkpoints are session-scoped, so use that path to

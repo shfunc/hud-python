@@ -10,7 +10,7 @@ training service.
 |------|---------|
 | `env.py` | Local multiplication environment and grader |
 | `train.py` | Rollout, advantage, training, evaluation, and checkpoint loop |
-| `test_train.py` | Unit tests for URL handling, reward normalization, batch construction, and reward spread |
+| `test_train.py` | Unit tests for batching and the HUD rollout lifecycle; tokenizer compatibility check |
 
 ## Setup
 
@@ -25,12 +25,16 @@ key must have access to Fireworks Serverless Training.
 uv sync
 ```
 
-The default model is `accounts/fireworks/models/qwen3p5-9b`. A different
-model requires a matching `--base-model`, `--tokenizer-model`, and
+The default model is Qwen 3.8 27B (`accounts/fireworks/models/qwen3p8-27b`),
+with tokenizer `Qwen/Qwen3.8-27B`. Fireworks deprecated the Qwen 3.5 9B and
+Qwen 3.6 27B Serverless Training pools; see the
+[Fireworks changelog](https://docs.fireworks.ai/updates/changelog).
+A different model requires a matching `--base-model`, `--tokenizer-model`, and
 `--renderer`, since tokenization and prompt rendering happen on the client.
 
-The default renderer disables thinking mode. With thinking enabled and a
-small generation budget, the model may spend all available tokens on
+The default renderer is `qwen3_8_disable_thinking`, provided by
+`tinker-cookbook>=0.5.7`. With thinking enabled and a small generation
+budget, the model may spend all available tokens on
 reasoning without producing the final answer expected by the grader.
 
 ## Run
@@ -41,8 +45,8 @@ Calibrate the default task before taking an optimizer step:
 uv run train.py \
   --calibrate \
   --tasks-per-step 6 \
-  --group-size 6 \
-  --max-tokens 512 \
+  --group-size 4 \
+  --max-tokens 2048 \
   --debug-samples 4
 ```
 
@@ -53,7 +57,7 @@ uv run train.py \
   --steps 1 \
   --tasks-per-step 2 \
   --group-size 4 \
-  --max-tokens 512 \
+  --max-tokens 2048 \
   --eval-tasks 4 \
   --require-update
 ```
@@ -61,10 +65,12 @@ uv run train.py \
 `--require-update` fails if every group has identical rewards and the script
 cannot apply an optimizer update. A successful command verifies
 authentication, sampling, HUD grading, one update, checkpoint creation, and
-evaluation.
+evaluation. Calibration, training, and evaluation fail if any rollout has a
+sampling or grading error; failed attempts are not treated as zero-reward
+training examples.
 
 The default command requests 30 training steps with 8 task groups per step,
-8 rollouts per group, and up to 1,024 generated tokens per rollout. A step
+8 rollouts per group, and up to 2,048 generated tokens per rollout. A step
 with no reward variation skips its optimizer update. The run still collects
 1,920 paid training rollouts, followed by 16 evaluation rollouts. Fireworks
 meters prompt prefill, sampled output, and training tokens separately.
@@ -80,6 +86,15 @@ tests do not require an API key:
 ```bash
 uv run pytest
 ```
+
+To check the default renderer against Qwen's published chat template:
+
+```bash
+uv run pytest -m integration test_train.py -k default_renderer
+```
+
+This downloads the tokenizer from Hugging Face and requires network access,
+but does not call Fireworks or train a model.
 
 Serverless capacity is shared. `--max-concurrent` controls the number of
 simultaneous rollout requests; lower values reduce burst pressure when the
@@ -98,7 +113,7 @@ an optimizer update:
 uv run train.py \
   --calibrate \
   --tasks-per-step 6 \
-  --group-size 6 \
+  --group-size 4 \
   --debug-samples 4
 ```
 
@@ -109,7 +124,7 @@ The command reports:
 | `reward_mean` | Mean reward across completed rollouts |
 | `within_group_reward_std` | Mean reward standard deviation within rollout groups |
 
-`--debug-samples N` prints the reward, output-token count, and text for the
+`--debug-samples N` prints the reward, output-token count, and full response for the
 first N rollouts. During training, the within-group statistic is stored as
 `reward_std_within_group`. A positive value confirms reward variation in at
 least one group. Inspect the sample text to verify that the rewards track
@@ -118,8 +133,10 @@ answer quality.
 If groups are uniformly correct, increase the task difficulty with
 `--min-a`, `--max-a`, `--min-b`, and `--max-b`. If groups are uniformly
 incorrect, reduce the operand range or increase `--max-tokens`. The default
-three-digit multiplication range is intended to produce both correct and
-incorrect samples with the 9B model.
+four-digit multiplication range uses a 2,048-token budget. Three-digit tasks
+were nearly saturated on Qwen 3.8 27B, while smaller generation budgets cut
+off many answers. Inspect both correctness and output-token counts when
+calibrating; a clipped response does not establish arithmetic difficulty.
 
 ## Training flow
 
@@ -191,6 +208,10 @@ Resume a previous run with a fully qualified training checkpoint:
 ```bash
 uv run train.py --resume-from "<account>/<run-id>/state-0005"
 ```
+
+Resume restores the checkpoint's original base model; it does not migrate
+an older Qwen adapter to Qwen 3.8. Start a new run when changing base models.
+For a supported non-default checkpoint, pass its matching tokenizer and renderer.
 
 Resume creates a new Fireworks run, appends metrics to the existing
 `metrics.jsonl`, and restarts local step numbering at 1. Sampler checkpoints

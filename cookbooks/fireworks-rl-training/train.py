@@ -26,11 +26,10 @@ from env import multiply
 
 HERE = Path(__file__).resolve().parent
 SERVERLESS_URL = "https://api.fireworks.ai/training/v1/serverless"
-DEFAULT_BASE_MODEL = "accounts/fireworks/models/qwen3p5-9b"
-DEFAULT_TOKENIZER_MODEL = "Qwen/Qwen3.5-9B"
-# Thinking mode spends the whole token budget on a <think> block and never
-# reaches the final answer line, so rewards collapse to zero on this task.
-DEFAULT_RENDERER = "qwen3_5_disable_thinking"
+DEFAULT_BASE_MODEL = "accounts/fireworks/models/qwen3p8-27b"
+DEFAULT_TOKENIZER_MODEL = "Qwen/Qwen3.8-27B"
+# Reserve the generation budget for the answer rather than hidden reasoning.
+DEFAULT_RENDERER = "qwen3_8_disable_thinking"
 
 
 def serverless_url(value: str) -> str:
@@ -89,8 +88,6 @@ def report_calibration(runs: list[Run], *, debug_samples: int) -> None:
         sample = _sample(run)
         assert sample is not None
         text = (run.trace.content or "").strip()
-        if len(text) > 400:
-            text = text[:400] + "..."
         print(
             f"--- reward={run.reward:.2f} output_tokens={len(sample.output_token_ids)}\n{text}",
             flush=True,
@@ -98,9 +95,6 @@ def report_calibration(runs: list[Run], *, debug_samples: int) -> None:
 
 
 def make_taskset(*, count: int, seed: int, a: tuple[int, int], b: tuple[int, int]) -> Taskset:
-    # The default 3-digit x 3-digit lands mid-difficulty for the 9B model:
-    # right often but not always, so groups keep the reward spread GRPO
-    # trains on. Tune the ranges with --min-a/--max-a/--min-b/--max-b.
     a_count = a[1] - a[0] + 1
     b_count = b[1] - b[0] + 1
     population = a_count * b_count
@@ -386,6 +380,17 @@ async def run_rollouts(
             group=group_size,
             max_concurrent=max_concurrent,
         )
+        failed = [
+            run
+            for run in job.runs
+            if run.trace.status != "completed" or run.grade.is_error or _sample(run) is None
+        ]
+        if failed:
+            first = failed[0]
+            detail = first.trace.error or first.grade.content or "missing completed sample"
+            raise RuntimeError(
+                f"{len(failed)}/{len(job.runs)} rollouts failed during {snapshot_name}: {detail}"
+            )
         return job.runs, snapshot.path
     finally:
         sampler.close()
@@ -651,7 +656,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--group-size", type=int, default=8, help="rollouts per task (the GRPO group)"
     )
-    parser.add_argument("--max-tokens", type=int, default=1024, help="generated tokens per rollout")
+    parser.add_argument("--max-tokens", type=int, default=2048, help="generated tokens per rollout")
     parser.add_argument("--max-concurrent", type=int, default=4, help="simultaneous rollouts")
     parser.add_argument(
         "--eval-tasks", type=int, default=16, help="held-out tasks for the final eval"
@@ -678,10 +683,10 @@ def parse_args() -> argparse.Namespace:
         default=0,
         help="with --calibrate, print the first N rollouts (reward, tokens, text)",
     )
-    parser.add_argument("--min-a", type=int, default=100, help="task difficulty: lower bound of a")
-    parser.add_argument("--max-a", type=int, default=999, help="task difficulty: upper bound of a")
-    parser.add_argument("--min-b", type=int, default=100, help="task difficulty: lower bound of b")
-    parser.add_argument("--max-b", type=int, default=999, help="task difficulty: upper bound of b")
+    parser.add_argument("--min-a", type=int, default=1000, help="task difficulty: lower bound of a")
+    parser.add_argument("--max-a", type=int, default=9999, help="task difficulty: upper bound of a")
+    parser.add_argument("--min-b", type=int, default=1000, help="task difficulty: lower bound of b")
+    parser.add_argument("--max-b", type=int, default=9999, help="task difficulty: upper bound of b")
     return parser.parse_args()
 
 

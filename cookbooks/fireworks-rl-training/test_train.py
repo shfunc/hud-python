@@ -1,12 +1,23 @@
 from __future__ import annotations
 
+import asyncio
+import json
+import re
 from argparse import Namespace
+from concurrent.futures import Future
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 from hud.agents.types import AgentStep, Sample
 from hud.eval import HUDRuntime, LocalRuntime, Taskset
 from hud.eval.run import Run
+from hud.settings import settings
+from tokenizers import Tokenizer, decoders, models, pre_tokenizers
+from transformers import PreTrainedTokenizerFast
 
+import train as training
+from env import multiply
 from train import (
     group_relative_advantages,
     make_taskset,
@@ -16,6 +27,32 @@ from train import (
     split_taskset,
     within_group_reward_std,
 )
+
+
+@pytest.fixture(autouse=True)
+def isolate_hud(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "telemetry_enabled", False)
+    monkeypatch.setattr(settings, "api_key", None)
+    monkeypatch.setattr(settings, "telemetry_local_dir", None)
+
+
+@pytest.fixture
+def tokenizer() -> PreTrainedTokenizerFast:
+    vocabulary = {token: i for i, token in enumerate(sorted(pre_tokenizers.ByteLevel.alphabet()))}
+    backend = Tokenizer(models.BPE(vocab=vocabulary, merges=[]))
+    backend.pre_tokenizer = pre_tokenizers.ByteLevel(add_prefix_space=False)
+    backend.decoder = decoders.ByteLevel()
+    return PreTrainedTokenizerFast(
+        tokenizer_object=backend,
+        eos_token="<|im_end|>",
+        additional_special_tokens=["<|im_start|>", "<think>", "</think>"],
+    )
+
+
+def resolved(value: object) -> Future:
+    future = Future()
+    future.set_result(value)
+    return future
 
 
 def rollout(*, group: str, reward: float) -> Run:
@@ -137,3 +174,200 @@ def test_default_rollout_source_has_disjoint_evaluation_tasks() -> None:
 
     assert {task.slug for task in train}.isdisjoint(task.slug for task in evaluation)
     assert isinstance(runtime, LocalRuntime)
+
+
+@pytest.fixture
+def fireworks_service(tokenizer: PreTrainedTokenizerFast) -> MagicMock:
+    service = MagicMock()
+    client = service.create_lora_training_client.return_value
+    client.save_weights_for_sampler.side_effect = lambda name: resolved(
+        SimpleNamespace(path=f"test/run/{name}")
+    )
+    client.save_state.side_effect = lambda name: resolved(SimpleNamespace(path=f"test/run/{name}"))
+    client.forward_backward.return_value = resolved(
+        SimpleNamespace(metrics={"loss:sum": 1.0, "total_tokens:sum": 10})
+    )
+    client.optim_step.return_value = resolved(None)
+    attempts: dict[str, int] = {}
+
+    def sample(*, prompt, num_samples, sampling_params):
+        text = tokenizer.decode(prompt.to_ints())
+        operands = re.search(r"What is (\d+) \* (\d+)", text)
+        assert operands is not None
+        attempts[text] = attempts.get(text, 0) + 1
+        correct = int(operands[1]) * int(operands[2])
+        answer = correct if attempts[text] % 2 else correct + 1
+        tokens = tokenizer.encode(f"{answer}<|im_end|>", add_special_tokens=False)
+        return resolved(
+            SimpleNamespace(
+                sequences=[SimpleNamespace(tokens=tokens, logprobs=[-0.5] * len(tokens))]
+            )
+        )
+
+    service.create_sampling_client.return_value.sample.side_effect = sample
+    return service
+
+
+@pytest.mark.parametrize("calibrate", [False, True])
+def test_training_lifecycle_with_mocked_fireworks(
+    monkeypatch, tmp_path, tokenizer, fireworks_service, calibrate
+) -> None:
+    monkeypatch.setenv("FIREWORKS_API_KEY", "test-key")
+    monkeypatch.setattr(training, "get_tokenizer", lambda model: tokenizer)
+    factory = MagicMock(return_value=fireworks_service)
+    monkeypatch.setattr(training, "FiretitanServiceClient", factory)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "train.py",
+            "--steps",
+            "1",
+            "--tasks-per-step",
+            "1",
+            "--group-size",
+            "2",
+            "--eval-tasks",
+            "1",
+            "--max-concurrent",
+            "1",
+            "--require-update",
+            "--output-dir",
+            str(tmp_path),
+        ]
+        + (["--calibrate"] if calibrate else []),
+    )
+    args = training.parse_args()
+    assert args.base_model == "accounts/fireworks/models/qwen3p8-27b"
+    assert args.tokenizer_model == "Qwen/Qwen3.8-27B"
+    assert args.renderer == "qwen3_8_disable_thinking"
+
+    asyncio.run(training.train(args))
+
+    client = fireworks_service.create_lora_training_client.return_value
+    fireworks_service.create_lora_training_client.assert_called_once_with(
+        base_model=args.base_model, rank=8
+    )
+    if calibrate:
+        client.forward_backward.assert_not_called()
+        client.optim_step.assert_not_called()
+    else:
+        datums, loss_fn = client.forward_backward.call_args.args
+        assert loss_fn == "importance_sampling"
+        assert len(datums) == 2
+        assert any(value > 0 for value in datums[0].loss_fn_inputs["advantages"].data)
+        assert any(value < 0 for value in datums[1].loss_fn_inputs["advantages"].data)
+        client.optim_step.assert_called_once()
+        client.save_state.assert_called_once_with("final-state")
+        metric = json.loads((tmp_path / "metrics.jsonl").read_text())
+        assert metric["updated"] is True
+        assert metric["valid_rollouts"] == 2
+        assert metric["reward_std_within_group"] > 0
+    fireworks_service.close.assert_called_once()
+
+
+@pytest.mark.parametrize("failure", ["sampling", "grading"])
+def test_rollout_failure_fails_calibration(
+    monkeypatch, tmp_path, tokenizer, fireworks_service, failure
+):
+    monkeypatch.setenv("FIREWORKS_API_KEY", "test-key")
+    monkeypatch.setattr(training, "get_tokenizer", lambda model: tokenizer)
+    monkeypatch.setattr(training, "FiretitanServiceClient", lambda **kwargs: fireworks_service)
+    argv = [
+        "train.py",
+        "--calibrate",
+        "--tasks-per-step",
+        "1",
+        "--group-size",
+        "2",
+        "--output-dir",
+        str(tmp_path),
+    ]
+    sampler = fireworks_service.create_sampling_client.return_value
+    if failure == "sampling":
+        future = Future()
+        future.set_exception(RuntimeError("sampler unavailable"))
+        sampler.sample.side_effect = None
+        sampler.sample.return_value = future
+    else:
+        source = tmp_path / "broken.py"
+        source.write_text(
+            "from hud import Environment\n"
+            'env = Environment("broken-grader")\n'
+            "@env.template()\n"
+            "async def multiply():\n"
+            '    answer = yield "What is 123 * 456?"\n'
+            '    raise RuntimeError("grader unavailable")\n'
+            "tasks = [multiply()]\n"
+        )
+        argv.extend(["--tasks-file", str(source), "--env-path", str(source)])
+    monkeypatch.setattr("sys.argv", argv)
+
+    with pytest.raises(RuntimeError, match="2/2 rollouts failed"):
+        asyncio.run(training.train(training.parse_args()))
+
+    fireworks_service.create_lora_training_client.return_value.optim_step.assert_not_called()
+    sampler.close.assert_called_once()
+    fireworks_service.close.assert_called_once()
+
+
+@pytest.mark.integration
+def test_default_renderer_matches_qwen38_chat_template() -> None:
+    tokenizer = training.get_tokenizer(training.DEFAULT_TOKENIZER_MODEL)
+    renderer = training.get_renderer(training.DEFAULT_RENDERER, tokenizer)
+    messages = [{"role": "user", "content": "What is 123 * 456?"}]
+    expected = tokenizer.apply_chat_template(
+        messages,
+        tokenize=True,
+        return_dict=False,
+        add_generation_prompt=True,
+        enable_thinking=False,
+    )
+    assert renderer.build_generation_prompt(messages).to_ints() == expected
+    tokens = tokenizer.encode("56088<|im_end|>", add_special_tokens=False)
+    message, _ = renderer.parse_response(tokens)
+    assert training.get_text_content(message) == "56088"
+
+
+@pytest.mark.parametrize(
+    ("a", "b", "answer", "reward"),
+    [
+        (4861, 3217, "15637837", 1.0),
+        (4861, 3217, "The final answer is:\n15,637,837", 1.0),
+        (4861, 3217, "The answer is 15637837, as calculated above.", 0.0),
+        (4861, 3217, "The answer is 15,637,837, as calculated above.", 0.0),
+        (2, 3, "6,", 0.0),
+        (4861, 3217, r"\boxed{15,637,837}", 0.0),
+        (4861, 3217, "Working...\n\n  15,637,837  \n \t\n", 1.0),
+        (4861, 3217, "+15,637,837", 1.0),
+        (4861, 3217, "15637837\n0", 0.0),
+        (4861, 3217, "15637837\nThat's my answer.", 0.0),
+        (4861, -3217, "-15,637,837", 1.0),
+        (3, 279, "15,637,837", 0.0),
+        (4861, 3217, "0.15637837", 0.0),
+        (4861, 3217, "1e15637837", 0.0),
+        (4861, 3217, "15,63,7837", 0.0),
+        (4861, 3217, "15,63,7837,", 0.0),
+        (4861, 3217, "15,,637,837,", 0.0),
+        (4861, 3217, "No answer", 0.0),
+        (4861, 3217, " \n\t\n", 0.0),
+    ],
+)
+def test_grades_integer_on_last_nonempty_line(a, b, answer, reward, tokenizer, fireworks_service):
+    tokens = tokenizer.encode(f"{answer}<|im_end|>", add_special_tokens=False)
+    sampler = fireworks_service.create_sampling_client.return_value
+    sampler.sample.side_effect = None
+    sampler.sample.return_value = resolved(
+        SimpleNamespace(sequences=[SimpleNamespace(tokens=tokens, logprobs=[-0.5] * len(tokens))])
+    )
+    agent = training.FireworksAgent(
+        sampler=sampler,
+        renderer=training.get_renderer(training.DEFAULT_RENDERER, tokenizer),
+        model=training.DEFAULT_BASE_MODEL,
+        max_tokens=2048,
+        temperature=1.0,
+        timeout=10,
+        max_seq_len=8192,
+    )
+    job = asyncio.run(multiply(a=a, b=b).run(agent, runtime=LocalRuntime(training.HERE / "env.py")))
+    assert job.runs[0].trace.status == "completed"
+    assert job.runs[0].reward == reward

@@ -4,11 +4,11 @@ version = "0.1.0"
 description = "Train on HUD rewards with Fireworks Serverless RL"
 requires-python = ">=3.11,<3.13"
 dependencies = [
-    "fireworks-ai[training]",
+    "fireworks-ai[training]>=1.2.11",
     "hud",
     "python-dotenv",
     "tinker",
-    "tinker-cookbook",
+    "tinker-cookbook>=0.5.7",
 ]
 
 [tool.uv]
@@ -19,3 +19,10 @@ dev = ["pytest"]
 
 [tool.uv.sources]
 hud = { path = "../..", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+addopts = "-m 'not integration'"
+markers = [
+    "integration: requires network access to download the model tokenizer",
+]
