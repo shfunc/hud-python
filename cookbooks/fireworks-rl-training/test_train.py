@@ -333,16 +333,26 @@ def test_default_renderer_matches_qwen38_chat_template() -> None:
     [
         (4861, 3217, "15637837", 1.0),
         (4861, 3217, "The final answer is:\n15,637,837", 1.0),
-        (4861, 3217, r"\boxed{15,637,837}", 1.0),
+        (4861, 3217, "The answer is 15637837, as calculated above.", 0.0),
+        (4861, 3217, "The answer is 15,637,837, as calculated above.", 0.0),
+        (2, 3, "6,", 0.0),
+        (4861, 3217, r"\boxed{15,637,837}", 0.0),
+        (4861, 3217, "Working...\n\n  15,637,837  \n \t\n", 1.0),
+        (4861, 3217, "+15,637,837", 1.0),
+        (4861, 3217, "15637837\n0", 0.0),
+        (4861, 3217, "15637837\nThat's my answer.", 0.0),
         (4861, -3217, "-15,637,837", 1.0),
         (3, 279, "15,637,837", 0.0),
         (4861, 3217, "0.15637837", 0.0),
         (4861, 3217, "1e15637837", 0.0),
         (4861, 3217, "15,63,7837", 0.0),
+        (4861, 3217, "15,63,7837,", 0.0),
+        (4861, 3217, "15,,637,837,", 0.0),
         (4861, 3217, "No answer", 0.0),
+        (4861, 3217, " \n\t\n", 0.0),
     ],
 )
-def test_grades_final_numeric_value(a, b, answer, reward, tokenizer, fireworks_service):
+def test_grades_integer_on_last_nonempty_line(a, b, answer, reward, tokenizer, fireworks_service):
     tokens = tokenizer.encode(f"{answer}<|im_end|>", add_special_tokens=False)
     sampler = fireworks_service.create_sampling_client.return_value
     sampler.sample.side_effect = None

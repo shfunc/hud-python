@@ -11,10 +11,9 @@ env = Environment(name="fireworks-arithmetic")
 
 
 def grade_final_integer(answer: object, expected: int) -> EvaluationResult:
-    """Compare the final numeric token as an integer, allowing thousands separators."""
-    text = answer if isinstance(answer, str) else str(answer)
-    numbers = re.findall(r"[+-]?(?:\d[\d,]*(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?", text)
-    final = numbers[-1] if numbers else ""
+    """Grade an integer on the last nonempty line, allowing thousands separators."""
+    text = (answer if isinstance(answer, str) else str(answer)).strip()
+    final = text.splitlines()[-1].strip() if text else ""
     got = (
         int(final.replace(",", ""))
         if re.fullmatch(r"[+-]?(?:\d+|\d{1,3}(?:,\d{3})+)", final)
@@ -22,7 +21,7 @@ def grade_final_integer(answer: object, expected: int) -> EvaluationResult:
     )
     return EvaluationResult(
         reward=1.0 if got == expected else 0.0,
-        content=text.strip(),
+        content=text,
         info={"expected": expected, "got": got},
     )
 
