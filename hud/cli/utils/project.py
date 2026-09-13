@@ -13,6 +13,8 @@ from hud.utils.exceptions import HudRequestError
 from hud.utils.naming import normalize_environment_name
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from hud.cli.utils.source import EnvironmentSource
     from hud.utils.hud_console import HUDConsole
     from hud.utils.platform import PlatformClient
@@ -102,8 +104,24 @@ class ProjectNotWritable(PermissionError):
 
 def list_projects(platform: PlatformClient) -> list[Project]:
     """Every Project visible to the caller."""
-    data = platform.get("/projects")
-    return _projects_from_page(data)
+    return list(_iter_projects(platform))
+
+
+def _iter_projects(platform: PlatformClient, *, search: str | None = None) -> Iterator[Project]:
+    params: dict[str, str | int] = {"limit": 50, "offset": 0}
+    if search is not None:
+        params["search"] = search
+    offset = 0
+    while True:
+        params["offset"] = offset
+        data = platform.get("/projects", params=params)
+        projects = _projects_from_page(data)
+        yield from projects
+        if not projects:
+            return
+        offset += len(data["items"])
+        if offset >= data["total"]:
+            return
 
 
 def require_projects_enabled(platform: PlatformClient) -> None:
@@ -129,7 +147,7 @@ def resolve_project(platform: PlatformClient, ref: str) -> Project:
         project_id = str(uuid.UUID(ref))
     except ValueError:
         name = normalize_environment_name(ref, default="")
-        projects = _projects_from_page(platform.get("/projects", params={"search": name}))
+        projects = _iter_projects(platform, search=name)
         match = next((p for p in projects if p.name == name), None)
     else:
         try:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 import typer
@@ -48,23 +49,41 @@ def calls() -> list[str]:
 
 
 @pytest.fixture
-def platform(monkeypatch: pytest.MonkeyPatch, calls: list[str]) -> PlatformClient:
-    """A client whose ``GET /projects`` returns a fixed three-project team."""
+def records() -> list[dict[str, Any]]:
+    return [
+        _record(_DEFAULT_ID, "default", is_default=True),
+        _record(_BROWSER_ID, "browser-evals"),
+        _record(_READONLY_ID, "locked-down", create=False),
+    ]
+
+
+@pytest.fixture
+def platform(
+    monkeypatch: pytest.MonkeyPatch, calls: list[str], records: list[dict[str, Any]]
+) -> PlatformClient:
+    """A client backed by a paginated, searchable Projects API."""
 
     def fake_request(method: str, url: str, **kwargs: Any) -> dict[str, Any]:
         calls.append(url)
-        records = [
-            _record(_DEFAULT_ID, "default", is_default=True),
-            _record(_BROWSER_ID, "browser-evals"),
-            _record(_READONLY_ID, "locked-down", create=False),
-        ]
-        project_id = url.rsplit("/", 1)[-1]
+        parsed = urlsplit(url)
+        params = parse_qs(parsed.query)
+        project_id = parsed.path.rsplit("/", 1)[-1]
         if project_id in {_DEFAULT_ID, _BROWSER_ID, _READONLY_ID}:
             return next(record for record in records if record["id"] == project_id)
-        search = (kwargs.get("params") or {}).get("search")
-        if search:
-            records = [record for record in records if search in record["name"]]
-        return {"items": records, "total": len(records), "limit": 50, "offset": 0}
+        search = params.get("search", [""])[0]
+        matches = [
+            record
+            for record in records
+            if search in record["name"] or search in (record.get("description") or "")
+        ]
+        limit = int(params.get("limit", ["50"])[0])
+        offset = int(params.get("offset", ["0"])[0])
+        return {
+            "items": matches[offset : offset + limit],
+            "total": len(matches),
+            "limit": limit,
+            "offset": offset,
+        }
 
     monkeypatch.setattr("hud.utils.platform.make_request_sync", fake_request)
     return PlatformClient("https://api.example", "key")
@@ -80,6 +99,47 @@ def test_list_reads_paginated_items(platform: PlatformClient) -> None:
         "browser-evals",
         "locked-down",
     ]
+
+
+@pytest.mark.parametrize("count", [0, 50, 51, 101])
+def test_list_returns_every_page(
+    platform: PlatformClient, records: list[dict[str, Any]], calls: list[str], count: int
+) -> None:
+    records[:] = [_record(str(i), f"project-{i}") for i in range(count)]
+
+    assert [project.id for project in list_projects(platform)] == [r["id"] for r in records]
+    assert len(calls) == max(1, (count + 49) // 50)
+
+
+@pytest.mark.parametrize("match_index", [0, 50, 100])
+def test_resolve_searches_until_the_exact_name_is_found(
+    platform: PlatformClient,
+    records: list[dict[str, Any]],
+    calls: list[str],
+    match_index: int,
+) -> None:
+    records[:] = [_record(str(i), f"browser-evals-{i}") for i in range(101)]
+    records[match_index] = _record(_BROWSER_ID, "browser-evals")
+
+    assert resolve_project(platform, "Browser Evals").id == _BROWSER_ID
+    assert len(calls) == match_index // 50 + 1
+    assert all(parse_qs(urlsplit(url).query)["search"] == ["browser-evals"] for url in calls)
+
+
+def test_resolve_exhausts_search_and_lists_all_alternatives_when_no_exact_name_exists(
+    platform: PlatformClient, records: list[dict[str, Any]], calls: list[str]
+) -> None:
+    records[:] = [
+        {**_record(str(i), f"project-{i}"), "description": "browser-evals"} for i in range(51)
+    ]
+
+    with pytest.raises(ProjectNotFound) as excinfo:
+        resolve_project(platform, "browser-evals")
+
+    assert [p.id for p in excinfo.value.available] == [r["id"] for r in records]
+    queries = [parse_qs(urlsplit(url).query) for url in calls]
+    assert [q.get("search") for q in queries] == [["browser-evals"], ["browser-evals"], None, None]
+    assert [q["offset"] for q in queries] == [["0"], ["50"], ["0"], ["50"]]
 
 
 def test_projects_not_enabled_matches_only_the_feature_gate() -> None:
