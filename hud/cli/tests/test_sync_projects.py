@@ -6,9 +6,11 @@ import json
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from typer.testing import CliRunner
 
 import hud.cli.sync as sync_module
 from hud.eval import Task, Taskset
+from hud.utils.exceptions import HudRequestError
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -138,3 +140,37 @@ def test_project_override_does_not_pin_directory(
 
     config = json.loads((tmp_path / ".hud" / "config.json").read_text())
     assert config == {"tasksetId": "taskset-1"}
+
+
+@pytest.mark.parametrize("status_code", [400, 403, 500])
+def test_rejected_upload_exits_with_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, status_code: int
+) -> None:
+    project_id = "22222222-2222-4222-8222-222222222222"
+    detail = "Taskset belongs to another Project" if status_code == 400 else "Upload rejected"
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("hud.settings.settings.api_key", "test-key")
+    monkeypatch.setattr("hud.settings.settings.hud_api_url", "https://api.example")
+    (tmp_path / "tasks.json").write_text(
+        json.dumps([{"env": "example", "id": "solve", "slug": "one"}])
+    )
+
+    def request(method: str, url: str, **kwargs: Any) -> dict[str, Any]:
+        if method == "GET" and url == f"https://api.example/v2/projects/{project_id}":
+            return {"id": project_id, "name": "browser-evals", "capabilities": {"create": True}}
+        assert method == "POST" and url == "https://api.example/v2/tasks/upload"
+        assert kwargs["json"]["project_id"] == project_id
+        assert len(kwargs["json"]["tasks"]) == 1
+        raise HudRequestError(detail, status_code=status_code, response_json={"detail": detail})
+
+    monkeypatch.setattr("hud.utils.platform.make_request_sync", request)
+
+    result = CliRunner().invoke(
+        sync_module.sync_app,
+        ["tasks", "demo", "tasks.json", "--project", project_id, "--force", "--yes"],
+    )
+
+    assert result.exit_code == 1
+    assert detail in result.output
+    assert "Sync complete" not in result.output
+    assert not (tmp_path / ".hud" / "config.json").exists()

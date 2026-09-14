@@ -381,7 +381,7 @@ def sync_tasks_command(
         )
     except HudRequestError as e:
         _show_upload_error(e, hud_console)
-        return
+        raise typer.Exit(1) from e
 
     created = int(result.get("tasks_created", 0))
     updated = int(result.get("tasks_updated", 0))
