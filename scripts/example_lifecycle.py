@@ -56,7 +56,7 @@ def check() -> None:
     env = {key: value for key, value in os.environ.items() if key != "HUD_TELEMETRY_LOCAL_DIR"}
     for attempt in range(12):
         result = subprocess.run(
-            [str(Path(sys.executable).with_name("hud")), "trace", traces[0].stem, "--json"],
+            [str(Path(sys.executable).with_name("hud")), "trace", "get", traces[0].stem, "--json"],
             env=env,
             capture_output=True,
             text=True,
