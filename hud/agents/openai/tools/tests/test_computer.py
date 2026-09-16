@@ -126,6 +126,7 @@ async def test_actions_list_runs_each() -> None:
 async def test_empty_actions_errors() -> None:
     tool = RecordingOpenAI()
     assert (await tool.execute({"actions": []})).isError
+    assert tool.calls == [("screenshot",)]
 
 
 async def test_invalid_type_errors() -> None:

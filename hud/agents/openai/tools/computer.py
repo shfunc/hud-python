@@ -38,17 +38,24 @@ def last_image_content(result: MCPToolResult) -> mcp_types.ImageContent | None:
 OPENAI_KEY_ALIASES: dict[str, str] = {
     "return": "Return",
     "escape": "Escape",
+    "esc": "Escape",
     "arrowup": "Up",
+    "up": "Up",
     "arrowdown": "Down",
+    "down": "Down",
     "arrowleft": "Left",
+    "left": "Left",
     "arrowright": "Right",
+    "right": "Right",
     "backspace": "BackSpace",
     "delete": "Delete",
+    "del": "Delete",
     "tab": "Tab",
     "space": "space",
     "control": "Control_L",
     "ctrl": "Control_L",
     "alt": "Alt_L",
+    "option": "Alt_L",
     "shift": "Shift_L",
     "meta": "Super_L",
     "cmd": "Super_L",
@@ -93,11 +100,11 @@ class OpenAIComputerTool(RFBTool):
         if isinstance(actions, list):
             action_list = cast("list[Any]", actions)
             if not action_list:
-                return tool_err("actions list is empty")
+                return await self._error_result("actions list is empty")
             result = MCPToolResult(content=[], isError=False)
             for index, raw_action in enumerate(action_list):
                 if not isinstance(raw_action, dict):
-                    return tool_err("actions must be objects")
+                    return await self._error_result("actions must be objects")
                 action = cast("dict[str, Any]", raw_action)
                 result = await self._execute_one(
                     action,
@@ -108,6 +115,11 @@ class OpenAIComputerTool(RFBTool):
             return result
         return await self._execute_one(arguments, ensure_screenshot=True)
 
+    async def _error_result(self, message: str) -> MCPToolResult:
+        result = tool_err(message)
+        result.content.extend((await self.screenshot()).content)
+        return result
+
     async def _execute_one(
         self,
         arguments: dict[str, Any],
@@ -116,12 +128,12 @@ class OpenAIComputerTool(RFBTool):
     ) -> MCPToolResult:
         action_type = arguments.get("type")
         if not isinstance(action_type, str):
-            return tool_err("type is required")
+            return await self._error_result("type is required")
 
         if action_type == "response":
             text = arguments.get("text")
             if not isinstance(text, str):
-                return tool_err("text is required for response")
+                return await self._error_result("text is required for response")
             return MCPToolResult(
                 content=[mcp_types.TextContent(type="text", text=text)],
             )
@@ -130,7 +142,7 @@ class OpenAIComputerTool(RFBTool):
             await self._dispatch(action_type, arguments)
         except Exception as exc:
             logger.exception("OpenAIComputerTool action %s failed", action_type)
-            return tool_err(f"computer action {action_type!r} failed: {exc}")
+            return await self._error_result(f"computer action {action_type!r} failed: {exc}")
 
         needs_screenshot = (
             ensure_screenshot and action_type in _SCREENSHOT_ACTIONS and action_type != "screenshot"
