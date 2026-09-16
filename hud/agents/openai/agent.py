@@ -316,7 +316,7 @@ class OpenAIAgent(ToolAgent[ResponseInputItemParam, OpenAIConfig]):
                     elif item.action is not None:
                         arguments = item.action.to_dict()
                     else:
-                        raise ValueError("OpenAI computer_call missing action")
+                        arguments = {"actions": []}
                     call_dict: dict[str, Any] = {
                         "name": "computer",
                         "arguments": arguments,

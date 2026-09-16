@@ -9,12 +9,16 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, patch
 
+import mcp.types as mcp_types
+import pytest
+
 from hud.agents.openai.tools.computer import (
     OpenAIComputerTool,
     _hold_keys,
     _map_key,
 )
-from hud.agents.tools.base import result_text, tool_ok
+from hud.agents.tools.base import result_text
+from hud.types import MCPToolResult
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -27,9 +31,11 @@ class RecordingOpenAI(OpenAIComputerTool):
         self.calls: list[tuple[Any, ...]] = []
         self.client = SimpleNamespace(width=200, height=100)
 
-    async def screenshot(self) -> Any:
+    async def screenshot(self) -> MCPToolResult:
         self.calls.append(("screenshot",))
-        return tool_ok("shot")
+        return MCPToolResult(
+            content=[mcp_types.ImageContent(type="image", data="c2hvdA==", mimeType="image/png")],
+        )
 
     async def click(
         self,
@@ -76,8 +82,10 @@ class RecordingOpenAI(OpenAIComputerTool):
 def test_key_mapping() -> None:
     assert _map_key("ctrl") == "Control_L"
     assert _map_key("x") == "x"
+    assert _map_key("ESC") == "Escape"
+    assert _map_key("RIGHT") == "Right"
     assert _hold_keys(["ctrl", "c"]) == ["Control_L", "c"]
-    assert _hold_keys("notalist") is None
+    assert _hold_keys(None) is None
 
 
 def test_to_params() -> None:
@@ -99,19 +107,23 @@ async def test_type_and_keypress() -> None:
     assert ("keys", ("Control_L", "c")) in tool.calls
 
 
-async def test_drag_and_wait() -> None:
+@pytest.mark.parametrize(("ms", "seconds"), [(500, 0.5), (0, 0)])
+async def test_drag_and_wait(ms: int, seconds: float) -> None:
     tool = RecordingOpenAI()
     await tool.execute({"type": "drag", "path": [{"x": 0, "y": 0}, {"x": 5, "y": 5}]})
     with patch("hud.agents.tools.rfb.asyncio.sleep", new_callable=AsyncMock) as sleep:
-        await tool.execute({"type": "wait", "ms": 500})
+        result = await tool.execute({"type": "wait", "ms": ms})
     assert ("drag", ((0, 0), (5, 5))) in tool.calls
-    sleep.assert_awaited_once_with(0.5)
+    assert not result.isError
+    sleep.assert_awaited_once_with(seconds)
 
 
-async def test_response_action_returns_text() -> None:
+async def test_response_action_returns_text_and_screenshot() -> None:
     tool = RecordingOpenAI()
     result = await tool.execute({"type": "response", "text": "all done"})
     assert result_text(result) == "all done"
+    assert any(isinstance(block, mcp_types.ImageContent) for block in result.content)
+    assert tool.calls[-1] == ("screenshot",)
 
 
 async def test_actions_list_runs_each() -> None:
@@ -123,9 +135,12 @@ async def test_actions_list_runs_each() -> None:
     assert ("type", "a") in tool.calls
 
 
-async def test_empty_actions_errors() -> None:
+@pytest.mark.parametrize(
+    "arguments", [{"actions": []}, {"actions": "invalid", "type": "move", "x": 3, "y": 4}]
+)
+async def test_invalid_actions_errors(arguments: dict[str, Any]) -> None:
     tool = RecordingOpenAI()
-    assert (await tool.execute({"actions": []})).isError
+    assert (await tool.execute(arguments)).isError
     assert tool.calls == [("screenshot",)]
 
 
@@ -133,3 +148,27 @@ async def test_invalid_type_errors() -> None:
     tool = RecordingOpenAI()
     assert (await tool.execute({"type": "frobnicate"})).isError
     assert (await tool.execute({})).isError
+
+
+@pytest.mark.parametrize(
+    "action",
+    [
+        {"type": "type"},
+        {"type": "move", "x": 10},
+        {"type": "keypress", "keys": "ESC"},
+        {"type": "keypress", "keys": []},
+        {"type": "drag", "path": [{"x": 1, "y": 2}, {"x": 3}]},
+        {"type": "click", "button": 1},
+        {"type": "wait", "ms": -1},
+    ],
+)
+async def test_invalid_action_stops_batch_and_returns_screenshot(action: dict[str, Any]) -> None:
+    tool = RecordingOpenAI()
+    result = await tool.execute(
+        {"actions": [{"type": "move", "x": 3, "y": 4}, action, {"type": "type", "text": "later"}]},
+    )
+
+    assert result.isError
+    assert result_text(result)
+    assert any(isinstance(block, mcp_types.ImageContent) for block in result.content)
+    assert tool.calls == [("move", 3, 4), ("screenshot",)]
