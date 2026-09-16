@@ -1,12 +1,12 @@
-"""HUD inference gateway: provider clients and the model catalog.
+"""HUD inference gateway: provider clients, and the model catalog they resolve against.
 
-The sibling of :mod:`hud.utils.platform` — that module talks to the platform
-API, this one talks to the inference gateway. Agent construction on top of the
-gateway lives in :func:`hud.agents.create_agent`.
+Agent construction on top of the gateway lives in :func:`hud.agents.create_agent`.
 """
 
 from __future__ import annotations
 
+import difflib
+from datetime import UTC, datetime
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
@@ -33,60 +33,84 @@ class GatewayProviderInfo(BaseModel):
 
 
 class GatewayModelInfo(BaseModel):
-    id: str | None = None
+    id: str
     name: str | None = None
     model_name: str | None = None
     sdk_agent_type: str | None = None
     is_trainable: bool = False
     provider: GatewayProviderInfo = Field(default_factory=GatewayProviderInfo)
+    created_at: datetime | None = None
+    released_at: datetime | None = None
+    deprecated_at: datetime | None = None
+
+    @property
+    def recency(self) -> datetime:
+        """Sort key for "newest first": the model's release, else when it joined the catalog."""
+        return self.released_at or self.created_at or datetime.min.replace(tzinfo=UTC)
 
 
 class GatewayModelsResponse(BaseModel):
-    """`GET /models` — a paginated platform response; only `items` is read."""
+    """One page of `GET /models`."""
 
     items: list[GatewayModelInfo]
+    total: int
 
 
-_MODEL_ALIASES: dict[str, str] = {
-    "deepseek-v4": "deepseek/deepseek-v4-pro",
-    "deepseek-v4-pro": "deepseek/deepseek-v4-pro",
-    "deepseek-v4-flash": "deepseek/deepseek-v4-flash",
-    "glm-5.2": "z-ai/glm-5.2",
-    "kimi-2.6": "moonshotai/kimi-k2.6",
-    "kimi-k2.6": "moonshotai/kimi-k2.6",
-    "minimax-m3": "MiniMax-M3",
-    "minimax-m2.7": "MiniMax-M2.7",
-    "minimax-m2.5": "MiniMax-M2.5",
-}
-
-
-def _inject_trace_id(request: httpx.Request) -> None:
+async def _inject_trace_id(request: httpx.Request) -> None:
+    """httpx request hook."""
     request.headers.update(get_trace_headers())
 
 
-async def _inject_trace_id_async(request: httpx.Request) -> None:
-    _inject_trace_id(request)
+def build_model_client(
+    provider: str, *, model: str | None = None, gateway: bool = False
+) -> GatewayClient:
+    """The provider's own key when set, otherwise the HUD gateway; *gateway* skips the
+    provider key. A Bedrock inference-profile ARN as the Anthropic *model* is only
+    reachable through Bedrock, so it cannot be combined with *gateway*.
+    """
+    bedrock = provider == "anthropic" and model is not None and model.startswith("arn:aws:bedrock:")
+    if bedrock and gateway:
+        raise ValueError(f"{model} is a Bedrock inference profile; it cannot use the HUD gateway")
+    if bedrock:
+        if not (
+            settings.aws_access_key_id and settings.aws_secret_access_key and settings.aws_region
+        ):
+            raise HudAuthenticationError(
+                "AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_REGION are required "
+                "for AWS Bedrock"
+            )
+        from anthropic import AsyncAnthropicBedrock
 
+        return AsyncAnthropicBedrock(
+            aws_access_key=settings.aws_access_key_id,
+            aws_secret_key=settings.aws_secret_access_key,
+            aws_region=settings.aws_region,
+        )
+    keys = {
+        "anthropic": settings.anthropic_api_key,
+        "gemini": settings.gemini_api_key,
+        "openai": settings.openai_api_key,
+    }
+    key = keys[provider]
+    if gateway or not key:
+        if settings.api_key:
+            return build_gateway_client(provider)
+        raise HudAuthenticationError(
+            f"No API key for {provider}. Set its provider key or HUD_API_KEY."
+        )
+    if provider == "anthropic":
+        from anthropic import AsyncAnthropic
 
-def normalize_gateway_model_id(model: str) -> str:
-    """Return the canonical HUD gateway model slug for known short aliases."""
-    return _MODEL_ALIASES.get(model.lower(), model)
+        return AsyncAnthropic(api_key=key)
+    if provider == "gemini":
+        from google import genai
 
-
-def gateway_model_aliases() -> tuple[str, ...]:
-    """Return accepted short aliases for HUD gateway model slugs."""
-    return tuple(_MODEL_ALIASES)
+        return genai.Client(api_key=key)
+    return AsyncOpenAI(api_key=key)
 
 
 def build_gateway_client(provider: str) -> GatewayClient:
-    """Build a client configured for HUD gateway routing.
-
-    Args:
-        provider: Provider name ("anthropic", "openai", "gemini", etc.)
-
-    Returns:
-        Configured async client for the provider.
-    """
+    """A *provider* SDK client pointed at the HUD gateway, with trace headers attached."""
     # Provider SDK clients bypass hud.utils.requests, so guard here.
     if not settings.api_key:
         raise HudAuthenticationError("HUD_API_KEY is required for HUD gateway clients")
@@ -103,7 +127,7 @@ def build_gateway_client(provider: str) -> GatewayClient:
             api_key=settings.api_key,
             base_url=settings.hud_gateway_url,
             http_client=AnthropicHttpClient(
-                event_hooks={"request": [_inject_trace_id_async]},
+                event_hooks={"request": [_inject_trace_id]},
             ),
         )
 
@@ -116,10 +140,14 @@ def build_gateway_client(provider: str) -> GatewayClient:
             http_options=HttpOptions(
                 api_version="v1beta",
                 base_url=settings.hud_gateway_url,
-                client_args={"event_hooks": {"request": [_inject_trace_id]}},
+                client_args={
+                    "event_hooks": {
+                        "request": [lambda request: request.headers.update(get_trace_headers())]
+                    }
+                },
                 async_client_args={
                     "transport": httpx.AsyncHTTPTransport(),
-                    "event_hooks": {"request": [_inject_trace_id_async]},
+                    "event_hooks": {"request": [_inject_trace_id]},
                 },
             ),
         )
@@ -129,13 +157,46 @@ def build_gateway_client(provider: str) -> GatewayClient:
         api_key=settings.api_key,
         base_url=settings.hud_gateway_url,
         http_client=DefaultAsyncHttpxClient(
-            event_hooks={"request": [_inject_trace_id_async]},
+            event_hooks={"request": [_inject_trace_id]},
         ),
     )
 
 
 @lru_cache(maxsize=1)
-def list_gateway_models() -> list[GatewayModelInfo]:
-    """Models available through the HUD gateway (the platform model catalog)."""
-    payload = PlatformClient.from_settings().get("/models")
-    return GatewayModelsResponse.model_validate(payload).items
+def list_gateway_models(platform: PlatformClient | None = None) -> list[GatewayModelInfo]:
+    """Models available through the HUD gateway (the whole platform model catalog),
+    as seen by *platform* (the settings' client when omitted)."""
+    if platform is None:
+        platform = PlatformClient.from_settings()
+    models: list[GatewayModelInfo] = []
+    while True:
+        page = GatewayModelsResponse.model_validate(
+            platform.get("/models", params={"limit": 100, "offset": len(models)})
+        )
+        models.extend(page.items)
+        if len(models) >= page.total:
+            return models
+        if not page.items:
+            raise ValueError("Models API returned an empty page before the reported total")
+
+
+def resolve_gateway_model(model: str, platform: PlatformClient | None = None) -> GatewayModelInfo:
+    """The catalog entry for a model id, display name, or slug (case-insensitive;
+    a slug's provider prefix is optional)."""
+    names = [
+        (name, entry)
+        for entry in list_gateway_models(platform)
+        for name in (
+            entry.id,
+            entry.name,
+            entry.model_name,
+            (entry.model_name or "").rsplit("/", 1)[-1],
+        )
+        if name
+    ]
+    for name, entry in names:
+        if name.lower() == model.lower():
+            return entry
+    near = difflib.get_close_matches(model, [name for name, _ in names], n=3, cutoff=0.5)
+    hint = f" Did you mean: {', '.join(near)}?" if near else " Run `hud models` to list them."
+    raise ValueError(f"Model {model!r} not found in the HUD gateway registry.{hint}")

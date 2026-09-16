@@ -10,14 +10,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlencode
-from uuid import UUID
 
+from hud.settings import settings
+from hud.utils.exceptions import HudAuthenticationError
 from hud.utils.requests import make_request, make_request_sync
-
-
-def canonical_record_id(record_id: str) -> str:
-    """Return the canonical UUID representation of a HUD record id."""
-    return str(UUID(record_id))
 
 
 @dataclass(frozen=True)
@@ -39,9 +35,10 @@ class PlatformClient:
 
     @classmethod
     def from_settings(cls) -> PlatformClient:
-        from hud.settings import settings
-
-        return cls(settings.hud_api_url, settings.api_key or "")
+        api_key = settings.api_key
+        if not api_key:
+            raise HudAuthenticationError("HUD_API_KEY is required")
+        return cls(settings.hud_api_url, api_key)
 
     @property
     def base_url(self) -> str:
@@ -60,6 +57,9 @@ class PlatformClient:
 
     def post(self, path: str, *, json: Any | None = None) -> Any:
         return make_request_sync("POST", self.url(path), json=json, api_key=self.api_key)
+
+    def put(self, path: str, *, json: Any | None = None) -> Any:
+        return make_request_sync("PUT", self.url(path), json=json, api_key=self.api_key)
 
     def patch(self, path: str, *, json: Any | None = None) -> Any:
         return make_request_sync("PATCH", self.url(path), json=json, api_key=self.api_key)

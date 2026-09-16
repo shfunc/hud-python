@@ -7,19 +7,7 @@ from typing import Any
 import pytest
 
 from hud.utils.exceptions import HudAuthenticationError
-from hud.utils.platform import PlatformClient, canonical_record_id
-
-
-def test_canonical_record_id_accepts_uuid_and_compact_hex() -> None:
-    canonical = "03dd2a73-d3df-4d10-a54a-e3d87c2d530d"
-
-    assert canonical_record_id(canonical) == canonical
-    assert canonical_record_id(canonical.replace("-", "")) == canonical
-
-
-def test_canonical_record_id_rejects_non_uuid() -> None:
-    with pytest.raises(ValueError):
-        canonical_record_id("not-a-uuid")
+from hud.utils.platform import PlatformClient
 
 
 def test_url_prefixes_version_segment_and_joins_params() -> None:
@@ -86,3 +74,15 @@ def test_from_settings_prepends_canonical_version(monkeypatch: pytest.MonkeyPatc
 
     platform = PlatformClient.from_settings()
     assert platform.url("/tasks/upload") == "https://api.example/v2/tasks/upload"
+
+
+@pytest.mark.parametrize("api_key", [None, ""])
+def test_from_settings_requires_api_key(
+    monkeypatch: pytest.MonkeyPatch, api_key: str | None
+) -> None:
+    from hud import settings as settings_module
+
+    monkeypatch.setattr(settings_module.settings, "api_key", api_key)
+
+    with pytest.raises(HudAuthenticationError, match="HUD_API_KEY is required"):
+        PlatformClient.from_settings()

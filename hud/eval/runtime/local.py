@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import inspect
 import sys
 from collections import deque
 from contextlib import asynccontextmanager
@@ -141,15 +142,17 @@ class LocalRuntime:
 
 
 class SubprocessRuntime:
-    """The child-process provider: serve the placed row's env from *path*.
+    """The child-process provider: serve the placed row's env from *source*.
 
     Each acquisition runs ``python -m hud.environment.server <path> --env
     name`` — the same serving entry point a container CMD runs — on an
     ephemeral loopback port, yields its :class:`Runtime`, and terminates the
-    child on exit. *path* is a ``.py`` file or a directory of them. The served
-    env is the placed task's ``env`` name (so a mixed-env taskset works
-    against one source), unless *env* pins one explicitly; placing a row whose
-    env the source does not define fails loudly in the child.
+    child on exit. *source* is a ``.py`` file, a directory of them, or a live
+    :class:`~hud.environment.Environment`, which is served from the file its
+    ``@env.template`` declarations live in. The served env is the placed
+    task's ``env`` name (so a mixed-env taskset works against one source),
+    unless *env* pins one explicitly; placing a row whose env the source does
+    not define fails loudly in the child.
 
     The child's working directory is the source's directory, so sibling
     imports and relative data paths resolve; ``@env.initialize`` daemons start
@@ -160,13 +163,28 @@ class SubprocessRuntime:
 
     def __init__(
         self,
-        path: str | Path,
+        source: str | Path | Environment,
         *,
         env: str | None = None,
         ready_timeout: float = 120.0,
     ) -> None:
-        self.source = Path(path).resolve()
-        self.env = env
+        from hud.environment.env import Environment as _Environment
+
+        if isinstance(source, _Environment):
+            if env is not None:
+                raise TypeError("SubprocessRuntime: env= applies only to source paths")
+            files = {Path(inspect.getfile(t.func)).resolve() for t in source.tasks.values()}
+            if len(files) != 1:
+                raise ValueError(
+                    f"SubprocessRuntime: Environment {source.name!r} must declare its "
+                    "@env.template tasks in exactly one source file to be served from source; "
+                    "serve a source path instead"
+                )
+            self.source = files.pop()
+            self.env: str | None = source.name
+        else:
+            self.source = Path(source).resolve()
+            self.env = env
         self.ready_timeout = ready_timeout
 
     @asynccontextmanager

@@ -1,198 +1,247 @@
-"""``hud project`` — see and choose the Project new environments land in."""
+"""Projects: platform records, placement, and the ``hud project`` commands."""
 
 from __future__ import annotations
 
-import httpx
+import uuid
+from dataclasses import asdict, dataclass
+from typing import Any
+
 import typer
 
-from hud.cli.utils.api import require_api_key
-from hud.cli.utils.project import (
-    Project,
-    ProjectNotFound,
-    ProjectNotWritable,
-    list_projects,
-    projects_not_enabled,
-    report_project_error,
-    require_projects_enabled,
-    resolve_placement,
-    resolve_project,
+from hud.cli import (
+    CLI,
+    CONFIG_PATH,
+    AuthScope,
+    CliError,
+    DirectoryLink,
+    DirectoryState,
 )
-from hud.cli.utils.source import EnvironmentSource
+from hud.settings import settings
 from hud.utils.exceptions import HudRequestError
 from hud.utils.hud_console import HUDConsole
+from hud.utils.naming import normalize_environment_name
 from hud.utils.platform import PlatformClient
 
-project_app = typer.Typer(
+PROJECT_OPTION_HELP = (
+    "Project name or ID for this command. Defaults to the directory's saved "
+    "project, HUD_DEFAULT_PROJECT, then your team default. Does not change "
+    "directory configuration."
+)
+
+
+@dataclass(frozen=True)
+class Project:
+    id: str
+    name: str
+    is_default: bool
+    can_create: bool
+
+    @classmethod
+    def from_record(cls, data: dict[str, Any]) -> Project:
+        return cls(
+            id=str(data["id"]),
+            name=data["name"],
+            is_default=bool(data.get("is_default")),
+            can_create=bool(data.get("capabilities", {}).get("create")),
+        )
+
+    @classmethod
+    def resolve(cls, platform: PlatformClient, ref: str) -> Project:
+        """The Project with this ID or name, within the authenticated scope.
+
+        Names are normalized the way the platform normalizes them on create, so
+        ``My Project`` and ``my-project`` resolve to the same row.
+        """
+        try:
+            project_id = str(uuid.UUID(ref))
+        except ValueError:
+            project_id = None
+        if project_id is None:
+            name = normalize_environment_name(ref, default="")
+            data = platform.get("/projects", params={"search": name, "limit": 500})
+            matches = [cls.from_record(item) for item in data["items"] if item["name"] == name]
+            if not matches:
+                raise CliError(
+                    "not_found",
+                    f"No Project named {ref!r}.",
+                    suggestion="Run 'hud project list' to see visible Projects.",
+                    input={"project": ref},
+                )
+            if len(matches) > 1:
+                raise CliError(
+                    "usage",
+                    f"{len(matches)} Projects are named {name!r}; pass an ID instead: "
+                    + ", ".join(project.id for project in matches),
+                    input={"project": ref},
+                )
+            return matches[0]
+        try:
+            return cls.from_record(platform.get(f"/projects/{project_id}"))
+        except HudRequestError as exc:
+            raise CliError.from_http(exc, resource="Project", input={"project": ref}) from exc
+
+
+@dataclass(frozen=True)
+class Placement:
+    """The Project selected for the current directory, and what selected it."""
+
+    project: Project | None
+    #: ``--project``, ``.hud/config.json``, ``HUD_DEFAULT_PROJECT``, or ``team default``.
+    source: str
+
+    @property
+    def project_id(self) -> str | None:
+        """The id to send to the platform, or None to accept the team default."""
+        return self.project.id if self.project else None
+
+    @property
+    def label(self) -> str:
+        if self.project is None:
+            return "team default Project"
+        return f"{self.project.name} (via {self.source})"
+
+    @classmethod
+    def resolve(
+        cls, platform: PlatformClient, link: DirectoryLink, *, flag: str | None
+    ) -> Placement:
+        """The configured Project, most specific source first."""
+        for ref, source in (
+            (flag, "--project"),
+            (str(link.project_id) if link.project_id else None, str(CONFIG_PATH)),
+            (settings.default_project, "HUD_DEFAULT_PROJECT"),
+        ):
+            if ref:
+                return cls(Project.resolve(platform, ref), source)
+        return cls(None, "team default")
+
+    def require_writable(self) -> None:
+        if self.project is not None and not self.project.can_create:
+            raise CliError(
+                error="permission_denied",
+                message="You do not have permission to create environments or tasksets in "
+                f"project '{self.project.name}'",
+                input={"project": self.project.id},
+            )
+
+
+project_app = CLI(
     name="project",
-    help="Show and choose the HUD Project new environments and tasksets land in",
+    help="Show and choose the Project for new environments and tasksets",
     add_completion=False,
     rich_markup_mode="rich",
 )
 
-_DIRECTORY_META_KEY = "hud_project_directory"
-
 
 @project_app.command("list")
-def list_command() -> None:
-    """List the Projects you can see.
-
-    [not dim]Examples:
-        hud project list[/not dim]
-    """
+def list_command(
+    quiet: bool = typer.Option(
+        False, "--quiet", "-q", help="Print one identifier per line, with no headers (for piping)."
+    ),
+) -> Any:
+    """List all visible Projects and their canonical IDs."""
+    platform = PlatformClient.from_settings()
+    projects: list[Project] = []
+    while True:
+        data = platform.get("/projects", params={"limit": 500, "offset": len(projects)})
+        page = [Project.from_record(item) for item in data["items"]]
+        projects.extend(page)
+        if len(projects) >= data["total"]:
+            break
+        if not page:
+            raise ValueError("Projects API returned an empty page before the reported total")
+    if quiet:
+        for project in projects:
+            typer.echo(project.id)
+        return [asdict(project) for project in projects]
     console = HUDConsole()
-    require_api_key("list projects")
-
-    try:
-        projects = list_projects(PlatformClient.from_settings())
-    except HudRequestError as e:
-        raise report_project_error(console, e) from e
-
+    for project in projects:
+        tags = " (default)" if project.is_default else ""
+        tags += " (read-only)" if not project.can_create else ""
+        console.info(f"{project.name}  {project.id}{tags}")
     if not projects:
-        console.warning("No projects found")
-        console.hint("Create one with: hud project create <name>")
-        return
-
-    console.info("Your projects:")
-    for project in sorted(projects, key=lambda p: (not p.is_default, p.name)):
-        tags: list[str] = []
-        if project.is_default:
-            tags.append("default")
-        if not project.can_create:
-            tags.append("read-only")
-        suffix = f" [{', '.join(tags)}]" if tags else ""
-        console.info(f"  {project.name} ({project.short_id}...){suffix}")
+        console.info("No projects found")
+    return [asdict(project) for project in projects]
 
 
 @project_app.command("create")
 def create_command(
     ctx: typer.Context,
-    name: str = typer.Argument(..., help="Name for the new project"),
-    description: str | None = typer.Option(None, "--description", help="What the project holds"),
-    directory: str | None = typer.Option(
-        None,
-        "--directory",
-        "-C",
-        help="Directory to pin it to (defaults to the group -C or current directory)",
+    name: str = typer.Argument(..., help="Name for the new Project"),
+    description: str | None = typer.Option(None, "--description"),
+    directory: str | None = typer.Option(None, "--directory", "-C"),
+    no_use: bool = typer.Option(False, "--no-use", help="Create without linking this directory"),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Print the planned action without making changes."
     ),
-    no_use: bool = typer.Option(False, "--no-use", help="Create without pinning this directory"),
-) -> None:
-    """Create a Project and pin this directory to it.
-
-    [not dim]Only team admins can create projects.
-
-    Examples:
-        hud project create browser-evals
-        hud project create browser-evals --no-use[/not dim]
-    """
-    console = HUDConsole()
-    require_api_key("create a project")
-
+) -> Any:
+    """Create a Project and link this directory unless --no-use is passed."""
     platform = PlatformClient.from_settings()
-    payload: dict[str, str] = {"name": name}
+    payload = {"name": name}
     if description:
         payload["description"] = description
-
-    try:
-        created = Project.from_record(platform.post("/projects", json=payload))
-    except HudRequestError as e:
-        if projects_not_enabled(e):
-            raise report_project_error(console, e) from e
-        if e.status_code == httpx.codes.CONFLICT:
-            console.error(f"A project named '{name}' already exists")
-            console.hint(f"Pin this directory to it with: hud project use {name}")
-            raise typer.Exit(1) from e
-        if e.status_code == httpx.codes.FORBIDDEN:
-            console.error("Only team admins can create projects")
-            raise typer.Exit(1) from e
-        raise report_project_error(console, e) from e
-
-    console.success(f"Created project: {created.name} ({created.short_id}...)")
-    if not no_use:
-        _pin(created, _command_directory(ctx, directory), console)
+    if dry_run:
+        HUDConsole().info(f"Would create Project {name}")
+        return {"dry_run": True, "action": "create_project", **payload}
+    state = (
+        None
+        if no_use
+        else DirectoryState(
+            AuthScope.resolve(platform), directory or ctx.meta["hud_project_directory"]
+        )
+    )
+    if state is not None:
+        state.load()  # a config written under other credentials fails before we create anything
+    created = Project.from_record(platform.post("/projects", json=payload))
+    if state is not None:
+        state.update(DirectoryLink(project_id=created.id))
+    HUDConsole().success(f"Created Project: {created.name} ({created.id})")
+    return asdict(created)
 
 
 @project_app.command("use")
 def use_command(
     ctx: typer.Context,
-    ref: str = typer.Argument(..., help="Project name or ID"),
-    directory: str | None = typer.Option(
-        None,
-        "--directory",
-        "-C",
-        help="Directory to pin (defaults to the group -C or current directory)",
+    ref: str = typer.Argument(..., help="Project name or ID (see hud project list)"),
+    directory: str | None = typer.Option(None, "--directory", "-C"),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Print the planned action without making changes."
     ),
-) -> None:
-    """Pin a directory to a Project.
-
-    [not dim]Writes projectId to .hud/config.json, so later deploys and task
-    syncs from this directory use the same project. Set a machine-wide fallback
-    with: hud set HUD_DEFAULT_PROJECT=<name-or-id>
-
-    Examples:
-        hud project use browser-evals
-        hud project use browser-evals -C ./envs/browser[/not dim]
-    """
-    console = HUDConsole()
-    require_api_key("select a project")
-
-    try:
-        project = resolve_project(PlatformClient.from_settings(), ref)
-    except (ProjectNotFound, HudRequestError) as e:
-        raise report_project_error(console, e) from e
-    if not project.can_create:
-        raise report_project_error(console, ProjectNotWritable(project))
-    _pin(project, _command_directory(ctx, directory), console)
+) -> Any:
+    """Link a directory to a Project in .hud/config.json for this account and team."""
+    platform = PlatformClient.from_settings()
+    state = DirectoryState(
+        AuthScope.resolve(platform), directory or ctx.meta["hud_project_directory"]
+    )
+    state.load()
+    placement = Placement(Project.resolve(platform, ref), "--project")
+    placement.require_writable()
+    project = placement.project
+    assert project is not None
+    if not dry_run:
+        state.update(DirectoryLink(project_id=project.id))
+    HUDConsole().success(
+        f"{'Would use' if dry_run else 'Using'} Project: {project.name} ({project.id})"
+    )
+    return {**asdict(project), "dry_run": dry_run}
 
 
 @project_app.callback(invoke_without_command=True)
 def project_callback(
     ctx: typer.Context,
-    directory: str = typer.Option(".", "--directory", "-C", help="Directory to report on"),
-) -> None:
-    """Show the Project this directory places new environments and tasksets in.
-
-    [not dim]Examples:
-        hud project                      # where does a deploy here land?
-        hud project list                 # projects you can see
-        hud project use browser-evals    # pin this directory[/not dim]
-    """
-    ctx.meta[_DIRECTORY_META_KEY] = directory
+    directory: str = typer.Option(".", "--directory", "-C"),
+) -> Any:
+    """Show the Project selected for this directory."""
+    ctx.meta["hud_project_directory"] = directory
     if ctx.invoked_subcommand is not None:
         return
-
-    console = HUDConsole()
-    require_api_key("resolve the current project")
     platform = PlatformClient.from_settings()
-    try:
-        require_projects_enabled(platform)
-        placement = resolve_placement(
-            platform,
-            EnvironmentSource.open(directory),
-            flag=None,
-        )
-    except (ProjectNotFound, HudRequestError) as e:
-        raise report_project_error(console, e) from e
-
-    console.info(f"Project: {placement.label}")
-    if placement.project is None:
-        console.hint("Pin a different one with: hud project use <name>")
-    elif not placement.project.can_create:
-        console.warning("You do not have create access to this Project")
-
-
-def _command_directory(ctx: typer.Context, directory: str | None) -> str:
-    """Let subcommand -C override the group-level project -C option."""
-    if directory is not None:
-        return directory
-    inherited = ctx.meta.get(_DIRECTORY_META_KEY)
-    return inherited if isinstance(inherited, str) else "."
-
-
-def _pin(project: Project, directory: str, console: HUDConsole) -> None:
-    changed = EnvironmentSource.open(directory).save_config({"projectId": project.id})
-    console.success(f"Using project: {project.name} ({project.short_id}...)")
-    if changed:
-        console.dim_info("Config saved to:", ".hud/config.json")
-
-
-__all__ = ["project_app"]
+    # Projects are feature-gated per team; surface that before reading the directory.
+    platform.get("/projects", params={"limit": 1})
+    state = DirectoryState(AuthScope.resolve(platform), directory)
+    placement = Placement.resolve(platform, state.load(), flag=None)
+    HUDConsole().info(f"Project: {placement.label}")
+    return {
+        "project": asdict(placement.project) if placement.project else None,
+        "source": placement.source,
+        "label": placement.label,
+    }

@@ -7,50 +7,17 @@ so agents can connect to it.
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+import logging
 
 import typer
 from rich.markup import escape
 
+from hud.cli import parse_key_value
+from hud.environment import load_environment
+from hud.environment.server import serve
 from hud.utils.hud_console import HUDConsole
 
 hud_console = HUDConsole()
-
-
-def _load_environment(module: str | None, factory_args: dict[str, str]) -> Any:
-    """Resolve the serve target (``target[:name]``), printing failures."""
-    from hud.environment import load_environment
-
-    target, _, name = (module or "env").partition(":")
-    try:
-        return load_environment(target, name=name or None, args=factory_args or None)
-    except Exception as exc:
-        hud_console.error(str(exc))
-        return None
-
-
-def _serve_environment(env: Any, host: str, port: int) -> None:
-    """Serve an ``Environment``'s control channel (tcp JSON-RPC) until interrupted."""
-    hud_console.section_title("Environment")
-    hud_console.console.print(
-        f"{hud_console.sym.ITEM} {escape(env.name)}",
-        highlight=False,
-    )
-    hud_console.console.print(
-        f"{hud_console.sym.ITEM} serving on tcp://{host}:{port}",
-        highlight=False,
-    )
-    hud_console.console.print(
-        f"{hud_console.sym.ITEM} {len(env.tasks)} task(s), {len(env.capabilities)} capability(ies)",
-        highlight=False,
-    )
-    hud_console.hint("Press Ctrl+C to stop.")
-    from hud.environment.server import serve
-
-    try:
-        asyncio.run(serve(env, host, port))
-    except KeyboardInterrupt:
-        hud_console.info("Stopped.")
 
 
 def serve_command(
@@ -70,7 +37,7 @@ def serve_command(
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed logs."),
 ) -> None:
-    """🔥 Serve a HUD Environment locally (its tcp control channel).
+    """Serve a HUD Environment locally (its tcp control channel).
 
     [not dim]Examples:
         hud serve                # auto-detect env.py
@@ -82,24 +49,26 @@ def serve_command(
     MCP-server hot-reload / Docker dev mode is no longer supported.[/not dim]
     """
     if verbose:
-        import logging
-
         logging.basicConfig(level=logging.INFO)
 
     factory_args: dict[str, str] = {}
     for pair in arg or []:
-        key, _, value = pair.partition("=")
-        factory_args[key] = value
-    env = _load_environment(module, factory_args)
-    if env is None:
-        hud_console.error(
-            f"No HUD Environment found for {module or 'env.py'}.",
-        )
-        hud_console.info(
-            "In v6, `hud serve` serves a `hud.environment.Environment` "
-            "(e.g. `env = Environment(name=...)` in env.py). "
-            "MCP-server hot-reload mode is no longer supported.",
-        )
-        raise typer.Exit(1)
+        parsed = parse_key_value(pair)
+        if parsed is None:
+            raise ValueError(f"--arg expects key=value, got {pair!r}")
+        factory_args[parsed[0]] = parsed[1]
+    target, _, name = (module or "env").partition(":")
+    env = load_environment(target, name=name or None, args=factory_args or None)
 
-    _serve_environment(env, host, port)
+    hud_console.section_title("Environment")
+    hud_console.print(f"{hud_console.sym.ITEM} {escape(env.name)}", highlight=False)
+    hud_console.print(f"{hud_console.sym.ITEM} serving on tcp://{host}:{port}", highlight=False)
+    hud_console.print(
+        f"{hud_console.sym.ITEM} {len(env.tasks)} task(s), {len(env.capabilities)} capability(ies)",
+        highlight=False,
+    )
+    hud_console.hint("Press Ctrl+C to stop.")
+    try:
+        asyncio.run(serve(env, host, port))
+    except KeyboardInterrupt:
+        hud_console.info("Stopped.")

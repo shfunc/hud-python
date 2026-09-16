@@ -12,7 +12,7 @@ import pytest
 import hud.eval.runtime.local as local_runtime_module
 from hud.agents.base import Agent
 from hud.environment import Environment
-from hud.eval import LocalRuntime, SubprocessRuntime, Task, Taskset
+from hud.eval import LocalRuntime, RuntimeConfig, SubprocessRuntime, Task, Taskset
 
 _SUMS_ENV = """\
 from hud import Environment
@@ -110,6 +110,32 @@ async def test_subprocess_runtime_streams_environment_output(
     assert "environment booted" in captured.out
     assert "y" * 100_000 in captured.err
     assert "environment warning" in captured.err
+
+
+def test_subprocess_runtime_serves_a_live_env_from_its_template_file(tmp_path, request) -> None:
+    module_name = f"sums_env_{request.node.name}"
+    env_py = tmp_path / f"{module_name}.py"
+    env_py.write_text(_SUMS_ENV.format(name="sums"), encoding="utf-8")
+    tasks_py = tmp_path / "tasks.py"
+    tasks_py.write_text(f"from {module_name} import add\n\ntasks = [add(a=2, b=3)]\n")
+    request.addfinalizer(lambda: sys.modules.pop(module_name, None))
+
+    task = next(iter(Taskset.from_module(tasks_py)))
+    assert task._env is not None
+    provider = SubprocessRuntime(task._env)
+
+    assert provider.source == env_py.resolve()
+    assert provider.env == "sums"
+
+
+def test_subprocess_runtime_rejects_env_without_templates() -> None:
+    with pytest.raises(ValueError, match="exactly one source file"):
+        SubprocessRuntime(Environment("demo"))
+
+
+def test_subprocess_runtime_rejects_env_pin_for_live_env() -> None:
+    with pytest.raises(TypeError, match="env= applies only to source paths"):
+        SubprocessRuntime(_sums_env(), env="sums")
 
 
 async def test_subprocess_runtime_fails_when_stdout_closes_before_serving(
@@ -262,6 +288,60 @@ async def test_tasks_module_uses_factory_environment(tmp_path, request) -> None:
 async def test_ad_hoc_taskset_requires_explicit_placement() -> None:
     with pytest.raises(ValueError, match="no placement: pass runtime="):
         await Taskset("sums", [Task(env="sums", id="add")]).run(_FnAgent(_solve_add))
+
+
+async def test_container_rows_start_their_image_by_default(monkeypatch) -> None:
+    """A row that names an image is placeable without ``runtime=``: it gets DockerRuntime."""
+    import hud.eval.taskset as taskset_module
+
+    live = LocalRuntime(_sums_env())
+    monkeypatch.setattr(
+        taskset_module,
+        "DockerRuntime",
+        lambda: lambda task: live(task.model_copy(update={"runtime_config": None})),
+    )
+    portable = Task(env="sums", id="add", args={"a": 2, "b": 3})
+    container = Task(
+        env="sums", id="add", args={"a": 4, "b": 5}, runtime_config=RuntimeConfig(image="sums")
+    )
+
+    job = await Taskset("sums", [container]).run(_FnAgent(_solve_add))
+    assert [run.reward for run in job.runs] == [1.0]
+
+    with pytest.raises(ValueError, match="no placement"):
+        await Taskset("sums", [container, portable]).run(_FnAgent(_solve_add))
+
+
+async def test_container_row_with_shared_verifier_is_placeable(monkeypatch) -> None:
+    """A verifier on the same env with no runtime of its own rides the actor's container."""
+    import hud.eval.taskset as taskset_module
+
+    env = _sums_env()
+
+    @env.template(id="verify")
+    async def verify() -> AsyncGenerator[Any, Any]:
+        actor_grade = yield ""
+        yield 1.0 if actor_grade["score"] == 1.0 else 0.0
+
+    live = LocalRuntime(env)
+    starts: list[str] = []
+
+    def docker(task: Task) -> Any:
+        starts.append(task.id)
+        return live(task.model_copy(update={"runtime_config": None}))
+
+    monkeypatch.setattr(taskset_module, "DockerRuntime", lambda: docker)
+    container = Task(
+        env="sums",
+        id="add",
+        args={"a": 4, "b": 5},
+        runtime_config=RuntimeConfig(image="sums"),
+        verifier=Task(env="sums", id="verify"),
+    )
+
+    job = await Taskset("sums", [container]).run(_FnAgent(_solve_add))
+    assert [run.reward for run in job.runs] == [1.0]
+    assert starts == ["add"]  # one container for actor and verifier
 
 
 async def test_empty_taskset_needs_no_placement() -> None:

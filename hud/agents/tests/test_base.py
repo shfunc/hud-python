@@ -8,11 +8,13 @@ resolution.
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
 from hud.agents import OpenAIAgent, OpenAIChatAgent, create_agent
 from hud.agents.base import Agent
+from hud.agents.types import OpenAIConfig
 from hud.types import AgentType
 from hud.utils.exceptions import HudAuthenticationError
 
@@ -85,7 +87,7 @@ def gateway_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_create_agent_unknown_model_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     # No gateway models available -> a bare unknown model can't be resolved.
-    monkeypatch.setattr("hud.agents.list_gateway_models", list)
+    monkeypatch.setattr("hud.utils.gateway.list_gateway_models", lambda *_: [])
     with pytest.raises(ValueError, match="not found"):
         create_agent("totally-unknown-model-xyz")
 
@@ -108,6 +110,26 @@ def test_create_agent_value_shortcut_leaves_client_out_of_config(
     assert agent.hosted_spec()["config"]["prompt_cache_key"] == agent.config.prompt_cache_key
 
 
+def test_create_agent_uses_the_gateway_even_with_a_provider_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("hud.utils.gateway.settings.openai_api_key", "provider-key")
+    direct = MagicMock(return_value=object())
+    via_gateway = MagicMock(return_value=object())
+    monkeypatch.setattr("hud.utils.gateway.AsyncOpenAI", direct)
+    monkeypatch.setattr("hud.utils.gateway.build_gateway_client", via_gateway)
+
+    agent = create_agent("openai")
+
+    assert isinstance(agent, OpenAIAgent)
+    assert agent.openai_client is via_gateway.return_value
+    direct.assert_not_called()
+    # The same config built directly honours the provider key.
+    assert OpenAIAgent(OpenAIConfig()).openai_client is direct.return_value
+    # Routing is config, not a client, so the agent stays hosted-serializable.
+    assert "gateway" not in agent.hosted_spec()["config"]
+
+
 def test_create_agent_resolves_gateway_model_metadata(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -119,7 +141,7 @@ def test_create_agent_resolves_gateway_model_metadata(
         sdk_agent_type="openai_compatible",
         provider=GatewayProviderInfo(name="openai"),
     )
-    monkeypatch.setattr("hud.agents.list_gateway_models", lambda: [model])
+    monkeypatch.setattr("hud.utils.gateway.list_gateway_models", lambda *_: [model])
 
     def _build_client(_provider: str) -> object:
         return object()
@@ -136,11 +158,10 @@ def test_create_agent_resolves_gateway_model_metadata(
 @pytest.mark.parametrize(
     ("alias", "canonical"),
     [
-        ("deepseek-v4", "deepseek/deepseek-v4-pro"),
-        ("deepseek-v4-flash", "deepseek/deepseek-v4-flash"),
+        ("deepseek-v4-flash", "deepseek/deepseek-v4-flash"),  # slug without provider prefix
         ("glm-5.2", "z-ai/glm-5.2"),
         ("kimi-k2.6", "moonshotai/kimi-k2.6"),
-        ("minimax-m3", "MiniMax-M3"),
+        ("minimax-m3", "MiniMax-M3"),  # case-insensitive
     ],
 )
 def test_create_agent_accepts_gateway_model_aliases(
@@ -156,7 +177,7 @@ def test_create_agent_accepts_gateway_model_aliases(
         sdk_agent_type="openai_compatible",
         provider=GatewayProviderInfo(name="openai"),
     )
-    monkeypatch.setattr("hud.agents.list_gateway_models", lambda: [model])
+    monkeypatch.setattr("hud.utils.gateway.list_gateway_models", lambda *_: [model])
 
     def _build_client(_provider: str) -> object:
         return object()

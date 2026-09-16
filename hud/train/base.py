@@ -5,12 +5,15 @@ modality-independent ``optim_step``. Modality clients (e.g.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
-from urllib.parse import quote
 from uuid import UUID
 
 from hud.settings import settings
 from hud.train.types import CheckpointResponse, OptimStepRequest, OptimStepResult
+from hud.utils.exceptions import HudAuthenticationError
+from hud.utils.gateway import resolve_gateway_model
+from hud.utils.platform import PlatformClient
 from hud.utils.requests import make_request
 
 
@@ -38,41 +41,18 @@ class BaseTrainingClient:
         self._model_id: str | None = None
 
     async def _resolve_model_id(self) -> str:
-        """Resolve ``self.model`` to the id the service keys on: a uuid is used
-        directly, a slug/name is looked up once via the catalog and cached.
-
-        Resolution order:
-        1. UUID → used directly.
-        2. Slug (model_name) → GET /v2/models/resolve (fast path).
-        3. Display name or unknown string → fall back to list_gateway_models(),
-           which matches id | name | model_name — same logic as create_agent().
-        """
-        if self._model_id is not None:
-            return self._model_id
-        try:
-            self._model_id = str(UUID(self.model))
-        except ValueError:
-            url = f"{self._api_url}/v2/models/resolve?model={quote(self.model, safe='')}"
+        """The id the service keys on: a uuid as-is, else the catalog entry's, cached."""
+        if self._model_id is None:
             try:
-                data = await make_request("GET", url, api_key=self._api_key)
-                self._model_id = str(data["id"])
-            except Exception as exc:
-                # /v2/models/resolve only matches model_name (slug), not the
-                # display name. Fall back to the full model list, which matches
-                # id | name | model_name — consistent with create_agent().
-                from hud.utils.gateway import list_gateway_models
-
-                for gm in list_gateway_models():
-                    if self.model in (gm.id, gm.name, gm.model_name):
-                        resolved = gm.id or gm.model_name
-                        if resolved:
-                            self._model_id = resolved
-                            break
-                else:
-                    raise ValueError(
-                        f"Model {self.model!r} not found. "
-                        "Run `hud models` to list available models."
-                    ) from exc
+                self._model_id = str(UUID(self.model))
+            except ValueError:
+                if not self._api_key:
+                    raise HudAuthenticationError(
+                        "HUD_API_KEY is required to resolve a model slug"
+                    ) from None
+                platform = PlatformClient(self._api_url, self._api_key)
+                entry = await asyncio.to_thread(resolve_gateway_model, self.model, platform)
+                self._model_id = entry.id
         return self._model_id
 
     async def _train_url(self, suffix: str) -> str:

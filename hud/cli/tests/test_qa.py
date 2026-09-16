@@ -8,7 +8,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from hud.cli import app
+from hud.cli.__main__ import app
+from hud.cli.qa import is_standard_result_blob, presentation_for_result
 
 runner = CliRunner()
 
@@ -56,7 +57,6 @@ def _result(verdict: str = "passed") -> dict[str, object]:
 
 def _invoke(platform: MagicMock, args: list[str]):
     with (
-        patch("hud.cli.qa.require_api_key", return_value="api-key"),
         patch("hud.cli.qa.PlatformClient.from_settings", return_value=platform),
     ):
         return runner.invoke(app, args)
@@ -81,14 +81,33 @@ def test_qa_lists_agent_name_and_uuid() -> None:
     )
 
 
+def test_qa_list_verb_matches_bare_qa() -> None:
+    platform = MagicMock()
+    platform.get.return_value = {
+        "items": [_agent()],
+        "total": 1,
+        "limit": 50,
+        "offset": 0,
+    }
+
+    result = _invoke(platform, ["qa", "list"])
+
+    assert result.exit_code == 0
+    assert result.output.strip() == f"Failure Analysis\t{_AGENT_ID}"
+    platform.get.assert_called_once_with(
+        "/qa-agents",
+        params={"subject_type": "trace", "limit": 50, "offset": 0},
+    )
+
+
 def test_qa_run_rejects_resource_agents() -> None:
     platform = MagicMock()
     platform.get.return_value = _agent(subject_type="environment")
 
     result = _invoke(platform, ["qa", "run", _AGENT_ID, _TRACE_ID, "--no-wait"])
 
-    assert result.exit_code == 1
-    assert "trace agents only" in result.output
+    assert result.exit_code == 2
+    assert "trace agents only" in f"{result.output}{getattr(result, 'stderr', '') or ''}"
     platform.post.assert_not_called()
 
 
@@ -363,6 +382,18 @@ def test_qa_results_pages_sanitized_rollout() -> None:
     assert platform.get.call_count == 3
 
 
+def test_qa_rollout_rejects_stalled_pagination():
+    platform = MagicMock()
+    platform.get.side_effect = [
+        [_result()],
+        {"events": [], "has_more": True, "next_seq": -1},
+    ]
+    result = _invoke(platform, ["qa", "results", _TRACE_ID, "--rollout"])
+    assert result.exit_code != 0
+    assert "pagination did not advance" in result.output
+    assert platform.get.call_count == 2
+
+
 def test_qa_results_empty_problems_is_passed() -> None:
     platform = MagicMock()
     platform.get.return_value = [
@@ -472,3 +503,85 @@ def test_qa_results_rollout_skips_boolean_result_json() -> None:
     assert "Checking the grader." in result.output
     assert result.output.count("Turn 1") == 1
     assert '"is_false_negative"' not in result.output
+
+
+def test_failure_analysis_problems_are_a_failed_agent_finding() -> None:
+    view = presentation_for_result(
+        {
+            "status": "completed",
+            "result": {
+                "content": (
+                    '{"summary": "Missing file.", "problems": ['
+                    '{"problem": "No regex", "fault": "agent", "description": "Never wrote it."}'
+                    '], "confidence": "high"}'
+                )
+            },
+        }
+    )
+
+    assert view.kind == "problems"
+    assert view.tag == "failed"
+    assert view.answer == "Agent failure"
+    assert view.findings[0].title == "No regex"
+    assert view.findings[0].fault == "agent"
+
+
+def test_failure_analysis_empty_problems_is_passed() -> None:
+    view = presentation_for_result(
+        {
+            "status": "completed",
+            "result": {"summary": "Clean.", "problems": [], "confidence": "high"},
+        }
+    )
+
+    assert view.tag == "passed"
+    assert view.answer == "No failure"
+    assert view.findings == ()
+
+
+def test_mixed_faults_are_labeled_mixed_failure() -> None:
+    view = presentation_for_result(
+        {
+            "status": "completed",
+            "result": {
+                "problems": [
+                    {"problem": "Bad regex", "fault": "agent"},
+                    {"problem": "Cut off", "fault": "unclear"},
+                ]
+            },
+        }
+    )
+
+    assert view.tag == "failed"
+    assert view.answer == "Mixed failure"
+
+
+def test_false_negative_yes_is_failed_without_findings() -> None:
+    view = presentation_for_result(
+        {
+            "status": "completed",
+            "result": {"content": '{"is_false_negative": true, "reasoning": "Grader missed it."}'},
+        }
+    )
+
+    assert view.kind == "boolean"
+    assert view.tag == "failed"
+    assert view.label == "False Negative"
+    assert view.answer == "yes"
+    assert view.findings == ()
+    assert view.summary == "Grader missed it."
+
+
+def test_queued_runs_are_pending_not_passed() -> None:
+    view = presentation_for_result({"status": "queued", "canonical_result": None})
+
+    assert view.kind == "pending"
+    assert view.tag == "unknown"
+    assert view.label == "queued"
+
+
+def test_standard_result_blob_detects_boolean_and_problems() -> None:
+    assert is_standard_result_blob('{"is_false_negative": false}')
+    assert is_standard_result_blob('{"summary": "x", "problems": []}')
+    assert not is_standard_result_blob("Checking the workspace.")
+    assert not is_standard_result_blob('{"notes": "still working"}')

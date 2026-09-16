@@ -35,10 +35,11 @@ HostedRuntime, Runtime`); `ModalRuntime` and `DaytonaRuntime` import from `hud.e
 **You can usually omit `runtime=`.** A run without one uses its known placement:
 
 - a platform taskset (`Taskset.from_api`) runs on the platform
-- a task created by `@env.template` runs against that environment
+- a row whose `runtime_config` names an image or Compose project starts it under `DockerRuntime`
+- a task created by `@env.template` runs against that environment, in this process
 
 When none of these apply, `run` raises and lists the runtimes you can pass — it never silently picks
-one. For example, a task loaded from JSON needs `runtime=LocalRuntime(env)` or another runtime.
+one. For example, a JSON row with no image needs `runtime=LocalRuntime(env)` or another runtime.
 </Note>
 
 To deploy an environment to the platform and run against it, see
@@ -129,11 +130,11 @@ that `LocalRuntime` are serialized. Env hooks share this process and event loop;
 ### `SubprocessRuntime`
 
 ```python
-SubprocessRuntime(path, *, env=None, ready_timeout=120.0)
+SubprocessRuntime(source, *, env=None, ready_timeout=120.0)
 ```
 
-- **`path`** - `.py` file (or directory) that declares the env. The child's working directory is the source's directory, so sibling imports and relative data paths resolve.
-- **`env`** - pin a specific env name when the source declares more than one. Defaults to the placed task's env.
+- **`source`** - `.py` file (or directory) that declares the env, or a live `Environment`, which is served from the file its `@env.template` declarations live in. The child's working directory is the source's directory, so sibling imports and relative data paths resolve.
+- **`env`** - pin a specific env name when a source path declares more than one. Defaults to the placed task's env.
 - **`ready_timeout`** - seconds to wait for the child to start serving.
 
 ### `DockerRuntime`
