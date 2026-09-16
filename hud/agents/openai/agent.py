@@ -25,6 +25,7 @@ from openai.types.responses.response_input_param import (
 from openai.types.shared_params.reasoning import Reasoning  # noqa: TC002
 
 from hud.agents.tool_agent import DegenerateTurnError, RunState, ToolAgent
+from hud.agents.tools.base import result_text
 from hud.agents.types import AgentStep, Citation, OpenAIConfig, Usage
 from hud.types import MCPToolCall, MCPToolResult
 from hud.utils import gateway
@@ -108,8 +109,10 @@ class OpenAIAgent(ToolAgent[ResponseInputItemParam, OpenAIConfig]):
         if isinstance(tool, OpenAIComputerTool):
             screenshot = last_image_content(result)
             if screenshot is None:
-                logger.warning("Computer tool result missing screenshot for call %s", call.name)
-                return None
+                raise RuntimeError(
+                    f"Computer tool result missing screenshot for call {call.id}: "
+                    f"{result_text(result)}"
+                )
             output = ComputerCallOutput(
                 type="computer_call_output",
                 call_id=call.id,
@@ -134,7 +137,17 @@ class OpenAIAgent(ToolAgent[ResponseInputItemParam, OpenAIConfig]):
                         acknowledged.append(raw_check)
                 if acknowledged:
                     output["acknowledged_safety_checks"] = acknowledged
-            return cast("ResponseInputItemParam", output)
+            if result.isError:
+                return [
+                    output,
+                    self._format_message(
+                        "user",
+                        f"Computer call {call.id} stopped with an error. "
+                        "Remaining actions in this call were not executed.\n"
+                        f"{result_text(result)}",
+                    ),
+                ]
+            return output
 
         if isinstance(tool, OpenAIShellTool):
             structured = (
@@ -142,8 +155,6 @@ class OpenAIAgent(ToolAgent[ResponseInputItemParam, OpenAIConfig]):
             )
             output_list = structured.get("output")
             if not isinstance(output_list, list):
-                from hud.agents.tools.base import result_text
-
                 text = result_text(result)
                 output_list = [shell_output("", text, 1 if result.isError else 0)]
             response: dict[str, Any] = {
@@ -305,7 +316,7 @@ class OpenAIAgent(ToolAgent[ResponseInputItemParam, OpenAIConfig]):
                     elif item.action is not None:
                         arguments = item.action.to_dict()
                     else:
-                        raise ValueError("OpenAI computer_call missing action")
+                        arguments = {"actions": []}
                     call_dict: dict[str, Any] = {
                         "name": "computer",
                         "arguments": arguments,

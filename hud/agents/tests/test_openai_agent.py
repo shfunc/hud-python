@@ -4,8 +4,10 @@ with a fake ``AsyncOpenAI`` client (no network).
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from typing import Any, cast
+from unittest.mock import AsyncMock, Mock
 
 import mcp.types as mcp_types
 import pytest
@@ -15,6 +17,9 @@ from hud.agents.openai.agent import EmptyShellCallError, OpenAIAgent, OpenAIRunS
 from hud.agents.openai.tools.base import format_openai_result
 from hud.agents.openai.tools.computer import OPENAI_COMPUTER_SPEC, OpenAIComputerTool
 from hud.agents.types import OpenAIConfig
+from hud.capabilities import Capability, RFBClient
+from hud.clients.client import HudClient
+from hud.eval.run import Run
 from hud.types import MCPToolCall, MCPToolResult
 
 
@@ -87,6 +92,121 @@ def _api_response(
         usage=usage,
         incomplete_details=incomplete_details,
     )
+
+
+@pytest.fixture
+def computer_client() -> Mock:
+    screen = Mock(
+        spec=RFBClient,
+        drain=AsyncMock(),
+        screenshot_png=AsyncMock(return_value=(b"screen", "image/png")),
+    )
+    return Mock(
+        spec=HudClient,
+        manifest=SimpleNamespace(
+            bindings=[Capability.rfb(name="screen", url="rfb://localhost:5900")],
+        ),
+        open=AsyncMock(return_value=screen),
+        start_task=AsyncMock(return_value={"prompt": "Use the computer."}),
+        grade=AsyncMock(return_value={"score": 1.0}),
+    )
+
+
+@pytest.mark.parametrize(
+    ("actions", "error"),
+    [
+        ([{"type": "screenshot"}, {"type": "response", "text": "all done"}], None),
+        ([], "actions list is empty"),
+        ([{"type": "keypress", "keys": ["UNKNOWN"]}, {"type": "type", "text": "later"}], "UNKNOWN"),
+    ],
+    ids=["response", "empty-call", "failed-keypress"],
+)
+async def test_computer_result_reaches_next_model_turn(
+    computer_client: Mock, actions: list[dict[str, Any]], error: str | None
+) -> None:
+    screen = computer_client.open.return_value
+    screen.conn.keyboard.press.side_effect = KeyError("UNKNOWN")
+    call = SimpleNamespace(
+        type="computer_call",
+        call_id="call_1",
+        actions=[SimpleNamespace(to_dict=lambda action=action: action) for action in actions],
+        action=None,
+        pending_safety_checks=[],
+    )
+    create = AsyncMock(side_effect=[_api_response("resp_1", [call]), _api_response("resp_2", [])])
+    agent = OpenAIAgent(
+        OpenAIConfig(model="gpt-test", model_client=Mock(responses=Mock(create=create))),
+    )
+
+    async with Run(computer_client, "computer-task", {}) as run:
+        await agent(run)
+
+    assert run.trace.status == "completed"
+    assert create.await_count == 2
+    feedback = create.call_args_list[1].kwargs["input"]
+    assert feedback[0]["type"] == "computer_call_output"
+    assert feedback[0]["call_id"] == "call_1"
+    assert feedback[0]["output"]["image_url"].startswith("data:image/png;base64,")
+    if error:
+        assert error in feedback[1]["content"][0]["text"]
+        assert (
+            "Remaining actions in this call were not executed" in feedback[1]["content"][0]["text"]
+        )
+    screen.conn.keyboard.write.assert_not_called()
+
+
+async def test_computer_error_preserves_failed_screenshot_context(computer_client: Mock) -> None:
+    computer_client.open.return_value.screenshot_png.side_effect = RuntimeError(
+        "display unavailable"
+    )
+    call = SimpleNamespace(
+        type="computer_call",
+        call_id="call_1",
+        actions=[],
+        action=SimpleNamespace(to_dict=lambda: {"type": "frobnicate"}),
+        pending_safety_checks=[],
+    )
+    agent = _agent(_api_response("resp_1", [call]))
+
+    async with Run(computer_client, "computer-task", {}) as run:
+        await agent(run)
+
+    assert run.trace.status == "error"
+    error = next(step.error for step in run.trace.steps if step.error)
+    assert "frobnicate" in error
+    assert "display unavailable" in error
+
+
+async def test_computer_screenshot_timeout_preserves_action_context(computer_client: Mock) -> None:
+    timeout = TimeoutError("capture timed out")
+    screen = computer_client.open.return_value
+    screen.screenshot_png.side_effect = timeout
+    tool = OpenAIComputerTool(spec=OPENAI_COMPUTER_SPEC, client=screen)
+
+    with pytest.raises(TimeoutError, match="capture timed out") as raised:
+        await tool.execute({"type": "frobnicate"})
+
+    assert raised.value is timeout
+    assert any("frobnicate" in note for note in raised.value.__notes__)
+
+
+@pytest.mark.parametrize("error_type", [TimeoutError, asyncio.CancelledError])
+async def test_computer_action_interruption_stops_batch(
+    computer_client: Mock, error_type: type[BaseException]
+) -> None:
+    screen = computer_client.open.return_value
+    error = error_type("input interrupted")
+    screen.drain = AsyncMock(side_effect=error)
+    tool = OpenAIComputerTool(spec=OPENAI_COMPUTER_SPEC, client=screen)
+
+    with pytest.raises(error_type) as raised:
+        await tool.execute(
+            {"actions": [{"type": "move", "x": 3, "y": 4}, {"type": "type", "text": "later"}]},
+        )
+
+    assert raised.value is error
+    screen.conn.keyboard.write.assert_not_called()
+    screen.screenshot_png.assert_not_awaited()
 
 
 async def test_get_response_parses_text_and_function_call() -> None:
