@@ -102,7 +102,7 @@ class EvalConfig(BaseModel):
     group_size: int = 1
     gateway: bool = False
     #: ``LOCAL`` spawns each row's env (Docker for container rows, a subprocess
-    #: serving the bound env's source otherwise); other names hand rows to that
+    #: loading the task source otherwise); other names hand rows to that
     #: provider; a ``tcp://`` url attaches to an already-served env. ``None``
     #: infers from the source: a file on disk runs locally, a platform taskset hosted.
     runtime: Placement | TcpUrl | None = None
@@ -417,24 +417,33 @@ def eval_command(
         case AnyUrl():
             placement = Runtime(str(cfg.runtime))
         case Placement.LOCAL:
-            # Isolate each row: its container, or a subprocess serving the bound env's
-            # source (``Taskset.run`` alone would serve a live env in-process). Data
-            # rows (JSON/JSONL) only name their env; its source lives beside the file.
-            if not Path(source).exists():
+            rows = list(taskset)
+            rows.extend(
+                task.verifier
+                for task in taskset
+                if task.verifier is not None and not task.shares_verifier_runtime
+            )
+            if not Path(source).exists() and any(
+                not (
+                    task.runtime_config
+                    and (task.runtime_config.image or task.runtime_config.compose)
+                )
+                for task in rows
+            ):
                 raise ValueError(
                     f"{source} is a platform taskset, so there is no env source to spawn "
                     "locally. Run it with --remote, --runtime hud, or --runtime tcp://host:port."
                 )
             docker = DockerRuntime()
-            source_dir = Path(source).resolve()
-            beside = SubprocessRuntime(source_dir if source_dir.is_dir() else source_dir.parent)
+            source_path = Path(source).resolve()
+            beside = SubprocessRuntime(source_path if source_path.is_dir() else source_path.parent)
 
             def spawn(task: Task) -> AbstractAsyncContextManager[Runtime]:
                 config = task.runtime_config
                 if config and (config.image or config.compose):
                     return docker(task)
                 if task._env is not None:
-                    return SubprocessRuntime(task._env)(task)
+                    return SubprocessRuntime(source_path)(task)
                 return beside(task)
 
             placement = spawn

@@ -89,9 +89,10 @@ When `runtime=` is omitted, `_resolve_placement` uses what the process already k
   (`LocalRuntime(env)`), so envs that exist only in memory still have a placement.
 - Anything else raises, naming the forms to pass.
 
-`hud eval` chooses differently on purpose: it always starts from a file, so it isolates each
-rollout — container rows in Docker, bound rows in a child process serving the env's source
-(`SubprocessRuntime`) — instead of serving a live env in-process.
+For local files, `hud eval` uses `SubprocessRuntime` for Python environments and
+`DockerRuntime` for image or Compose configurations. Platform tasksets default to
+`HostedRuntime`. They support `--runtime local` when every task and any verifier
+that runs separately has an image or Compose configuration.
 
 </div>
 
@@ -107,9 +108,9 @@ configuration. Four patterns cover what exists today.
 
 ### Fresh substrate per rollout
 
-The default, and what every built-in does: one acquisition brings up one new substrate and tears it
-down on exit. Isolation is structural - two rollouts never share state because they never share a
-substrate.
+`SubprocessRuntime` starts a process per rollout; `DockerRuntime` starts a container.
+Both stop it afterward. Processes share host files and ports, so concurrent runs
+need separate workspaces and ports.
 
 ```python
 job = await taskset.run(agent, runtime=DockerRuntime("my-env-image"))

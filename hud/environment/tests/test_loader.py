@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
+import importlib
+import json
+import sys
+from typing import TYPE_CHECKING
+
 import pytest
 
 from hud.environment import load_environment
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
 
 
 def test_load_environment_selects_by_attr_or_env_name(tmp_path) -> None:
@@ -167,3 +176,134 @@ def test_every_reference_form_resolves(tmp_path, monkeypatch) -> None:
     assert load_environment("pkg", name="make_env", args={"name": "x"}).name == "x"
     # ...while a bare reference to the same package still scans its source
     assert load_environment("pkg").name == "from-pkg-source"
+
+
+def test_environment_reexports_are_not_ambiguous(tmp_path) -> None:
+    source = tmp_path / "env.py"
+    source.write_text('from hud import Environment\nenv = Environment("shared")\nalias = env\n')
+    assert load_environment(source, name="shared").name == "shared"
+    assert load_environment(source).name == "shared"
+
+
+def test_distinct_environments_with_the_same_name_are_ambiguous(tmp_path) -> None:
+    source = tmp_path / "env.py"
+    source.write_text(
+        'from hud import Environment\none = Environment("shared")\ntwo = Environment("shared")\n'
+    )
+    with pytest.raises(ValueError, match="multiple Environments"):
+        load_environment(source, name="shared")
+
+
+def test_source_supports_package_relative_imports(tmp_path) -> None:
+    package = tmp_path / "relative_env_package"
+    package.mkdir()
+    (package / "__init__.py").write_text("")
+    (package / "world.py").write_text(
+        'from hud import Environment\nenv = Environment("relative")\n'
+    )
+    (package / "env.py").write_text("from .world import env\n")
+    assert load_environment(package / "env.py").name == "relative"
+
+
+def test_directory_imports_each_module_once(tmp_path) -> None:
+    (tmp_path / "scan_core.py").write_text(
+        'from hud import Environment\nenv = Environment("scanned")\n'
+    )
+    (tmp_path / "scan_templates.py").write_text(
+        "from scan_core import env\n"
+        '@env.template(id="solve")\nasync def solve():\n    yield "ok"\n    yield 1.0\n'
+    )
+    (tmp_path / "assembly.py").write_text(
+        "from scan_core import env\nfrom scan_templates import solve\n"
+    )
+    env = load_environment(tmp_path, name="scanned")
+    assert set(env.tasks) == {"solve"}
+    assert load_environment(tmp_path, name="scanned") is env
+
+
+@pytest.mark.parametrize("export", ["task", "list", "tuple", "taskset"])
+def test_source_resolves_environments_from_exported_tasks(tmp_path, request, export) -> None:
+    name = f"bound_source_{export}"
+    (tmp_path / f"{name}.py").write_text(
+        'from hud import Environment\nenv = Environment("bound")\n'
+        '@env.template(id="solve")\nasync def solve():\n    yield "ok"\n    yield 1.0\n'
+        "def make_task():\n    return solve()\n"
+    )
+    request.addfinalizer(lambda: sys.modules.pop(name, None))
+    expression = {
+        "task": "make_task()",
+        "list": "[make_task()]",
+        "tuple": "(make_task(),)",
+        "taskset": 'Taskset("rows", [make_task()])',
+    }[export]
+    source = tmp_path / "tasks.py"
+    source.write_text(
+        f"from {name} import make_task\nfrom hud.eval import Taskset\nrows = {expression}\n"
+    )
+    assert set(load_environment(source, name="bound").tasks) == {"solve"}
+
+
+@pytest.mark.parametrize("source", ["json.py", "."])
+def test_source_does_not_replace_an_imported_module(tmp_path, source) -> None:
+    (tmp_path / "json.py").write_text(
+        "import json\nfrom hud import Environment\nenv = Environment(json.loads('\"local\"'))\n"
+    )
+    assert load_environment(tmp_path / source).name == "local"
+    assert importlib.import_module("json") is json
+
+
+def test_package_init_can_reexport_its_environment(tmp_path) -> None:
+    package = tmp_path / "reexported_env_package"
+    package.mkdir()
+    (package / "__init__.py").write_text("from .env import env\n")
+    (package / "core.py").write_text(
+        'from hud import Environment\nenv = Environment("reexported")\n'
+    )
+    (package / "env.py").write_text(
+        'from .core import env\n@env.template(id="solve")\n'
+        'async def solve():\n    yield "ok"\n    yield 1.0\n'
+    )
+    env = load_environment(package / "env.py")
+    assert env.name == "reexported"
+    assert load_environment(package, name="reexported") is env
+
+
+@pytest.fixture
+def package_sources(tmp_path: Path) -> Iterator[tuple[Path, Path]]:
+    packages = tuple(tmp_path / label / "source_root_package" for label in ("first", "second"))
+    for package in packages:
+        package.mkdir(parents=True)
+        (package / "__init__.py").write_text("from .env import env\n")
+        (package / "core.py").write_text(
+            f"from hud import Environment\nenv = Environment({package.parent.name!r})\n"
+        )
+        (package / "env.py").write_text("from .core import env\n")
+    try:
+        yield packages[0], packages[1]
+    finally:
+        for name in list(sys.modules):
+            if name == "source_root_package" or name.startswith("source_root_package."):
+                del sys.modules[name]
+
+
+@pytest.mark.parametrize("source", ["env.py", "__init__.py", "."])
+def test_package_sources_reject_a_cached_namespace_from_another_root(
+    package_sources: tuple[Path, Path], source: str
+) -> None:
+    first, second = (package / source for package in package_sources)
+    assert load_environment(first).name == "first"
+
+    with pytest.raises(ValueError, match="already imported from a different source root"):
+        load_environment(second)
+
+    assert load_environment(first).name == "first"
+
+
+def test_package_source_takes_precedence_over_other_import_roots(
+    package_sources: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first, second = package_sources
+    monkeypatch.syspath_prepend(str(second.parent))
+    monkeypatch.syspath_prepend(str(first.parent))
+
+    assert load_environment(second / "env.py").name == "second"
