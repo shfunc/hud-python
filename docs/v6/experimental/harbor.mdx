@@ -81,12 +81,16 @@ or the mounted test tree without changing the environment image identity.
 
 ### Deploy and sync
 
-`hud deploy` recognizes the generated root `compose.yaml` as the build recipe.
-Each generated environment is deployed separately, followed by the task rows
-that reference it:
+Save the Compose configuration as `runtime.json` in the generated project root:
+
+```json
+{"compose": {"document": "compose.yaml", "root": "."}}
+```
+
+Each generated environment is deployed separately, followed by its task rows:
 
 ```bash
-hud deploy .hud-adapt/<environment>
+hud deploy .hud-adapt/<environment> --runtime-config .hud-adapt/<environment>/runtime.json
 hud sync tasks my-harbor-tasks .hud-adapt/<environment>/tasks.json
 ```
 

@@ -21,6 +21,7 @@ from rich.table import Table
 from hud.cli import (
     CLI,
     CliError,
+    CLIGroup,
     map_exception,
 )
 from hud.settings import settings
@@ -30,7 +31,19 @@ from hud.utils.platform import PlatformClient
 
 hud_console = HUDConsole()
 
+
+class _JobsGroup(CLIGroup):
+    def resolve_command(self, ctx: Any, args: list[str]) -> tuple[Any, Any, list[str]]:
+        try:
+            UUID(args[0])
+        except ValueError:
+            return super().resolve_command(ctx, args)
+        ctx.default_map = {"get": ctx.params}
+        return "get", self.commands["get"], args
+
+
 jobs_app = CLI(
+    cls=_JobsGroup,
     name="jobs",
     help="List jobs, inspect their traces, and cancel rollouts.",
     add_completion=False,
