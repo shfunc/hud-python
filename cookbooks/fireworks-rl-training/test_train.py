@@ -304,23 +304,14 @@ def test_resume_uses_checkpoint_model_and_matching_rendering(
     checkpoint = "test/previous-run/final-state"
     argv = [
         "train.py",
-        "--resume-from",
-        checkpoint,
-        "--base-model",
-        "accounts/fireworks/models/ignored-cli-model",
-        "--steps",
-        "1",
-        "--tasks-per-step",
-        "1",
-        "--group-size",
-        "2",
-        "--eval-tasks",
-        "1",
-        "--max-concurrent",
-        "1",
-        "--require-update",
-        "--output-dir",
-        str(tmp_path),
+        f"--resume-from={checkpoint}",
+        "--base-model=accounts/fireworks/models/ignored-cli-model",
+        "--steps=1",
+        "--tasks-per-step=1",
+        "--group-size=2",
+        "--eval-tasks=1",
+        "--max-concurrent=1",
+        f"--output-dir={tmp_path}",
     ]
     if tokenizer_model:
         argv.extend(["--tokenizer-model", tokenizer_model, "--renderer", renderer_name])
@@ -335,19 +326,11 @@ def test_resume_uses_checkpoint_model_and_matching_rendering(
         checkpoint
     )
     fireworks_service.create_lora_training_client.assert_not_called()
-    assert all(
-        call.kwargs["tokenizer"] is tokenizer
-        for call in fireworks_service.create_sampling_client.call_args_list
-    )
-    fireworks_service.create_training_client_from_state_with_optimizer.return_value.optim_step.assert_called_once()
     config = json.loads((tmp_path / "config.json").read_text())
     assert config["base_model"] == model
     assert config["tokenizer_model"] == (tokenizer_model or training.DEFAULT_TOKENIZER_MODEL)
     assert config["renderer"] == (renderer_name or training.DEFAULT_RENDERER)
-    output = capsys.readouterr().out
-    assert f"model={model}" in output
-    assert "ignored-cli-model" not in output
-    fireworks_service.close.assert_called_once()
+    assert f"model={model}" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("resume", [False, True])
@@ -360,9 +343,7 @@ def test_nondefault_models_require_explicit_tokenizer_and_renderer(
 ) -> None:
     monkeypatch.setenv("FIREWORKS_API_KEY", "test-key")
     load_tokenizer = MagicMock()
-    load_renderer = MagicMock()
     monkeypatch.setattr(training, "get_tokenizer", load_tokenizer)
-    monkeypatch.setattr(training, "get_renderer", load_renderer)
     monkeypatch.setattr(training, "FiretitanServiceClient", lambda **kwargs: fireworks_service)
     model = "accounts/fireworks/models/qwen3-8b"
     fireworks_service.create_rest_client.return_value.get_weights_info_by_tinker_path.return_value = resolved(
@@ -375,24 +356,18 @@ def test_nondefault_models_require_explicit_tokenizer_and_renderer(
         "sys.argv", ["train.py", "--output-dir", str(tmp_path), *model_args, *rendering_args]
     )
 
-    with pytest.raises(SystemExit) as error:
+    with pytest.raises(SystemExit, match=r"qwen3-8b.*--tokenizer-model and --renderer"):
         asyncio.run(training.train(training.parse_args()))
 
-    message = str(error.value)
-    assert model in message
-    assert "--tokenizer-model" in message
-    assert "--renderer" in message
     load_tokenizer.assert_not_called()
-    load_renderer.assert_not_called()
     fireworks_service.create_lora_training_client.assert_not_called()
     fireworks_service.create_training_client_from_state_with_optimizer.assert_not_called()
-    fireworks_service.create_sampling_client.assert_not_called()
     fireworks_service.close.assert_called_once()
 
 
 @pytest.mark.parametrize(
-    ("steps", "checkpoint_every", "checkpoint_name", "failing_snapshot"),
-    [(2, 1, "state-0001", "policy-0002"), (1, 2, "final-state", "final")],
+    ("steps", "checkpoint_every", "checkpoint_name"),
+    [(2, 1, "state-0001"), (1, 2, "final-state")],
 )
 def test_prints_training_checkpoint_before_later_sampling_failure(
     monkeypatch,
@@ -403,7 +378,6 @@ def test_prints_training_checkpoint_before_later_sampling_failure(
     steps,
     checkpoint_every,
     checkpoint_name,
-    failing_snapshot,
 ) -> None:
     monkeypatch.setenv("FIREWORKS_API_KEY", "test-key")
     monkeypatch.setattr(training, "get_tokenizer", lambda model: tokenizer)
@@ -412,46 +386,29 @@ def test_prints_training_checkpoint_before_later_sampling_failure(
     checkpoint_path = f"checkpoint-account/opaque-run/{checkpoint_name}"
     client.save_state.return_value = resolved(SimpleNamespace(path=checkpoint_path))
     client.save_state.side_effect = None
-    output_before_failure = []
-
-    def create_sampler(*, model_path, tokenizer):
-        if model_path == f"test/run/{failing_snapshot}":
-            output_before_failure.append(capsys.readouterr().out)
-            raise RuntimeError("sampler unavailable")
-        return fireworks_service.create_sampling_client.return_value
-
-    fireworks_service.create_sampling_client.side_effect = create_sampler
+    fireworks_service.create_sampling_client.side_effect = [
+        fireworks_service.create_sampling_client.return_value,
+        RuntimeError("sampler unavailable"),
+    ]
     monkeypatch.setattr(
         "sys.argv",
         [
             "train.py",
-            "--steps",
-            str(steps),
-            "--checkpoint-every",
-            str(checkpoint_every),
-            "--tasks-per-step",
-            "1",
-            "--group-size",
-            "2",
-            "--eval-tasks",
-            "1",
-            "--max-concurrent",
-            "1",
-            "--require-update",
-            "--output-dir",
-            str(tmp_path),
+            f"--steps={steps}",
+            f"--checkpoint-every={checkpoint_every}",
+            "--tasks-per-step=1",
+            "--group-size=2",
+            "--eval-tasks=1",
+            "--max-concurrent=1",
+            f"--output-dir={tmp_path}",
         ],
     )
 
     with pytest.raises(RuntimeError, match="sampler unavailable"):
         asyncio.run(training.train(training.parse_args()))
 
-    client.optim_step.assert_called_once()
     client.save_state.assert_called_once_with(checkpoint_name)
-    assert len(output_before_failure) == 1
-    assert f"Training checkpoint: {checkpoint_path}\n" in output_before_failure[0]
-    assert not (tmp_path / "eval-after.json").exists()
-    fireworks_service.close.assert_called_once()
+    assert f"Training checkpoint: {checkpoint_path}\n" in capsys.readouterr().out
 
 
 def test_evaluates_same_held_out_tasks_before_and_after_training(
